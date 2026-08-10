@@ -681,6 +681,7 @@ function loadInitialState() {
     templates: DEFAULT_TEMPLATES,
     programs: HERO_PROGRAMS,
     customPlans: [],
+    customPrograms: [], // { id, name, tagline, days: [{ label, exercises }] }
     customExercises: [], // { id, name, type, muscle }
     logs: [], // { id, exId, date, sets: [{weight, reps}], targetReps }
     cardioLogs: [], // { id, exId, date, distance, distanceUnit, duration, load, notes }
@@ -1408,6 +1409,17 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
     updateState((prev) => ({ ...prev, customPlans: [...prev.customPlans, newPlan] }));
   };
 
+  const copyProgramToCustom = (program) => {
+    const newProgram = {
+      id: `program_${Date.now()}`,
+      name: program.name,
+      tagline: program.tagline,
+      days: program.days,
+      isCustom: true,
+    };
+    updateState((prev) => ({ ...prev, customPrograms: [...(prev.customPrograms || []), newProgram] }));
+  };
+
   return (
     <div className="space-y-8">
       <div className="space-y-3">
@@ -1434,6 +1446,12 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
               </button>
               {openProgramId === prog.id && (
                 <div className="px-4 pb-4 space-y-4">
+                  <button
+                    onClick={() => copyProgramToCustom(prog)}
+                    className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30 flex items-center justify-center gap-1.5"
+                  >
+                    <Plus size={12} /> Add to my program
+                  </button>
                   {prog.days.map((day, di) => (
                     <div key={di} className="border-t border-neutral-900 pt-3">
                       <div className="flex items-center justify-between mb-2">
@@ -1522,6 +1540,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
   const [planName, setPlanName] = useState("");
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [exFilter, setExFilter] = useState("");
+  const [openProgramId, setOpenProgramId] = useState(null);
 
   const filteredExercises = useMemo(() => {
     const q = exFilter.trim().toLowerCase();
@@ -1547,6 +1566,10 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
 
   const deletePlan = (id) => {
     updateState((prev) => ({ ...prev, customPlans: prev.customPlans.filter((p) => p.id !== id) }));
+  };
+
+  const deleteProgram = (id) => {
+    updateState((prev) => ({ ...prev, customPrograms: (prev.customPrograms || []).filter((p) => p.id !== id) }));
   };
 
   return (
@@ -1654,6 +1677,69 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
                   <Trash2 size={14} />
                 </button>
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(state.customPrograms || []).length > 0 && (
+        <div className="pt-4 border-t border-neutral-900 space-y-2">
+          <div className="text-[11px] uppercase tracking-widest text-neutral-500">My programs</div>
+          {state.customPrograms.map((prog) => (
+            <div key={prog.id} className="border border-neutral-800 bg-neutral-950">
+              <button
+                onClick={() => setOpenProgramId(openProgramId === prog.id ? null : prog.id)}
+                className="w-full flex items-center justify-between px-4 py-3"
+              >
+                <div className="text-left">
+                  <div className="text-sm text-white">{prog.name}</div>
+                  <div className="text-xs text-neutral-600">{prog.days.length} days</div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0 ml-2">
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteProgram(prog.id);
+                    }}
+                    className="text-neutral-600 hover:text-red-600"
+                  >
+                    <Trash2 size={14} />
+                  </span>
+                  <ChevronRight
+                    size={16}
+                    className={`text-neutral-600 transition-transform ${openProgramId === prog.id ? "rotate-90" : ""}`}
+                  />
+                </div>
+              </button>
+              {openProgramId === prog.id && (
+                <div className="px-4 pb-4 space-y-4">
+                  {prog.days.map((day, di) => (
+                    <div key={di} className="border-t border-neutral-900 pt-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-red-500">{day.label}</span>
+                        <button
+                          onClick={() => onStartRun({ name: `${prog.name} — ${day.label}`, exercises: day.exercises })}
+                          className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+                        >
+                          <ChevronRight size={11} /> Start workout
+                        </button>
+                      </div>
+                      <div className="space-y-1.5">
+                        {day.exercises.map((e, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
+                            <span>{exMap[e.exId]?.name || e.exId}</span>
+                            <span className="text-neutral-600">
+                              {e.sets} x {e.reps}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
