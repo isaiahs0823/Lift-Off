@@ -855,7 +855,7 @@ function Header() {
           className="w-11 h-11 rounded-full object-cover ring-1 ring-red-700/60"
         />
         <div>
-          <div className="text-white font-bold tracking-wider text-sm leading-none">LIFT LOG</div>
+          <div className="text-white font-bold tracking-wider text-sm leading-none">BRK - LIFT</div>
           <div className="text-[10px] text-neutral-500 tracking-widest uppercase mt-1">Keep the promises you make to yourself</div>
         </div>
       </div>
