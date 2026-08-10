@@ -763,6 +763,7 @@ export default function LiftLog() {
   const [state, setState] = useState(loadInitialState());
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("log");
+  const [activeRun, setActiveRun] = useState(null);
 
   useEffect(() => {
     try {
@@ -806,6 +807,23 @@ export default function LiftLog() {
     [state.customExercises]
   );
 
+  const startRun = (plan, fromTab) => {
+    setActiveRun({ planName: plan.name, exercises: plan.exercises, index: 0, sessionEntries: [], returnTab: fromTab });
+  };
+  const advanceRun = (entry) => {
+    setActiveRun((run) => ({
+      ...run,
+      sessionEntries: [...run.sessionEntries, { exId: run.exercises[run.index].exId, entry }],
+      index: run.index + 1,
+    }));
+  };
+  const skipRun = () => setActiveRun((run) => ({ ...run, index: run.index + 1 }));
+  const previousRun = () => setActiveRun((run) => ({ ...run, index: Math.max(0, run.index - 1) }));
+  const exitRun = () => {
+    setTab(activeRun?.returnTab || "templates");
+    setActiveRun(null);
+  };
+
   if (!loaded) {
     return (
       <div className="w-full min-h-[400px] flex items-center justify-center bg-black text-neutral-400 text-sm">
@@ -817,30 +835,57 @@ export default function LiftLog() {
   return (
     <div className="w-full bg-black text-neutral-200 font-sans min-h-[600px]">
       <Header />
-      <div className="flex overflow-x-auto border-b border-red-900/40 bg-neutral-950 sticky top-0 z-10">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-3 text-xs tracking-widest uppercase whitespace-nowrap border-b-2 transition-colors ${
-              tab === t.id
-                ? "border-red-600 text-red-500"
-                : "border-transparent text-neutral-500 hover:text-neutral-300"
-            }`}
-          >
-            <t.icon size={14} />
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {!activeRun && (
+        <div className="flex overflow-x-auto border-b border-red-900/40 bg-neutral-950 sticky top-0 z-10">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-xs tracking-widest uppercase whitespace-nowrap border-b-2 transition-colors ${
+                tab === t.id
+                  ? "border-red-600 text-red-500"
+                  : "border-transparent text-neutral-500 hover:text-neutral-300"
+              }`}
+            >
+              <t.icon size={14} />
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="p-4 sm:p-6">
-        {tab === "log" && <LogTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
-        {tab === "cardio" && <CardioTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
-        {tab === "templates" && <TemplatesTab state={state} updateState={updateState} exMap={exMap} />}
-        {tab === "build" && <BuildPlanTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
-        {tab === "catalog" && <CatalogTab state={state} updateState={updateState} allExercises={allExercises} />}
-        {tab === "top" && <TopUsedTab state={state} exMap={exMap} />}
+        {activeRun ? (
+          <GuidedRunView
+            run={activeRun}
+            state={state}
+            updateState={updateState}
+            exMap={exMap}
+            onAdvance={advanceRun}
+            onSkip={skipRun}
+            onPrevious={previousRun}
+            onExit={exitRun}
+          />
+        ) : (
+          <>
+            {tab === "log" && <LogTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
+            {tab === "cardio" && <CardioTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
+            {tab === "templates" && (
+              <TemplatesTab state={state} updateState={updateState} exMap={exMap} onStartRun={(plan) => startRun(plan, "templates")} />
+            )}
+            {tab === "build" && (
+              <BuildPlanTab
+                state={state}
+                updateState={updateState}
+                allExercises={allExercises}
+                exMap={exMap}
+                onStartRun={(plan) => startRun(plan, "build")}
+              />
+            )}
+            {tab === "catalog" && <CatalogTab state={state} updateState={updateState} allExercises={allExercises} />}
+            {tab === "top" && <TopUsedTab state={state} exMap={exMap} />}
+          </>
+        )}
       </div>
     </div>
   );
@@ -864,34 +909,20 @@ function Header() {
   );
 }
 
-// ---------------- LOG TAB ----------------
-function LogTab({ state, updateState, allExercises, exMap }) {
-  const [selectedExId, setSelectedExId] = useState(allExercises[0].id);
-  const [exFilter, setExFilter] = useState("");
+// ---------------- SHARED SINGLE-EXERCISE LOGGER ----------------
+// Recommended panel + target reps + set rows + save + history, for a fixed exercise.
+// Used standalone by the Log tab (with its own exercise picker wrapped around it) and
+// by the guided plan runner (with a plan-driven step indicator wrapped around it).
+function ExerciseLogger({ exId, title, state, updateState, exMap, onSaved, saveLabel = "Save session" }) {
   const [targetReps, setTargetReps] = useState(8);
   const [setsInput, setSetsInput] = useState([{ weight: "", reps: "" }]);
 
-  const filteredExercises = useMemo(() => {
-    const q = exFilter.trim().toLowerCase();
-    if (!q) return allExercises;
-    return allExercises.filter((ex) => ex.name.toLowerCase().includes(q) || ex.muscle.toLowerCase().includes(q));
-  }, [exFilter, allExercises]);
-
-  const groupedByMuscle = useMemo(() => {
-    const groups = {};
-    filteredExercises.forEach((ex) => {
-      if (!groups[ex.muscle]) groups[ex.muscle] = [];
-      groups[ex.muscle].push(ex);
-    });
-    return groups;
-  }, [filteredExercises]);
-
-  const suggestion = useMemo(() => suggestNext(selectedExId, state.logs, exMap), [selectedExId, state.logs, exMap]);
+  const suggestion = useMemo(() => suggestNext(exId, state.logs, exMap), [exId, state.logs, exMap]);
 
   useEffect(() => {
     setTargetReps(suggestion.targetReps ?? 8);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedExId]);
+  }, [exId]);
 
   const addSetRow = () => setSetsInput((s) => [...s, { weight: "", reps: "" }]);
   const removeSetRow = (idx) => setSetsInput((s) => s.filter((_, i) => i !== idx));
@@ -907,52 +938,24 @@ function LogTab({ state, updateState, allExercises, exMap }) {
     if (sets.length === 0) return;
     const entry = {
       id: `log_${Date.now()}`,
-      exId: selectedExId,
+      exId,
       date: new Date().toISOString(),
       sets,
       targetReps: Number(targetReps) || sets[0].reps,
     };
     updateState((prev) => ({ ...prev, logs: [entry, ...prev.logs] }));
     setSetsInput([{ weight: "", reps: "" }]);
+    onSaved?.(entry);
   };
 
   const recentForEx = state.logs
-    .filter((l) => l.exId === selectedExId)
+    .filter((l) => l.exId === exId)
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 5);
 
   return (
     <div className="space-y-6">
-      <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Exercise</label>
-        <input
-          type="text"
-          value={exFilter}
-          onChange={(e) => setExFilter(e.target.value)}
-          placeholder="Search the catalog..."
-          className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-xs mb-2 focus:outline-none focus:border-red-700"
-        />
-        <select
-          value={selectedExId}
-          onChange={(e) => setSelectedExId(e.target.value)}
-          className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
-        >
-          {Object.entries(groupedByMuscle).map(([muscle, exs]) => (
-            <optgroup key={muscle} label={muscle}>
-              {exs.map((ex) => (
-                <option key={ex.id} value={ex.id}>
-                  {ex.name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-        {filteredExercises.length === 0 && (
-          <div className="text-xs text-neutral-600 mt-1.5">
-            No match. Add it in the Catalog tab and it'll show up here.
-          </div>
-        )}
-      </div>
+      {title && <div className="text-lg font-bold text-white">{title}</div>}
 
       <div className="border border-red-900/40 bg-neutral-950 p-4">
         <div className="text-[11px] uppercase tracking-widest text-red-600 mb-2">Recommended</div>
@@ -1024,7 +1027,7 @@ function LogTab({ state, updateState, allExercises, exMap }) {
             : "bg-neutral-950 border-neutral-800 text-neutral-700 cursor-not-allowed"
         }`}
       >
-        Save session
+        {saveLabel}
       </button>
 
       {recentForEx.length > 0 && (
@@ -1042,6 +1045,157 @@ function LogTab({ state, updateState, allExercises, exMap }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------- LOG TAB ----------------
+function LogTab({ state, updateState, allExercises, exMap }) {
+  const [selectedExId, setSelectedExId] = useState(allExercises[0].id);
+  const [exFilter, setExFilter] = useState("");
+
+  const filteredExercises = useMemo(() => {
+    const q = exFilter.trim().toLowerCase();
+    if (!q) return allExercises;
+    return allExercises.filter((ex) => ex.name.toLowerCase().includes(q) || ex.muscle.toLowerCase().includes(q));
+  }, [exFilter, allExercises]);
+
+  const groupedByMuscle = useMemo(() => {
+    const groups = {};
+    filteredExercises.forEach((ex) => {
+      if (!groups[ex.muscle]) groups[ex.muscle] = [];
+      groups[ex.muscle].push(ex);
+    });
+    return groups;
+  }, [filteredExercises]);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Exercise</label>
+        <input
+          type="text"
+          value={exFilter}
+          onChange={(e) => setExFilter(e.target.value)}
+          placeholder="Search the catalog..."
+          className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-xs mb-2 focus:outline-none focus:border-red-700"
+        />
+        <select
+          value={selectedExId}
+          onChange={(e) => setSelectedExId(e.target.value)}
+          className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+        >
+          {Object.entries(groupedByMuscle).map(([muscle, exs]) => (
+            <optgroup key={muscle} label={muscle}>
+              {exs.map((ex) => (
+                <option key={ex.id} value={ex.id}>
+                  {ex.name}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        {filteredExercises.length === 0 && (
+          <div className="text-xs text-neutral-600 mt-1.5">
+            No match. Add it in the Catalog tab and it'll show up here.
+          </div>
+        )}
+      </div>
+
+      <ExerciseLogger exId={selectedExId} state={state} updateState={updateState} exMap={exMap} />
+    </div>
+  );
+}
+
+// ---------------- GUIDED PLAN RUNNER ----------------
+// Steps through a plan's exercises one at a time. Saving an exercise writes to the same
+// state.logs array the standalone Log tab uses, then auto-advances to the next exercise.
+function GuidedRunView({ run, state, updateState, exMap, onAdvance, onSkip, onPrevious, onExit }) {
+  const total = run.exercises.length;
+  const isComplete = run.index >= total;
+
+  if (isComplete) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <div className="text-[11px] uppercase tracking-widest text-red-600">{run.planName}</div>
+          <div className="text-xl font-bold text-white mt-1">Workout complete</div>
+        </div>
+
+        {run.sessionEntries.length > 0 ? (
+          <div className="space-y-1.5">
+            {run.sessionEntries.map(({ entry }, i) => (
+              <div key={entry.id || i} className="border border-neutral-800 bg-neutral-950 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white">{exMap[entry.exId]?.name || entry.exId}</span>
+                  <span className="text-xs text-neutral-500">Target {entry.targetReps}</span>
+                </div>
+                <div className="text-xs text-neutral-400 mt-1">
+                  {entry.sets.map((s) => `${s.weight}x${s.reps}`).join(", ")}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-neutral-500">Nothing logged this session — every exercise was skipped.</div>
+        )}
+
+        <button
+          onClick={onExit}
+          className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+        >
+          Back to plans
+        </button>
+      </div>
+    );
+  }
+
+  const currentExId = run.exercises[run.index].exId;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[11px] uppercase tracking-widest text-red-600">{run.planName}</div>
+          <div className="text-xs text-neutral-500 mt-1">
+            Exercise {run.index + 1} of {total}
+          </div>
+        </div>
+        <button onClick={onExit} className="text-xs text-neutral-600 hover:text-red-600">
+          Exit
+        </button>
+      </div>
+
+      <ExerciseLogger
+        key={currentExId}
+        exId={currentExId}
+        title={exMap[currentExId]?.name || currentExId}
+        state={state}
+        updateState={updateState}
+        exMap={exMap}
+        onSaved={onAdvance}
+        saveLabel="Save & continue"
+      />
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onPrevious}
+          disabled={run.index === 0}
+          className={`flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border ${
+            run.index === 0
+              ? "bg-neutral-950 border-neutral-900 text-neutral-700 cursor-not-allowed"
+              : "bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-600"
+          }`}
+        >
+          Previous
+        </button>
+        <button
+          onClick={onSkip}
+          className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-600"
+        >
+          Skip
+        </button>
+      </div>
     </div>
   );
 }
@@ -1235,7 +1389,7 @@ function CardioTab({ state, updateState, allExercises, exMap }) {
 }
 
 // ---------------- TEMPLATES TAB ----------------
-function TemplatesTab({ state, updateState, exMap }) {
+function TemplatesTab({ state, updateState, exMap, onStartRun }) {
   const [openId, setOpenId] = useState(null);
   const [openProgramId, setOpenProgramId] = useState(null);
 
@@ -1284,12 +1438,20 @@ function TemplatesTab({ state, updateState, exMap }) {
                     <div key={di} className="border-t border-neutral-900 pt-3">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-medium text-red-500">{day.label}</span>
-                        <button
-                          onClick={() => copyDayToCustom(prog, day)}
-                          className="text-[11px] text-neutral-500 hover:text-red-500 flex items-center gap-1"
-                        >
-                          <Plus size={11} /> Copy to my plans
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => onStartRun({ name: `${prog.name} — ${day.label}`, exercises: day.exercises })}
+                            className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+                          >
+                            <ChevronRight size={11} /> Start workout
+                          </button>
+                          <button
+                            onClick={() => copyDayToCustom(prog, day)}
+                            className="text-[11px] text-neutral-500 hover:text-red-500 flex items-center gap-1"
+                          >
+                            <Plus size={11} /> Copy to my plans
+                          </button>
+                        </div>
                       </div>
                       <div className="space-y-1.5">
                         {day.exercises.map((e, i) => (
@@ -1332,12 +1494,20 @@ function TemplatesTab({ state, updateState, exMap }) {
                     </span>
                   </div>
                 ))}
-                <button
-                  onClick={() => copyToCustom(tpl)}
-                  className="mt-2 text-xs text-red-500 hover:text-red-400 flex items-center gap-1"
-                >
-                  <Plus size={12} /> Copy to my plans
-                </button>
+                <div className="mt-2 flex items-center gap-3">
+                  <button
+                    onClick={() => onStartRun(tpl)}
+                    className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1"
+                  >
+                    <ChevronRight size={12} /> Start workout
+                  </button>
+                  <button
+                    onClick={() => copyToCustom(tpl)}
+                    className="text-xs text-neutral-500 hover:text-red-500 flex items-center gap-1"
+                  >
+                    <Plus size={12} /> Copy to my plans
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1348,7 +1518,7 @@ function TemplatesTab({ state, updateState, exMap }) {
 }
 
 // ---------------- BUILD PLAN TAB ----------------
-function BuildPlanTab({ state, updateState, allExercises, exMap }) {
+function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
   const [planName, setPlanName] = useState("");
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [exFilter, setExFilter] = useState("");
@@ -1473,9 +1643,17 @@ function BuildPlanTab({ state, updateState, allExercises, exMap }) {
                 <div className="text-sm text-white">{p.name}</div>
                 <div className="text-xs text-neutral-600">{p.exercises.length} exercises</div>
               </div>
-              <button onClick={() => deletePlan(p.id)} className="text-neutral-600 hover:text-red-600">
-                <Trash2 size={14} />
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => onStartRun(p)}
+                  className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+                >
+                  <ChevronRight size={12} /> Start workout
+                </button>
+                <button onClick={() => deletePlan(p.id)} className="text-neutral-600 hover:text-red-600">
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
