@@ -694,7 +694,8 @@ function increment(exType) {
 // Suggest next weight based on last performance (double progression)
 function suggestNext(exId, logs, exMap) {
   const exLogs = logs.filter((l) => l.exId === exId).sort((a, b) => new Date(b.date) - new Date(a.date));
-  if (exLogs.length === 0) return { lastWeight: null, lastReps: null, suggestion: null, reason: "No history yet — log a starting weight." };
+  if (exLogs.length === 0)
+    return { lastWeight: null, lastReps: null, suggestion: null, targetReps: null, reason: "No history yet — log a starting weight." };
   const last = exLogs[0];
   const topSet = last.sets[0];
   const allHitTarget = last.sets.every((s) => s.reps >= last.targetReps);
@@ -708,7 +709,7 @@ function suggestNext(exId, logs, exMap) {
     suggestion = topSet.weight;
     reason = `Missed target reps last time — repeat ${topSet.weight} lb and push for ${last.targetReps}.`;
   }
-  return { lastWeight: topSet.weight, lastReps: topSet.reps, suggestion, reason, date: last.date };
+  return { lastWeight: topSet.weight, lastReps: topSet.reps, suggestion, targetReps: last.targetReps, reason, date: last.date };
 }
 
 function usageCounts(logs) {
@@ -887,6 +888,11 @@ function LogTab({ state, updateState, allExercises, exMap }) {
 
   const suggestion = useMemo(() => suggestNext(selectedExId, state.logs, exMap), [selectedExId, state.logs, exMap]);
 
+  useEffect(() => {
+    setTargetReps(suggestion.targetReps ?? 8);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedExId]);
+
   const addSetRow = () => setSetsInput((s) => [...s, { weight: "", reps: "" }]);
   const removeSetRow = (idx) => setSetsInput((s) => s.filter((_, i) => i !== idx));
   const updateSetRow = (idx, field, val) =>
@@ -952,7 +958,7 @@ function LogTab({ state, updateState, allExercises, exMap }) {
         <div className="text-[11px] uppercase tracking-widest text-red-600 mb-2">Recommended</div>
         {suggestion.suggestion !== null ? (
           <>
-            <div className="text-3xl font-bold text-white">{suggestion.suggestion} lb</div>
+            <div className="text-3xl font-bold text-white">{suggestion.suggestion} lb x {suggestion.targetReps} reps</div>
             <div className="text-xs text-neutral-500 mt-1">{suggestion.reason}</div>
             <div className="text-xs text-neutral-600 mt-2">
               Last: {suggestion.lastWeight} lb x {suggestion.lastReps} reps
