@@ -11,6 +11,15 @@ export default {
           panel: "#202020",
         },
       },
+      keyframes: {
+        restFlash: {
+          "0%, 100%": { backgroundColor: "#202020" },
+          "50%": { backgroundColor: "rgba(220, 38, 38, 0.45)" },
+        },
+      },
+      animation: {
+        "rest-flash": "restFlash 0.5s ease-in-out 4",
+      },
     },
   },
   plugins: [],

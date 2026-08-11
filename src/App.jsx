@@ -1,5 +1,23 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Plus, Trash2, ChevronRight, ChevronLeft, ArrowLeftRight, Flame, Dumbbell, ClipboardList, TrendingUp, X, Star, Search, Check, Timer } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  ChevronRight,
+  ChevronLeft,
+  ArrowLeftRight,
+  Flame,
+  Dumbbell,
+  ClipboardList,
+  TrendingUp,
+  X,
+  Star,
+  Search,
+  Check,
+  Timer,
+  Settings,
+  Download,
+  Upload,
+} from "lucide-react";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained)
 const BREAK_LOGO =
@@ -708,6 +726,49 @@ function resolveCurrentProgramDay(state) {
   };
 }
 
+// ---------- Data export / import ----------
+// Everything the user has actually created — not the built-in templates/programs, which
+// ship with the app and always come from source, never from a backup file.
+const BACKUP_DATA_KEYS = ["logs", "cardioLogs", "customExercises", "customPlans", "customPrograms", "currentProgram"];
+
+function exportBackupFile(state) {
+  const payload = {
+    app: "BRK - Lift",
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    data: Object.fromEntries(BACKUP_DATA_KEYS.map((k) => [k, state[k] ?? (k === "currentProgram" ? null : [])])),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const dateStr = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `brk-lift-backup-${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Returns { ok: true, data } or { ok: false, error }. Never throws.
+function parseBackupFile(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    return { ok: false, error: "That file isn't valid JSON." };
+  }
+  const data = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed.data || parsed : null;
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { ok: false, error: "That file doesn't look like a BRK - Lift backup." };
+  }
+  const hasKnownKey = BACKUP_DATA_KEYS.some((k) => k in data);
+  if (!hasKnownKey) {
+    return { ok: false, error: "That file doesn't contain any recognizable BRK - Lift data." };
+  }
+  return { ok: true, data };
+}
+
 function increment(exType) {
   return exType === "compound" ? 5 : 2.5;
 }
@@ -778,6 +839,7 @@ const TABS = [
   { id: "build", label: "Build plan", icon: Dumbbell },
   { id: "catalog", label: "Catalog", icon: Search },
   { id: "top", label: "Top used", icon: Flame },
+  { id: "settings", label: "Settings", icon: Settings },
 ];
 
 export default function LiftLog() {
@@ -785,6 +847,8 @@ export default function LiftLog() {
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("log");
   const [activeRun, setActiveRun] = useState(null);
+  const [restBump, setRestBump] = useState(0);
+  const bumpRestTimer = useCallback(() => setRestBump((t) => t + 1), []);
 
   useEffect(() => {
     try {
@@ -871,6 +935,7 @@ export default function LiftLog() {
   return (
     <div className="w-full bg-charcoal-deep text-neutral-200 font-sans min-h-[600px]">
       <Header />
+      <RestTimer bumpToken={restBump} />
       {!activeRun && (
         <div className="flex overflow-x-auto border-b border-red-900/40 bg-charcoal-panel sticky top-0 z-10">
           {TABS.map((t) => (
@@ -902,6 +967,7 @@ export default function LiftLog() {
             onFinish={finishRun}
             onExit={exitRun}
             onSwap={swapRunExercise}
+            onLoggedSet={bumpRestTimer}
           />
         ) : (
           <>
@@ -912,9 +978,18 @@ export default function LiftLog() {
                 allExercises={allExercises}
                 exMap={exMap}
                 onStartRun={(plan, programContext) => startRun(plan, "log", programContext)}
+                onLoggedSet={bumpRestTimer}
               />
             )}
-            {tab === "cardio" && <CardioTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
+            {tab === "cardio" && (
+              <CardioTab
+                state={state}
+                updateState={updateState}
+                allExercises={allExercises}
+                exMap={exMap}
+                onLoggedSet={bumpRestTimer}
+              />
+            )}
             {tab === "templates" && (
               <TemplatesTab
                 state={state}
@@ -934,6 +1009,7 @@ export default function LiftLog() {
             )}
             {tab === "catalog" && <CatalogTab state={state} updateState={updateState} allExercises={allExercises} />}
             {tab === "top" && <TopUsedTab state={state} exMap={exMap} />}
+            {tab === "settings" && <SettingsTab state={state} updateState={updateState} />}
           </>
         )}
       </div>
@@ -1204,7 +1280,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
 }
 
 // ---------------- LOG TAB ----------------
-function LogTab({ state, updateState, allExercises, exMap, onStartRun }) {
+function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedSet }) {
   const [selectedExId, setSelectedExId] = useState(allExercises[0].id);
   const [exFilter, setExFilter] = useState("");
 
@@ -1284,6 +1360,7 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun }) {
         exMap={exMap}
         allExercises={allExercises}
         onSwap={setSelectedExId}
+        onSaved={onLoggedSet}
       />
     </div>
   );
@@ -1333,9 +1410,14 @@ function playRestCompleteBeep() {
   });
 }
 
+// Global rest timer widget — mounted once at the app shell so it survives tab switches.
+// Idle state is a slim bar; the instant it's running (or just hit zero) it expands into a
+// large, high-contrast readout meant to be legible from across a gym, with a vibration +
+// flash + beep on completion.
 function RestTimer({ bumpToken }) {
   const [duration, setDuration] = useState(90);
   const [remaining, setRemaining] = useState(null);
+  const [justFinished, setJustFinished] = useState(false);
 
   useEffect(() => {
     if (remaining === null || remaining <= 0) return;
@@ -1344,7 +1426,12 @@ function RestTimer({ bumpToken }) {
   }, [remaining]);
 
   useEffect(() => {
-    if (remaining === 0) playRestCompleteBeep();
+    if (remaining !== 0) return;
+    playRestCompleteBeep();
+    if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]);
+    setJustFinished(true);
+    const id = setTimeout(() => setJustFinished(false), 2000);
+    return () => clearTimeout(id);
   }, [remaining]);
 
   // Compares against the last-seen bumpToken (rather than a "have I ever run" flag) so
@@ -1363,39 +1450,54 @@ function RestTimer({ bumpToken }) {
     setDuration(secs);
     setRemaining(secs);
   };
-  const stop = () => setRemaining(null);
+  const addThirty = () => setRemaining((r) => (r === null ? 30 : r + 30));
+  const skip = () => setRemaining(null);
+
+  const isActive = remaining !== null;
 
   return (
-    <div className="sticky top-0 z-20 border border-red-900/40 bg-charcoal-panel/95 backdrop-blur px-4 py-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="text-[11px] uppercase tracking-widest text-red-600 flex items-center gap-1.5">
-          <Timer size={12} /> Rest timer
-        </div>
-        {remaining === null ? (
-          <div className="text-xs text-neutral-600">Not running</div>
-        ) : remaining > 0 ? (
-          <div className="flex items-center gap-3">
-            <div className="text-2xl font-bold text-white tabular-nums">{formatRestTime(remaining)}</div>
-            <button onClick={stop} className="text-xs text-neutral-500 hover:text-red-500">
-              Stop
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <div className="text-sm font-bold text-red-500">Rest complete</div>
-            <button onClick={stop} className="text-xs text-neutral-500 hover:text-red-500">
-              Dismiss
-            </button>
-          </div>
-        )}
+    <div
+      className={`border-b border-red-900/40 bg-charcoal-panel px-4 transition-colors ${
+        justFinished ? "animate-rest-flash" : ""
+      } ${isActive ? "py-5" : "py-2.5"}`}
+    >
+      <div className={`flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-red-600 ${isActive ? "mb-3 justify-center" : "mb-2"}`}>
+        <Timer size={12} /> Rest timer
       </div>
-      <div className="flex items-center gap-2">
+
+      {isActive ? (
+        <div className="space-y-4">
+          <div className="text-center">
+            {remaining > 0 ? (
+              <div className="text-7xl font-bold text-white tabular-nums leading-none">{formatRestTime(remaining)}</div>
+            ) : (
+              <div className="text-4xl font-bold text-red-500 leading-none">Rest complete</div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={addThirty}
+              className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600"
+            >
+              +30s
+            </button>
+            <button
+              onClick={skip}
+              className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className={`flex items-center gap-2 ${isActive ? "mt-4" : ""}`}>
         {REST_PRESETS.map((secs) => (
           <button
             key={secs}
             onClick={() => startPreset(secs)}
             className={`flex-1 py-1.5 text-xs font-bold border ${
-              remaining !== null && duration === secs
+              isActive && duration === secs
                 ? "bg-red-700 border-red-700 text-white"
                 : "bg-charcoal-panel border-neutral-800 text-neutral-300 hover:border-neutral-600"
             }`}
@@ -1413,9 +1515,7 @@ function RestTimer({ bumpToken }) {
 // whole session is visible at once. Saving a set writes to the same state.logs array the
 // standalone Log tab uses and bumps the rest timer. A "Finish workout" button ends the
 // session; it doesn't require every exercise to be logged.
-function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, onFinish, onExit, onSwap }) {
-  const [restBumpToken, setRestBumpToken] = useState(0);
-
+function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, onFinish, onExit, onSwap, onLoggedSet }) {
   if (run.finished) {
     return (
       <div className="space-y-6">
@@ -1468,8 +1568,6 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
         </button>
       </div>
 
-      <RestTimer bumpToken={restBumpToken} />
-
       <div className="space-y-8">
         {run.exercises.map((exSlot, idx) => {
           const currentExId = run.swaps?.[idx] ?? exSlot.exId;
@@ -1491,7 +1589,7 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
                 allExercises={allExercises}
                 onSaved={(entry) => {
                   onSaved(idx, entry);
-                  setRestBumpToken((t) => t + 1);
+                  onLoggedSet?.();
                 }}
                 onSwap={(newExId) => onSwap(idx, newExId)}
                 saveLabel="Log set"
@@ -1513,7 +1611,7 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
 }
 
 // ---------------- CARDIO TAB ----------------
-function CardioTab({ state, updateState, allExercises, exMap }) {
+function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
   const conditioningExercises = useMemo(
     () => allExercises.filter((ex) => ex.muscle === "Conditioning"),
     [allExercises]
@@ -1560,6 +1658,7 @@ function CardioTab({ state, updateState, allExercises, exMap }) {
       notes: notes.trim(),
     };
     updateState((prev) => ({ ...prev, cardioLogs: [entry, ...(prev.cardioLogs || [])] }));
+    onLoggedSet?.();
     setDistance("");
     setDuration("");
     setLoad("");
@@ -2320,6 +2419,114 @@ function CatalogTab({ state, updateState, allExercises }) {
         ))}
         {filtered.length === 0 && (
           <div className="text-center py-10 text-neutral-600 text-sm">No matches — add it above.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- SETTINGS TAB ----------------
+// The only backup mechanism available, since everything lives in localStorage with no
+// server. Export/import cover every piece of user-created data — logs, cardio logs,
+// custom exercises, custom plans and programs, and which program is currently active —
+// not just workout logs.
+function SettingsTab({ state, updateState }) {
+  const fileInputRef = useRef(null);
+  const [importMessage, setImportMessage] = useState(null); // { type: "error" | "success", text }
+
+  const handleExport = () => {
+    exportBackupFile(state);
+    setImportMessage({ type: "success", text: "Backup downloaded." });
+  };
+
+  const handleImportClick = () => {
+    setImportMessage(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = parseBackupFile(String(reader.result));
+      if (!result.ok) {
+        setImportMessage({ type: "error", text: result.error });
+        return;
+      }
+      const confirmed = window.confirm(
+        "Importing this backup will overwrite all current data on this device — logs, cardio logs, custom exercises, custom plans and programs, and your active program. This can't be undone. Continue?"
+      );
+      if (!confirmed) return;
+
+      updateState((prev) => {
+        const next = { ...prev };
+        BACKUP_DATA_KEYS.forEach((key) => {
+          if (key in result.data) next[key] = result.data[key];
+        });
+        return next;
+      });
+      setImportMessage({ type: "success", text: "Backup restored." });
+    };
+    reader.onerror = () => setImportMessage({ type: "error", text: "Couldn't read that file." });
+    reader.readAsText(file);
+  };
+
+  const counts = {
+    logs: (state.logs || []).length,
+    cardioLogs: (state.cardioLogs || []).length,
+    customExercises: (state.customExercises || []).length,
+    customPlans: (state.customPlans || []).length,
+    customPrograms: (state.customPrograms || []).length,
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-4">
+        <div>
+          <div className="text-[11px] uppercase tracking-widest text-red-600">Data backup</div>
+          <p className="text-xs text-neutral-500 mt-1">
+            Everything is stored on this device only — there's no account or server. Export a backup before
+            switching phones or clearing browser data, and import it to restore.
+          </p>
+        </div>
+
+        <div className="text-xs text-neutral-400 space-y-1">
+          <div>{counts.logs} lift logs</div>
+          <div>{counts.cardioLogs} run / conditioning logs</div>
+          <div>{counts.customExercises} custom exercises</div>
+          <div>{counts.customPlans} custom plans</div>
+          <div>{counts.customPrograms} custom programs</div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <button
+            onClick={handleExport}
+            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1.5"
+          >
+            <Download size={14} /> Export data
+          </button>
+          <button
+            onClick={handleImportClick}
+            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600 flex items-center justify-center gap-1.5"
+          >
+            <Upload size={14} /> Import data
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={handleFileSelected}
+            className="hidden"
+          />
+        </div>
+
+        {importMessage && (
+          <div className={`text-xs ${importMessage.type === "error" ? "text-red-500" : "text-green-500"}`}>
+            {importMessage.text}
+          </div>
         )}
       </div>
     </div>
