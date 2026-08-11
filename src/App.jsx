@@ -17,6 +17,8 @@ import {
   Settings,
   Download,
   Upload,
+  Camera,
+  Share2,
 } from "lucide-react";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained)
@@ -710,7 +712,8 @@ function loadInitialState() {
     customExercises: [], // { id, name, type, muscle }
     logs: [], // { id, exId, date, sets: [{weight, reps}], targetReps }
     cardioLogs: [], // { id, exId, date, distance, distanceUnit, duration, load, notes }
-    currentProgram: null, // { programId, programName, source: "builtin" | "custom", dayIndex, totalDays }
+    currentProgram: null, // { programId, programName, source: "builtin" | "custom", dayIndex, totalDays, startDate }
+    photos: [], // { id, date, context, dataUrl }
   };
 }
 
@@ -789,7 +792,7 @@ function resolveCurrentProgramDay(state) {
 // ---------- Data export / import ----------
 // Everything the user has actually created — not the built-in templates/programs, which
 // ship with the app and always come from source, never from a backup file.
-const BACKUP_DATA_KEYS = ["logs", "cardioLogs", "customExercises", "customPlans", "customPrograms", "currentProgram"];
+const BACKUP_DATA_KEYS = ["logs", "cardioLogs", "customExercises", "customPlans", "customPrograms", "currentProgram", "photos"];
 
 function exportBackupFile(state) {
   const payload = {
@@ -899,6 +902,7 @@ const TABS = [
   { id: "build", label: "Build plan", icon: Dumbbell },
   { id: "catalog", label: "Catalog", icon: Search },
   { id: "top", label: "Top used", icon: Flame },
+  { id: "photos", label: "Photos", icon: Camera },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -1100,6 +1104,7 @@ export default function LiftLog() {
             )}
             {tab === "catalog" && <CatalogTab state={state} updateState={updateState} allExercises={allExercises} />}
             {tab === "top" && <TopUsedTab state={state} exMap={exMap} />}
+            {tab === "photos" && <PhotosTab state={state} updateState={updateState} />}
             {tab === "settings" && <SettingsTab state={state} updateState={updateState} />}
           </>
         )}
@@ -2588,6 +2593,254 @@ function CatalogTab({ state, updateState, allExercises }) {
   );
 }
 
+// ---------------- PHOTOS ----------------
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Couldn't load image"));
+    img.src = src;
+  });
+}
+
+const PROGRESS_PHOTO_MAX_DIM = 1080;
+const PROGRESS_PHOTO_QUALITY = 0.7;
+
+// Resizes to a max dimension, then burns the BREAK_LOGO watermark and a date/context
+// caption directly into the pixel data (not a CSS overlay) so the branding survives
+// wherever the photo gets shared, and compresses to JPEG to keep localStorage usage sane.
+async function compositeProgressPhoto(file, contextLine) {
+  const objectUrl = URL.createObjectURL(file);
+  let img;
+  try {
+    img = await loadImage(objectUrl);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+
+  const scale = Math.min(1, PROGRESS_PHOTO_MAX_DIM / Math.max(img.width, img.height));
+  const width = Math.round(img.width * scale);
+  const height = Math.round(img.height * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0, width, height);
+
+  const dateStr = new Date().toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  const lines = contextLine ? [contextLine, dateStr] : [dateStr];
+
+  const padding = Math.round(width * 0.035);
+  const fontSize = Math.max(13, Math.round(width * 0.034));
+  const lineHeight = Math.round(fontSize * 1.35);
+  const logoSize = Math.round(width * 0.13);
+  const barHeight = Math.max(lines.length * lineHeight + padding * 1.5, logoSize + padding * 2);
+
+  const gradient = ctx.createLinearGradient(0, height - barHeight, 0, height);
+  gradient.addColorStop(0, "rgba(0,0,0,0)");
+  gradient.addColorStop(1, "rgba(0,0,0,0.68)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, height - barHeight, width, barHeight);
+
+  // Watermark logo, bottom-right, clipped to a circle with a red ring
+  try {
+    const logo = await loadImage(BREAK_LOGO);
+    const logoX = width - padding - logoSize;
+    const logoY = height - padding - logoSize;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+    ctx.restore();
+    ctx.strokeStyle = "rgba(220,38,38,0.9)";
+    ctx.lineWidth = Math.max(1, logoSize * 0.045);
+    ctx.beginPath();
+    ctx.arc(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
+    ctx.stroke();
+  } catch (e) {
+    // logo failed to load — still burn the text caption below
+  }
+
+  // Date + context caption, bottom-left
+  ctx.fillStyle = "#ffffff";
+  ctx.textBaseline = "bottom";
+  let ty = height - padding;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const isPrimary = i === 0 && lines.length > 1;
+    ctx.font = `${isPrimary ? "bold " : ""}${Math.round(isPrimary ? fontSize : fontSize * 0.82)}px sans-serif`;
+    ctx.fillText(lines[i], padding, ty);
+    ty -= lineHeight;
+  }
+
+  return canvas.toDataURL("image/jpeg", PROGRESS_PHOTO_QUALITY);
+}
+
+function PhotoFullView({ photo, onBack, onDelete }) {
+  const [shareSupported, setShareSupported] = useState(false);
+
+  useEffect(() => {
+    setShareSupported(typeof navigator.share === "function");
+  }, []);
+
+  const handleShare = async () => {
+    try {
+      const res = await fetch(photo.dataUrl);
+      const blob = await res.blob();
+      const file = new File([blob], `brk-lift-${photo.date.slice(0, 10)}.jpg`, { type: "image/jpeg" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "BRK - Lift progress photo" });
+      } else {
+        await navigator.share({ title: "BRK - Lift progress photo", text: photo.context || "" });
+      }
+    } catch (e) {
+      // user cancelled the share sheet, or sharing failed — nothing to do
+    }
+  };
+
+  const handleDownload = () => {
+    const a = document.createElement("a");
+    a.href = photo.dataUrl;
+    a.download = `brk-lift-${photo.date.slice(0, 10)}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  return (
+    <SlideInPanel title="Progress photo" subtitle={new Date(photo.date).toLocaleString()} onBack={onBack}>
+      <img src={photo.dataUrl} alt="Progress" className="w-full border border-neutral-800" />
+      {photo.context && <div className="text-xs text-neutral-500">{photo.context}</div>}
+      <div className="flex items-center gap-2">
+        {shareSupported ? (
+          <button
+            onClick={handleShare}
+            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1.5"
+          >
+            <Share2 size={14} /> Share
+          </button>
+        ) : (
+          <button
+            onClick={handleDownload}
+            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1.5"
+          >
+            <Download size={14} /> Download
+          </button>
+        )}
+        <button
+          onClick={onDelete}
+          className="py-3 px-4 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-300 hover:border-neutral-600 flex items-center justify-center gap-1.5"
+        >
+          <Trash2 size={14} /> Delete
+        </button>
+      </div>
+    </SlideInPanel>
+  );
+}
+
+// ---------------- PHOTOS TAB ----------------
+function PhotosTab({ state, updateState }) {
+  const fileInputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [viewingId, setViewingId] = useState(null);
+
+  const currentProgramDay = useMemo(() => resolveCurrentProgramDay(state), [state]);
+  const photos = state.photos || [];
+
+  const handleTakePhoto = () => {
+    setErrorMsg(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    setErrorMsg(null);
+    try {
+      const contextLine =
+        currentProgramDay && !currentProgramDay.isComplete
+          ? `${currentProgramDay.programName} — ${currentProgramDay.dayLabel}`
+          : null;
+      const dataUrl = await compositeProgressPhoto(file, contextLine);
+      const photo = { id: `photo_${Date.now()}`, date: new Date().toISOString(), context: contextLine, dataUrl };
+      let quotaError = false;
+      updateState((prev) => {
+        const next = { ...prev, photos: [photo, ...(prev.photos || [])] };
+        try {
+          window.localStorage.setItem("liftlog-data", JSON.stringify(next));
+        } catch (err) {
+          quotaError = true;
+          return prev;
+        }
+        return next;
+      });
+      if (quotaError) {
+        setErrorMsg("Couldn't save that photo — you're out of local storage space. Delete some older photos and try again.");
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Couldn't process that photo. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deletePhoto = (id) => {
+    updateState((prev) => ({ ...prev, photos: (prev.photos || []).filter((p) => p.id !== id) }));
+    setViewingId(null);
+  };
+
+  if (viewingId) {
+    const photo = photos.find((p) => p.id === viewingId);
+    if (!photo) return null;
+    return <PhotoFullView photo={photo} onBack={() => setViewingId(null)} onDelete={() => deletePhoto(photo.id)} />;
+  }
+
+  return (
+    <div className="space-y-6">
+      <button
+        onClick={handleTakePhoto}
+        disabled={busy}
+        className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 disabled:opacity-50 flex items-center justify-center gap-1.5"
+      >
+        <Camera size={16} /> {busy ? "Processing..." : "Take progress photo"}
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileSelected}
+        className="hidden"
+      />
+      {errorMsg && <div className="text-xs text-red-500">{errorMsg}</div>}
+
+      {photos.length === 0 ? (
+        <div className="text-center py-16 text-neutral-500 text-sm">
+          No progress photos yet. Take one to start tracking visually over time.
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-1.5">
+          {photos.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setViewingId(p.id)}
+              className="aspect-square overflow-hidden border border-neutral-800 bg-charcoal-panel"
+            >
+              <img src={p.dataUrl} alt="" className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------- SETTINGS TAB ----------------
 // The only backup mechanism available, since everything lives in localStorage with no
 // server. Export/import cover every piece of user-created data — logs, cardio logs,
@@ -2643,6 +2896,7 @@ function SettingsTab({ state, updateState }) {
     customExercises: (state.customExercises || []).length,
     customPlans: (state.customPlans || []).length,
     customPrograms: (state.customPrograms || []).length,
+    photos: (state.photos || []).length,
   };
 
   return (
@@ -2662,6 +2916,7 @@ function SettingsTab({ state, updateState }) {
           <div>{counts.customExercises} custom exercises</div>
           <div>{counts.customPlans} custom plans</div>
           <div>{counts.customPrograms} custom programs</div>
+          <div>{counts.photos} progress photos</div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">
