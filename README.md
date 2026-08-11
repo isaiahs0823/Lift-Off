@@ -1,7 +1,7 @@
 # Lift Log
 
-A workout tracking app: templates, hero-themed multi-day programs (Superman, Batman,
-Punisher, Thor, Firefighter, Hybrid, Military/First Responder), a custom plan builder,
+A workout tracking app: templates, multi-day programs (Titan, Reaper, Berserker,
+Ragnar, Firefighter, Hybrid, Military/First Responder), a custom plan builder,
 a full exercise catalog (including Arsenal Strength machines), progression-based weight
 suggestions, and a separate run/conditioning log.
 

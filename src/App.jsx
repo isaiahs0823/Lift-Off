@@ -281,8 +281,9 @@ const DEFAULT_TEMPLATES = [
 const HERO_PROGRAMS = [
   {
     id: "prog_superman",
-    name: "Superman",
+    name: "Titan",
     tagline: "Classic hero V-taper — chest and back lead, legs never skipped",
+    weeks: 12,
     days: [
       {
         label: "Day 1: Chest",
@@ -338,8 +339,9 @@ const HERO_PROGRAMS = [
   },
   {
     id: "prog_batman",
-    name: "Batman",
+    name: "Reaper",
     tagline: "Lean, athletic, low body fat — trained like a detective, not a bodybuilder",
+    weeks: 10,
     days: [
       {
         label: "Day 1: Full body functional",
@@ -384,8 +386,9 @@ const HERO_PROGRAMS = [
   },
   {
     id: "prog_punisher",
-    name: "Punisher",
+    name: "Berserker",
     tagline: "Raw brute strength — heavy compounds, low reps, no wasted volume",
+    weeks: 8,
     days: [
       {
         label: "Day 1: Squat",
@@ -449,8 +452,9 @@ const HERO_PROGRAMS = [
   },
   {
     id: "prog_thor",
-    name: "Thor",
+    name: "Ragnar",
     tagline: "God-tier mass and power — huge shoulders, back, and grip",
+    weeks: 10,
     days: [
       {
         label: "Day 1: Overhead power",
@@ -503,6 +507,7 @@ const HERO_PROGRAMS = [
     id: "prog_firefighter",
     name: "Firefighter",
     tagline: "Job-ready functional strength — work capacity under load",
+    weeks: 12,
     days: [
       {
         label: "Day 1: Upper push/pull",
@@ -565,6 +570,7 @@ const HERO_PROGRAMS = [
     id: "prog_hybrid",
     name: "Hybrid",
     tagline: "Strong and has an engine — lifting and conditioning, not one or the other",
+    weeks: 10,
     days: [
       {
         label: "Day 1: Strength - upper",
@@ -626,6 +632,7 @@ const HERO_PROGRAMS = [
     id: "prog_military",
     name: "Military / First Responder",
     tagline: "Occupational readiness — pass the test, perform on the job",
+    weeks: 8,
     days: [
       {
         label: "Day 1: PT test push/pull",
@@ -707,22 +714,75 @@ function loadInitialState() {
   };
 }
 
+// Programs renamed after users may already have saved plan copies / a currentProgram
+// referencing the old names — brings those forward so nothing's left pointing at a name
+// that no longer exists anywhere in the app.
+const RENAMED_PROGRAMS = { Superman: "Titan", Batman: "Reaper", Punisher: "Berserker", Thor: "Ragnar" };
+
+function migrateProgramNames(state) {
+  const customPlans = (state.customPlans || []).map((p) => {
+    const sepIdx = p.name.indexOf(" — ");
+    if (sepIdx === -1) return p;
+    const prefix = p.name.slice(0, sepIdx);
+    const rest = p.name.slice(sepIdx);
+    return RENAMED_PROGRAMS[prefix] ? { ...p, name: RENAMED_PROGRAMS[prefix] + rest } : p;
+  });
+
+  const customPrograms = (state.customPrograms || []).map((p) =>
+    RENAMED_PROGRAMS[p.name] ? { ...p, name: RENAMED_PROGRAMS[p.name] } : p
+  );
+
+  const currentProgram =
+    state.currentProgram && RENAMED_PROGRAMS[state.currentProgram.programName]
+      ? { ...state.currentProgram, programName: RENAMED_PROGRAMS[state.currentProgram.programName] }
+      : state.currentProgram;
+
+  return { ...state, customPlans, customPrograms, currentProgram };
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 // Resolves state.currentProgram into the actual program/day data, or null if the
-// program was deleted (custom program removed) or no program is active.
+// program was deleted (custom program removed) or no program is active. When the
+// program has a weeks field and enough real time has elapsed since startDate, returns
+// an isComplete result instead of a day to run.
 function resolveCurrentProgramDay(state) {
   const cp = state.currentProgram;
   if (!cp) return null;
   const list = cp.source === "custom" ? state.customPrograms || [] : state.programs || [];
   const prog = list.find((p) => p.id === cp.programId);
   if (!prog || !prog.days || !prog.days[cp.dayIndex]) return null;
+
+  const totalWeeks = prog.weeks || null;
+  let weekNumber = null;
+  if (cp.startDate && totalWeeks) {
+    const daysElapsed = Math.max(0, Math.floor((Date.now() - new Date(cp.startDate).getTime()) / MS_PER_DAY));
+    weekNumber = Math.floor(daysElapsed / 7) + 1;
+  }
+
+  const programContext = {
+    programId: prog.id,
+    programName: prog.name,
+    source: cp.source,
+    dayIndex: cp.dayIndex,
+    totalDays: prog.days.length,
+  };
+
+  if (weekNumber !== null && weekNumber > totalWeeks) {
+    return { isComplete: true, programName: prog.name, totalWeeks, programContext };
+  }
+
   const day = prog.days[cp.dayIndex];
   return {
+    isComplete: false,
     programName: prog.name,
     dayLabel: day.label,
     dayIndex: cp.dayIndex,
     totalDays: prog.days.length,
+    weekNumber,
+    totalWeeks,
     plan: { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
-    programContext: { programId: prog.id, programName: prog.name, source: cp.source, dayIndex: cp.dayIndex, totalDays: prog.days.length },
+    programContext,
   };
 }
 
@@ -855,7 +915,15 @@ export default function LiftLog() {
       const raw = window.localStorage.getItem("liftlog-data");
       if (raw) {
         const parsed = JSON.parse(raw);
-        setState((s) => ({ ...s, ...parsed }));
+        setState((s) => {
+          const migrated = migrateProgramNames({ ...s, ...parsed });
+          try {
+            window.localStorage.setItem("liftlog-data", JSON.stringify(migrated));
+          } catch (e) {
+            // storage unavailable — migrated state still applies for this session
+          }
+          return migrated;
+        });
       }
     } catch (e) {
       // no saved data yet, or storage unavailable
@@ -903,7 +971,14 @@ export default function LiftLog() {
       programContext: programContext || null,
     });
     if (programContext) {
-      updateState((prev) => ({ ...prev, currentProgram: programContext }));
+      updateState((prev) => {
+        const isSameProgram =
+          prev.currentProgram &&
+          prev.currentProgram.programId === programContext.programId &&
+          prev.currentProgram.source === programContext.source;
+        const startDate = isSameProgram ? prev.currentProgram.startDate : new Date().toISOString();
+        return { ...prev, currentProgram: { ...programContext, startDate } };
+      });
     }
   };
   const recordRunEntry = (index, entry) => {
@@ -916,12 +991,26 @@ export default function LiftLog() {
     setActiveRun((run) => ({ ...run, finished: true }));
     if (activeRun?.programContext) {
       const ctx = activeRun.programContext;
-      updateState((prev) => ({ ...prev, currentProgram: { ...ctx, dayIndex: (ctx.dayIndex + 1) % ctx.totalDays } }));
+      updateState((prev) => ({
+        ...prev,
+        currentProgram: {
+          ...ctx,
+          dayIndex: (ctx.dayIndex + 1) % ctx.totalDays,
+          startDate: prev.currentProgram?.startDate || new Date().toISOString(),
+        },
+      }));
     }
   };
   const exitRun = () => {
     setTab(activeRun?.returnTab || "templates");
     setActiveRun(null);
+  };
+  const restartCurrentProgram = () => {
+    updateState((prev) =>
+      prev.currentProgram
+        ? { ...prev, currentProgram: { ...prev.currentProgram, dayIndex: 0, startDate: new Date().toISOString() } }
+        : prev
+    );
   };
 
   if (!loaded) {
@@ -979,6 +1068,8 @@ export default function LiftLog() {
                 exMap={exMap}
                 onStartRun={(plan, programContext) => startRun(plan, "log", programContext)}
                 onLoggedSet={bumpRestTimer}
+                onRestartProgram={restartCurrentProgram}
+                onGoToTemplates={() => setTab("templates")}
               />
             )}
             {tab === "cardio" && (
@@ -1280,7 +1371,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
 }
 
 // ---------------- LOG TAB ----------------
-function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedSet }) {
+function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedSet, onRestartProgram, onGoToTemplates }) {
   const [selectedExId, setSelectedExId] = useState(allExercises[0].id);
   const [exFilter, setExFilter] = useState("");
 
@@ -1303,12 +1394,40 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
 
   return (
     <div className="space-y-6">
-      {currentProgramDay && (
+      {currentProgramDay?.isComplete && (
+        <div className="border border-red-900/40 bg-charcoal-panel px-4 py-3 space-y-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-red-600">Program complete</div>
+            <div className="text-base text-white mt-0.5">
+              {currentProgramDay.programName} — {currentProgramDay.totalWeeks} weeks done
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRestartProgram}
+              className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
+            >
+              Restart
+            </button>
+            <button
+              onClick={onGoToTemplates}
+              className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600"
+            >
+              New program
+            </button>
+          </div>
+        </div>
+      )}
+
+      {currentProgramDay && !currentProgramDay.isComplete && (
         <div className="border border-red-900/40 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
           <div className="min-w-0">
             <div className="text-[10px] uppercase tracking-widest text-red-600">Current program</div>
             <div className="text-base text-white mt-0.5 truncate">
-              {currentProgramDay.programName} — Day {currentProgramDay.dayIndex + 1} of {currentProgramDay.totalDays}
+              {currentProgramDay.programName}
+              {currentProgramDay.weekNumber !== null
+                ? ` — Week ${currentProgramDay.weekNumber} of ${currentProgramDay.totalWeeks}, Day ${currentProgramDay.dayIndex + 1} of ${currentProgramDay.totalDays}`
+                : ` — Day ${currentProgramDay.dayIndex + 1} of ${currentProgramDay.totalDays}`}
             </div>
             <div className="text-xs text-neutral-500 mt-0.5 truncate">{currentProgramDay.dayLabel}</div>
           </div>
@@ -1823,19 +1942,27 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
       id: `program_${Date.now()}`,
       name: program.name,
       tagline: program.tagline,
+      weeks: program.weeks,
       days: program.days,
       isCustom: true,
     };
     updateState((prev) => ({ ...prev, customPrograms: [...(prev.customPrograms || []), newProgram] }));
   };
 
-  const isCurrent = (progId) => state.currentProgram?.source === "builtin" && state.currentProgram.programId === progId;
+  const currentProgramDay = useMemo(() => resolveCurrentProgramDay(state), [state]);
+  const isCurrent = (progId) =>
+    state.currentProgram?.source === "builtin" && state.currentProgram.programId === progId;
+  const isComplete = (progId) => isCurrent(progId) && currentProgramDay?.isComplete;
 
   if (detail?.kind === "program") {
     const prog = (state.programs || []).find((p) => p.id === detail.id);
     if (!prog) return null;
     return (
-      <SlideInPanel title={prog.name} subtitle={prog.tagline} onBack={() => setDetail(null)}>
+      <SlideInPanel
+        title={prog.name}
+        subtitle={prog.weeks ? `${prog.tagline} · ${prog.weeks} weeks` : prog.tagline}
+        onBack={() => setDetail(null)}
+      >
         <button
           onClick={() => copyProgramToCustom(prog)}
           className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30 flex items-center justify-center gap-1.5"
@@ -1932,11 +2059,18 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-base font-medium text-white truncate">{prog.name}</span>
-                  {isCurrent(prog.id) && (
-                    <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
+                  {isComplete(prog.id) ? (
+                    <span className="text-[9px] uppercase tracking-widest bg-neutral-700 text-white px-1.5 py-0.5 shrink-0">Complete</span>
+                  ) : (
+                    isCurrent(prog.id) && (
+                      <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
+                    )
                   )}
                 </div>
-                <div className="text-[11px] text-neutral-500 mt-0.5 truncate">{prog.tagline}</div>
+                <div className="text-[11px] text-neutral-500 mt-0.5 truncate">
+                  {prog.tagline}
+                  {prog.weeks ? ` · ${prog.weeks} weeks` : ""}
+                </div>
               </div>
               <ChevronRight size={16} className="text-neutral-600 shrink-0 ml-2" />
             </button>
@@ -1969,6 +2103,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
   const [planName, setPlanName] = useState("");
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [exFilter, setExFilter] = useState("");
+  const [planSearch, setPlanSearch] = useState("");
   const [detail, setDetail] = useState(null); // { kind: "plan" | "program", id }
 
   const filteredExercises = useMemo(() => {
@@ -2001,7 +2136,15 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
     updateState((prev) => ({ ...prev, customPrograms: (prev.customPrograms || []).filter((p) => p.id !== id) }));
   };
 
+  const filteredPlans = useMemo(() => {
+    const q = planSearch.trim().toLowerCase();
+    if (!q) return state.customPlans;
+    return state.customPlans.filter((p) => p.name.toLowerCase().includes(q));
+  }, [planSearch, state.customPlans]);
+
+  const currentProgramDay = useMemo(() => resolveCurrentProgramDay(state), [state]);
   const isCurrentCustom = (progId) => state.currentProgram?.source === "custom" && state.currentProgram.programId === progId;
+  const isCompleteCustom = (progId) => isCurrentCustom(progId) && currentProgramDay?.isComplete;
 
   if (detail?.kind === "plan") {
     const p = state.customPlans.find((pl) => pl.id === detail.id);
@@ -2040,7 +2183,11 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
     const prog = (state.customPrograms || []).find((pr) => pr.id === detail.id);
     if (!prog) return null;
     return (
-      <SlideInPanel title={prog.name} subtitle={`${prog.days.length} days`} onBack={() => setDetail(null)}>
+      <SlideInPanel
+        title={prog.name}
+        subtitle={prog.weeks ? `${prog.days.length} days · ${prog.weeks} weeks` : `${prog.days.length} days`}
+        onBack={() => setDetail(null)}
+      >
         {prog.days.map((day, di) => (
           <div key={di} className="border-t border-neutral-900 pt-3">
             <div className="flex items-center justify-between mb-2">
@@ -2175,7 +2322,17 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
       {state.customPlans.length > 0 && (
         <div className="pt-4 border-t border-neutral-900 space-y-2">
           <div className="text-[11px] uppercase tracking-widest text-neutral-500">My plans</div>
-          {state.customPlans.map((p) => (
+          <input
+            type="text"
+            value={planSearch}
+            onChange={(e) => setPlanSearch(e.target.value)}
+            placeholder="Search my plans..."
+            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-xs focus:outline-none focus:border-red-700"
+          />
+          {filteredPlans.length === 0 && (
+            <div className="text-xs text-neutral-600 py-2 text-center">No plans match "{planSearch}".</div>
+          )}
+          {filteredPlans.map((p) => (
             <div key={p.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
               <button onClick={() => setDetail({ kind: "plan", id: p.id })} className="flex-1 min-w-0 text-left">
                 <div className="text-base text-white truncate">{p.name}</div>
@@ -2205,11 +2362,17 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
               <button onClick={() => setDetail({ kind: "program", id: prog.id })} className="flex-1 min-w-0 text-left">
                 <div className="flex items-center gap-2">
                   <span className="text-base text-white truncate">{prog.name}</span>
-                  {isCurrentCustom(prog.id) && (
-                    <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
+                  {isCompleteCustom(prog.id) ? (
+                    <span className="text-[9px] uppercase tracking-widest bg-neutral-700 text-white px-1.5 py-0.5 shrink-0">Complete</span>
+                  ) : (
+                    isCurrentCustom(prog.id) && (
+                      <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
+                    )
                   )}
                 </div>
-                <div className="text-xs text-neutral-600">{prog.days.length} days</div>
+                <div className="text-xs text-neutral-600">
+                  {prog.days.length} days{prog.weeks ? ` · ${prog.weeks} weeks` : ""}
+                </div>
               </button>
               <button onClick={() => deleteProgram(prog.id)} className="text-neutral-600 hover:text-red-600 shrink-0 ml-3">
                 <Trash2 size={14} />
