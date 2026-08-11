@@ -714,6 +714,8 @@ function loadInitialState() {
     cardioLogs: [], // { id, exId, date, distance, distanceUnit, duration, load, notes }
     currentProgram: null, // { programId, programName, source: "builtin" | "custom", dayIndex, totalDays, startDate }
     photos: [], // { id, date, context, dataUrl }
+    completedPrograms: [], // { id, programId, programSource, programName, weeks, startDate, endDate }
+    hasSeenOnboarding: false, // sticky — never re-derived from current data, only set true by a real action
   };
 }
 
@@ -792,7 +794,16 @@ function resolveCurrentProgramDay(state) {
 // ---------- Data export / import ----------
 // Everything the user has actually created — not the built-in templates/programs, which
 // ship with the app and always come from source, never from a backup file.
-const BACKUP_DATA_KEYS = ["logs", "cardioLogs", "customExercises", "customPlans", "customPrograms", "currentProgram", "photos"];
+const BACKUP_DATA_KEYS = [
+  "logs",
+  "cardioLogs",
+  "customExercises",
+  "customPlans",
+  "customPrograms",
+  "currentProgram",
+  "photos",
+  "completedPrograms",
+];
 
 function exportBackupFile(state) {
   const payload = {
@@ -926,7 +937,17 @@ export default function LiftLog() {
           // through this spread otherwise, silently reverting any future edit to the
           // built-in library — which is exactly what happened with this rename.
           const merged = { ...s, ...parsed, templates: DEFAULT_TEMPLATES, programs: HERO_PROGRAMS };
-          const migrated = migrateProgramNames(merged);
+          let migrated = migrateProgramNames(merged);
+          // Backward-compat: a returning user whose save predates the onboarding flag
+          // already clearly isn't a fresh install — retroactively mark them as having
+          // seen it so they never see the welcome screen. A brand-new install has no
+          // `raw` at all, so this block never runs for them and the loadInitialState()
+          // default (false) correctly stands.
+          if (!migrated.hasSeenOnboarding) {
+            const alreadyActive =
+              (migrated.logs || []).length > 0 || (migrated.cardioLogs || []).length > 0 || !!migrated.currentProgram;
+            if (alreadyActive) migrated = { ...migrated, hasSeenOnboarding: true };
+          }
           try {
             const { templates, programs, ...toPersist } = migrated;
             window.localStorage.setItem("liftlog-data", JSON.stringify(toPersist));
@@ -992,7 +1013,7 @@ export default function LiftLog() {
           prev.currentProgram.programId === programContext.programId &&
           prev.currentProgram.source === programContext.source;
         const startDate = isSameProgram ? prev.currentProgram.startDate : new Date().toISOString();
-        return { ...prev, currentProgram: { ...programContext, startDate } };
+        return { ...prev, currentProgram: { ...programContext, startDate }, hasSeenOnboarding: true };
       });
     }
   };
@@ -1027,6 +1048,62 @@ export default function LiftLog() {
         : prev
     );
   };
+  // Used by the completed-programs history list to relaunch a program that's no longer
+  // "current" (its currentProgram was cleared when the user moved on).
+  const restartProgramById = (programId, source) => {
+    const list = source === "custom" ? state.customPrograms || [] : state.programs || [];
+    const prog = list.find((p) => p.id === programId);
+    if (!prog) return;
+    updateState((prev) => ({
+      ...prev,
+      currentProgram: {
+        programId: prog.id,
+        programName: prog.name,
+        source,
+        dayIndex: 0,
+        totalDays: prog.days.length,
+        startDate: new Date().toISOString(),
+      },
+    }));
+    setTab("log");
+  };
+  const goToTemplatesAndClearProgram = () => {
+    updateState((prev) => ({ ...prev, currentProgram: null }));
+    setTab("templates");
+  };
+
+  // Records a program's completion to history once (deduped by programId+startDate, the
+  // unique identifier for a given run-through) as soon as it's detected — independent of
+  // whether the "Program complete" banner is currently on screen. Doesn't clear
+  // currentProgram itself; that only happens when the user picks Restart or New program,
+  // so the banner (and its actions) stays usable however long they take to respond.
+  useEffect(() => {
+    const resolved = resolveCurrentProgramDay(state);
+    if (!resolved?.isComplete) return;
+    const cp = state.currentProgram;
+    const alreadyRecorded = (state.completedPrograms || []).some(
+      (c) => c.programId === cp.programId && c.startDate === cp.startDate
+    );
+    if (alreadyRecorded) return;
+    const entry = {
+      id: `completed_${Date.now()}`,
+      programId: cp.programId,
+      programSource: cp.source,
+      programName: resolved.programName,
+      weeks: resolved.totalWeeks,
+      startDate: cp.startDate,
+      endDate: new Date().toISOString(),
+    };
+    updateState((prev) => {
+      if (!prev.currentProgram || prev.currentProgram.programId !== cp.programId || prev.currentProgram.startDate !== cp.startDate) {
+        return prev;
+      }
+      const dup = (prev.completedPrograms || []).some((c) => c.programId === cp.programId && c.startDate === cp.startDate);
+      if (dup) return prev;
+      return { ...prev, completedPrograms: [entry, ...(prev.completedPrograms || [])] };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   if (!loaded) {
     return (
@@ -1075,18 +1152,25 @@ export default function LiftLog() {
           />
         ) : (
           <>
-            {tab === "log" && (
-              <LogTab
-                state={state}
-                updateState={updateState}
-                allExercises={allExercises}
-                exMap={exMap}
-                onStartRun={(plan, programContext) => startRun(plan, "log", programContext)}
-                onLoggedSet={bumpRestTimer}
-                onRestartProgram={restartCurrentProgram}
-                onGoToTemplates={() => setTab("templates")}
-              />
-            )}
+            {tab === "log" &&
+              (!state.hasSeenOnboarding ? (
+                <OnboardingView
+                  state={state}
+                  onStartRun={(plan, programContext) => startRun(plan, "log", programContext)}
+                  onGoToTemplates={() => setTab("templates")}
+                />
+              ) : (
+                <LogTab
+                  state={state}
+                  updateState={updateState}
+                  allExercises={allExercises}
+                  exMap={exMap}
+                  onStartRun={(plan, programContext) => startRun(plan, "log", programContext)}
+                  onLoggedSet={bumpRestTimer}
+                  onRestartProgram={restartCurrentProgram}
+                  onGoToTemplates={goToTemplatesAndClearProgram}
+                />
+              ))}
             {tab === "cardio" && (
               <CardioTab
                 state={state}
@@ -1102,6 +1186,7 @@ export default function LiftLog() {
                 updateState={updateState}
                 exMap={exMap}
                 onStartRun={(plan, programContext) => startRun(plan, "templates", programContext)}
+                onRestartCompletedProgram={restartProgramById}
               />
             )}
             {tab === "build" && (
@@ -1218,6 +1303,96 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, onBack, onSelect
   );
 }
 
+// ---------------- EDIT LOGGED ENTRY ----------------
+// Lets a previously-saved history entry be corrected (weight/reps per set, target reps)
+// or deleted outright. Edits flow back through the same state.logs array, so
+// suggestNext recomputes automatically off the corrected numbers.
+function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
+  const [sets, setSets] = useState(entry.sets.map((s) => ({ weight: String(s.weight), reps: String(s.reps) })));
+  const [targetReps, setTargetReps] = useState(String(entry.targetReps));
+
+  const updateSetRow = (idx, field, val) => setSets((s) => s.map((row, i) => (i === idx ? { ...row, [field]: val } : row)));
+  const addSetRow = () => setSets((s) => [...s, { weight: "", reps: "" }]);
+  const removeSetRow = (idx) => setSets((s) => s.filter((_, i) => i !== idx));
+
+  const canSave = sets.some((s) => s.weight !== "" && s.reps !== "");
+
+  const handleSave = () => {
+    const cleanSets = sets.filter((s) => s.weight !== "" && s.reps !== "").map((s) => ({ weight: Number(s.weight), reps: Number(s.reps) }));
+    if (cleanSets.length === 0) return;
+    onSave({ sets: cleanSets, targetReps: Number(targetReps) || cleanSets[0].reps });
+  };
+
+  return (
+    <SlideInPanel
+      title={exMap[entry.exId]?.name || entry.exId}
+      subtitle={new Date(entry.date).toLocaleDateString()}
+      onBack={onBack}
+    >
+      <div>
+        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Target reps</label>
+        <input
+          type="number"
+          value={targetReps}
+          onChange={(e) => setTargetReps(e.target.value)}
+          className="w-24 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+        />
+      </div>
+
+      <div>
+        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Sets</label>
+        <div className="space-y-2">
+          {sets.map((row, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <span className="text-xs text-neutral-600 w-5">{idx + 1}</span>
+              <input
+                type="number"
+                placeholder="Weight"
+                value={row.weight}
+                onChange={(e) => updateSetRow(idx, "weight", e.target.value)}
+                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+              />
+              <input
+                type="number"
+                placeholder="Reps"
+                value={row.reps}
+                onChange={(e) => updateSetRow(idx, "reps", e.target.value)}
+                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+              />
+              {sets.length > 1 && (
+                <button onClick={() => removeSetRow(idx)} className="text-neutral-600 hover:text-red-600 p-1">
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        <button onClick={addSetRow} className="mt-2 flex items-center gap-1 text-xs text-neutral-500 hover:text-red-500">
+          <Plus size={12} /> Add set
+        </button>
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={!canSave}
+        className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
+          canSave
+            ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
+            : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+        }`}
+      >
+        Save changes
+      </button>
+      <button
+        onClick={onDelete}
+        className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-400 hover:text-red-500 hover:border-red-900/40 flex items-center justify-center gap-1.5"
+      >
+        <Trash2 size={14} /> Delete entry
+      </button>
+    </SlideInPanel>
+  );
+}
+
 // ---------------- SHARED SINGLE-EXERCISE LOGGER ----------------
 // Recommended panel + target reps + set rows + save + history, for a fixed exercise.
 // Used standalone by the Log tab (with its own exercise picker wrapped around it) and
@@ -1226,6 +1401,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
   const [targetReps, setTargetReps] = useState(8);
   const [setsInput, setSetsInput] = useState([{ weight: "", reps: "" }]);
   const [swapOpen, setSwapOpen] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState(null);
 
   const suggestion = useMemo(() => suggestNext(exId, state.logs, exMap), [exId, state.logs, exMap]);
 
@@ -1253,7 +1429,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
       sets,
       targetReps: Number(targetReps) || sets[0].reps,
     };
-    updateState((prev) => ({ ...prev, logs: [entry, ...prev.logs] }));
+    updateState((prev) => ({ ...prev, logs: [entry, ...prev.logs], hasSeenOnboarding: true }));
     setSetsInput([{ weight: "", reps: "" }]);
     onSaved?.(entry);
   };
@@ -1273,6 +1449,36 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         onSelect={(newExId) => {
           setSwapOpen(false);
           onSwap(newExId);
+        }}
+      />
+    );
+  }
+
+  if (editingEntryId) {
+    const entry = state.logs.find((l) => l.id === editingEntryId);
+    if (!entry) {
+      return (
+        <SlideInPanel title="Entry not found" onBack={() => setEditingEntryId(null)}>
+          <div className="text-sm text-neutral-500">This entry no longer exists.</div>
+        </SlideInPanel>
+      );
+    }
+    return (
+      <EditLogEntryPanel
+        entry={entry}
+        exMap={exMap}
+        onBack={() => setEditingEntryId(null)}
+        onSave={(changes) => {
+          updateState((prev) => ({
+            ...prev,
+            logs: prev.logs.map((l) => (l.id === editingEntryId ? { ...l, ...changes } : l)),
+          }));
+          setEditingEntryId(null);
+        }}
+        onDelete={() => {
+          if (!window.confirm("Delete this logged entry? This can't be undone.")) return;
+          updateState((prev) => ({ ...prev, logs: prev.logs.filter((l) => l.id !== editingEntryId) }));
+          setEditingEntryId(null);
         }}
       />
     );
@@ -1372,16 +1578,75 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
           <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">History</div>
           <div className="space-y-1.5">
             {recentForEx.map((l) => (
-              <div key={l.id} className="flex items-center justify-between text-xs border-b border-neutral-900 py-2">
+              <button
+                key={l.id}
+                onClick={() => setEditingEntryId(l.id)}
+                className="w-full flex items-center justify-between text-xs border-b border-neutral-900 py-2 text-left hover:border-neutral-700"
+              >
                 <span className="text-neutral-500">{new Date(l.date).toLocaleDateString()}</span>
                 <span className="text-sm text-neutral-300">
                   {l.sets.map((s) => `${s.weight}x${s.reps}`).join(", ")}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------- ONBOARDING ----------------
+// Shown in place of the Log tab only for a genuinely fresh install — no logs, no cardio
+// logs, no active program — until the user logs anything or starts a program, at which
+// point hasSeenOnboarding latches true for good (see startRun / saveLog / saveEntry).
+function OnboardingView({ state, onStartRun, onGoToTemplates }) {
+  return (
+    <div className="space-y-6">
+      <div className="text-center space-y-3 py-2">
+        <img
+          src={BREAK_LOGO}
+          alt="B.R.E.A.K. logo"
+          className="w-16 h-16 rounded-full object-cover ring-1 ring-red-700/60 mx-auto"
+        />
+        <div>
+          <div className="text-xl font-bold text-white">Welcome to BRK - Lift</div>
+          <p className="text-sm text-neutral-400 mt-2 max-w-sm mx-auto">
+            Log every set, follow a structured multi-day program, and let the app tell you what to lift next. Pick a
+            program below to start Day 1 right now.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-[11px] uppercase tracking-widest text-red-600">Pick a program</div>
+        {(state.programs || []).map((prog) => (
+          <div key={prog.id} className="border border-red-900/40 bg-charcoal-panel p-4 space-y-2">
+            <div>
+              <div className="text-base font-medium text-white">{prog.name}</div>
+              <div className="text-xs text-neutral-500 mt-0.5">
+                {prog.tagline}
+                {prog.weeks ? ` · ${prog.weeks} weeks` : ""}
+              </div>
+            </div>
+            <button
+              onClick={() =>
+                onStartRun(
+                  { name: `${prog.name} — ${prog.days[0].label}`, exercises: prog.days[0].exercises },
+                  { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: 0, totalDays: prog.days.length }
+                )
+              }
+              className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1.5"
+            >
+              <ChevronRight size={12} /> Start Day 1
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={onGoToTemplates} className="w-full text-center text-xs text-neutral-500 hover:text-red-500 py-2">
+        Or browse everything in Templates
+      </button>
     </div>
   );
 }
@@ -1745,6 +2010,111 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
   );
 }
 
+// ---------------- EDIT CARDIO ENTRY ----------------
+// Same idea as EditLogEntryPanel but for cardio's distance/duration/load/notes shape.
+// Edits flow back through state.cardioLogs, so bestCardioStat recomputes automatically.
+function EditCardioEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
+  const [distance, setDistance] = useState(entry.distance != null ? String(entry.distance) : "");
+  const [distanceUnit, setDistanceUnit] = useState(entry.distanceUnit || "mi");
+  const [duration, setDuration] = useState(entry.duration != null ? String(entry.duration) : "");
+  const [load, setLoad] = useState(entry.load != null ? String(entry.load) : "");
+  const [notes, setNotes] = useState(entry.notes || "");
+
+  const canSave = distance !== "" || duration !== "";
+
+  const handleSave = () => {
+    if (!canSave) return;
+    onSave({
+      distance: distance !== "" ? Number(distance) : null,
+      distanceUnit,
+      duration: duration !== "" ? Number(duration) : null,
+      load: load !== "" ? Number(load) : null,
+      notes: notes.trim(),
+    });
+  };
+
+  return (
+    <SlideInPanel
+      title={exMap[entry.exId]?.name || entry.exId}
+      subtitle={new Date(entry.date).toLocaleDateString()}
+      onBack={onBack}
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Distance</label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              value={distance}
+              onChange={(e) => setDistance(e.target.value)}
+              placeholder="0"
+              className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+            />
+            <select
+              value={distanceUnit}
+              onChange={(e) => setDistanceUnit(e.target.value)}
+              className="bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
+            >
+              <option value="mi">mi</option>
+              <option value="yd">yd</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Duration (min)</label>
+          <input
+            type="number"
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+            placeholder="0"
+            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Load — sled/ruck only (lb)</label>
+        <input
+          type="number"
+          value={load}
+          onChange={(e) => setLoad(e.target.value)}
+          placeholder="Optional"
+          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+        />
+      </div>
+
+      <div>
+        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Notes</label>
+        <input
+          type="text"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="How it felt, route, weather, etc."
+          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+        />
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={!canSave}
+        className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
+          canSave
+            ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
+            : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+        }`}
+      >
+        Save changes
+      </button>
+      <button
+        onClick={onDelete}
+        className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-400 hover:text-red-500 hover:border-red-900/40 flex items-center justify-center gap-1.5"
+      >
+        <Trash2 size={14} /> Delete entry
+      </button>
+    </SlideInPanel>
+  );
+}
+
 // ---------------- CARDIO TAB ----------------
 function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
   const conditioningExercises = useMemo(
@@ -1758,6 +2128,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
   const [duration, setDuration] = useState("");
   const [load, setLoad] = useState("");
   const [notes, setNotes] = useState("");
+  const [editingEntryId, setEditingEntryId] = useState(null);
 
   if (conditioningExercises.length === 0) {
     return (
@@ -1792,13 +2163,43 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
       load: load !== "" ? Number(load) : null,
       notes: notes.trim(),
     };
-    updateState((prev) => ({ ...prev, cardioLogs: [entry, ...(prev.cardioLogs || [])] }));
+    updateState((prev) => ({ ...prev, cardioLogs: [entry, ...(prev.cardioLogs || [])], hasSeenOnboarding: true }));
     onLoggedSet?.();
     setDistance("");
     setDuration("");
     setLoad("");
     setNotes("");
   };
+
+  if (editingEntryId) {
+    const entry = cardioLogs.find((l) => l.id === editingEntryId);
+    if (!entry) {
+      return (
+        <SlideInPanel title="Entry not found" onBack={() => setEditingEntryId(null)}>
+          <div className="text-sm text-neutral-500">This entry no longer exists.</div>
+        </SlideInPanel>
+      );
+    }
+    return (
+      <EditCardioEntryPanel
+        entry={entry}
+        exMap={exMap}
+        onBack={() => setEditingEntryId(null)}
+        onSave={(changes) => {
+          updateState((prev) => ({
+            ...prev,
+            cardioLogs: (prev.cardioLogs || []).map((l) => (l.id === editingEntryId ? { ...l, ...changes } : l)),
+          }));
+          setEditingEntryId(null);
+        }}
+        onDelete={() => {
+          if (!window.confirm("Delete this logged entry? This can't be undone.")) return;
+          updateState((prev) => ({ ...prev, cardioLogs: (prev.cardioLogs || []).filter((l) => l.id !== editingEntryId) }));
+          setEditingEntryId(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -1912,7 +2313,11 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
             {recentForEx.map((l) => {
               const pace = cardioPace(l);
               return (
-                <div key={l.id} className="text-xs border-b border-neutral-900 py-2">
+                <button
+                  key={l.id}
+                  onClick={() => setEditingEntryId(l.id)}
+                  className="w-full text-xs border-b border-neutral-900 py-2 text-left hover:border-neutral-700"
+                >
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-500">{new Date(l.date).toLocaleDateString()}</span>
                     <span className="text-sm text-neutral-300">
@@ -1923,8 +2328,8 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
                       {l.load ? ` · ${l.load} lb` : ""}
                     </span>
                   </div>
-                  {l.notes && <div className="text-neutral-600 mt-1">{l.notes}</div>}
-                </div>
+                  {l.notes && <div className="text-neutral-600 mt-1 text-left">{l.notes}</div>}
+                </button>
               );
             })}
           </div>
@@ -1935,7 +2340,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
 }
 
 // ---------------- TEMPLATES TAB ----------------
-function TemplatesTab({ state, updateState, exMap, onStartRun }) {
+function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartCompletedProgram }) {
   const [detail, setDetail] = useState(null); // { kind: "program" | "template", id }
 
   const copyToCustom = (tpl) => {
@@ -2110,6 +2515,31 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
           ))}
         </div>
       </div>
+
+      {(state.completedPrograms || []).length > 0 && (
+        <div className="space-y-3">
+          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Completed programs</div>
+          <p className="text-xs text-neutral-500">Every program you've finished — earned, not reset silently.</p>
+          <div className="space-y-2">
+            {state.completedPrograms.map((c) => (
+              <div key={c.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
+                <div className="min-w-0">
+                  <div className="text-base text-white truncate">{c.programName}</div>
+                  <div className="text-xs text-neutral-600 mt-0.5">
+                    {c.weeks} weeks · {new Date(c.startDate).toLocaleDateString()} – {new Date(c.endDate).toLocaleDateString()}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onRestartCompletedProgram(c.programId, c.programSource)}
+                  className="shrink-0 ml-3 text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+                >
+                  <ChevronRight size={12} /> Restart
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2908,6 +3338,7 @@ function SettingsTab({ state, updateState }) {
     customPlans: (state.customPlans || []).length,
     customPrograms: (state.customPrograms || []).length,
     photos: (state.photos || []).length,
+    completedPrograms: (state.completedPrograms || []).length,
   };
 
   return (
@@ -2928,6 +3359,7 @@ function SettingsTab({ state, updateState }) {
           <div>{counts.customPlans} custom plans</div>
           <div>{counts.customPrograms} custom programs</div>
           <div>{counts.photos} progress photos</div>
+          <div>{counts.completedPrograms} completed programs</div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">
