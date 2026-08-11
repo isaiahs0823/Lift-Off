@@ -920,9 +920,16 @@ export default function LiftLog() {
       if (raw) {
         const parsed = JSON.parse(raw);
         setState((s) => {
-          const migrated = migrateProgramNames({ ...s, ...parsed });
+          // templates/programs are static, app-shipped content — always take the fresh
+          // in-source copy, never whatever got persisted from an older build. Older saves
+          // (from before persist() excluded them) can still carry a stale copy forward
+          // through this spread otherwise, silently reverting any future edit to the
+          // built-in library — which is exactly what happened with this rename.
+          const merged = { ...s, ...parsed, templates: DEFAULT_TEMPLATES, programs: HERO_PROGRAMS };
+          const migrated = migrateProgramNames(merged);
           try {
-            window.localStorage.setItem("liftlog-data", JSON.stringify(migrated));
+            const { templates, programs, ...toPersist } = migrated;
+            window.localStorage.setItem("liftlog-data", JSON.stringify(toPersist));
           } catch (e) {
             // storage unavailable — migrated state still applies for this session
           }
@@ -938,7 +945,11 @@ export default function LiftLog() {
 
   const persist = useCallback((next) => {
     try {
-      window.localStorage.setItem("liftlog-data", JSON.stringify(next));
+      // Never persist templates/programs — they're static app content that should
+      // always come from source on the next load, not a snapshot from whatever build
+      // last saved.
+      const { templates, programs, ...toPersist } = next;
+      window.localStorage.setItem("liftlog-data", JSON.stringify(toPersist));
     } catch (e) {
       console.error("Storage error", e);
     }
