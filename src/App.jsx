@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Plus, Trash2, ChevronRight, ChevronLeft, ArrowLeftRight, Flame, Dumbbell, ClipboardList, TrendingUp, X, Star, Search, Check, Timer } from "lucide-react";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained)
@@ -832,9 +832,9 @@ export default function LiftLog() {
     setActiveRun({
       planName: plan.name,
       exercises: plan.exercises,
-      index: 0,
       sessionEntries: [],
       swaps: {},
+      finished: false,
       returnTab: fromTab,
       programContext: programContext || null,
     });
@@ -842,33 +842,22 @@ export default function LiftLog() {
       updateState((prev) => ({ ...prev, currentProgram: programContext }));
     }
   };
-  const advanceProgramDayIfDone = (nextIndex) => {
-    if (nextIndex >= activeRun.exercises.length && activeRun.programContext) {
+  const recordRunEntry = (index, entry) => {
+    setActiveRun((run) => ({ ...run, sessionEntries: [...run.sessionEntries, { exId: entry.exId, entry }] }));
+  };
+  const swapRunExercise = (index, newExId) => {
+    setActiveRun((run) => ({ ...run, swaps: { ...(run.swaps || {}), [index]: newExId } }));
+  };
+  const finishRun = () => {
+    setActiveRun((run) => ({ ...run, finished: true }));
+    if (activeRun?.programContext) {
       const ctx = activeRun.programContext;
       updateState((prev) => ({ ...prev, currentProgram: { ...ctx, dayIndex: (ctx.dayIndex + 1) % ctx.totalDays } }));
     }
   };
-  const advanceRun = (entry) => {
-    const nextIndex = activeRun.index + 1;
-    setActiveRun((run) => ({
-      ...run,
-      sessionEntries: [...run.sessionEntries, { exId: entry.exId, entry }],
-      index: nextIndex,
-    }));
-    advanceProgramDayIfDone(nextIndex);
-  };
-  const skipRun = () => {
-    const nextIndex = activeRun.index + 1;
-    setActiveRun((run) => ({ ...run, index: nextIndex }));
-    advanceProgramDayIfDone(nextIndex);
-  };
-  const previousRun = () => setActiveRun((run) => ({ ...run, index: Math.max(0, run.index - 1) }));
   const exitRun = () => {
     setTab(activeRun?.returnTab || "templates");
     setActiveRun(null);
-  };
-  const swapRunExercise = (newExId) => {
-    setActiveRun((run) => ({ ...run, swaps: { ...(run.swaps || {}), [run.index]: newExId } }));
   };
 
   if (!loaded) {
@@ -909,9 +898,8 @@ export default function LiftLog() {
             updateState={updateState}
             exMap={exMap}
             allExercises={allExercises}
-            onAdvance={advanceRun}
-            onSkip={skipRun}
-            onPrevious={previousRun}
+            onSaved={recordRunEntry}
+            onFinish={finishRun}
             onExit={exitRun}
             onSwap={swapRunExercise}
           />
@@ -1051,7 +1039,7 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, onBack, onSelect
 // Recommended panel + target reps + set rows + save + history, for a fixed exercise.
 // Used standalone by the Log tab (with its own exercise picker wrapped around it) and
 // by the guided plan runner (with a plan-driven step indicator wrapped around it).
-function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, onSaved, onSwap, saveLabel = "Save session" }) {
+function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, onSaved, onSwap, saveLabel = "Save session", showHistory = true }) {
   const [targetReps, setTargetReps] = useState(8);
   const [setsInput, setSetsInput] = useState([{ weight: "", reps: "" }]);
   const [swapOpen, setSwapOpen] = useState(false);
@@ -1196,7 +1184,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         {saveLabel}
       </button>
 
-      {recentForEx.length > 0 && (
+      {showHistory && recentForEx.length > 0 && (
         <div>
           <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">History</div>
           <div className="space-y-1.5">
@@ -1301,14 +1289,95 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun }) {
   );
 }
 
-// ---------------- GUIDED PLAN RUNNER ----------------
-// Steps through a plan's exercises one at a time. Saving an exercise writes to the same
-// state.logs array the standalone Log tab uses, then auto-advances to the next exercise.
-function GuidedRunView({ run, state, updateState, exMap, allExercises, onAdvance, onSkip, onPrevious, onExit, onSwap }) {
-  const total = run.exercises.length;
-  const isComplete = run.index >= total;
+// ---------------- REST TIMER ----------------
+// Sticky widget with fixed presets (1:00 / 1:30 / 2:00 / 3:00). Auto-(re)starts at the
+// last-used duration whenever bumpToken changes (i.e. whenever a set gets logged).
+const REST_PRESETS = [60, 90, 120, 180];
 
-  if (isComplete) {
+function formatRestTime(totalSeconds) {
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+}
+
+function RestTimer({ bumpToken }) {
+  const [duration, setDuration] = useState(90);
+  const [remaining, setRemaining] = useState(null);
+
+  useEffect(() => {
+    if (remaining === null || remaining <= 0) return;
+    const id = setInterval(() => setRemaining((r) => (r === null ? null : r - 1)), 1000);
+    return () => clearInterval(id);
+  }, [remaining]);
+
+  const isFirstRun = useRef(true);
+  useEffect(() => {
+    if (isFirstRun.current) {
+      isFirstRun.current = false;
+      return;
+    }
+    setRemaining(duration);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bumpToken]);
+
+  const startPreset = (secs) => {
+    setDuration(secs);
+    setRemaining(secs);
+  };
+  const stop = () => setRemaining(null);
+
+  return (
+    <div className="sticky top-0 z-20 border border-red-900/40 bg-neutral-950/95 backdrop-blur px-4 py-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] uppercase tracking-widest text-red-600 flex items-center gap-1.5">
+          <Timer size={12} /> Rest timer
+        </div>
+        {remaining === null ? (
+          <div className="text-xs text-neutral-600">Not running</div>
+        ) : remaining > 0 ? (
+          <div className="flex items-center gap-3">
+            <div className="text-2xl font-bold text-white tabular-nums">{formatRestTime(remaining)}</div>
+            <button onClick={stop} className="text-xs text-neutral-500 hover:text-red-500">
+              Stop
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <div className="text-sm font-bold text-red-500">Rest complete</div>
+            <button onClick={stop} className="text-xs text-neutral-500 hover:text-red-500">
+              Dismiss
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        {REST_PRESETS.map((secs) => (
+          <button
+            key={secs}
+            onClick={() => startPreset(secs)}
+            className={`flex-1 py-1.5 text-xs font-bold border ${
+              remaining !== null && duration === secs
+                ? "bg-red-700 border-red-700 text-white"
+                : "bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-600"
+            }`}
+          >
+            {formatRestTime(secs)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- GUIDED PLAN RUNNER ----------------
+// Shows every exercise in the plan on one page, each with its own logging card, so the
+// whole session is visible at once. Saving a set writes to the same state.logs array the
+// standalone Log tab uses and bumps the rest timer. A "Finish workout" button ends the
+// session; it doesn't require every exercise to be logged.
+function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, onFinish, onExit, onSwap }) {
+  const [restBumpToken, setRestBumpToken] = useState(0);
+
+  if (run.finished) {
     return (
       <div className="space-y-6">
         <div>
@@ -1331,7 +1400,7 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onAdvance
             ))}
           </div>
         ) : (
-          <div className="text-sm text-neutral-500">Nothing logged this session — every exercise was skipped.</div>
+          <div className="text-sm text-neutral-500">Nothing logged this session.</div>
         )}
 
         <button
@@ -1344,7 +1413,7 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onAdvance
     );
   }
 
-  const currentExId = run.swaps?.[run.index] ?? run.exercises[run.index].exId;
+  const loggedCount = new Set(run.sessionEntries.map((se) => se.exId)).size;
 
   return (
     <div className="space-y-6">
@@ -1352,7 +1421,7 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onAdvance
         <div>
           <div className="text-[11px] uppercase tracking-widest text-red-600">{run.planName}</div>
           <div className="text-xs text-neutral-500 mt-1">
-            Exercise {run.index + 1} of {total}
+            {run.exercises.length} exercises · {loggedCount} logged this session
           </div>
         </div>
         <button onClick={onExit} className="text-xs text-neutral-600 hover:text-red-600">
@@ -1360,38 +1429,46 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onAdvance
         </button>
       </div>
 
-      <ExerciseLogger
-        key={currentExId}
-        exId={currentExId}
-        title={exMap[currentExId]?.name || currentExId}
-        state={state}
-        updateState={updateState}
-        exMap={exMap}
-        allExercises={allExercises}
-        onSaved={onAdvance}
-        onSwap={onSwap}
-        saveLabel="Save & continue"
-      />
+      <RestTimer bumpToken={restBumpToken} />
 
-      <div className="flex items-center gap-2">
-        <button
-          onClick={onPrevious}
-          disabled={run.index === 0}
-          className={`flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border ${
-            run.index === 0
-              ? "bg-neutral-950 border-neutral-900 text-neutral-700 cursor-not-allowed"
-              : "bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-600"
-          }`}
-        >
-          Previous
-        </button>
-        <button
-          onClick={onSkip}
-          className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-600"
-        >
-          Skip
-        </button>
+      <div className="space-y-8">
+        {run.exercises.map((exSlot, idx) => {
+          const currentExId = run.swaps?.[idx] ?? exSlot.exId;
+          const isLogged = run.sessionEntries.some((se) => se.exId === currentExId);
+          return (
+            <div key={idx} className="border-t border-neutral-900 pt-6 first:border-t-0 first:pt-0">
+              {isLogged && (
+                <div className="flex items-center gap-1.5 text-xs text-green-500 mb-2">
+                  <Check size={14} /> Logged this session
+                </div>
+              )}
+              <ExerciseLogger
+                key={currentExId}
+                exId={currentExId}
+                title={exMap[currentExId]?.name || currentExId}
+                state={state}
+                updateState={updateState}
+                exMap={exMap}
+                allExercises={allExercises}
+                onSaved={(entry) => {
+                  onSaved(idx, entry);
+                  setRestBumpToken((t) => t + 1);
+                }}
+                onSwap={(newExId) => onSwap(idx, newExId)}
+                saveLabel="Log set"
+                showHistory={false}
+              />
+            </div>
+          );
+        })}
       </div>
+
+      <button
+        onClick={onFinish}
+        className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+      >
+        Finish workout
+      </button>
     </div>
   );
 }
