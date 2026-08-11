@@ -1300,6 +1300,39 @@ function formatRestTime(totalSeconds) {
   return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
 }
 
+// Web Audio (not an <audio> element) so the beep mixes with whatever the user is already
+// playing (Spotify/Apple Music/etc.) instead of pausing it, the way <audio>/<video> often do
+// on mobile. A single AudioContext is reused and resumed on user gestures (autoplay policy
+// requires that) so it's already unlocked by the time the countdown actually hits zero.
+let sharedAudioCtx = null;
+function unlockAudio() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+  if (sharedAudioCtx.state === "suspended") sharedAudioCtx.resume();
+}
+function playRestCompleteBeep() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+  const ctx = sharedAudioCtx;
+  if (ctx.state === "suspended") ctx.resume();
+  const now = ctx.currentTime;
+  [0, 0.22, 0.44].forEach((offset) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0, now + offset);
+    gain.gain.linearRampToValueAtTime(0.35, now + offset + 0.015);
+    gain.gain.linearRampToValueAtTime(0, now + offset + 0.18);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now + offset);
+    osc.stop(now + offset + 0.2);
+  });
+}
+
 function RestTimer({ bumpToken }) {
   const [duration, setDuration] = useState(90);
   const [remaining, setRemaining] = useState(null);
@@ -1310,17 +1343,23 @@ function RestTimer({ bumpToken }) {
     return () => clearInterval(id);
   }, [remaining]);
 
+  useEffect(() => {
+    if (remaining === 0) playRestCompleteBeep();
+  }, [remaining]);
+
   const isFirstRun = useRef(true);
   useEffect(() => {
     if (isFirstRun.current) {
       isFirstRun.current = false;
       return;
     }
+    unlockAudio();
     setRemaining(duration);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bumpToken]);
 
   const startPreset = (secs) => {
+    unlockAudio();
     setDuration(secs);
     setRemaining(secs);
   };
