@@ -701,6 +701,111 @@ const HERO_PROGRAMS = [
       },
     ],
   },
+  {
+    id: "prog_valkyrie",
+    name: "Valkyrie",
+    tagline: "Glutes, hips, and hamstrings lead every week — lower body hypertrophy with just enough upper body to stay balanced",
+    weeks: 10,
+    days: [
+      {
+        label: "Day 1: Glutes & hamstrings",
+        exercises: [
+          { exId: "rdl", sets: 4, reps: 8 },
+          { exId: "hip_thrust", sets: 4, reps: 10 },
+          { exId: "bulgarian_split_squat", sets: 3, reps: 10 },
+          { exId: "leg_curl_seated", sets: 3, reps: 12 },
+          { exId: "cable_pull_through", sets: 3, reps: 15 },
+        ],
+      },
+      {
+        label: "Day 2: Upper body push/pull",
+        exercises: [
+          { exId: "db_bench", sets: 3, reps: 10 },
+          { exId: "seated_row", sets: 3, reps: 10 },
+          { exId: "db_shoulder_press", sets: 3, reps: 12 },
+          { exId: "lat_pulldown", sets: 3, reps: 12 },
+          { exId: "tricep_pushdown", sets: 3, reps: 12 },
+        ],
+      },
+      {
+        label: "Day 3: Glutes & quads",
+        exercises: [
+          { exId: "squat", sets: 4, reps: 8 },
+          { exId: "walking_lunge", sets: 3, reps: 12 },
+          { exId: "hip_thrust_machine", sets: 3, reps: 12 },
+          { exId: "leg_extension", sets: 3, reps: 15 },
+          { exId: "hip_abduction_machine", sets: 3, reps: 15 },
+        ],
+      },
+      {
+        label: "Day 4: Shoulders & arms",
+        exercises: [
+          { exId: "lat_raise", sets: 3, reps: 15 },
+          { exId: "hammer_curl", sets: 3, reps: 12 },
+          { exId: "overhead_tricep_ext", sets: 3, reps: 12 },
+          { exId: "rear_delt_fly", sets: 3, reps: 15 },
+          { exId: "face_pull", sets: 3, reps: 15 },
+        ],
+      },
+      {
+        label: "Day 5: Glute burnout & core",
+        exercises: [
+          { exId: "hip_thrust", sets: 4, reps: 12 },
+          { exId: "glute_kickback_machine", sets: 3, reps: 15 },
+          { exId: "hip_adduction_machine", sets: 3, reps: 15 },
+          { exId: "step_up", sets: 3, reps: 12 },
+          { exId: "hanging_leg_raise", sets: 3, reps: 15 },
+        ],
+      },
+    ],
+  },
+  {
+    id: "prog_huntress",
+    name: "Huntress",
+    tagline: "Full-body strength with a lean, athletic finish — higher reps, real conditioning, no wasted days",
+    weeks: 8,
+    days: [
+      {
+        label: "Day 1: Full body strength A",
+        exercises: [
+          { exId: "squat", sets: 3, reps: 10 },
+          { exId: "db_bench", sets: 3, reps: 10 },
+          { exId: "seated_row", sets: 3, reps: 10 },
+          { exId: "rdl", sets: 3, reps: 10 },
+          { exId: "plank", sets: 3, reps: 1 },
+        ],
+      },
+      {
+        label: "Day 2: Conditioning & core",
+        exercises: [
+          { exId: "kb_swing", sets: 4, reps: 15 },
+          { exId: "battle_ropes", sets: 4, reps: 30 },
+          { exId: "hanging_leg_raise", sets: 3, reps: 12 },
+          { exId: "russian_twist", sets: 3, reps: 20 },
+        ],
+      },
+      {
+        label: "Day 3: Full body strength B",
+        exercises: [
+          { exId: "deadlift", sets: 3, reps: 8 },
+          { exId: "ohp", sets: 3, reps: 10 },
+          { exId: "lat_pulldown", sets: 3, reps: 10 },
+          { exId: "walking_lunge", sets: 3, reps: 12 },
+          { exId: "cable_crunch", sets: 3, reps: 15 },
+        ],
+      },
+      {
+        label: "Day 4: Glutes & arms finisher",
+        exercises: [
+          { exId: "hip_thrust", sets: 4, reps: 12 },
+          { exId: "leg_curl_seated", sets: 3, reps: 12 },
+          { exId: "db_curl", sets: 3, reps: 12 },
+          { exId: "tricep_pushdown", sets: 3, reps: 12 },
+          { exId: "lat_raise", sets: 3, reps: 15 },
+        ],
+      },
+    ],
+  },
 ];
 
 function loadInitialState() {
