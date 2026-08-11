@@ -862,17 +862,17 @@ export default function LiftLog() {
 
   if (!loaded) {
     return (
-      <div className="w-full min-h-[400px] flex items-center justify-center bg-black text-neutral-400 text-sm">
+      <div className="w-full min-h-[400px] flex items-center justify-center bg-charcoal-deep text-neutral-400 text-sm">
         Loading...
       </div>
     );
   }
 
   return (
-    <div className="w-full bg-black text-neutral-200 font-sans min-h-[600px]">
+    <div className="w-full bg-charcoal-deep text-neutral-200 font-sans min-h-[600px]">
       <Header />
       {!activeRun && (
-        <div className="flex overflow-x-auto border-b border-red-900/40 bg-neutral-950 sticky top-0 z-10">
+        <div className="flex overflow-x-auto border-b border-red-900/40 bg-charcoal-panel sticky top-0 z-10">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -943,7 +943,7 @@ export default function LiftLog() {
 
 function Header() {
   return (
-    <div className="px-4 sm:px-6 pt-6 pb-4 border-b border-red-900/40 bg-gradient-to-b from-neutral-950 to-black">
+    <div className="px-4 sm:px-6 pt-6 pb-4 border-b border-red-900/40 bg-gradient-to-b from-charcoal-panel to-charcoal-deep">
       <div className="flex items-center gap-3">
         <img
           src={BREAK_LOGO}
@@ -973,7 +973,7 @@ function SlideInPanel({ title, subtitle, onBack, children }) {
   return (
     <div className="overflow-hidden">
       <div className={`transform transition-transform duration-300 ease-out ${entered ? "translate-x-0" : "translate-x-full"}`}>
-        <div className="flex items-center gap-3 px-4 py-3 mb-4 border border-red-900/40 bg-neutral-950">
+        <div className="flex items-center gap-3 px-4 py-3 mb-4 border border-red-900/40 bg-charcoal-panel">
           <button onClick={onBack} className="text-neutral-400 hover:text-red-500 p-1 -ml-1 shrink-0" aria-label="Back">
             <ChevronLeft size={20} />
           </button>
@@ -1014,7 +1014,7 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, onBack, onSelect
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search the catalog..."
-        className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-xs focus:outline-none focus:border-red-700"
+        className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-xs focus:outline-none focus:border-red-700"
       />
       <div className="space-y-1.5">
         {results.map((ex) => (
@@ -1099,7 +1099,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
     <div className="space-y-6">
       {title && (
         <div className="flex items-center justify-between gap-2">
-          <div className="text-lg font-bold text-white truncate">{title}</div>
+          <div className="text-xl font-bold text-white truncate">{title}</div>
           {onSwap && (
             <button
               onClick={() => setSwapOpen(true)}
@@ -1111,13 +1111,13 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         </div>
       )}
 
-      <div className="border border-red-900/40 bg-neutral-950 p-4">
+      <div className="border border-red-900/40 bg-charcoal-panel p-4">
         <div className="text-[11px] uppercase tracking-widest text-red-600 mb-2">Recommended</div>
         {suggestion.suggestion !== null ? (
           <>
-            <div className="text-3xl font-bold text-white">{suggestion.suggestion} lb x {suggestion.targetReps} reps</div>
+            <div className="text-4xl font-bold text-white">{suggestion.suggestion} lb x {suggestion.targetReps} reps</div>
             <div className="text-xs text-neutral-500 mt-1">{suggestion.reason}</div>
-            <div className="text-xs text-neutral-600 mt-2">
+            <div className="text-sm text-neutral-600 mt-2">
               Last: {suggestion.lastWeight} lb x {suggestion.lastReps} reps
             </div>
           </>
@@ -1132,7 +1132,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
           type="number"
           value={targetReps}
           onChange={(e) => setTargetReps(e.target.value)}
-          className="w-24 bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-24 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
         />
       </div>
 
@@ -1147,14 +1147,14 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
                 placeholder="Weight"
                 value={row.weight}
                 onChange={(e) => updateSetRow(idx, "weight", e.target.value)}
-                className="flex-1 bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
               />
               <input
                 type="number"
                 placeholder="Reps"
                 value={row.reps}
                 onChange={(e) => updateSetRow(idx, "reps", e.target.value)}
-                className="flex-1 bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
               />
               {setsInput.length > 1 && (
                 <button onClick={() => removeSetRow(idx)} className="text-neutral-600 hover:text-red-600 p-1">
@@ -1178,7 +1178,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
           canSave
             ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-            : "bg-neutral-950 border-neutral-800 text-neutral-700 cursor-not-allowed"
+            : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
         }`}
       >
         {saveLabel}
@@ -1191,7 +1191,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
             {recentForEx.map((l) => (
               <div key={l.id} className="flex items-center justify-between text-xs border-b border-neutral-900 py-2">
                 <span className="text-neutral-500">{new Date(l.date).toLocaleDateString()}</span>
-                <span className="text-neutral-300">
+                <span className="text-sm text-neutral-300">
                   {l.sets.map((s) => `${s.weight}x${s.reps}`).join(", ")}
                 </span>
               </div>
@@ -1228,10 +1228,10 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun }) {
   return (
     <div className="space-y-6">
       {currentProgramDay && (
-        <div className="border border-red-900/40 bg-neutral-950 px-4 py-3 flex items-center justify-between">
+        <div className="border border-red-900/40 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
           <div className="min-w-0">
             <div className="text-[10px] uppercase tracking-widest text-red-600">Current program</div>
-            <div className="text-sm text-white mt-0.5 truncate">
+            <div className="text-base text-white mt-0.5 truncate">
               {currentProgramDay.programName} — Day {currentProgramDay.dayIndex + 1} of {currentProgramDay.totalDays}
             </div>
             <div className="text-xs text-neutral-500 mt-0.5 truncate">{currentProgramDay.dayLabel}</div>
@@ -1252,12 +1252,12 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun }) {
           value={exFilter}
           onChange={(e) => setExFilter(e.target.value)}
           placeholder="Search the catalog..."
-          className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-xs mb-2 focus:outline-none focus:border-red-700"
+          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-xs mb-2 focus:outline-none focus:border-red-700"
         />
         <select
           value={selectedExId}
           onChange={(e) => setSelectedExId(e.target.value)}
-          className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
         >
           {Object.entries(groupedByMuscle).map(([muscle, exs]) => (
             <optgroup key={muscle} label={muscle}>
@@ -1347,12 +1347,12 @@ function RestTimer({ bumpToken }) {
     if (remaining === 0) playRestCompleteBeep();
   }, [remaining]);
 
-  const isFirstRun = useRef(true);
+  // Compares against the last-seen bumpToken (rather than a "have I ever run" flag) so
+  // React StrictMode's double-invoke-on-commit in dev can't misfire this as a real bump.
+  const lastBumpToken = useRef(bumpToken);
   useEffect(() => {
-    if (isFirstRun.current) {
-      isFirstRun.current = false;
-      return;
-    }
+    if (bumpToken === lastBumpToken.current) return;
+    lastBumpToken.current = bumpToken;
     unlockAudio();
     setRemaining(duration);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1366,7 +1366,7 @@ function RestTimer({ bumpToken }) {
   const stop = () => setRemaining(null);
 
   return (
-    <div className="sticky top-0 z-20 border border-red-900/40 bg-neutral-950/95 backdrop-blur px-4 py-3 space-y-2">
+    <div className="sticky top-0 z-20 border border-red-900/40 bg-charcoal-panel/95 backdrop-blur px-4 py-3 space-y-2">
       <div className="flex items-center justify-between">
         <div className="text-[11px] uppercase tracking-widest text-red-600 flex items-center gap-1.5">
           <Timer size={12} /> Rest timer
@@ -1397,7 +1397,7 @@ function RestTimer({ bumpToken }) {
             className={`flex-1 py-1.5 text-xs font-bold border ${
               remaining !== null && duration === secs
                 ? "bg-red-700 border-red-700 text-white"
-                : "bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-600"
+                : "bg-charcoal-panel border-neutral-800 text-neutral-300 hover:border-neutral-600"
             }`}
           >
             {formatRestTime(secs)}
@@ -1427,9 +1427,9 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
         {run.sessionEntries.length > 0 ? (
           <div className="space-y-1.5">
             {run.sessionEntries.map(({ entry }, i) => (
-              <div key={entry.id || i} className="border border-neutral-800 bg-neutral-950 px-4 py-3">
+              <div key={entry.id || i} className="border border-neutral-800 bg-charcoal-panel px-4 py-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-white">{exMap[entry.exId]?.name || entry.exId}</span>
+                  <span className="text-base text-white">{exMap[entry.exId]?.name || entry.exId}</span>
                   <span className="text-xs text-neutral-500">Target {entry.targetReps}</span>
                 </div>
                 <div className="text-xs text-neutral-400 mt-1">
@@ -1573,7 +1573,7 @@ function CardioTab({ state, updateState, allExercises, exMap }) {
         <select
           value={currentExId}
           onChange={(e) => setSelectedExId(e.target.value)}
-          className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
         >
           {conditioningExercises.map((ex) => (
             <option key={ex.id} value={ex.id}>
@@ -1584,16 +1584,16 @@ function CardioTab({ state, updateState, allExercises, exMap }) {
       </div>
 
       {(lastEntry || best) && (
-        <div className="border border-red-900/40 bg-neutral-950 p-4 space-y-2">
+        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-2">
           <div className="text-[11px] uppercase tracking-widest text-red-600">Where you stand</div>
           {best && (
-            <div className="text-2xl font-bold text-white">
+            <div className="text-3xl font-bold text-white">
               Best {best.type === "pace" ? "pace" : "distance"}: {best.value}
               {best.type === "pace" ? " /mi" : ""}
             </div>
           )}
           {lastEntry && (
-            <div className="text-xs text-neutral-500">
+            <div className="text-sm text-neutral-500">
               Last: {new Date(lastEntry.date).toLocaleDateString()} —{" "}
               {lastEntry.distance ? `${lastEntry.distance} ${lastEntry.distanceUnit}` : ""}
               {lastEntry.distance && lastEntry.duration ? ", " : ""}
@@ -1613,12 +1613,12 @@ function CardioTab({ state, updateState, allExercises, exMap }) {
               value={distance}
               onChange={(e) => setDistance(e.target.value)}
               placeholder="0"
-              className="flex-1 min-w-0 bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+              className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
             />
             <select
               value={distanceUnit}
               onChange={(e) => setDistanceUnit(e.target.value)}
-              className="bg-neutral-950 border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
+              className="bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
             >
               <option value="mi">mi</option>
               <option value="yd">yd</option>
@@ -1632,7 +1632,7 @@ function CardioTab({ state, updateState, allExercises, exMap }) {
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
             placeholder="0"
-            className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
           />
         </div>
       </div>
@@ -1644,7 +1644,7 @@ function CardioTab({ state, updateState, allExercises, exMap }) {
           value={load}
           onChange={(e) => setLoad(e.target.value)}
           placeholder="Optional"
-          className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
         />
       </div>
 
@@ -1655,7 +1655,7 @@ function CardioTab({ state, updateState, allExercises, exMap }) {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="How it felt, route, weather, etc."
-          className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
         />
       </div>
 
@@ -1665,7 +1665,7 @@ function CardioTab({ state, updateState, allExercises, exMap }) {
         className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
           canSave
             ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-            : "bg-neutral-950 border-neutral-800 text-neutral-700 cursor-not-allowed"
+            : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
         }`}
       >
         Save session
@@ -1681,7 +1681,7 @@ function CardioTab({ state, updateState, allExercises, exMap }) {
                 <div key={l.id} className="text-xs border-b border-neutral-900 py-2">
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-500">{new Date(l.date).toLocaleDateString()}</span>
-                    <span className="text-neutral-300">
+                    <span className="text-sm text-neutral-300">
                       {l.distance ? `${l.distance} ${l.distanceUnit}` : ""}
                       {l.distance && l.duration ? " · " : ""}
                       {l.duration ? `${l.duration} min` : ""}
@@ -1775,7 +1775,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
             <div className="space-y-1.5">
               {day.exercises.map((e, i) => (
                 <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
-                  <span>{exMap[e.exId]?.name || e.exId}</span>
+                  <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
                   <span className="text-neutral-600">
                     {e.sets} x {e.reps}
                   </span>
@@ -1796,7 +1796,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
         <div className="space-y-2">
           {tpl.exercises.map((e, i) => (
             <div key={i} className="flex items-center justify-between text-xs text-neutral-400 py-1.5 border-t border-neutral-900">
-              <span>{exMap[e.exId]?.name || e.exId}</span>
+              <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
               <span className="text-neutral-600">
                 {e.sets} x {e.reps}
               </span>
@@ -1828,11 +1828,11 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
             <button
               key={prog.id}
               onClick={() => setDetail({ kind: "program", id: prog.id })}
-              className="w-full flex items-center justify-between px-4 py-3 border border-red-900/40 bg-neutral-950 text-left"
+              className="w-full flex items-center justify-between px-4 py-3 border border-red-900/40 bg-charcoal-panel text-left"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-white truncate">{prog.name}</span>
+                  <span className="text-base font-medium text-white truncate">{prog.name}</span>
                   {isCurrent(prog.id) && (
                     <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
                   )}
@@ -1853,9 +1853,9 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
             <button
               key={tpl.id}
               onClick={() => setDetail({ kind: "template", id: tpl.id })}
-              className="w-full flex items-center justify-between px-4 py-3 border border-neutral-800 bg-neutral-950 text-left"
+              className="w-full flex items-center justify-between px-4 py-3 border border-neutral-800 bg-charcoal-panel text-left"
             >
-              <span className="text-sm font-medium text-white truncate">{tpl.name}</span>
+              <span className="text-base font-medium text-white truncate">{tpl.name}</span>
               <ChevronRight size={16} className="text-neutral-600 shrink-0 ml-2" />
             </button>
           ))}
@@ -1912,7 +1912,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
         <div className="space-y-1.5">
           {p.exercises.map((e, i) => (
             <div key={i} className="flex items-center justify-between text-xs text-neutral-400 py-1.5 border-t border-neutral-900">
-              <span>{exMap[e.exId]?.name || e.exId}</span>
+              <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
               <span className="text-neutral-600">
                 {e.sets} x {e.reps}
               </span>
@@ -1966,7 +1966,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
             <div className="space-y-1.5">
               {day.exercises.map((e, i) => (
                 <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
-                  <span>{exMap[e.exId]?.name || e.exId}</span>
+                  <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
                   <span className="text-neutral-600">
                     {e.sets} x {e.reps}
                   </span>
@@ -1997,7 +1997,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
           value={planName}
           onChange={(e) => setPlanName(e.target.value)}
           placeholder="e.g. Fat loss phase - upper focus"
-          className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
         />
       </div>
 
@@ -2008,7 +2008,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
           value={exFilter}
           onChange={(e) => setExFilter(e.target.value)}
           placeholder="Search the catalog..."
-          className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-xs mb-2 focus:outline-none focus:border-red-700"
+          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-xs mb-2 focus:outline-none focus:border-red-700"
         />
         <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto border border-neutral-900 p-2">
           {filteredExercises.map((ex) => (
@@ -2038,19 +2038,19 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
           <label className="block text-[11px] uppercase tracking-widest text-neutral-500">Plan exercises</label>
           {selectedExercises.map((e) => (
             <div key={e.exId} className="flex items-center gap-2 border border-neutral-900 px-3 py-2">
-              <span className="flex-1 text-sm text-neutral-200">{exMap[e.exId]?.name}</span>
+              <span className="flex-1 text-base text-neutral-200">{exMap[e.exId]?.name}</span>
               <input
                 type="number"
                 value={e.sets}
                 onChange={(ev) => updateExercise(e.exId, "sets", ev.target.value)}
-                className="w-14 bg-neutral-950 border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
+                className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
               />
               <span className="text-neutral-600 text-xs">sets</span>
               <input
                 type="number"
                 value={e.reps}
                 onChange={(ev) => updateExercise(e.exId, "reps", ev.target.value)}
-                className="w-14 bg-neutral-950 border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
+                className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
               />
               <span className="text-neutral-600 text-xs">reps</span>
               <button onClick={() => removeExercise(e.exId)} className="text-neutral-600 hover:text-red-600">
@@ -2067,7 +2067,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
         className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
           planName.trim() && selectedExercises.length > 0
             ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-            : "bg-neutral-950 border-neutral-800 text-neutral-700 cursor-not-allowed"
+            : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
         }`}
       >
         Save plan
@@ -2077,9 +2077,9 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
         <div className="pt-4 border-t border-neutral-900 space-y-2">
           <div className="text-[11px] uppercase tracking-widest text-neutral-500">My plans</div>
           {state.customPlans.map((p) => (
-            <div key={p.id} className="border border-neutral-800 bg-neutral-950 px-4 py-3 flex items-center justify-between">
+            <div key={p.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
               <button onClick={() => setDetail({ kind: "plan", id: p.id })} className="flex-1 min-w-0 text-left">
-                <div className="text-sm text-white truncate">{p.name}</div>
+                <div className="text-base text-white truncate">{p.name}</div>
                 <div className="text-xs text-neutral-600">{p.exercises.length} exercises</div>
               </button>
               <div className="flex items-center gap-3 shrink-0 ml-3">
@@ -2102,10 +2102,10 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
         <div className="pt-4 border-t border-neutral-900 space-y-2">
           <div className="text-[11px] uppercase tracking-widest text-neutral-500">My programs</div>
           {state.customPrograms.map((prog) => (
-            <div key={prog.id} className="border border-neutral-800 bg-neutral-950 px-4 py-3 flex items-center justify-between">
+            <div key={prog.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
               <button onClick={() => setDetail({ kind: "program", id: prog.id })} className="flex-1 min-w-0 text-left">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-white truncate">{prog.name}</span>
+                  <span className="text-base text-white truncate">{prog.name}</span>
                   {isCurrentCustom(prog.id) && (
                     <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
                   )}
@@ -2145,11 +2145,11 @@ function TopUsedTab({ state, exMap }) {
     <div className="space-y-3">
       <p className="text-xs text-neutral-500">Ranked by how often you've logged each lift.</p>
       {ranked.map((r, i) => (
-        <div key={r.ex.id} className="border border-neutral-800 bg-neutral-950 px-4 py-3">
+        <div key={r.ex.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               {i === 0 && <Star size={12} className="text-red-600" />}
-              <span className="text-sm text-white">{r.ex.name}</span>
+              <span className="text-base text-white">{r.ex.name}</span>
             </div>
             <span className="text-xs text-neutral-500">{r.count}x</span>
           </div>
@@ -2215,12 +2215,12 @@ function CatalogTab({ state, updateState, allExercises }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search exercises..."
-          className="flex-1 bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
         />
         <select
           value={muscleFilter}
           onChange={(e) => setMuscleFilter(e.target.value)}
-          className="bg-neutral-950 border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
+          className="bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
         >
           <option value="All">All</option>
           {MUSCLE_GROUPS.map((m) => (
@@ -2239,20 +2239,20 @@ function CatalogTab({ state, updateState, allExercises }) {
           <Plus size={14} /> Add missing exercise
         </button>
       ) : (
-        <div className="border border-red-900/40 bg-neutral-950 p-4 space-y-3">
+        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
           <div className="text-[11px] uppercase tracking-widest text-red-600">Add exercise</div>
           <input
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="e.g. Plate-loaded chest press machine"
-            className="w-full bg-black border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
           />
           <div className="flex gap-2">
             <select
               value={newMuscle}
               onChange={(e) => setNewMuscle(e.target.value)}
-              className="flex-1 bg-black border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
+              className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
             >
               {MUSCLE_GROUPS.map((m) => (
                 <option key={m} value={m}>
@@ -2263,7 +2263,7 @@ function CatalogTab({ state, updateState, allExercises }) {
             <select
               value={newType}
               onChange={(e) => setNewType(e.target.value)}
-              className="flex-1 bg-black border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
+              className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
             >
               <option value="compound">Compound</option>
               <option value="isolation">Isolation</option>
@@ -2276,7 +2276,7 @@ function CatalogTab({ state, updateState, allExercises }) {
               className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border flex items-center justify-center gap-1.5 ${
                 newName.trim()
                   ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-                  : "bg-neutral-950 border-neutral-800 text-neutral-700 cursor-not-allowed"
+                  : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
               }`}
             >
               <Check size={14} /> Save
@@ -2302,9 +2302,9 @@ function CatalogTab({ state, updateState, allExercises }) {
               {exs.map((ex) => (
                 <div
                   key={ex.id}
-                  className="flex items-center justify-between text-sm border border-neutral-900 bg-neutral-950 px-3 py-2"
+                  className="flex items-center justify-between text-sm border border-neutral-900 bg-charcoal-panel px-3 py-2"
                 >
-                  <span className="text-neutral-200">{ex.name}</span>
+                  <span className="text-base text-neutral-200">{ex.name}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] uppercase tracking-wider text-neutral-600">{ex.type}</span>
                     {ex.custom && (
