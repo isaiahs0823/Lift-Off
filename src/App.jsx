@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, ChevronRight, Flame, Dumbbell, ClipboardList, TrendingUp, X, Star, Search, Check, Timer } from "lucide-react";
+import { Plus, Trash2, ChevronRight, ChevronLeft, ArrowLeftRight, Flame, Dumbbell, ClipboardList, TrendingUp, X, Star, Search, Check, Timer } from "lucide-react";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained)
 const BREAK_LOGO =
@@ -685,6 +685,26 @@ function loadInitialState() {
     customExercises: [], // { id, name, type, muscle }
     logs: [], // { id, exId, date, sets: [{weight, reps}], targetReps }
     cardioLogs: [], // { id, exId, date, distance, distanceUnit, duration, load, notes }
+    currentProgram: null, // { programId, programName, source: "builtin" | "custom", dayIndex, totalDays }
+  };
+}
+
+// Resolves state.currentProgram into the actual program/day data, or null if the
+// program was deleted (custom program removed) or no program is active.
+function resolveCurrentProgramDay(state) {
+  const cp = state.currentProgram;
+  if (!cp) return null;
+  const list = cp.source === "custom" ? state.customPrograms || [] : state.programs || [];
+  const prog = list.find((p) => p.id === cp.programId);
+  if (!prog || !prog.days || !prog.days[cp.dayIndex]) return null;
+  const day = prog.days[cp.dayIndex];
+  return {
+    programName: prog.name,
+    dayLabel: day.label,
+    dayIndex: cp.dayIndex,
+    totalDays: prog.days.length,
+    plan: { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
+    programContext: { programId: prog.id, programName: prog.name, source: cp.source, dayIndex: cp.dayIndex, totalDays: prog.days.length },
   };
 }
 
@@ -808,21 +828,47 @@ export default function LiftLog() {
     [state.customExercises]
   );
 
-  const startRun = (plan, fromTab) => {
-    setActiveRun({ planName: plan.name, exercises: plan.exercises, index: 0, sessionEntries: [], returnTab: fromTab });
+  const startRun = (plan, fromTab, programContext) => {
+    setActiveRun({
+      planName: plan.name,
+      exercises: plan.exercises,
+      index: 0,
+      sessionEntries: [],
+      swaps: {},
+      returnTab: fromTab,
+      programContext: programContext || null,
+    });
+    if (programContext) {
+      updateState((prev) => ({ ...prev, currentProgram: programContext }));
+    }
+  };
+  const advanceProgramDayIfDone = (nextIndex) => {
+    if (nextIndex >= activeRun.exercises.length && activeRun.programContext) {
+      const ctx = activeRun.programContext;
+      updateState((prev) => ({ ...prev, currentProgram: { ...ctx, dayIndex: (ctx.dayIndex + 1) % ctx.totalDays } }));
+    }
   };
   const advanceRun = (entry) => {
+    const nextIndex = activeRun.index + 1;
     setActiveRun((run) => ({
       ...run,
-      sessionEntries: [...run.sessionEntries, { exId: run.exercises[run.index].exId, entry }],
-      index: run.index + 1,
+      sessionEntries: [...run.sessionEntries, { exId: entry.exId, entry }],
+      index: nextIndex,
     }));
+    advanceProgramDayIfDone(nextIndex);
   };
-  const skipRun = () => setActiveRun((run) => ({ ...run, index: run.index + 1 }));
+  const skipRun = () => {
+    const nextIndex = activeRun.index + 1;
+    setActiveRun((run) => ({ ...run, index: nextIndex }));
+    advanceProgramDayIfDone(nextIndex);
+  };
   const previousRun = () => setActiveRun((run) => ({ ...run, index: Math.max(0, run.index - 1) }));
   const exitRun = () => {
     setTab(activeRun?.returnTab || "templates");
     setActiveRun(null);
+  };
+  const swapRunExercise = (newExId) => {
+    setActiveRun((run) => ({ ...run, swaps: { ...(run.swaps || {}), [run.index]: newExId } }));
   };
 
   if (!loaded) {
@@ -862,17 +908,32 @@ export default function LiftLog() {
             state={state}
             updateState={updateState}
             exMap={exMap}
+            allExercises={allExercises}
             onAdvance={advanceRun}
             onSkip={skipRun}
             onPrevious={previousRun}
             onExit={exitRun}
+            onSwap={swapRunExercise}
           />
         ) : (
           <>
-            {tab === "log" && <LogTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
+            {tab === "log" && (
+              <LogTab
+                state={state}
+                updateState={updateState}
+                allExercises={allExercises}
+                exMap={exMap}
+                onStartRun={(plan, programContext) => startRun(plan, "log", programContext)}
+              />
+            )}
             {tab === "cardio" && <CardioTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
             {tab === "templates" && (
-              <TemplatesTab state={state} updateState={updateState} exMap={exMap} onStartRun={(plan) => startRun(plan, "templates")} />
+              <TemplatesTab
+                state={state}
+                updateState={updateState}
+                exMap={exMap}
+                onStartRun={(plan, programContext) => startRun(plan, "templates", programContext)}
+              />
             )}
             {tab === "build" && (
               <BuildPlanTab
@@ -880,7 +941,7 @@ export default function LiftLog() {
                 updateState={updateState}
                 allExercises={allExercises}
                 exMap={exMap}
-                onStartRun={(plan) => startRun(plan, "build")}
+                onStartRun={(plan, programContext) => startRun(plan, "build", programContext)}
               />
             )}
             {tab === "catalog" && <CatalogTab state={state} updateState={updateState} allExercises={allExercises} />}
@@ -910,13 +971,90 @@ function Header() {
   );
 }
 
+// ---------------- SHARED SLIDE-IN DRILL-DOWN PANEL ----------------
+// Full-width view that slides in from the right with a back arrow at the top, replacing
+// an accordion-expand or a dead-end tap. Used for Templates/My plans drill-down and the
+// exercise swap picker.
+function SlideInPanel({ title, subtitle, onBack, children }) {
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  return (
+    <div className="overflow-hidden">
+      <div className={`transform transition-transform duration-300 ease-out ${entered ? "translate-x-0" : "translate-x-full"}`}>
+        <div className="flex items-center gap-3 px-4 py-3 mb-4 border border-red-900/40 bg-neutral-950">
+          <button onClick={onBack} className="text-neutral-400 hover:text-red-500 p-1 -ml-1 shrink-0" aria-label="Back">
+            <ChevronLeft size={20} />
+          </button>
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-white truncate">{title}</div>
+            {subtitle && <div className="text-xs text-neutral-500 mt-0.5 truncate">{subtitle}</div>}
+          </div>
+        </div>
+        <div className="space-y-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- EXERCISE SWAP PICKER ----------------
+// Filtered to the same muscle group as the exercise being swapped, with a search bar
+// (same pattern as the catalog search elsewhere) to widen it if needed.
+function ExerciseSwapPicker({ currentExId, allExercises, exMap, onBack, onSelect }) {
+  const [query, setQuery] = useState("");
+  const currentMuscle = exMap[currentExId]?.muscle;
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const pool = q
+      ? allExercises.filter((ex) => ex.name.toLowerCase().includes(q) || ex.muscle.toLowerCase().includes(q))
+      : allExercises.filter((ex) => ex.muscle === currentMuscle);
+    return pool.filter((ex) => ex.id !== currentExId);
+  }, [query, allExercises, currentMuscle, currentExId]);
+
+  return (
+    <SlideInPanel
+      title="Swap exercise"
+      subtitle={currentMuscle ? `Same muscle group: ${currentMuscle} — this session only` : "This session only"}
+      onBack={onBack}
+    >
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search the catalog..."
+        className="w-full bg-neutral-950 border border-neutral-800 text-neutral-100 px-3 py-2 text-xs focus:outline-none focus:border-red-700"
+      />
+      <div className="space-y-1.5">
+        {results.map((ex) => (
+          <button
+            key={ex.id}
+            onClick={() => onSelect(ex.id)}
+            className="w-full text-left px-3 py-2 text-sm border border-neutral-900 text-neutral-300 hover:border-red-700 hover:text-white"
+          >
+            {ex.name}
+            <span className="text-xs text-neutral-600 ml-2">{ex.muscle}</span>
+          </button>
+        ))}
+        {results.length === 0 && (
+          <div className="text-xs text-neutral-600 py-4 text-center">No matches. Try a different search.</div>
+        )}
+      </div>
+    </SlideInPanel>
+  );
+}
+
 // ---------------- SHARED SINGLE-EXERCISE LOGGER ----------------
 // Recommended panel + target reps + set rows + save + history, for a fixed exercise.
 // Used standalone by the Log tab (with its own exercise picker wrapped around it) and
 // by the guided plan runner (with a plan-driven step indicator wrapped around it).
-function ExerciseLogger({ exId, title, state, updateState, exMap, onSaved, saveLabel = "Save session" }) {
+function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, onSaved, onSwap, saveLabel = "Save session" }) {
   const [targetReps, setTargetReps] = useState(8);
   const [setsInput, setSetsInput] = useState([{ weight: "", reps: "" }]);
+  const [swapOpen, setSwapOpen] = useState(false);
 
   const suggestion = useMemo(() => suggestNext(exId, state.logs, exMap), [exId, state.logs, exMap]);
 
@@ -954,9 +1092,36 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, onSaved, saveL
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 5);
 
+  if (swapOpen) {
+    return (
+      <ExerciseSwapPicker
+        currentExId={exId}
+        allExercises={allExercises}
+        exMap={exMap}
+        onBack={() => setSwapOpen(false)}
+        onSelect={(newExId) => {
+          setSwapOpen(false);
+          onSwap(newExId);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {title && <div className="text-lg font-bold text-white">{title}</div>}
+      {title && (
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-lg font-bold text-white truncate">{title}</div>
+          {onSwap && (
+            <button
+              onClick={() => setSwapOpen(true)}
+              className="shrink-0 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500 flex items-center gap-1"
+            >
+              <ArrowLeftRight size={12} /> Swap
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="border border-red-900/40 bg-neutral-950 p-4">
         <div className="text-[11px] uppercase tracking-widest text-red-600 mb-2">Recommended</div>
@@ -1051,7 +1216,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, onSaved, saveL
 }
 
 // ---------------- LOG TAB ----------------
-function LogTab({ state, updateState, allExercises, exMap }) {
+function LogTab({ state, updateState, allExercises, exMap, onStartRun }) {
   const [selectedExId, setSelectedExId] = useState(allExercises[0].id);
   const [exFilter, setExFilter] = useState("");
 
@@ -1070,8 +1235,28 @@ function LogTab({ state, updateState, allExercises, exMap }) {
     return groups;
   }, [filteredExercises]);
 
+  const currentProgramDay = useMemo(() => resolveCurrentProgramDay(state), [state]);
+
   return (
     <div className="space-y-6">
+      {currentProgramDay && (
+        <div className="border border-red-900/40 bg-neutral-950 px-4 py-3 flex items-center justify-between">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-widest text-red-600">Current program</div>
+            <div className="text-sm text-white mt-0.5 truncate">
+              {currentProgramDay.programName} — Day {currentProgramDay.dayIndex + 1} of {currentProgramDay.totalDays}
+            </div>
+            <div className="text-xs text-neutral-500 mt-0.5 truncate">{currentProgramDay.dayLabel}</div>
+          </div>
+          <button
+            onClick={() => onStartRun(currentProgramDay.plan, currentProgramDay.programContext)}
+            className="shrink-0 ml-3 text-xs text-red-500 hover:text-red-400 flex items-center gap-1"
+          >
+            <ChevronRight size={14} /> Start
+          </button>
+        </div>
+      )}
+
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Exercise</label>
         <input
@@ -1103,7 +1288,15 @@ function LogTab({ state, updateState, allExercises, exMap }) {
         )}
       </div>
 
-      <ExerciseLogger exId={selectedExId} state={state} updateState={updateState} exMap={exMap} />
+      <ExerciseLogger
+        exId={selectedExId}
+        title={exMap[selectedExId]?.name}
+        state={state}
+        updateState={updateState}
+        exMap={exMap}
+        allExercises={allExercises}
+        onSwap={setSelectedExId}
+      />
     </div>
   );
 }
@@ -1111,7 +1304,7 @@ function LogTab({ state, updateState, allExercises, exMap }) {
 // ---------------- GUIDED PLAN RUNNER ----------------
 // Steps through a plan's exercises one at a time. Saving an exercise writes to the same
 // state.logs array the standalone Log tab uses, then auto-advances to the next exercise.
-function GuidedRunView({ run, state, updateState, exMap, onAdvance, onSkip, onPrevious, onExit }) {
+function GuidedRunView({ run, state, updateState, exMap, allExercises, onAdvance, onSkip, onPrevious, onExit, onSwap }) {
   const total = run.exercises.length;
   const isComplete = run.index >= total;
 
@@ -1151,7 +1344,7 @@ function GuidedRunView({ run, state, updateState, exMap, onAdvance, onSkip, onPr
     );
   }
 
-  const currentExId = run.exercises[run.index].exId;
+  const currentExId = run.swaps?.[run.index] ?? run.exercises[run.index].exId;
 
   return (
     <div className="space-y-6">
@@ -1174,7 +1367,9 @@ function GuidedRunView({ run, state, updateState, exMap, onAdvance, onSkip, onPr
         state={state}
         updateState={updateState}
         exMap={exMap}
+        allExercises={allExercises}
         onSaved={onAdvance}
+        onSwap={onSwap}
         saveLabel="Save & continue"
       />
 
@@ -1391,8 +1586,7 @@ function CardioTab({ state, updateState, allExercises, exMap }) {
 
 // ---------------- TEMPLATES TAB ----------------
 function TemplatesTab({ state, updateState, exMap, onStartRun }) {
-  const [openId, setOpenId] = useState(null);
-  const [openProgramId, setOpenProgramId] = useState(null);
+  const [detail, setDetail] = useState(null); // { kind: "program" | "template", id }
 
   const copyToCustom = (tpl) => {
     const newPlan = { ...tpl, id: `plan_${Date.now()}`, name: `${tpl.name} (copy)`, isCustom: true };
@@ -1420,6 +1614,91 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
     updateState((prev) => ({ ...prev, customPrograms: [...(prev.customPrograms || []), newProgram] }));
   };
 
+  const isCurrent = (progId) => state.currentProgram?.source === "builtin" && state.currentProgram.programId === progId;
+
+  if (detail?.kind === "program") {
+    const prog = (state.programs || []).find((p) => p.id === detail.id);
+    if (!prog) return null;
+    return (
+      <SlideInPanel title={prog.name} subtitle={prog.tagline} onBack={() => setDetail(null)}>
+        <button
+          onClick={() => copyProgramToCustom(prog)}
+          className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30 flex items-center justify-center gap-1.5"
+        >
+          <Plus size={12} /> Add to my program
+        </button>
+        {prog.days.map((day, di) => (
+          <div key={di} className="border-t border-neutral-900 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-red-500 flex items-center gap-1.5">
+                {day.label}
+                {isCurrent(prog.id) && state.currentProgram.dayIndex === di && (
+                  <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Next up</span>
+                )}
+              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() =>
+                    onStartRun(
+                      { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
+                      { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: di, totalDays: prog.days.length }
+                    )
+                  }
+                  className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+                >
+                  <ChevronRight size={11} /> Start workout
+                </button>
+                <button
+                  onClick={() => copyDayToCustom(prog, day)}
+                  className="text-[11px] text-neutral-500 hover:text-red-500 flex items-center gap-1"
+                >
+                  <Plus size={11} /> Copy to my plans
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              {day.exercises.map((e, i) => (
+                <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
+                  <span>{exMap[e.exId]?.name || e.exId}</span>
+                  <span className="text-neutral-600">
+                    {e.sets} x {e.reps}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </SlideInPanel>
+    );
+  }
+
+  if (detail?.kind === "template") {
+    const tpl = state.templates.find((t) => t.id === detail.id);
+    if (!tpl) return null;
+    return (
+      <SlideInPanel title={tpl.name} onBack={() => setDetail(null)}>
+        <div className="space-y-2">
+          {tpl.exercises.map((e, i) => (
+            <div key={i} className="flex items-center justify-between text-xs text-neutral-400 py-1.5 border-t border-neutral-900">
+              <span>{exMap[e.exId]?.name || e.exId}</span>
+              <span className="text-neutral-600">
+                {e.sets} x {e.reps}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => onStartRun(tpl)} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
+            <ChevronRight size={12} /> Start workout
+          </button>
+          <button onClick={() => copyToCustom(tpl)} className="text-xs text-neutral-500 hover:text-red-500 flex items-center gap-1">
+            <Plus size={12} /> Copy to my plans
+          </button>
+        </div>
+      </SlideInPanel>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <div className="space-y-3">
@@ -1430,62 +1709,22 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
         </p>
         <div className="space-y-2">
           {(state.programs || []).map((prog) => (
-            <div key={prog.id} className="border border-red-900/40 bg-neutral-950">
-              <button
-                onClick={() => setOpenProgramId(openProgramId === prog.id ? null : prog.id)}
-                className="w-full flex items-center justify-between px-4 py-3"
-              >
-                <div className="text-left">
-                  <div className="text-sm font-medium text-white">{prog.name}</div>
-                  <div className="text-[11px] text-neutral-500 mt-0.5">{prog.tagline}</div>
+            <button
+              key={prog.id}
+              onClick={() => setDetail({ kind: "program", id: prog.id })}
+              className="w-full flex items-center justify-between px-4 py-3 border border-red-900/40 bg-neutral-950 text-left"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-white truncate">{prog.name}</span>
+                  {isCurrent(prog.id) && (
+                    <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
+                  )}
                 </div>
-                <ChevronRight
-                  size={16}
-                  className={`text-neutral-600 shrink-0 ml-2 transition-transform ${openProgramId === prog.id ? "rotate-90" : ""}`}
-                />
-              </button>
-              {openProgramId === prog.id && (
-                <div className="px-4 pb-4 space-y-4">
-                  <button
-                    onClick={() => copyProgramToCustom(prog)}
-                    className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30 flex items-center justify-center gap-1.5"
-                  >
-                    <Plus size={12} /> Add to my program
-                  </button>
-                  {prog.days.map((day, di) => (
-                    <div key={di} className="border-t border-neutral-900 pt-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-red-500">{day.label}</span>
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => onStartRun({ name: `${prog.name} — ${day.label}`, exercises: day.exercises })}
-                            className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
-                          >
-                            <ChevronRight size={11} /> Start workout
-                          </button>
-                          <button
-                            onClick={() => copyDayToCustom(prog, day)}
-                            className="text-[11px] text-neutral-500 hover:text-red-500 flex items-center gap-1"
-                          >
-                            <Plus size={11} /> Copy to my plans
-                          </button>
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        {day.exercises.map((e, i) => (
-                          <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
-                            <span>{exMap[e.exId]?.name || e.exId}</span>
-                            <span className="text-neutral-600">
-                              {e.sets} x {e.reps}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                <div className="text-[11px] text-neutral-500 mt-0.5 truncate">{prog.tagline}</div>
+              </div>
+              <ChevronRight size={16} className="text-neutral-600 shrink-0 ml-2" />
+            </button>
           ))}
         </div>
       </div>
@@ -1493,43 +1732,18 @@ function TemplatesTab({ state, updateState, exMap, onStartRun }) {
       <div className="space-y-3">
         <div className="text-[11px] uppercase tracking-widest text-neutral-500">Single day templates</div>
         <p className="text-xs text-neutral-500">Standard split templates. Copy one into your own plans to customize it.</p>
-        {state.templates.map((tpl) => (
-          <div key={tpl.id} className="border border-neutral-800 bg-neutral-950">
+        <div className="space-y-2">
+          {state.templates.map((tpl) => (
             <button
-              onClick={() => setOpenId(openId === tpl.id ? null : tpl.id)}
-              className="w-full flex items-center justify-between px-4 py-3"
+              key={tpl.id}
+              onClick={() => setDetail({ kind: "template", id: tpl.id })}
+              className="w-full flex items-center justify-between px-4 py-3 border border-neutral-800 bg-neutral-950 text-left"
             >
-              <span className="text-sm font-medium text-white">{tpl.name}</span>
-              <ChevronRight size={16} className={`text-neutral-600 transition-transform ${openId === tpl.id ? "rotate-90" : ""}`} />
+              <span className="text-sm font-medium text-white truncate">{tpl.name}</span>
+              <ChevronRight size={16} className="text-neutral-600 shrink-0 ml-2" />
             </button>
-            {openId === tpl.id && (
-              <div className="px-4 pb-4 space-y-2">
-                {tpl.exercises.map((e, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs text-neutral-400 py-1.5 border-t border-neutral-900">
-                    <span>{exMap[e.exId]?.name || e.exId}</span>
-                    <span className="text-neutral-600">
-                      {e.sets} x {e.reps}
-                    </span>
-                  </div>
-                ))}
-                <div className="mt-2 flex items-center gap-3">
-                  <button
-                    onClick={() => onStartRun(tpl)}
-                    className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1"
-                  >
-                    <ChevronRight size={12} /> Start workout
-                  </button>
-                  <button
-                    onClick={() => copyToCustom(tpl)}
-                    className="text-xs text-neutral-500 hover:text-red-500 flex items-center gap-1"
-                  >
-                    <Plus size={12} /> Copy to my plans
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1540,7 +1754,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
   const [planName, setPlanName] = useState("");
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [exFilter, setExFilter] = useState("");
-  const [openProgramId, setOpenProgramId] = useState(null);
+  const [detail, setDetail] = useState(null); // { kind: "plan" | "program", id }
 
   const filteredExercises = useMemo(() => {
     const q = exFilter.trim().toLowerCase();
@@ -1571,6 +1785,92 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
   const deleteProgram = (id) => {
     updateState((prev) => ({ ...prev, customPrograms: (prev.customPrograms || []).filter((p) => p.id !== id) }));
   };
+
+  const isCurrentCustom = (progId) => state.currentProgram?.source === "custom" && state.currentProgram.programId === progId;
+
+  if (detail?.kind === "plan") {
+    const p = state.customPlans.find((pl) => pl.id === detail.id);
+    if (!p) return null;
+    return (
+      <SlideInPanel title={p.name} subtitle={`${p.exercises.length} exercises`} onBack={() => setDetail(null)}>
+        <div className="space-y-1.5">
+          {p.exercises.map((e, i) => (
+            <div key={i} className="flex items-center justify-between text-xs text-neutral-400 py-1.5 border-t border-neutral-900">
+              <span>{exMap[e.exId]?.name || e.exId}</span>
+              <span className="text-neutral-600">
+                {e.sets} x {e.reps}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => onStartRun(p)} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
+            <ChevronRight size={12} /> Start workout
+          </button>
+          <button
+            onClick={() => {
+              deletePlan(p.id);
+              setDetail(null);
+            }}
+            className="text-xs text-neutral-500 hover:text-red-600 flex items-center gap-1"
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        </div>
+      </SlideInPanel>
+    );
+  }
+
+  if (detail?.kind === "program") {
+    const prog = (state.customPrograms || []).find((pr) => pr.id === detail.id);
+    if (!prog) return null;
+    return (
+      <SlideInPanel title={prog.name} subtitle={`${prog.days.length} days`} onBack={() => setDetail(null)}>
+        {prog.days.map((day, di) => (
+          <div key={di} className="border-t border-neutral-900 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-red-500 flex items-center gap-1.5">
+                {day.label}
+                {isCurrentCustom(prog.id) && state.currentProgram.dayIndex === di && (
+                  <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Next up</span>
+                )}
+              </span>
+              <button
+                onClick={() =>
+                  onStartRun(
+                    { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
+                    { programId: prog.id, programName: prog.name, source: "custom", dayIndex: di, totalDays: prog.days.length }
+                  )
+                }
+                className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+              >
+                <ChevronRight size={11} /> Start workout
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {day.exercises.map((e, i) => (
+                <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
+                  <span>{exMap[e.exId]?.name || e.exId}</span>
+                  <span className="text-neutral-600">
+                    {e.sets} x {e.reps}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        <button
+          onClick={() => {
+            deleteProgram(prog.id);
+            setDetail(null);
+          }}
+          className="text-xs text-neutral-500 hover:text-red-600 flex items-center gap-1"
+        >
+          <Trash2 size={12} /> Delete program
+        </button>
+      </SlideInPanel>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -1662,11 +1962,11 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
           <div className="text-[11px] uppercase tracking-widest text-neutral-500">My plans</div>
           {state.customPlans.map((p) => (
             <div key={p.id} className="border border-neutral-800 bg-neutral-950 px-4 py-3 flex items-center justify-between">
-              <div>
-                <div className="text-sm text-white">{p.name}</div>
+              <button onClick={() => setDetail({ kind: "plan", id: p.id })} className="flex-1 min-w-0 text-left">
+                <div className="text-sm text-white truncate">{p.name}</div>
                 <div className="text-xs text-neutral-600">{p.exercises.length} exercises</div>
-              </div>
-              <div className="flex items-center gap-3">
+              </button>
+              <div className="flex items-center gap-3 shrink-0 ml-3">
                 <button
                   onClick={() => onStartRun(p)}
                   className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
@@ -1686,60 +1986,19 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
         <div className="pt-4 border-t border-neutral-900 space-y-2">
           <div className="text-[11px] uppercase tracking-widest text-neutral-500">My programs</div>
           {state.customPrograms.map((prog) => (
-            <div key={prog.id} className="border border-neutral-800 bg-neutral-950">
-              <button
-                onClick={() => setOpenProgramId(openProgramId === prog.id ? null : prog.id)}
-                className="w-full flex items-center justify-between px-4 py-3"
-              >
-                <div className="text-left">
-                  <div className="text-sm text-white">{prog.name}</div>
-                  <div className="text-xs text-neutral-600">{prog.days.length} days</div>
+            <div key={prog.id} className="border border-neutral-800 bg-neutral-950 px-4 py-3 flex items-center justify-between">
+              <button onClick={() => setDetail({ kind: "program", id: prog.id })} className="flex-1 min-w-0 text-left">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-white truncate">{prog.name}</span>
+                  {isCurrentCustom(prog.id) && (
+                    <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
+                  )}
                 </div>
-                <div className="flex items-center gap-3 shrink-0 ml-2">
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteProgram(prog.id);
-                    }}
-                    className="text-neutral-600 hover:text-red-600"
-                  >
-                    <Trash2 size={14} />
-                  </span>
-                  <ChevronRight
-                    size={16}
-                    className={`text-neutral-600 transition-transform ${openProgramId === prog.id ? "rotate-90" : ""}`}
-                  />
-                </div>
+                <div className="text-xs text-neutral-600">{prog.days.length} days</div>
               </button>
-              {openProgramId === prog.id && (
-                <div className="px-4 pb-4 space-y-4">
-                  {prog.days.map((day, di) => (
-                    <div key={di} className="border-t border-neutral-900 pt-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-red-500">{day.label}</span>
-                        <button
-                          onClick={() => onStartRun({ name: `${prog.name} — ${day.label}`, exercises: day.exercises })}
-                          className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
-                        >
-                          <ChevronRight size={11} /> Start workout
-                        </button>
-                      </div>
-                      <div className="space-y-1.5">
-                        {day.exercises.map((e, i) => (
-                          <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
-                            <span>{exMap[e.exId]?.name || e.exId}</span>
-                            <span className="text-neutral-600">
-                              {e.sets} x {e.reps}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <button onClick={() => deleteProgram(prog.id)} className="text-neutral-600 hover:text-red-600 shrink-0 ml-3">
+                <Trash2 size={14} />
+              </button>
             </div>
           ))}
         </div>
