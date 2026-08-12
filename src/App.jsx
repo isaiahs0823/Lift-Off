@@ -953,6 +953,8 @@ function increment(exType) {
 }
 
 // Suggest next weight based on last performance (double progression)
+// Only ever reads s.weight/s.reps (the top/initial set) — s.drops, when present, is never
+// touched here, so a dropset's reduced-weight drops can't skew the next suggested weight.
 function suggestNext(exId, logs, exMap) {
   const exLogs = logs.filter((l) => l.exId === exId).sort((a, b) => new Date(b.date) - new Date(a.date));
   if (exLogs.length === 0)
@@ -971,6 +973,40 @@ function suggestNext(exId, logs, exMap) {
     reason = `Missed target reps last time — repeat ${topSet.weight} lb and push for ${last.targetReps}.`;
   }
   return { lastWeight: topSet.weight, lastReps: topSet.reps, suggestion, targetReps: last.targetReps, reason, date: last.date };
+}
+
+// ---------- Dropset helpers ----------
+// A set is { weight, reps, drops?: [{ weight, reps }, ...] }. drops is only present when
+// there's at least one — a normal set never carries the key at all.
+function formatSetCompact(s) {
+  const parts = [`${s.weight}x${s.reps}`, ...(s.drops || []).map((d) => `${d.weight}x${d.reps}`)];
+  return parts.join(" → ");
+}
+function formatSetVerbose(s) {
+  const parts = [`${s.weight} lb x ${s.reps} reps`, ...(s.drops || []).map((d) => `${d.weight} lb x ${d.reps} reps`)];
+  return parts.join(" → ");
+}
+function formatSetsVerbose(sets) {
+  return sets.map(formatSetVerbose).join(", ");
+}
+
+// Turns the raw {weight, reps, drops}[] editor rows (string inputs, possibly-empty drop
+// rows) into the clean numeric shape saved to state.logs. A set is dropped entirely if its
+// own weight/reps are blank; an individual blank drop row is dropped without affecting the
+// rest. drops is omitted from the result set entirely when empty.
+function cleanSetsInput(sets) {
+  return sets
+    .filter((s) => s.weight !== "" && s.reps !== "")
+    .map((s) => {
+      const cleanDrops = (s.drops || [])
+        .filter((d) => d.weight !== "" && d.reps !== "")
+        .map((d) => ({ weight: Number(d.weight), reps: Number(d.reps) }));
+      return {
+        weight: Number(s.weight),
+        reps: Number(s.reps),
+        ...(cleanDrops.length > 0 ? { drops: cleanDrops } : {}),
+      };
+    });
 }
 
 function usageCounts(logs) {
@@ -1026,7 +1062,29 @@ export default function LiftLog() {
   const [state, setState] = useState(loadInitialState());
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("log");
-  const [activeRun, setActiveRun] = useState(null);
+  // Lazy-initted straight from localStorage (not loaded in an effect like `state` below) so
+  // an in-progress workout is already in place on the very first render — no flash back to
+  // the plan-picker tab, and no race with the persist effect right below.
+  const [activeRun, setActiveRun] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem("liftlog-active-run");
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  // Keeps the in-progress (or just-finished-but-not-yet-exited) run surviving a closed tab,
+  // backgrounded phone, or crash — otherwise closing mid-workout silently drops everything
+  // that wasn't already saved as a logged set. Cleared once the user actually exits the run
+  // (finishRun -> "Back to plans", or Exit), not merely on "Finish workout".
+  useEffect(() => {
+    try {
+      if (activeRun) window.localStorage.setItem("liftlog-active-run", JSON.stringify(activeRun));
+      else window.localStorage.removeItem("liftlog-active-run");
+    } catch (e) {
+      // storage unavailable
+    }
+  }, [activeRun]);
   const [restBump, setRestBump] = useState(0);
   const bumpRestTimer = useCallback(() => setRestBump((t) => t + 1), []);
 
@@ -1123,7 +1181,19 @@ export default function LiftLog() {
     }
   };
   const recordRunEntry = (index, entry) => {
-    setActiveRun((run) => ({ ...run, sessionEntries: [...run.sessionEntries, { exId: entry.exId, entry }] }));
+    setActiveRun((run) => ({ ...run, sessionEntries: [...run.sessionEntries, { index, exId: entry.exId, entry }] }));
+  };
+  // Used when a collapsed "Logged this session" card is edited/deleted via the shared
+  // EditLogEntryPanel — keeps the run's own tracking of which slot is logged in sync with
+  // state.logs, since that's what determines which card collapses vs. stays active.
+  const editRunEntry = (index, updatedEntry) => {
+    setActiveRun((run) => ({
+      ...run,
+      sessionEntries: run.sessionEntries.map((se) => (se.index === index ? { ...se, entry: updatedEntry } : se)),
+    }));
+  };
+  const deleteRunEntry = (index) => {
+    setActiveRun((run) => ({ ...run, sessionEntries: run.sessionEntries.filter((se) => se.index !== index) }));
   };
   const swapRunExercise = (index, newExId) => {
     setActiveRun((run) => ({ ...run, swaps: { ...(run.swaps || {}), [index]: newExId } }));
@@ -1250,6 +1320,8 @@ export default function LiftLog() {
             exMap={exMap}
             allExercises={allExercises}
             onSaved={recordRunEntry}
+            onEditEntry={editRunEntry}
+            onDeleteEntry={deleteRunEntry}
             onFinish={finishRun}
             onExit={exitRun}
             onSwap={swapRunExercise}
@@ -1408,22 +1480,103 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, onBack, onSelect
   );
 }
 
+// ---------------- SET ROWS EDITOR ----------------
+// Shared by the standalone logger's "Today's sets" and the edit panel's "Sets" — each set
+// row can carry its own nested drops array, added/removed independently of the set itself.
+// Row shape while editing: { weight: string, reps: string, drops: [{weight, reps}, ...] }.
+function SetRowsEditor({ sets, onChange }) {
+  const updateSetRow = (idx, field, val) => onChange(sets.map((row, i) => (i === idx ? { ...row, [field]: val } : row)));
+  const addSetRow = () => onChange([...sets, { weight: "", reps: "", drops: [] }]);
+  const removeSetRow = (idx) => onChange(sets.filter((_, i) => i !== idx));
+  const addDropRow = (idx) =>
+    onChange(sets.map((row, i) => (i === idx ? { ...row, drops: [...(row.drops || []), { weight: "", reps: "" }] } : row)));
+  const updateDropRow = (idx, dIdx, field, val) =>
+    onChange(
+      sets.map((row, i) =>
+        i === idx ? { ...row, drops: row.drops.map((d, di) => (di === dIdx ? { ...d, [field]: val } : d)) } : row
+      )
+    );
+  const removeDropRow = (idx, dIdx) =>
+    onChange(sets.map((row, i) => (i === idx ? { ...row, drops: row.drops.filter((_, di) => di !== dIdx) } : row)));
+
+  return (
+    <div className="space-y-3">
+      {sets.map((row, idx) => (
+        <div key={idx} className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-neutral-600 w-5">{idx + 1}</span>
+            <input
+              type="number"
+              placeholder="Weight"
+              value={row.weight}
+              onChange={(e) => updateSetRow(idx, "weight", e.target.value)}
+              className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+            />
+            <input
+              type="number"
+              placeholder="Reps"
+              value={row.reps}
+              onChange={(e) => updateSetRow(idx, "reps", e.target.value)}
+              className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+            />
+            {sets.length > 1 && (
+              <button onClick={() => removeSetRow(idx)} className="text-neutral-600 hover:text-red-600 p-1">
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+          {(row.drops || []).map((drop, dIdx) => (
+            <div key={dIdx} className="flex items-center gap-2 pl-7">
+              <span className="text-xs text-neutral-700">↳</span>
+              <input
+                type="number"
+                placeholder="Drop weight"
+                value={drop.weight}
+                onChange={(e) => updateDropRow(idx, dIdx, "weight", e.target.value)}
+                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+              />
+              <input
+                type="number"
+                placeholder="Drop reps"
+                value={drop.reps}
+                onChange={(e) => updateDropRow(idx, dIdx, "reps", e.target.value)}
+                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+              />
+              <button onClick={() => removeDropRow(idx, dIdx)} className="text-neutral-600 hover:text-red-600 p-1">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+          <button onClick={() => addDropRow(idx)} className="pl-7 flex items-center gap-1 text-[11px] text-neutral-600 hover:text-red-500">
+            <Plus size={11} /> Add drop
+          </button>
+        </div>
+      ))}
+      <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-neutral-500 hover:text-red-500">
+        <Plus size={12} /> Add set
+      </button>
+    </div>
+  );
+}
+
 // ---------------- EDIT LOGGED ENTRY ----------------
-// Lets a previously-saved history entry be corrected (weight/reps per set, target reps)
-// or deleted outright. Edits flow back through the same state.logs array, so
+// Lets a previously-saved history entry be corrected (weight/reps per set and per drop,
+// target reps) or deleted outright. Edits flow back through the same state.logs array, so
 // suggestNext recomputes automatically off the corrected numbers.
 function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
-  const [sets, setSets] = useState(entry.sets.map((s) => ({ weight: String(s.weight), reps: String(s.reps) })));
+  const [sets, setSets] = useState(
+    entry.sets.map((s) => ({
+      weight: String(s.weight),
+      reps: String(s.reps),
+      drops: (s.drops || []).map((d) => ({ weight: String(d.weight), reps: String(d.reps) })),
+    }))
+  );
   const [targetReps, setTargetReps] = useState(String(entry.targetReps));
-
-  const updateSetRow = (idx, field, val) => setSets((s) => s.map((row, i) => (i === idx ? { ...row, [field]: val } : row)));
-  const addSetRow = () => setSets((s) => [...s, { weight: "", reps: "" }]);
-  const removeSetRow = (idx) => setSets((s) => s.filter((_, i) => i !== idx));
 
   const canSave = sets.some((s) => s.weight !== "" && s.reps !== "");
 
   const handleSave = () => {
-    const cleanSets = sets.filter((s) => s.weight !== "" && s.reps !== "").map((s) => ({ weight: Number(s.weight), reps: Number(s.reps) }));
+    const cleanSets = cleanSetsInput(sets);
     if (cleanSets.length === 0) return;
     onSave({ sets: cleanSets, targetReps: Number(targetReps) || cleanSets[0].reps });
   };
@@ -1446,35 +1599,7 @@ function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
 
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Sets</label>
-        <div className="space-y-2">
-          {sets.map((row, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <span className="text-xs text-neutral-600 w-5">{idx + 1}</span>
-              <input
-                type="number"
-                placeholder="Weight"
-                value={row.weight}
-                onChange={(e) => updateSetRow(idx, "weight", e.target.value)}
-                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
-              />
-              <input
-                type="number"
-                placeholder="Reps"
-                value={row.reps}
-                onChange={(e) => updateSetRow(idx, "reps", e.target.value)}
-                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
-              />
-              {sets.length > 1 && (
-                <button onClick={() => removeSetRow(idx)} className="text-neutral-600 hover:text-red-600 p-1">
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        <button onClick={addSetRow} className="mt-2 flex items-center gap-1 text-xs text-neutral-500 hover:text-red-500">
-          <Plus size={12} /> Add set
-        </button>
+        <SetRowsEditor sets={sets} onChange={setSets} />
       </div>
 
       <button
@@ -1504,7 +1629,7 @@ function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
 // by the guided plan runner (with a plan-driven step indicator wrapped around it).
 function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, onSaved, onSwap, saveLabel = "Save session", showHistory = true }) {
   const [targetReps, setTargetReps] = useState(8);
-  const [setsInput, setSetsInput] = useState([{ weight: "", reps: "" }]);
+  const [setsInput, setSetsInput] = useState([{ weight: "", reps: "", drops: [] }]);
   const [swapOpen, setSwapOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState(null);
 
@@ -1515,17 +1640,10 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exId]);
 
-  const addSetRow = () => setSetsInput((s) => [...s, { weight: "", reps: "" }]);
-  const removeSetRow = (idx) => setSetsInput((s) => s.filter((_, i) => i !== idx));
-  const updateSetRow = (idx, field, val) =>
-    setSetsInput((s) => s.map((row, i) => (i === idx ? { ...row, [field]: val } : row)));
-
   const canSave = setsInput.some((s) => s.weight !== "" && s.reps !== "");
 
   const saveLog = () => {
-    const sets = setsInput
-      .filter((s) => s.weight !== "" && s.reps !== "")
-      .map((s) => ({ weight: Number(s.weight), reps: Number(s.reps) }));
+    const sets = cleanSetsInput(setsInput);
     if (sets.length === 0) return;
     const entry = {
       id: `log_${Date.now()}`,
@@ -1535,7 +1653,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
       targetReps: Number(targetReps) || sets[0].reps,
     };
     updateState((prev) => ({ ...prev, logs: [entry, ...prev.logs], hasSeenOnboarding: true }));
-    setSetsInput([{ weight: "", reps: "" }]);
+    setSetsInput([{ weight: "", reps: "", drops: [] }]);
     onSaved?.(entry);
   };
 
@@ -1632,38 +1750,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
 
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Today's sets</label>
-        <div className="space-y-2">
-          {setsInput.map((row, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <span className="text-xs text-neutral-600 w-5">{idx + 1}</span>
-              <input
-                type="number"
-                placeholder="Weight"
-                value={row.weight}
-                onChange={(e) => updateSetRow(idx, "weight", e.target.value)}
-                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
-              />
-              <input
-                type="number"
-                placeholder="Reps"
-                value={row.reps}
-                onChange={(e) => updateSetRow(idx, "reps", e.target.value)}
-                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
-              />
-              {setsInput.length > 1 && (
-                <button onClick={() => removeSetRow(idx)} className="text-neutral-600 hover:text-red-600 p-1">
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        <button
-          onClick={addSetRow}
-          className="mt-2 flex items-center gap-1 text-xs text-neutral-500 hover:text-red-500"
-        >
-          <Plus size={12} /> Add set
-        </button>
+        <SetRowsEditor sets={setsInput} onChange={setSetsInput} />
       </div>
 
       <button
@@ -1689,9 +1776,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
                 className="w-full flex items-center justify-between text-xs border-b border-neutral-900 py-2 text-left hover:border-neutral-700"
               >
                 <span className="text-neutral-500">{new Date(l.date).toLocaleDateString()}</span>
-                <span className="text-sm text-neutral-300">
-                  {l.sets.map((s) => `${s.weight}x${s.reps}`).join(", ")}
-                </span>
+                <span className="text-sm text-neutral-300">{l.sets.map(formatSetCompact).join(", ")}</span>
               </button>
             ))}
           </div>
@@ -2016,11 +2101,16 @@ function RestTimer({ bumpToken }) {
 }
 
 // ---------------- GUIDED PLAN RUNNER ----------------
-// Shows every exercise in the plan on one page, each with its own logging card, so the
-// whole session is visible at once. Saving a set writes to the same state.logs array the
+// Shows every exercise in the plan on one page so the whole session is visible at once, but
+// only the current, not-yet-logged exercise ever shows active input fields — logged ones
+// collapse to a read-only summary (with an Edit link back into the shared edit panel), and
+// not-yet-reached ones show just their name, so there's never more than one live input
+// target on screen to mis-tap. Saving a set writes to the same state.logs array the
 // standalone Log tab uses and bumps the rest timer. A "Finish workout" button ends the
 // session; it doesn't require every exercise to be logged.
-function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, onFinish, onExit, onSwap, onLoggedSet }) {
+function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, onEditEntry, onDeleteEntry, onFinish, onExit, onSwap, onLoggedSet }) {
+  const [editingIdx, setEditingIdx] = useState(null);
+
   if (run.finished) {
     return (
       <div className="space-y-6">
@@ -2037,9 +2127,7 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
                   <span className="text-base text-white">{exMap[entry.exId]?.name || entry.exId}</span>
                   <span className="text-xs text-neutral-500">Target {entry.targetReps}</span>
                 </div>
-                <div className="text-xs text-neutral-400 mt-1">
-                  {entry.sets.map((s) => `${s.weight}x${s.reps}`).join(", ")}
-                </div>
+                <div className="text-xs text-neutral-400 mt-1">{entry.sets.map(formatSetCompact).join(", ")}</div>
               </div>
             ))}
           </div>
@@ -2057,7 +2145,8 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
     );
   }
 
-  const loggedCount = new Set(run.sessionEntries.map((se) => se.exId)).size;
+  const entryForIndex = (idx) => run.sessionEntries.find((se) => se.index === idx)?.entry || null;
+  const currentIdx = run.exercises.findIndex((_, idx) => !entryForIndex(idx));
 
   return (
     <div className="space-y-6">
@@ -2065,7 +2154,7 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
         <div>
           <div className="text-[11px] uppercase tracking-widest text-red-600">{run.planName}</div>
           <div className="text-xs text-neutral-500 mt-1">
-            {run.exercises.length} exercises · {loggedCount} logged this session
+            {run.exercises.length} exercises · {run.sessionEntries.length} logged this session
           </div>
         </div>
         <button onClick={onExit} className="text-xs text-neutral-600 hover:text-red-600">
@@ -2076,30 +2165,70 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
       <div className="space-y-8">
         {run.exercises.map((exSlot, idx) => {
           const currentExId = run.swaps?.[idx] ?? exSlot.exId;
-          const isLogged = run.sessionEntries.some((se) => se.exId === currentExId);
+          const entry = entryForIndex(idx);
+          const isLogged = !!entry;
+          const isEditing = editingIdx === idx;
+          const isActive = !isLogged && idx === currentIdx;
+
           return (
             <div key={idx} className="border-t border-neutral-900 pt-6 first:border-t-0 first:pt-0">
-              {isLogged && (
-                <div className="flex items-center gap-1.5 text-xs text-green-500 mb-2">
-                  <Check size={14} /> Logged this session
+              {isEditing ? (
+                <EditLogEntryPanel
+                  entry={entry}
+                  exMap={exMap}
+                  onBack={() => setEditingIdx(null)}
+                  onSave={(changes) => {
+                    const updatedEntry = { ...entry, ...changes };
+                    updateState((prev) => ({
+                      ...prev,
+                      logs: prev.logs.map((l) => (l.id === entry.id ? updatedEntry : l)),
+                    }));
+                    onEditEntry(idx, updatedEntry);
+                    setEditingIdx(null);
+                  }}
+                  onDelete={() => {
+                    if (!window.confirm("Delete this logged entry? This can't be undone.")) return;
+                    updateState((prev) => ({ ...prev, logs: prev.logs.filter((l) => l.id !== entry.id) }));
+                    onDeleteEntry(idx);
+                    setEditingIdx(null);
+                  }}
+                />
+              ) : isLogged ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-xs text-green-500 mb-1">
+                      <Check size={14} /> Logged this session
+                    </div>
+                    <div className="text-xl font-bold text-white truncate">{exMap[currentExId]?.name || currentExId}</div>
+                    <div className="text-sm text-neutral-400 mt-1">{formatSetsVerbose(entry.sets)}</div>
+                  </div>
+                  <button
+                    onClick={() => setEditingIdx(idx)}
+                    className="shrink-0 text-xs uppercase tracking-widest text-red-500 hover:text-red-400"
+                  >
+                    Edit
+                  </button>
                 </div>
+              ) : isActive ? (
+                <ExerciseLogger
+                  key={currentExId}
+                  exId={currentExId}
+                  title={exMap[currentExId]?.name || currentExId}
+                  state={state}
+                  updateState={updateState}
+                  exMap={exMap}
+                  allExercises={allExercises}
+                  onSaved={(savedEntry) => {
+                    onSaved(idx, savedEntry);
+                    onLoggedSet?.();
+                  }}
+                  onSwap={(newExId) => onSwap(idx, newExId)}
+                  saveLabel="Log set"
+                  showHistory={false}
+                />
+              ) : (
+                <div className="text-base font-medium text-neutral-600">{exMap[currentExId]?.name || currentExId}</div>
               )}
-              <ExerciseLogger
-                key={currentExId}
-                exId={currentExId}
-                title={exMap[currentExId]?.name || currentExId}
-                state={state}
-                updateState={updateState}
-                exMap={exMap}
-                allExercises={allExercises}
-                onSaved={(entry) => {
-                  onSaved(idx, entry);
-                  onLoggedSet?.();
-                }}
-                onSwap={(newExId) => onSwap(idx, newExId)}
-                saveLabel="Log set"
-                showHistory={false}
-              />
             </div>
           );
         })}
