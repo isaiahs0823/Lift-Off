@@ -28,6 +28,7 @@ import {
   Target,
   Scale,
   MessageCircle,
+  Copy,
 } from "lucide-react";
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
@@ -37,6 +38,8 @@ import CoachTab from "./components/CoachTab.jsx";
 import { buildCoachContext } from "./utils/coachContext.js";
 import { generatePostWorkoutReview, generatePreWorkoutAdvice } from "./services/coachService.js";
 import { computeReadinessScore, readinessBand } from "./utils/readiness.js";
+import ShareCardButton from "./components/ShareCardButton.jsx";
+import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
 
@@ -1589,7 +1592,7 @@ export default function LiftLog() {
                 onLoggedSet={bumpRestTimer}
               />
             )}
-            {tab === "progress" && <ProgressTab state={state} updateState={updateState} exMap={exMap} />}
+            {tab === "progress" && <ProgressTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
             {tab === "templates" && (
               <TemplatesTab
                 state={state}
@@ -1697,6 +1700,18 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir" }) {
   const updateSetRow = (idx, field, val) => onChange(sets.map((row, i) => (i === idx ? { ...row, [field]: val } : row)));
   const addSetRow = () => onChange([...sets, { weight: "", reps: "", drops: [], setType: "working", rir: "", rpe: "" }]);
   const removeSetRow = (idx) => onChange(sets.filter((_, i) => i !== idx));
+  // Quick logging: nudge a row's weight/reps without retyping, or clone it as the next set —
+  // the common case mid-workout is "same weight, one more rep" or "just repeat that."
+  const bumpField = (idx, field, delta) =>
+    onChange(
+      sets.map((row, i) => {
+        if (i !== idx) return row;
+        const current = row[field] === "" ? 0 : Number(row[field]);
+        return { ...row, [field]: String(Math.max(0, current + delta)) };
+      })
+    );
+  const duplicateSetRow = (idx) =>
+    onChange([...sets.slice(0, idx + 1), { ...sets[idx], drops: (sets[idx].drops || []).map((d) => ({ ...d } )) }, ...sets.slice(idx + 1)]);
   const addDropRow = (idx) =>
     onChange(sets.map((row, i) => (i === idx ? { ...row, drops: [...(row.drops || []), { weight: "", reps: "" }] } : row)));
   const updateDropRow = (idx, dIdx, field, val) =>
@@ -1733,6 +1748,32 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir" }) {
                 <Trash2 size={14} />
               </button>
             )}
+          </div>
+          <div className="flex items-center gap-1.5 pl-7 overflow-x-auto">
+            <button
+              onClick={() => bumpField(idx, "weight", -5)}
+              className="shrink-0 px-2 py-1 text-[11px] font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
+            >
+              -5
+            </button>
+            <button
+              onClick={() => bumpField(idx, "weight", 5)}
+              className="shrink-0 px-2 py-1 text-[11px] font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
+            >
+              +5 wt
+            </button>
+            <button
+              onClick={() => bumpField(idx, "reps", 1)}
+              className="shrink-0 px-2 py-1 text-[11px] font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
+            >
+              +1 rep
+            </button>
+            <button
+              onClick={() => duplicateSetRow(idx)}
+              className="shrink-0 flex items-center gap-1 px-2 py-1 text-[11px] font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
+            >
+              <Copy size={10} /> Duplicate
+            </button>
           </div>
           <div className="flex items-center gap-1 pl-7 overflow-x-auto">
             {SET_TYPES.map((t) => {
@@ -2165,6 +2206,19 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
             <div className="text-4xl font-bold text-white">{suggestion.suggestion} lb x {suggestion.targetReps} reps</div>
             <div className="text-xs text-neutral-500 mt-1">{suggestion.reason}</div>
             {recentForEx.length > 0 && <div className="text-sm text-neutral-600 mt-2">Goal: beat last session without losing form.</div>}
+            <button
+              onClick={() => {
+                setTargetReps(suggestion.targetReps ?? 8);
+                setSetsInput((rows) =>
+                  rows.map((r, i) =>
+                    i === 0 ? { ...r, weight: String(suggestion.suggestion), reps: String(suggestion.targetReps) } : r
+                  )
+                );
+              }}
+              className="mt-3 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400"
+            >
+              Use suggested — fill set 1
+            </button>
           </>
         ) : (
           <div className="text-sm text-neutral-400">{suggestion.reason}</div>
@@ -2184,7 +2238,28 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Today's sets</label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-[11px] uppercase tracking-widest text-neutral-500">Today's sets</label>
+          {recentForEx.length > 0 && (
+            <button
+              onClick={() =>
+                setSetsInput(
+                  recentForEx[0].sets.map((s) => ({
+                    weight: String(s.weight),
+                    reps: String(s.reps),
+                    drops: (s.drops || []).map((d) => ({ weight: String(d.weight), reps: String(d.reps) })),
+                    setType: s.setType || "working",
+                    rir: s.rir != null ? String(s.rir) : "",
+                    rpe: s.rpe != null ? String(s.rpe) : "",
+                  }))
+                )
+              }
+              className="flex items-center gap-1 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+            >
+              <Copy size={11} /> Copy last workout
+            </button>
+          )}
+        </div>
         <SetRowsEditor sets={setsInput} onChange={setSetsInput} rirSystem={rirSystem} />
       </div>
 
@@ -2322,6 +2397,9 @@ function PRCallout({ exMap, exId, prs, onDismiss }) {
         {prs.map((pr, i) => (
           <div key={i}>{prLine(pr)}</div>
         ))}
+      </div>
+      <div className="pt-1">
+        <ShareCardButton buildDataUrl={() => buildPRShareCard(exMap[exId]?.name || exId, prs)} filename="brk-lift-pr.png" />
       </div>
     </div>
   );
@@ -2751,6 +2829,10 @@ function GuidedRunView({
                 ))}
               </div>
             </div>
+
+            <div className="border-t border-neutral-900 pt-3">
+              <ShareCardButton buildDataUrl={() => buildWorkoutShareCard(summary)} filename="brk-lift-session.png" />
+            </div>
           </div>
         )}
 
@@ -2782,6 +2864,26 @@ function GuidedRunView({
 
   const entryForIndex = (idx) => run.sessionEntries.find((se) => se.index === idx)?.entry || null;
   const currentIdx = run.exercises.findIndex((_, idx) => !entryForIndex(idx));
+
+  // Superset/giant-set grouping: exercises carry an optional single-letter `group` (set in
+  // Build Plan). Two or more *consecutive* plan entries sharing a letter render as A1/A2/A3
+  // and share one rest window — logging a non-last member skips the rest timer entirely so
+  // the flow is "log A1 -> log A2 -> rest -> repeat," not a rest after every single movement.
+  const groupLabel = (idx) => {
+    const g = run.exercises[idx].group;
+    if (!g) return null;
+    const prevSame = idx > 0 && run.exercises[idx - 1].group === g;
+    const nextSame = idx < run.exercises.length - 1 && run.exercises[idx + 1].group === g;
+    if (!prevSame && !nextSame) return null;
+    let start = idx;
+    while (start > 0 && run.exercises[start - 1].group === g) start--;
+    return `${g}${idx - start + 1}`;
+  };
+  const isLastInGroup = (idx) => {
+    const g = run.exercises[idx].group;
+    if (!g) return true;
+    return !(idx < run.exercises.length - 1 && run.exercises[idx + 1].group === g);
+  };
 
   // Pre-workout advice, shown only before anything's been logged — once the session's under
   // way, per-exercise Recommended/Last-time cards already carry that context.
@@ -2833,8 +2935,13 @@ function GuidedRunView({
           const isEditing = editingIdx === idx;
           const isActive = !isLogged && idx === currentIdx;
 
+          const label = groupLabel(idx);
+
           return (
             <div key={idx} className="border-t border-neutral-900 pt-6 first:border-t-0 first:pt-0">
+              {label && (
+                <div className="text-[10px] uppercase tracking-widest text-red-600 font-bold mb-1.5">{label}</div>
+              )}
               {isEditing ? (
                 <EditLogEntryPanel
                   entry={entry}
@@ -2889,7 +2996,11 @@ function GuidedRunView({
                     const prs = detectPRs(currentExId, savedEntry, state.logs);
                     if (prs.length > 0) setPrByIndex((m) => ({ ...m, [idx]: prs }));
                     onSaved(idx, savedEntry);
-                    onLoggedSet?.(savedEntry);
+                    // Mid-group (e.g. just logged A1 of an A1/A2 pair): no rest, straight into
+                    // the next movement. Rest only starts once the group's last exercise logs,
+                    // and uses the "superset" default rather than this one exercise's own
+                    // compound/isolation category.
+                    if (isLastInGroup(idx)) onLoggedSet?.(label ? "superset" : savedEntry);
                   }}
                   onSwap={(newExId) => onSwap(idx, newExId)}
                   saveLabel="Log set"
@@ -3463,11 +3574,11 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
 
   const addExercise = (exId) => {
     if (selectedExercises.some((e) => e.exId === exId)) return;
-    setSelectedExercises((s) => [...s, { exId, sets: 3, reps: 10 }]);
+    setSelectedExercises((s) => [...s, { exId, sets: 3, reps: 10, group: "" }]);
   };
   const removeExercise = (exId) => setSelectedExercises((s) => s.filter((e) => e.exId !== exId));
   const updateExercise = (exId, field, val) =>
-    setSelectedExercises((s) => s.map((e) => (e.exId === exId ? { ...e, [field]: Number(val) } : e)));
+    setSelectedExercises((s) => s.map((e) => (e.exId === exId ? { ...e, [field]: field === "group" ? val : Number(val) } : e)));
 
   const savePlan = () => {
     if (!planName.trim() || selectedExercises.length === 0) return;
@@ -3632,27 +3743,43 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
         <div className="space-y-2">
           <label className="block text-[11px] uppercase tracking-widest text-neutral-500">Plan exercises</label>
           {selectedExercises.map((e) => (
-            <div key={e.exId} className="flex items-center gap-2 border border-neutral-900 px-3 py-2">
-              <span className="flex-1 text-base text-neutral-200">{exMap[e.exId]?.name}</span>
-              <input
-                type="number"
-                value={e.sets}
-                onChange={(ev) => updateExercise(e.exId, "sets", ev.target.value)}
-                className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
-              />
-              <span className="text-neutral-600 text-xs">sets</span>
-              <input
-                type="number"
-                value={e.reps}
-                onChange={(ev) => updateExercise(e.exId, "reps", ev.target.value)}
-                className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
-              />
-              <span className="text-neutral-600 text-xs">reps</span>
-              <button onClick={() => removeExercise(e.exId)} className="text-neutral-600 hover:text-red-600">
-                <X size={14} />
-              </button>
+            <div key={e.exId} className="border border-neutral-900 px-3 py-2 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="flex-1 min-w-0 text-base text-neutral-200 truncate">{exMap[e.exId]?.name}</span>
+                <button onClick={() => removeExercise(e.exId)} className="shrink-0 text-neutral-600 hover:text-red-600">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="number"
+                  value={e.sets}
+                  onChange={(ev) => updateExercise(e.exId, "sets", ev.target.value)}
+                  className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
+                />
+                <span className="text-neutral-600 text-xs">sets</span>
+                <input
+                  type="number"
+                  value={e.reps}
+                  onChange={(ev) => updateExercise(e.exId, "reps", ev.target.value)}
+                  className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
+                />
+                <span className="text-neutral-600 text-xs">reps</span>
+                <input
+                  type="text"
+                  value={e.group || ""}
+                  onChange={(ev) => updateExercise(e.exId, "group", ev.target.value.slice(0, 1).toUpperCase())}
+                  placeholder="—"
+                  title="Superset group — give two or more exercises the same letter to group them"
+                  className="w-10 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs text-center uppercase"
+                />
+                <span className="text-neutral-600 text-xs">group</span>
+              </div>
             </div>
           ))}
+          <p className="text-[11px] text-neutral-600">
+            Give two or more consecutive exercises the same group letter to run them as a superset — logged back to back with no rest between them.
+          </p>
         </div>
       )}
 

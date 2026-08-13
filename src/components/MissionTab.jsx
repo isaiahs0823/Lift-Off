@@ -5,6 +5,8 @@ import { resolveGoalCurrentValue, goalHistory, withManualProgress } from "../uti
 import { goalProgressPct, daysRemaining, currentPaceFromHistory, requiredPace, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
 import { computeAdherence } from "../utils/adherence.js";
 import WeeklyReviewCard from "./WeeklyReviewCard.jsx";
+import ShareCardButton from "./ShareCardButton.jsx";
+import { buildGoalShareCard } from "../utils/shareCard.js";
 
 function unitLabel(goal) {
   return goal.units ? ` ${goal.units}` : "";
@@ -41,7 +43,7 @@ function GoalCard({ goal, state, onOpen, primary }) {
     const pace = currentPaceFromHistory(history);
     const required = requiredPace(g);
     return (
-      <button onClick={onOpen} className="w-full text-left border border-red-900/40 bg-charcoal-panel p-4 space-y-3 hover:border-red-700/60">
+      <div onClick={onOpen} className="w-full text-left border border-red-900/40 bg-charcoal-panel p-4 space-y-3 hover:border-red-700/60 cursor-pointer">
         <div className="flex items-center justify-between">
           <div className="text-[11px] uppercase tracking-widest text-red-600">Mission</div>
           <div className={`text-[11px] uppercase tracking-widest font-bold ${STATUS_COLOR[status]}`}>{GOAL_STATUS_LABEL[status]}</div>
@@ -90,7 +92,10 @@ function GoalCard({ goal, state, onOpen, primary }) {
             <div>{required != null ? `${required >= 0 ? "+" : ""}${required.toFixed(1)}${unitLabel(g)}/week` : "—"}</div>
           </div>
         </div>
-      </button>
+        <div onClick={(e) => e.stopPropagation()}>
+          <ShareCardButton buildDataUrl={() => buildGoalShareCard(g, pct)} filename="brk-lift-goal.png" />
+        </div>
+      </div>
     );
   }
 

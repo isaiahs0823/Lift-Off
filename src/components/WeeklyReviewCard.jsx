@@ -2,6 +2,8 @@ import React from "react";
 import { MessageCircle } from "lucide-react";
 import { computeWeeklyReview } from "../utils/weeklyReview.js";
 import { generateWeeklyReview } from "../services/coachService.js";
+import ShareCardButton from "./ShareCardButton.jsx";
+import { buildWeeklyReviewShareCard } from "../utils/shareCard.js";
 
 const STRENGTH_LABEL = {
   improving: "Improving",
@@ -76,6 +78,10 @@ export default function WeeklyReviewCard({ state }) {
           <MessageCircle size={11} /> Coach
         </div>
         <div className="text-sm text-neutral-300">{generateWeeklyReview(review).message}</div>
+      </div>
+
+      <div className="border-t border-neutral-900 pt-3">
+        <ShareCardButton buildDataUrl={() => buildWeeklyReviewShareCard(review)} filename="brk-lift-weekly-review.png" />
       </div>
     </div>
   );
