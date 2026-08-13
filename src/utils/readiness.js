@@ -47,3 +47,11 @@ export const READINESS_RECOMMENDATION = {
 };
 
 export const BAND_LABEL = { green: "GREEN", yellow: "YELLOW", red: "RED" };
+
+// One-word-sentence version for compact surfaces (the Today dashboard card) — the full
+// READINESS_RECOMMENDATION text is for the check-in screen itself.
+export const READINESS_SHORT = {
+  green: "Train as planned.",
+  yellow: "Train, ease off failure work.",
+  red: "Recovery is poor — take it easy.",
+};

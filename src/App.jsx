@@ -29,6 +29,8 @@ import {
   Scale,
   MessageCircle,
   Copy,
+  Home,
+  MoreHorizontal,
 } from "lucide-react";
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
@@ -39,6 +41,9 @@ import { buildCoachContext } from "./utils/coachContext.js";
 import { generatePostWorkoutReview, generatePreWorkoutAdvice } from "./services/coachService.js";
 import { computeReadinessScore, readinessBand } from "./utils/readiness.js";
 import ShareCardButton from "./components/ShareCardButton.jsx";
+import TodayTab from "./components/TodayTab.jsx";
+import TrainTab from "./components/TrainTab.jsx";
+import MoreTab from "./components/MoreTab.jsx";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
@@ -1237,24 +1242,38 @@ function bestCardioStat(exId, cardioLogs) {
   return null;
 }
 
-const TABS = [
-  { id: "log", label: "Log", icon: TrendingUp },
-  { id: "mission", label: "Mission", icon: Target },
-  { id: "coach", label: "Coach", icon: MessageCircle },
-  { id: "cardio", label: "Runs", icon: Timer },
+// The main nav is deliberately just these four — everything else (mission detail, cardio,
+// templates, build, catalog, top used, photos, settings, coach) is still its own screen with
+// its own `tab` id, just reached by tapping into it from one of these four instead of having
+// a permanent slot in the bar. SECTION_OF is only for highlighting which of the four is
+// "closest" to wherever the user actually is; it doesn't gate access to anything.
+const TOP_TABS = [
+  { id: "today", label: "Today", icon: Home },
+  { id: "train", label: "Train", icon: Dumbbell },
   { id: "progress", label: "Progress", icon: Scale },
-  { id: "templates", label: "Templates", icon: ClipboardList },
-  { id: "build", label: "Build plan", icon: Dumbbell },
-  { id: "catalog", label: "Catalog", icon: Search },
-  { id: "top", label: "Top used", icon: Flame },
-  { id: "photos", label: "Photos", icon: Camera },
-  { id: "settings", label: "Settings", icon: Settings },
+  { id: "more", label: "More", icon: MoreHorizontal },
 ];
+const SECTION_OF = {
+  today: "today",
+  mission: "today",
+  coach: "today",
+  train: "train",
+  log: "train",
+  cardio: "train",
+  templates: "train",
+  build: "train",
+  progress: "progress",
+  photos: "progress",
+  more: "more",
+  catalog: "more",
+  top: "more",
+  settings: "more",
+};
 
 export default function LiftLog() {
   const [state, setState] = useState(loadInitialState());
   const [loaded, setLoaded] = useState(false);
-  const [tab, setTab] = useState("log");
+  const [tab, setTab] = useState("today");
   // Lazy-initted straight from localStorage (not loaded in an effect like `state` below) so
   // an in-progress workout is already in place on the very first render — no flash back to
   // the plan-picker tab, and no race with the persist effect right below.
@@ -1524,26 +1543,7 @@ export default function LiftLog() {
     <div className="w-full bg-charcoal-deep text-neutral-200 font-sans min-h-[600px]">
       <Header />
       <RestTimer bump={restBump} />
-      {!activeRun && (
-        <div className="flex overflow-x-auto border-b border-red-900/40 bg-charcoal-panel sticky top-0 z-10">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-xs tracking-widest uppercase whitespace-nowrap border-b-2 transition-colors ${
-                tab === t.id
-                  ? "border-red-600 text-red-500"
-                  : "border-transparent text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              <t.icon size={14} />
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="p-4 sm:p-6">
+      <div className={`p-4 sm:p-6 ${!activeRun ? "pb-24" : ""}`}>
         {activeRun ? (
           <GuidedRunView
             run={activeRun}
@@ -1562,25 +1562,38 @@ export default function LiftLog() {
           />
         ) : (
           <>
-            {tab === "log" &&
+            {tab === "today" &&
               (!state.hasSeenOnboarding ? (
                 <OnboardingView
                   state={state}
-                  onStartRun={(plan, programContext) => startRun(plan, "log", programContext)}
+                  onStartRun={(plan, programContext) => startRun(plan, "today", programContext)}
                   onGoToTemplates={() => setTab("templates")}
                 />
               ) : (
-                <LogTab
+                <TodayTab
                   state={state}
                   updateState={updateState}
-                  allExercises={allExercises}
                   exMap={exMap}
-                  onStartRun={(plan, programContext) => startRun(plan, "log", programContext)}
-                  onLoggedSet={bumpRestTimer}
-                  onRestartProgram={restartCurrentProgram}
-                  onGoToTemplates={goToTemplatesAndClearProgram}
+                  allExercises={allExercises}
+                  activeRun={activeRun}
+                  onStartRun={(plan, programContext) => startRun(plan, "today", programContext)}
+                  onNavigate={setTab}
                 />
               ))}
+            {tab === "train" && <TrainTab state={state} onStartRun={(plan, programContext) => startRun(plan, "train", programContext)} onNavigate={setTab} />}
+            {tab === "more" && <MoreTab state={state} updateState={updateState} onNavigate={setTab} />}
+            {tab === "log" && (
+              <LogTab
+                state={state}
+                updateState={updateState}
+                allExercises={allExercises}
+                exMap={exMap}
+                onStartRun={(plan, programContext) => startRun(plan, "log", programContext)}
+                onLoggedSet={bumpRestTimer}
+                onRestartProgram={restartCurrentProgram}
+                onGoToTemplates={goToTemplatesAndClearProgram}
+              />
+            )}
             {tab === "mission" && <MissionTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
             {tab === "coach" && <CoachTab state={state} updateState={updateState} exMap={exMap} />}
             {tab === "cardio" && (
@@ -1618,6 +1631,26 @@ export default function LiftLog() {
           </>
         )}
       </div>
+
+      {!activeRun && (
+        <div className="fixed bottom-0 left-0 right-0 z-20 flex border-t border-red-900/40 bg-charcoal-panel">
+          {TOP_TABS.map((t) => {
+            const active = (SECTION_OF[tab] || tab) === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] uppercase tracking-widest transition-colors ${
+                  active ? "text-red-500" : "text-neutral-500 hover:text-neutral-300"
+                }`}
+              >
+                <t.icon size={20} />
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

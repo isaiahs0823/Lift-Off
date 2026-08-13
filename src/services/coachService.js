@@ -24,6 +24,28 @@ export function isSafetyDeflection(text) {
   return SAFETY_PATTERN.test(text || "");
 }
 
+// ---------- Today snapshot ----------
+// One short line for the Today dashboard's coach card — distinct from the morning check-in
+// (which is specifically about readiness) and from Coach Me's answers (which are
+// question-driven). Priority order: a missed-session streak worth naming, then a moving
+// bodyweight trend, then goal progress, then a plain "nothing to report yet."
+export function generateTodaySnapshot(context) {
+  const { recentWeightTrend, daysSinceLastSession, userGoal } = context;
+  if (daysSinceLastSession != null && daysSinceLastSession >= 3) {
+    return {
+      message: `${daysSinceLastSession} days since your last session. One missed session means nothing. Don't turn it into a habit — get today's workout done.`,
+    };
+  }
+  if (recentWeightTrend?.weeklyRate != null && Math.abs(recentWeightTrend.weeklyRate) >= 0.1) {
+    const dir = recentWeightTrend.weeklyRate < 0 ? "down" : "up";
+    return { message: `Weight trend is moving ${dir} and strength is holding. Don't change anything.` };
+  }
+  if (userGoal) {
+    return { message: `${userGoal.title}: ${userGoal.progressPct}% there. Keep executing.` };
+  }
+  return { message: "Log today's session and I'll start giving you real feedback." };
+}
+
 // ---------- Morning check-in ----------
 // After a readiness check-in: interpretation, today's training expectation, one focus point.
 export function generateMorningCheckIn(context) {

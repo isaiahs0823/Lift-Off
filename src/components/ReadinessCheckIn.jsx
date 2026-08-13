@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { computeReadinessScore, readinessBand, BAND_LABEL } from "../utils/readiness.js";
+import { computeReadinessScore, readinessBand, BAND_LABEL, READINESS_SHORT } from "../utils/readiness.js";
 import { buildCoachContext } from "../utils/coachContext.js";
 import { generateMorningCheckIn } from "../services/coachService.js";
 
@@ -39,13 +39,13 @@ function RatingRow({ label, value, onChange }) {
   );
 }
 
-// Compact "already checked in today" summary — score, band, and the coach's morning
-// check-in message, with an Edit link back into the form.
-function TodaySummary({ entry, state, onEdit }) {
+// Compact "already checked in today" summary. On the full readiness screen this shows the
+// coach's morning check-in message; on the Today dashboard (compact) it's just the score,
+// band, and one short line, with an Edit link back into the form either way.
+function TodaySummary({ entry, state, onEdit, compact }) {
   const score = computeReadinessScore(entry);
   const band = readinessBand(score);
-  const context = buildCoachContext(state);
-  const { message } = generateMorningCheckIn(context);
+  const message = compact ? READINESS_SHORT[band] : generateMorningCheckIn(buildCoachContext(state)).message;
   return (
     <div className={`border ${BAND_BORDER[band]} bg-charcoal-panel p-4 space-y-2`}>
       <div className="flex items-center justify-between">
@@ -63,10 +63,27 @@ function TodaySummary({ entry, state, onEdit }) {
   );
 }
 
-export default function ReadinessCheckIn({ state, updateState }) {
+// Collapsed "no check-in yet" prompt for compact (Today dashboard) placement — full form
+// takes real screen space, so on Today it only opens once the user actually taps in.
+function CheckInPrompt({ onOpen }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full text-left border border-neutral-800 bg-charcoal-panel p-4 flex items-center justify-between hover:border-neutral-600"
+    >
+      <div>
+        <div className="text-[11px] uppercase tracking-widest text-red-600">Readiness</div>
+        <div className="text-sm text-neutral-400 mt-1">Check in — 2 min</div>
+      </div>
+      <span className="shrink-0 px-4 py-2 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white">Check in</span>
+    </button>
+  );
+}
+
+export default function ReadinessCheckIn({ state, updateState, compact = false }) {
   const entries = state.readinessLogs || [];
   const todayEntry = entries.find((e) => e.date.slice(0, 10) === todayStr());
-  const [editing, setEditing] = useState(!todayEntry);
+  const [editing, setEditing] = useState(!compact && !todayEntry);
   const [form, setForm] = useState({
     sleepQuality: todayEntry?.sleepQuality ?? 3,
     sleepHours: todayEntry?.sleepHours != null ? String(todayEntry.sleepHours) : "",
@@ -112,7 +129,10 @@ export default function ReadinessCheckIn({ state, updateState }) {
   };
 
   if (!editing && todayEntry) {
-    return <TodaySummary entry={todayEntry} state={state} onEdit={() => setEditing(true)} />;
+    return <TodaySummary entry={todayEntry} state={state} compact={compact} onEdit={() => setEditing(true)} />;
+  }
+  if (!editing && compact) {
+    return <CheckInPrompt onOpen={() => setEditing(true)} />;
   }
 
   const previewScore = computeReadinessScore(form);
