@@ -4,6 +4,7 @@ import { GoalEditor } from "./GoalEditor.jsx";
 import { resolveGoalCurrentValue, goalHistory, withManualProgress } from "../utils/goalData.js";
 import { goalProgressPct, daysRemaining, currentPaceFromHistory, requiredPace, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
 import { computeAdherence } from "../utils/adherence.js";
+import WeeklyReviewCard from "./WeeklyReviewCard.jsx";
 
 function unitLabel(goal) {
   return goal.units ? ` ${goal.units}` : "";
@@ -241,6 +242,8 @@ export default function MissionTab({ state, updateState, allExercises, exMap }) 
       )}
 
       <AdherenceCard state={state} />
+
+      <WeeklyReviewCard state={state} />
 
       {inactiveGoals.length > 0 && (
         <div className="space-y-2">

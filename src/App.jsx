@@ -31,6 +31,8 @@ import {
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
 import ProgressTab from "./components/ProgressTab.jsx";
+import ReadinessCheckIn from "./components/ReadinessCheckIn.jsx";
+import { suggestNext } from "./utils/progression.js";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained)
 const BREAK_LOGO =
@@ -848,6 +850,7 @@ function loadInitialState() {
     // priority: "primary"|"secondary", notes, status: "active"|"paused"|"completed",
     // linkedExId?, metric?, history?, createdAt } — see src/utils/goalMath.js, goalData.js
     bodyweightLogs: [], // { id, date, weight, waist, bodyFat, notes }
+    readinessLogs: [], // { id, date, sleepQuality, sleepHours, soreness, stress, motivation, energy, restingHR, notes }
   };
 }
 
@@ -940,6 +943,7 @@ const BACKUP_DATA_KEYS = [
   "workoutSessions",
   "goals",
   "bodyweightLogs",
+  "readinessLogs",
 ];
 
 // Per-key fallback when a key is missing from state entirely (older saves) — objects default
@@ -988,10 +992,6 @@ function parseBackupFile(text) {
   return { ok: true, data };
 }
 
-function increment(exType) {
-  return exType === "compound" ? 5 : 2.5;
-}
-
 // ---------- Set type classification ----------
 // "working" is the implicit default — a set with no setType at all (every set logged before
 // this feature existed, plus any new set that's never had its chip tapped) is treated as a
@@ -1012,51 +1012,6 @@ function isWarmup(s) {
 // analytics/progression helper below runs sets through first.
 function countedSets(sets) {
   return sets.filter((s) => !isWarmup(s));
-}
-
-// Suggest next weight based on last performance (double progression), sharpened by RIR/RPE
-// when it was logged. Only ever reads the top (non-warm-up) working set — s.drops, when
-// present, is never touched, so a dropset's reduced-weight drops can't skew the suggestion.
-function suggestNext(exId, logs, exMap) {
-  const exLogs = logs.filter((l) => l.exId === exId).sort((a, b) => new Date(b.date) - new Date(a.date));
-  if (exLogs.length === 0)
-    return { lastWeight: null, lastReps: null, suggestion: null, targetReps: null, reason: "No history yet — log a starting weight." };
-  const last = exLogs[0];
-  const scored = countedSets(last.sets).length > 0 ? countedSets(last.sets) : last.sets;
-  const topSet = scored[0];
-  const allHitTarget = scored.every((s) => s.reps >= last.targetReps);
-  const ex = exMap[exId];
-  const inc = increment(ex ? ex.type : "isolation");
-  // RIR/RPE on the top set turns a plain "hit target reps" into "with room to spare" vs.
-  // "barely ground it out" — reps alone can't tell those apart.
-  const topRir = topSet.rir != null ? topSet.rir : topSet.rpe != null ? 10 - topSet.rpe : null;
-
-  let suggestion, reason;
-  if (allHitTarget && topRir != null && topRir <= 1) {
-    suggestion = topSet.weight;
-    reason = `Hit target reps but at ${topRir} RIR — repeat ${topSet.weight} lb before adding load.`;
-  } else if (allHitTarget) {
-    suggestion = topSet.weight + inc;
-    reason =
-      topRir != null && topRir >= 2
-        ? `Hit target reps with ${topRir}+ RIR to spare — add ${inc} lb.`
-        : `Hit target reps last time (${last.targetReps}+) — add ${inc} lb.`;
-  } else {
-    // Two straight misses at the same weight is worth calling out explicitly rather than
-    // just repeating the same suggestion a third time blind.
-    const missedLastTwo =
-      exLogs.length >= 2 &&
-      exLogs[0].sets[0]?.weight === exLogs[1].sets[0]?.weight &&
-      exLogs.slice(0, 2).every((l) => {
-        const s = countedSets(l.sets).length > 0 ? countedSets(l.sets) : l.sets;
-        return !s.every((set) => set.reps >= l.targetReps);
-      });
-    suggestion = topSet.weight;
-    reason = missedLastTwo
-      ? `Missed target reps two sessions in a row at ${topSet.weight} lb — hold here, or drop ${inc} lb and rebuild.`
-      : `Missed target reps last time — repeat ${topSet.weight} lb and push for ${last.targetReps}.`;
-  }
-  return { lastWeight: topSet.weight, lastReps: topSet.reps, suggestion, targetReps: last.targetReps, reason, date: last.date };
 }
 
 // ---------- Dropset / RIR-RPE formatting helpers ----------
@@ -2114,7 +2069,10 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
   const [editingEntryId, setEditingEntryId] = useState(null);
   const rirSystem = state.settings?.rirSystem || "rir";
 
-  const suggestion = useMemo(() => suggestNext(exId, state.logs, exMap), [exId, state.logs, exMap]);
+  const suggestion = useMemo(
+    () => suggestNext(exId, state.logs, exMap, { readinessLogs: state.readinessLogs }),
+    [exId, state.logs, exMap, state.readinessLogs]
+  );
 
   useEffect(() => {
     setTargetReps(suggestion.targetReps ?? 8);
@@ -2207,15 +2165,27 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
 
       <ExerciseNotesPanel exId={exId} state={state} updateState={updateState} />
 
+      {recentForEx.length > 0 && (
+        <div className="border border-neutral-800 bg-charcoal-panel p-4">
+          <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Last time</div>
+          <div className="space-y-1">
+            {recentForEx[0].sets.map((s, i) => (
+              <div key={i} className="text-lg text-neutral-200">
+                {formatSetCompact(s)}
+              </div>
+            ))}
+          </div>
+          <div className="text-xs text-neutral-600 mt-2">{new Date(recentForEx[0].date).toLocaleDateString()}</div>
+        </div>
+      )}
+
       <div className="border border-red-900/40 bg-charcoal-panel p-4">
         <div className="text-[11px] uppercase tracking-widest text-red-600 mb-2">Recommended</div>
         {suggestion.suggestion !== null ? (
           <>
             <div className="text-4xl font-bold text-white">{suggestion.suggestion} lb x {suggestion.targetReps} reps</div>
             <div className="text-xs text-neutral-500 mt-1">{suggestion.reason}</div>
-            <div className="text-sm text-neutral-600 mt-2">
-              Last: {suggestion.lastWeight} lb x {suggestion.lastReps} reps
-            </div>
+            {recentForEx.length > 0 && <div className="text-sm text-neutral-600 mt-2">Goal: beat last session without losing form.</div>}
           </>
         ) : (
           <div className="text-sm text-neutral-400">{suggestion.reason}</div>
@@ -2404,6 +2374,8 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
 
   return (
     <div className="space-y-6">
+      <ReadinessCheckIn state={state} updateState={updateState} />
+
       {currentProgramDay?.isComplete && (
         <div className="border border-red-900/40 bg-charcoal-panel px-4 py-3 space-y-3">
           <div>
