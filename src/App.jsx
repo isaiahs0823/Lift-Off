@@ -1605,7 +1605,7 @@ export default function LiftLog() {
                 onLoggedSet={bumpRestTimer}
               />
             )}
-            {tab === "progress" && <ProgressTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
+            {tab === "progress" && <ProgressTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} onNavigate={setTab} />}
             {tab === "templates" && (
               <TemplatesTab
                 state={state}
