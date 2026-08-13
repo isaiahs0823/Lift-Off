@@ -1559,6 +1559,10 @@ export default function LiftLog() {
             onSwap={swapRunExercise}
             onLoggedSet={bumpRestTimer}
             onRate={rateSession}
+            onAskCoach={() => {
+              exitRun();
+              setTab("coach");
+            }}
           />
         ) : (
           <>
@@ -3113,6 +3117,7 @@ function GuidedRunView({
   onSwap,
   onLoggedSet,
   onRate,
+  onAskCoach,
 }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
@@ -3196,6 +3201,11 @@ function GuidedRunView({
                   <MessageCircle size={11} /> Coach
                 </div>
                 <div className="text-sm text-neutral-300 whitespace-pre-line">{summary.coachMessage}</div>
+                {onAskCoach && (
+                  <button onClick={onAskCoach} className="mt-2 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400">
+                    Ask Coach →
+                  </button>
+                )}
               </div>
             )}
 
