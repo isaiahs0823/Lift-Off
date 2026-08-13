@@ -27,12 +27,18 @@ import {
   StickyNote,
   Target,
   Scale,
+  MessageCircle,
 } from "lucide-react";
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
 import ProgressTab from "./components/ProgressTab.jsx";
 import ReadinessCheckIn from "./components/ReadinessCheckIn.jsx";
+import CoachTab from "./components/CoachTab.jsx";
+import { buildCoachContext } from "./utils/coachContext.js";
+import { generatePostWorkoutReview, generatePreWorkoutAdvice } from "./services/coachService.js";
+import { computeReadinessScore, readinessBand } from "./utils/readiness.js";
 import { suggestNext } from "./utils/progression.js";
+import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained)
 const BREAK_LOGO =
@@ -851,6 +857,7 @@ function loadInitialState() {
     // linkedExId?, metric?, history?, createdAt } — see src/utils/goalMath.js, goalData.js
     bodyweightLogs: [], // { id, date, weight, waist, bodyFat, notes }
     readinessLogs: [], // { id, date, sleepQuality, sleepHours, soreness, stress, motivation, energy, restingHR, notes }
+    coachHistory: [], // { id, date, type: "morning_checkin"|"pre_workout"|"post_workout"|"weekly_review"|"question", question?, message }
   };
 }
 
@@ -880,52 +887,6 @@ function migrateProgramNames(state) {
   return { ...state, customPlans, customPrograms, currentProgram };
 }
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-// Resolves state.currentProgram into the actual program/day data, or null if the
-// program was deleted (custom program removed) or no program is active. When the
-// program has a weeks field and enough real time has elapsed since startDate, returns
-// an isComplete result instead of a day to run.
-function resolveCurrentProgramDay(state) {
-  const cp = state.currentProgram;
-  if (!cp) return null;
-  const list = cp.source === "custom" ? state.customPrograms || [] : state.programs || [];
-  const prog = list.find((p) => p.id === cp.programId);
-  if (!prog || !prog.days || !prog.days[cp.dayIndex]) return null;
-
-  const totalWeeks = prog.weeks || null;
-  let weekNumber = null;
-  if (cp.startDate && totalWeeks) {
-    const daysElapsed = Math.max(0, Math.floor((Date.now() - new Date(cp.startDate).getTime()) / MS_PER_DAY));
-    weekNumber = Math.floor(daysElapsed / 7) + 1;
-  }
-
-  const programContext = {
-    programId: prog.id,
-    programName: prog.name,
-    source: cp.source,
-    dayIndex: cp.dayIndex,
-    totalDays: prog.days.length,
-  };
-
-  if (weekNumber !== null && weekNumber > totalWeeks) {
-    return { isComplete: true, programName: prog.name, totalWeeks, programContext };
-  }
-
-  const day = prog.days[cp.dayIndex];
-  return {
-    isComplete: false,
-    programName: prog.name,
-    dayLabel: day.label,
-    dayIndex: cp.dayIndex,
-    totalDays: prog.days.length,
-    weekNumber,
-    totalWeeks,
-    plan: { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
-    programContext,
-  };
-}
-
 // ---------- Data export / import ----------
 // Everything the user has actually created — not the built-in templates/programs, which
 // ship with the app and always come from source, never from a backup file.
@@ -944,6 +905,7 @@ const BACKUP_DATA_KEYS = [
   "goals",
   "bodyweightLogs",
   "readinessLogs",
+  "coachHistory",
 ];
 
 // Per-key fallback when a key is missing from state entirely (older saves) — objects default
@@ -1275,6 +1237,7 @@ function bestCardioStat(exId, cardioLogs) {
 const TABS = [
   { id: "log", label: "Log", icon: TrendingUp },
   { id: "mission", label: "Mission", icon: Target },
+  { id: "coach", label: "Coach", icon: MessageCircle },
   { id: "cardio", label: "Runs", icon: Timer },
   { id: "progress", label: "Progress", icon: Scale },
   { id: "templates", label: "Templates", icon: ClipboardList },
@@ -1443,7 +1406,22 @@ export default function LiftLog() {
   };
   const finishRun = () => {
     const summary = buildSessionSummary(activeRun, state.logs, state.workoutSessions || [], exMap);
-    updateState((prev) => ({ ...prev, workoutSessions: [summary, ...(prev.workoutSessions || [])] }));
+    // Only worth a coach review when something was actually logged — an empty session has
+    // nothing to grade.
+    const coachMessage = summary.exerciseCount > 0 ? generatePostWorkoutReview(summary).message : null;
+    const summaryWithCoach = coachMessage ? { ...summary, coachMessage } : summary;
+    updateState((prev) => ({
+      ...prev,
+      workoutSessions: [summaryWithCoach, ...(prev.workoutSessions || [])],
+      ...(coachMessage
+        ? {
+            coachHistory: [
+              { id: `coach_${Date.now()}`, date: new Date().toISOString(), type: "post_workout", message: coachMessage },
+              ...(prev.coachHistory || []),
+            ],
+          }
+        : {}),
+    }));
     setActiveRun((run) => ({ ...run, finished: true, summaryId: summary.id }));
     if (activeRun?.programContext) {
       const ctx = activeRun.programContext;
@@ -1601,6 +1579,7 @@ export default function LiftLog() {
                 />
               ))}
             {tab === "mission" && <MissionTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
+            {tab === "coach" && <CoachTab state={state} updateState={updateState} exMap={exMap} />}
             {tab === "cardio" && (
               <CardioTab
                 state={state}
@@ -2653,6 +2632,16 @@ function RestTimer({ bump }) {
   );
 }
 
+// Today's readiness in the small { loggedToday, score, band } shape the coach service
+// expects — shared by the pre-workout card below and buildCoachContext.
+function todayReadinessSummary(state) {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const entry = (state.readinessLogs || []).find((r) => r.date.slice(0, 10) === todayKey);
+  if (!entry) return { loggedToday: false };
+  const score = computeReadinessScore(entry);
+  return { loggedToday: true, score, band: readinessBand(score) };
+}
+
 // ---------------- GUIDED PLAN RUNNER ----------------
 // Shows every exercise in the plan on one page so the whole session is visible at once, but
 // only the current, not-yet-logged exercise ever shows active input fields — logged ones
@@ -2743,6 +2732,15 @@ function GuidedRunView({
               </div>
             )}
 
+            {summary.coachMessage && (
+              <div className="border-t border-neutral-900 pt-3">
+                <div className="text-[10px] uppercase tracking-widest text-red-600 mb-1 flex items-center gap-1.5">
+                  <MessageCircle size={11} /> Coach
+                </div>
+                <div className="text-sm text-neutral-300 whitespace-pre-line">{summary.coachMessage}</div>
+              </div>
+            )}
+
             <div>
               <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1.5">Rate this session</div>
               <div className="flex gap-1.5">
@@ -2785,6 +2783,25 @@ function GuidedRunView({
   const entryForIndex = (idx) => run.sessionEntries.find((se) => se.index === idx)?.entry || null;
   const currentIdx = run.exercises.findIndex((_, idx) => !entryForIndex(idx));
 
+  // Pre-workout advice, shown only before anything's been logged — once the session's under
+  // way, per-exercise Recommended/Last-time cards already carry that context.
+  let preWorkout = null;
+  if (run.sessionEntries.length === 0 && run.exercises.length > 0) {
+    const leadExId = run.swaps?.[0] ?? run.exercises[0].exId;
+    const leadSuggestion = suggestNext(leadExId, state.logs, exMap, { readinessLogs: state.readinessLogs });
+    const focus =
+      leadSuggestion.suggestion != null
+        ? {
+            name: exMap[leadExId]?.name || leadExId,
+            lastWeight: leadSuggestion.lastWeight,
+            lastReps: leadSuggestion.lastReps,
+            suggestedWeight: leadSuggestion.suggestion,
+            suggestedReps: leadSuggestion.targetReps,
+          }
+        : null;
+    preWorkout = generatePreWorkoutAdvice({ readiness: todayReadinessSummary(state) }, focus);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -2798,6 +2815,15 @@ function GuidedRunView({
           Exit
         </button>
       </div>
+
+      {preWorkout && (
+        <div className="border border-red-900/40 bg-charcoal-panel p-4">
+          <div className="text-[10px] uppercase tracking-widest text-red-600 mb-1 flex items-center gap-1.5">
+            <MessageCircle size={11} /> Coach
+          </div>
+          <div className="text-sm text-neutral-300">{preWorkout.message}</div>
+        </div>
+      )}
 
       <div className="space-y-8">
         {run.exercises.map((exSlot, idx) => {

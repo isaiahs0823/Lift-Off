@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { computeReadinessScore, readinessBand, READINESS_RECOMMENDATION, BAND_LABEL } from "../utils/readiness.js";
+import { computeReadinessScore, readinessBand, BAND_LABEL } from "../utils/readiness.js";
+import { buildCoachContext } from "../utils/coachContext.js";
+import { generateMorningCheckIn } from "../services/coachService.js";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -37,11 +39,13 @@ function RatingRow({ label, value, onChange }) {
   );
 }
 
-// Compact "already checked in today" summary — score, band, and the rule-based
-// recommendation, with an Edit link back into the form.
-function TodaySummary({ entry, onEdit }) {
+// Compact "already checked in today" summary — score, band, and the coach's morning
+// check-in message, with an Edit link back into the form.
+function TodaySummary({ entry, state, onEdit }) {
   const score = computeReadinessScore(entry);
   const band = readinessBand(score);
+  const context = buildCoachContext(state);
+  const { message } = generateMorningCheckIn(context);
   return (
     <div className={`border ${BAND_BORDER[band]} bg-charcoal-panel p-4 space-y-2`}>
       <div className="flex items-center justify-between">
@@ -54,7 +58,7 @@ function TodaySummary({ entry, onEdit }) {
         <span className={`text-4xl font-bold ${BAND_COLOR[band]}`}>{score}</span>
         <span className={`text-xs font-bold uppercase tracking-widest ${BAND_COLOR[band]}`}>{BAND_LABEL[band]}</span>
       </div>
-      <div className="text-sm text-neutral-400">{READINESS_RECOMMENDATION[band]}</div>
+      <div className="text-sm text-neutral-400 whitespace-pre-line">{message}</div>
     </div>
   );
 }
@@ -90,16 +94,25 @@ export default function ReadinessCheckIn({ state, updateState }) {
     updateState((prev) => {
       const list = prev.readinessLogs || [];
       const existing = list.find((e) => e.date.slice(0, 10) === todayStr());
-      if (existing) {
-        return { ...prev, readinessLogs: list.map((e) => (e.id === existing.id ? { ...e, ...fields } : e)) };
+      const readinessLogs = existing
+        ? list.map((e) => (e.id === existing.id ? { ...e, ...fields } : e))
+        : [{ id: `readiness_${Date.now()}`, date: new Date().toISOString(), ...fields }, ...list];
+      const next = { ...prev, readinessLogs };
+      // Only log a fresh coach-history entry for a brand-new check-in, not every edit to it.
+      if (!existing) {
+        const { message } = generateMorningCheckIn(buildCoachContext(next));
+        next.coachHistory = [
+          { id: `coach_${Date.now()}`, date: new Date().toISOString(), type: "morning_checkin", message },
+          ...(prev.coachHistory || []),
+        ];
       }
-      return { ...prev, readinessLogs: [{ id: `readiness_${Date.now()}`, date: new Date().toISOString(), ...fields }, ...list] };
+      return next;
     });
     setEditing(false);
   };
 
   if (!editing && todayEntry) {
-    return <TodaySummary entry={todayEntry} onEdit={() => setEditing(true)} />;
+    return <TodaySummary entry={todayEntry} state={state} onEdit={() => setEditing(true)} />;
   }
 
   const previewScore = computeReadinessScore(form);

@@ -1,5 +1,7 @@
 import React from "react";
+import { MessageCircle } from "lucide-react";
 import { computeWeeklyReview } from "../utils/weeklyReview.js";
+import { generateWeeklyReview } from "../services/coachService.js";
 
 const STRENGTH_LABEL = {
   improving: "Improving",
@@ -68,6 +70,13 @@ export default function WeeklyReviewCard({ state }) {
           Weakest area this week: <span className="text-white">{review.weakestArea.label}</span> ({review.weakestArea.pct}%)
         </div>
       )}
+
+      <div className="border-t border-neutral-900 pt-3">
+        <div className="text-[10px] uppercase tracking-widest text-red-600 mb-1 flex items-center gap-1.5">
+          <MessageCircle size={11} /> Coach
+        </div>
+        <div className="text-sm text-neutral-300">{generateWeeklyReview(review).message}</div>
+      </div>
     </div>
   );
 }
