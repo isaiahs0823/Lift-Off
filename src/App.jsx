@@ -19,6 +19,12 @@ import {
   Upload,
   Camera,
   Share2,
+  Pause,
+  Play,
+  RotateCcw,
+  Calculator,
+  Award,
+  StickyNote,
 } from "lucide-react";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained)
@@ -808,6 +814,11 @@ const HERO_PROGRAMS = [
   },
 ];
 
+// Defaults for the auto-started rest timer, keyed by movement category. Compound lifts get
+// the longest rest, isolation/conditioning/superset work progressively less — overridable
+// per-category in Settings.
+const DEFAULT_REST_DEFAULTS = { compound: 150, isolation: 90, conditioning: 60, superset: 45 };
+
 function loadInitialState() {
   return {
     templates: DEFAULT_TEMPLATES,
@@ -815,12 +826,19 @@ function loadInitialState() {
     customPlans: [],
     customPrograms: [], // { id, name, tagline, days: [{ label, exercises }] }
     customExercises: [], // { id, name, type, muscle }
-    logs: [], // { id, exId, date, sets: [{weight, reps}], targetReps }
+    logs: [], // { id, exId, date, sets: [{weight, reps, drops?, setType?, rir?, rpe?}], targetReps }
     cardioLogs: [], // { id, exId, date, distance, distanceUnit, duration, load, notes }
     currentProgram: null, // { programId, programName, source: "builtin" | "custom", dayIndex, totalDays, startDate }
     photos: [], // { id, date, context, dataUrl }
     completedPrograms: [], // { id, programId, programSource, programName, weeks, startDate, endDate }
     hasSeenOnboarding: false, // sticky — never re-derived from current data, only set true by a real action
+    settings: {
+      rirSystem: "rir", // "rir" | "rpe"
+      restDefaults: DEFAULT_REST_DEFAULTS,
+      barWeight: 45,
+    },
+    exerciseNotes: {}, // { [exId]: { general, machine, cue } }
+    workoutSessions: [], // finished guided-run summaries — see buildSessionSummary()
   };
 }
 
@@ -908,14 +926,25 @@ const BACKUP_DATA_KEYS = [
   "currentProgram",
   "photos",
   "completedPrograms",
+  "settings",
+  "exerciseNotes",
+  "workoutSessions",
 ];
+
+// Per-key fallback when a key is missing from state entirely (older saves) — objects default
+// to {}, currentProgram to null, everything else (arrays) to [].
+function backupKeyDefault(key) {
+  if (key === "currentProgram") return null;
+  if (key === "settings" || key === "exerciseNotes") return {};
+  return [];
+}
 
 function exportBackupFile(state) {
   const payload = {
     app: "BRK - Lift",
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
-    data: Object.fromEntries(BACKUP_DATA_KEYS.map((k) => [k, state[k] ?? (k === "currentProgram" ? null : [])])),
+    data: Object.fromEntries(BACKUP_DATA_KEYS.map((k) => [k, state[k] ?? backupKeyDefault(k)])),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -952,48 +981,101 @@ function increment(exType) {
   return exType === "compound" ? 5 : 2.5;
 }
 
-// Suggest next weight based on last performance (double progression)
-// Only ever reads s.weight/s.reps (the top/initial set) — s.drops, when present, is never
-// touched here, so a dropset's reduced-weight drops can't skew the next suggested weight.
+// ---------- Set type classification ----------
+// "working" is the implicit default — a set with no setType at all (every set logged before
+// this feature existed, plus any new set that's never had its chip tapped) is treated as a
+// normal working set everywhere below.
+const SET_TYPES = [
+  { value: "working", label: "Working", short: "WK" },
+  { value: "warmup", label: "Warm-up", short: "W" },
+  { value: "top", label: "Top set", short: "TOP" },
+  { value: "backoff", label: "Back-off", short: "BO" },
+  { value: "dropset", label: "Drop set", short: "DS" },
+  { value: "failure", label: "Failure", short: "F" },
+  { value: "amrap", label: "AMRAP", short: "AMRAP" },
+];
+function isWarmup(s) {
+  return s.setType === "warmup";
+}
+// Warm-ups never distort PRs, volume, or progression math — this is the one filter every
+// analytics/progression helper below runs sets through first.
+function countedSets(sets) {
+  return sets.filter((s) => !isWarmup(s));
+}
+
+// Suggest next weight based on last performance (double progression), sharpened by RIR/RPE
+// when it was logged. Only ever reads the top (non-warm-up) working set — s.drops, when
+// present, is never touched, so a dropset's reduced-weight drops can't skew the suggestion.
 function suggestNext(exId, logs, exMap) {
   const exLogs = logs.filter((l) => l.exId === exId).sort((a, b) => new Date(b.date) - new Date(a.date));
   if (exLogs.length === 0)
     return { lastWeight: null, lastReps: null, suggestion: null, targetReps: null, reason: "No history yet — log a starting weight." };
   const last = exLogs[0];
-  const topSet = last.sets[0];
-  const allHitTarget = last.sets.every((s) => s.reps >= last.targetReps);
+  const scored = countedSets(last.sets).length > 0 ? countedSets(last.sets) : last.sets;
+  const topSet = scored[0];
+  const allHitTarget = scored.every((s) => s.reps >= last.targetReps);
   const ex = exMap[exId];
   const inc = increment(ex ? ex.type : "isolation");
+  // RIR/RPE on the top set turns a plain "hit target reps" into "with room to spare" vs.
+  // "barely ground it out" — reps alone can't tell those apart.
+  const topRir = topSet.rir != null ? topSet.rir : topSet.rpe != null ? 10 - topSet.rpe : null;
+
   let suggestion, reason;
-  if (allHitTarget) {
-    suggestion = topSet.weight + inc;
-    reason = `Hit target reps last time (${last.targetReps}+) — add ${inc} lb.`;
-  } else {
+  if (allHitTarget && topRir != null && topRir <= 1) {
     suggestion = topSet.weight;
-    reason = `Missed target reps last time — repeat ${topSet.weight} lb and push for ${last.targetReps}.`;
+    reason = `Hit target reps but at ${topRir} RIR — repeat ${topSet.weight} lb before adding load.`;
+  } else if (allHitTarget) {
+    suggestion = topSet.weight + inc;
+    reason =
+      topRir != null && topRir >= 2
+        ? `Hit target reps with ${topRir}+ RIR to spare — add ${inc} lb.`
+        : `Hit target reps last time (${last.targetReps}+) — add ${inc} lb.`;
+  } else {
+    // Two straight misses at the same weight is worth calling out explicitly rather than
+    // just repeating the same suggestion a third time blind.
+    const missedLastTwo =
+      exLogs.length >= 2 &&
+      exLogs[0].sets[0]?.weight === exLogs[1].sets[0]?.weight &&
+      exLogs.slice(0, 2).every((l) => {
+        const s = countedSets(l.sets).length > 0 ? countedSets(l.sets) : l.sets;
+        return !s.every((set) => set.reps >= l.targetReps);
+      });
+    suggestion = topSet.weight;
+    reason = missedLastTwo
+      ? `Missed target reps two sessions in a row at ${topSet.weight} lb — hold here, or drop ${inc} lb and rebuild.`
+      : `Missed target reps last time — repeat ${topSet.weight} lb and push for ${last.targetReps}.`;
   }
   return { lastWeight: topSet.weight, lastReps: topSet.reps, suggestion, targetReps: last.targetReps, reason, date: last.date };
 }
 
-// ---------- Dropset helpers ----------
-// A set is { weight, reps, drops?: [{ weight, reps }, ...] }. drops is only present when
-// there's at least one — a normal set never carries the key at all.
+// ---------- Dropset / RIR-RPE formatting helpers ----------
+// A set is { weight, reps, drops?: [{ weight, reps }, ...], setType?, rir?, rpe? }. drops,
+// setType, rir, rpe are only present when they carry a non-default value.
 function formatSetCompact(s) {
   const parts = [`${s.weight}x${s.reps}`, ...(s.drops || []).map((d) => `${d.weight}x${d.reps}`)];
   return parts.join(" → ");
 }
+function rirRpeSuffix(s) {
+  if (s.rir != null) return ` @${s.rir} RIR`;
+  if (s.rpe != null) return ` @RPE ${s.rpe}`;
+  return "";
+}
 function formatSetVerbose(s) {
-  const parts = [`${s.weight} lb x ${s.reps} reps`, ...(s.drops || []).map((d) => `${d.weight} lb x ${d.reps} reps`)];
+  const parts = [
+    `${s.weight} lb x ${s.reps} reps${rirRpeSuffix(s)}`,
+    ...(s.drops || []).map((d) => `${d.weight} lb x ${d.reps} reps`),
+  ];
   return parts.join(" → ");
 }
 function formatSetsVerbose(sets) {
   return sets.map(formatSetVerbose).join(", ");
 }
 
-// Turns the raw {weight, reps, drops}[] editor rows (string inputs, possibly-empty drop
-// rows) into the clean numeric shape saved to state.logs. A set is dropped entirely if its
-// own weight/reps are blank; an individual blank drop row is dropped without affecting the
-// rest. drops is omitted from the result set entirely when empty.
+// Turns the raw editor rows (string inputs, possibly-empty drop rows) into the clean shape
+// saved to state.logs. A set is dropped entirely if its own weight/reps are blank; an
+// individual blank drop row is dropped without affecting the rest. drops/setType/rir/rpe are
+// omitted from the result whenever they'd carry only a default/empty value, keeping old and
+// new saved entries structurally identical wherever nothing new was actually used.
 function cleanSetsInput(sets) {
   return sets
     .filter((s) => s.weight !== "" && s.reps !== "")
@@ -1005,8 +1087,185 @@ function cleanSetsInput(sets) {
         weight: Number(s.weight),
         reps: Number(s.reps),
         ...(cleanDrops.length > 0 ? { drops: cleanDrops } : {}),
+        ...(s.setType && s.setType !== "working" ? { setType: s.setType } : {}),
+        ...(s.rir !== "" && s.rir != null ? { rir: Number(s.rir) } : {}),
+        ...(s.rpe !== "" && s.rpe != null ? { rpe: Number(s.rpe) } : {}),
       };
     });
+}
+
+// ---------- PR detection ----------
+// Epley formula — the standard, simple estimated-1RM approximation. Not exact, never claimed
+// to be; just a consistent basis for comparing effort across different rep ranges.
+function estimateOneRM(weight, reps) {
+  return weight * (1 + reps / 30);
+}
+// Sum of weight*reps across a counted set's main reps plus any drops — drops are real reps at
+// real weight, so they count toward volume even though they're ignored for suggestNext/PRs
+// that are specifically about the top working weight.
+function setVolume(s) {
+  const dropVolume = (s.drops || []).reduce((sum, d) => sum + d.weight * d.reps, 0);
+  return s.weight * s.reps + dropVolume;
+}
+function entryVolume(entry) {
+  return countedSets(entry.sets).reduce((sum, s) => sum + setVolume(s), 0);
+}
+
+// Compares a freshly-saved entry against every prior log for the same exercise (priorLogs
+// must NOT include the new entry itself) and reports which PR categories it broke. Returns
+// [] for an exercise's very first-ever log — there's no baseline yet to call a "record."
+function detectPRs(exId, newEntry, priorLogs) {
+  const priorForEx = priorLogs.filter((l) => l.exId === exId);
+  const newCounted = countedSets(newEntry.sets);
+  if (priorForEx.length === 0 || newCounted.length === 0) return [];
+
+  const priorCountedSets = priorForEx.flatMap((l) => countedSets(l.sets));
+  const prevMaxWeight = Math.max(0, ...priorCountedSets.map((s) => s.weight));
+  const prevMaxE1RM = Math.max(0, ...priorCountedSets.map((s) => estimateOneRM(s.weight, s.reps)));
+  const prevMaxVolume = Math.max(0, ...priorForEx.map(entryVolume));
+  // Best reps ever previously done at a weight >= this one, so a rep PR only counts against
+  // an equal-or-harder load, never an easier one.
+  const prevBestRepsAtWeight = (weight) =>
+    Math.max(0, ...priorCountedSets.filter((s) => s.weight >= weight).map((s) => s.reps));
+
+  const prs = [];
+  const heaviestSet = newCounted.reduce((best, s) => (s.weight > best.weight ? s : best), newCounted[0]);
+  if (heaviestSet.weight > prevMaxWeight) {
+    prs.push({ type: "weight", weight: heaviestSet.weight, reps: heaviestSet.reps, prev: prevMaxWeight });
+  }
+  const repPrSet = newCounted.find((s) => s.reps > prevBestRepsAtWeight(s.weight));
+  if (repPrSet) {
+    prs.push({ type: "reps", weight: repPrSet.weight, reps: repPrSet.reps, prev: prevBestRepsAtWeight(repPrSet.weight) });
+  }
+  const bestE1RMSet = newCounted.reduce(
+    (best, s) => (estimateOneRM(s.weight, s.reps) > estimateOneRM(best.weight, best.reps) ? s : best),
+    newCounted[0]
+  );
+  const newE1RM = estimateOneRM(bestE1RMSet.weight, bestE1RMSet.reps);
+  if (newE1RM > prevMaxE1RM) {
+    prs.push({
+      type: "e1rm",
+      weight: bestE1RMSet.weight,
+      reps: bestE1RMSet.reps,
+      value: Math.round(newE1RM),
+      prev: Math.round(prevMaxE1RM),
+    });
+  }
+  const newVolume = entryVolume(newEntry);
+  if (newVolume > prevMaxVolume) {
+    prs.push({ type: "exerciseVolume", value: Math.round(newVolume), prev: Math.round(prevMaxVolume) });
+  }
+  return prs;
+}
+
+// ---------- Plate calculator ----------
+const PLATE_SIZES = [45, 35, 25, 10, 5, 2.5];
+// Greedy fill — correct for a standard plate set since every denomination divides evenly
+// into the next one up. Returns the plates needed per side plus any leftover that can't be
+// made exactly (only possible with an unusual custom bar/target combo).
+function platesPerSide(targetWeight, barWeight) {
+  let remaining = (targetWeight - barWeight) / 2;
+  if (remaining <= 0) return { plates: [], remainder: 0 };
+  const plates = [];
+  for (const size of PLATE_SIZES) {
+    while (remaining >= size - 0.001) {
+      plates.push(size);
+      remaining -= size;
+    }
+  }
+  return { plates, remainder: Math.round(remaining * 100) / 100 };
+}
+
+// ---------- Post-workout summary ----------
+// Builds the record saved to state.workoutSessions when a guided run is finished. priorLogs
+// should be state.logs *excluding* this session's own entries (they're already in state.logs
+// by the time this runs) so PR detection compares against what came before the session, not
+// against itself.
+function buildSessionSummary(run, allLogs, priorSessions, exMap) {
+  const finishedAt = new Date();
+  const startedAt = run.startedAt ? new Date(run.startedAt) : finishedAt;
+  const durationSec = Math.max(0, Math.round((finishedAt - startedAt) / 1000));
+  const entries = run.sessionEntries.map((se) => se.entry);
+  const entryIds = new Set(entries.map((e) => e.id));
+  const priorLogs = allLogs.filter((l) => !entryIds.has(l.id));
+
+  let workingSets = 0;
+  let totalReps = 0;
+  let totalVolume = 0;
+  const rirValues = [];
+  const muscleCounts = {};
+  const prs = [];
+
+  entries.forEach((entry) => {
+    const counted = countedSets(entry.sets);
+    workingSets += counted.length;
+    counted.forEach((s) => {
+      totalReps += s.reps + (s.drops || []).reduce((sum, d) => sum + d.reps, 0);
+      if (s.rir != null) rirValues.push(s.rir);
+      else if (s.rpe != null) rirValues.push(10 - s.rpe);
+    });
+    totalVolume += entryVolume(entry);
+    const muscle = exMap[entry.exId]?.muscle;
+    if (muscle) muscleCounts[muscle] = (muscleCounts[muscle] || 0) + 1;
+    detectPRs(entry.exId, entry, priorLogs).forEach((pr) => prs.push({ ...pr, exId: entry.exId }));
+  });
+
+  const avgRir = rirValues.length > 0 ? rirValues.reduce((s, v) => s + v, 0) / rirValues.length : null;
+  const mainMuscles = Object.entries(muscleCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([m]) => m);
+
+  const prevSameFn = priorSessions
+    .filter((s) => s.planName === run.planName)
+    .sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt));
+  const prevSame = prevSameFn[0] || null;
+  const perfDeltaPct =
+    prevSame && prevSame.totalVolume > 0 ? Math.round(((totalVolume - prevSame.totalVolume) / prevSame.totalVolume) * 1000) / 10 : null;
+
+  const prevMaxSessionVolume = Math.max(0, ...priorSessions.map((s) => s.totalVolume || 0));
+  const isVolumePR = priorSessions.length > 0 && totalVolume > prevMaxSessionVolume;
+
+  // "Best lift" for the headline — prefer an actual weight/e1RM PR; fall back to the single
+  // best e1RM set of the session when nothing broke a record.
+  let bestLift = null;
+  const headlinePR = prs.find((p) => p.type === "weight") || prs.find((p) => p.type === "e1rm");
+  if (headlinePR) {
+    bestLift = { exId: headlinePR.exId, weight: headlinePR.weight, reps: headlinePR.reps };
+  } else {
+    let best = null;
+    entries.forEach((entry) => {
+      countedSets(entry.sets).forEach((s) => {
+        const e1rm = estimateOneRM(s.weight, s.reps);
+        if (!best || e1rm > best.e1rm) best = { exId: entry.exId, weight: s.weight, reps: s.reps, e1rm };
+      });
+    });
+    bestLift = best;
+  }
+
+  return {
+    id: `session_${Date.now()}`,
+    planName: run.planName,
+    startedAt: startedAt.toISOString(),
+    finishedAt: finishedAt.toISOString(),
+    durationSec,
+    exerciseCount: entries.length,
+    workingSets,
+    totalReps,
+    totalVolume: Math.round(totalVolume),
+    prs,
+    isVolumePR,
+    mainMuscles,
+    avgRir: avgRir != null ? Math.round(avgRir * 10) / 10 : null,
+    perfDeltaPct,
+    bestLift,
+    rating: null,
+  };
+}
+
+function formatSessionDuration(totalSeconds) {
+  const mins = Math.round(totalSeconds / 60);
+  return mins < 1 ? "<1 min" : `${mins} min`;
 }
 
 function usageCounts(logs) {
@@ -1085,8 +1344,7 @@ export default function LiftLog() {
       // storage unavailable
     }
   }, [activeRun]);
-  const [restBump, setRestBump] = useState(0);
-  const bumpRestTimer = useCallback(() => setRestBump((t) => t + 1), []);
+  const [restBump, setRestBump] = useState({ token: 0, seconds: 90 });
 
   useEffect(() => {
     try {
@@ -1159,6 +1417,22 @@ export default function LiftLog() {
     [state.customExercises]
   );
 
+  // Picks the right rest duration for whatever just got logged and (re)starts the global
+  // timer at it. Accepts a logged entry (category derived from its exercise's compound/
+  // isolation type), or a plain category string directly (e.g. CardioTab passes
+  // "conditioning" — there's no exMap lookup for a run/row).
+  const bumpRestTimer = useCallback(
+    (arg) => {
+      const defaults = { ...DEFAULT_REST_DEFAULTS, ...(state.settings?.restDefaults || {}) };
+      let category = "compound";
+      if (typeof arg === "string" && defaults[arg] != null) category = arg;
+      else if (arg && typeof arg === "object" && arg.exId) category = exMap[arg.exId]?.type === "isolation" ? "isolation" : "compound";
+      const seconds = defaults[category] ?? defaults.compound;
+      setRestBump((prev) => ({ token: prev.token + 1, seconds }));
+    },
+    [state.settings, exMap]
+  );
+
   const startRun = (plan, fromTab, programContext) => {
     setActiveRun({
       planName: plan.name,
@@ -1168,6 +1442,7 @@ export default function LiftLog() {
       finished: false,
       returnTab: fromTab,
       programContext: programContext || null,
+      startedAt: new Date().toISOString(),
     });
     if (programContext) {
       updateState((prev) => {
@@ -1199,7 +1474,9 @@ export default function LiftLog() {
     setActiveRun((run) => ({ ...run, swaps: { ...(run.swaps || {}), [index]: newExId } }));
   };
   const finishRun = () => {
-    setActiveRun((run) => ({ ...run, finished: true }));
+    const summary = buildSessionSummary(activeRun, state.logs, state.workoutSessions || [], exMap);
+    updateState((prev) => ({ ...prev, workoutSessions: [summary, ...(prev.workoutSessions || [])] }));
+    setActiveRun((run) => ({ ...run, finished: true, summaryId: summary.id }));
     if (activeRun?.programContext) {
       const ctx = activeRun.programContext;
       updateState((prev) => ({
@@ -1215,6 +1492,12 @@ export default function LiftLog() {
   const exitRun = () => {
     setTab(activeRun?.returnTab || "templates");
     setActiveRun(null);
+  };
+  const rateSession = (sessionId, rating) => {
+    updateState((prev) => ({
+      ...prev,
+      workoutSessions: (prev.workoutSessions || []).map((s) => (s.id === sessionId ? { ...s, rating } : s)),
+    }));
   };
   const restartCurrentProgram = () => {
     updateState((prev) =>
@@ -1291,7 +1574,7 @@ export default function LiftLog() {
   return (
     <div className="w-full bg-charcoal-deep text-neutral-200 font-sans min-h-[600px]">
       <Header />
-      <RestTimer bumpToken={restBump} />
+      <RestTimer bump={restBump} />
       {!activeRun && (
         <div className="flex overflow-x-auto border-b border-red-900/40 bg-charcoal-panel sticky top-0 z-10">
           {TABS.map((t) => (
@@ -1326,6 +1609,7 @@ export default function LiftLog() {
             onExit={exitRun}
             onSwap={swapRunExercise}
             onLoggedSet={bumpRestTimer}
+            onRate={rateSession}
           />
         ) : (
           <>
@@ -1484,9 +1768,9 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, onBack, onSelect
 // Shared by the standalone logger's "Today's sets" and the edit panel's "Sets" — each set
 // row can carry its own nested drops array, added/removed independently of the set itself.
 // Row shape while editing: { weight: string, reps: string, drops: [{weight, reps}, ...] }.
-function SetRowsEditor({ sets, onChange }) {
+function SetRowsEditor({ sets, onChange, rirSystem = "rir" }) {
   const updateSetRow = (idx, field, val) => onChange(sets.map((row, i) => (i === idx ? { ...row, [field]: val } : row)));
-  const addSetRow = () => onChange([...sets, { weight: "", reps: "", drops: [] }]);
+  const addSetRow = () => onChange([...sets, { weight: "", reps: "", drops: [], setType: "working", rir: "", rpe: "" }]);
   const removeSetRow = (idx) => onChange(sets.filter((_, i) => i !== idx));
   const addDropRow = (idx) =>
     onChange(sets.map((row, i) => (i === idx ? { ...row, drops: [...(row.drops || []), { weight: "", reps: "" }] } : row)));
@@ -1524,6 +1808,29 @@ function SetRowsEditor({ sets, onChange }) {
                 <Trash2 size={14} />
               </button>
             )}
+          </div>
+          <div className="flex items-center gap-1 pl-7 overflow-x-auto">
+            {SET_TYPES.map((t) => {
+              const active = (row.setType || "working") === t.value;
+              return (
+                <button
+                  key={t.value}
+                  onClick={() => updateSetRow(idx, "setType", t.value)}
+                  className={`shrink-0 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide border ${
+                    active ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+                  }`}
+                >
+                  {t.short}
+                </button>
+              );
+            })}
+            <input
+              type="number"
+              placeholder={rirSystem === "rpe" ? "RPE" : "RIR"}
+              value={rirSystem === "rpe" ? row.rpe ?? "" : row.rir ?? ""}
+              onChange={(e) => updateSetRow(idx, rirSystem === "rpe" ? "rpe" : "rir", e.target.value)}
+              className="shrink-0 w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-1.5 py-0.5 text-[11px] text-center focus:outline-none focus:border-red-700"
+            />
           </div>
           {(row.drops || []).map((drop, dIdx) => (
             <div key={dIdx} className="flex items-center gap-2 pl-7">
@@ -1563,12 +1870,15 @@ function SetRowsEditor({ sets, onChange }) {
 // Lets a previously-saved history entry be corrected (weight/reps per set and per drop,
 // target reps) or deleted outright. Edits flow back through the same state.logs array, so
 // suggestNext recomputes automatically off the corrected numbers.
-function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
+function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete, rirSystem = "rir" }) {
   const [sets, setSets] = useState(
     entry.sets.map((s) => ({
       weight: String(s.weight),
       reps: String(s.reps),
       drops: (s.drops || []).map((d) => ({ weight: String(d.weight), reps: String(d.reps) })),
+      setType: s.setType || "working",
+      rir: s.rir != null ? String(s.rir) : "",
+      rpe: s.rpe != null ? String(s.rpe) : "",
     }))
   );
   const [targetReps, setTargetReps] = useState(String(entry.targetReps));
@@ -1599,7 +1909,7 @@ function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
 
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Sets</label>
-        <SetRowsEditor sets={sets} onChange={setSets} />
+        <SetRowsEditor sets={sets} onChange={setSets} rirSystem={rirSystem} />
       </div>
 
       <button
@@ -1627,11 +1937,191 @@ function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
 // Recommended panel + target reps + set rows + save + history, for a fixed exercise.
 // Used standalone by the Log tab (with its own exercise picker wrapped around it) and
 // by the guided plan runner (with a plan-driven step indicator wrapped around it).
+// ---------------- EXERCISE NOTES ----------------
+// Persistent per-exercise notes (general / machine setup / technique cue), keyed by exId in
+// state.exerciseNotes. Shown collapsed-to-a-summary the moment there's anything saved, so
+// they surface automatically every time this exercise is opened — no digging required.
+function ExerciseNotesPanel({ exId, state, updateState }) {
+  const saved = state.exerciseNotes?.[exId] || { general: "", machine: "", cue: "" };
+  const hasAny = !!(saved.general || saved.machine || saved.cue);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(saved);
+
+  useEffect(() => {
+    setDraft(state.exerciseNotes?.[exId] || { general: "", machine: "", cue: "" });
+    setEditing(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exId]);
+
+  const save = () => {
+    updateState((prev) => ({ ...prev, exerciseNotes: { ...(prev.exerciseNotes || {}), [exId]: draft } }));
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
+        <div className="text-[11px] uppercase tracking-widest text-neutral-500 flex items-center gap-1.5">
+          <StickyNote size={12} /> Exercise notes
+        </div>
+        {[
+          ["machine", "Machine / setup", "e.g. Seat 4, pin 9, bench angle 30°"],
+          ["cue", "Technique cue", "e.g. Neutral grip, strap in on final sets"],
+          ["general", "General", "Anything else worth remembering"],
+        ].map(([key, label, placeholder]) => (
+          <div key={key}>
+            <label className="block text-[10px] uppercase tracking-widest text-neutral-600 mb-1">{label}</label>
+            <input
+              type="text"
+              value={draft[key] || ""}
+              onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+              placeholder={placeholder}
+              className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+            />
+          </div>
+        ))}
+        <div className="flex gap-2">
+          <button
+            onClick={save}
+            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+          >
+            Save notes
+          </button>
+          <button
+            onClick={() => {
+              setDraft(saved);
+              setEditing(false);
+            }}
+            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 hover:border-neutral-700"
+    >
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] uppercase tracking-widest text-neutral-500 flex items-center gap-1.5">
+          <StickyNote size={12} /> Notes
+        </div>
+        <span className="text-[11px] text-red-500">{hasAny ? "Edit" : "+ Add"}</span>
+      </div>
+      {hasAny ? (
+        <div className="mt-1.5 space-y-0.5 text-sm text-neutral-300">
+          {saved.machine && (
+            <div>
+              <span className="text-neutral-600">Setup: </span>
+              {saved.machine}
+            </div>
+          )}
+          {saved.cue && (
+            <div>
+              <span className="text-neutral-600">Cue: </span>
+              {saved.cue}
+            </div>
+          )}
+          {saved.general && (
+            <div>
+              <span className="text-neutral-600">Note: </span>
+              {saved.general}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="mt-1 text-xs text-neutral-600">Seat position, pin, grip, cues…</div>
+      )}
+    </button>
+  );
+}
+
+// ---------------- PLATE CALCULATOR ----------------
+function PlateCalculator({ defaultWeight, barWeight }) {
+  const [target, setTarget] = useState(defaultWeight != null ? String(defaultWeight) : "");
+  useEffect(() => {
+    if (defaultWeight != null) setTarget(String(defaultWeight));
+  }, [defaultWeight]);
+  const num = Number(target) || 0;
+  const { plates, remainder } = platesPerSide(num, barWeight);
+
+  return (
+    <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] uppercase tracking-widest text-neutral-500 flex items-center gap-1.5">
+          <Calculator size={12} /> Plate calculator
+        </div>
+        <span className="text-[11px] text-neutral-600">Bar: {barWeight} lb</span>
+      </div>
+      <input
+        type="number"
+        value={target}
+        onChange={(e) => setTarget(e.target.value)}
+        placeholder="Target weight"
+        className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+      />
+      {num > barWeight ? (
+        <div>
+          <div className="text-xs text-neutral-500 mb-1.5">Per side</div>
+          {plates.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {plates.map((p, i) => (
+                <span key={i} className="px-2.5 py-1 text-sm font-bold bg-charcoal-deep border border-neutral-700 text-white">
+                  {p}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-neutral-500">Bar only</div>
+          )}
+          {remainder > 0.01 && (
+            <div className="text-[11px] text-neutral-600 mt-1.5">
+              {remainder} lb per side can't be made exactly with standard plates.
+            </div>
+          )}
+        </div>
+      ) : num > 0 ? (
+        <div className="text-xs text-neutral-500">
+          {num} lb is at or below the bar ({barWeight} lb).
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Collapsed by default so it doesn't compete for space with the actual logging flow — one
+// tap reveals it prefilled with the recommended weight.
+function PlateCalculatorToggle({ defaultWeight, barWeight }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+      >
+        <Calculator size={12} /> Plate calculator {open ? "▴" : "▾"}
+      </button>
+      {open && (
+        <div className="mt-2">
+          <PlateCalculator defaultWeight={defaultWeight} barWeight={barWeight} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const BLANK_SET_ROW = { weight: "", reps: "", drops: [], setType: "working", rir: "", rpe: "" };
+
 function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, onSaved, onSwap, saveLabel = "Save session", showHistory = true }) {
   const [targetReps, setTargetReps] = useState(8);
-  const [setsInput, setSetsInput] = useState([{ weight: "", reps: "", drops: [] }]);
+  const [setsInput, setSetsInput] = useState([{ ...BLANK_SET_ROW, drops: [] }]);
   const [swapOpen, setSwapOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState(null);
+  const rirSystem = state.settings?.rirSystem || "rir";
 
   const suggestion = useMemo(() => suggestNext(exId, state.logs, exMap), [exId, state.logs, exMap]);
 
@@ -1653,7 +2143,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
       targetReps: Number(targetReps) || sets[0].reps,
     };
     updateState((prev) => ({ ...prev, logs: [entry, ...prev.logs], hasSeenOnboarding: true }));
-    setSetsInput([{ weight: "", reps: "", drops: [] }]);
+    setSetsInput([{ ...BLANK_SET_ROW, drops: [] }]);
     onSaved?.(entry);
   };
 
@@ -1690,6 +2180,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
       <EditLogEntryPanel
         entry={entry}
         exMap={exMap}
+        rirSystem={rirSystem}
         onBack={() => setEditingEntryId(null)}
         onSave={(changes) => {
           updateState((prev) => ({
@@ -1723,6 +2214,8 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         </div>
       )}
 
+      <ExerciseNotesPanel exId={exId} state={state} updateState={updateState} />
+
       <div className="border border-red-900/40 bg-charcoal-panel p-4">
         <div className="text-[11px] uppercase tracking-widest text-red-600 mb-2">Recommended</div>
         {suggestion.suggestion !== null ? (
@@ -1738,6 +2231,8 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         )}
       </div>
 
+      <PlateCalculatorToggle defaultWeight={suggestion.suggestion ?? undefined} barWeight={state.settings?.barWeight || 45} />
+
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Target reps this session</label>
         <input
@@ -1750,7 +2245,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
 
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Today's sets</label>
-        <SetRowsEditor sets={setsInput} onChange={setSetsInput} />
+        <SetRowsEditor sets={setsInput} onChange={setSetsInput} rirSystem={rirSystem} />
       </div>
 
       <button
@@ -1842,9 +2337,62 @@ function OnboardingView({ state, onStartRun, onGoToTemplates }) {
 }
 
 // ---------------- LOG TAB ----------------
+// ---------------- PR CELEBRATION ----------------
+function prHeadline(prs) {
+  return prs.find((p) => p.type === "weight") || prs.find((p) => p.type === "e1rm") || prs.find((p) => p.type === "reps") || prs[0];
+}
+function prLine(pr) {
+  switch (pr.type) {
+    case "weight":
+      return `Heaviest weight: ${pr.weight} lb (+${Math.round((pr.weight - pr.prev) * 10) / 10} lb vs previous best ${pr.prev} lb)`;
+    case "reps":
+      return `Rep record @ ${pr.weight} lb: ${pr.reps} reps${pr.prev > 0 ? ` (prev ${pr.prev})` : ""}`;
+    case "e1rm":
+      return `Estimated 1RM: ${pr.value} lb (+${pr.value - pr.prev} lb vs previous best)`;
+    case "exerciseVolume":
+      return `Exercise volume: ${pr.value.toLocaleString()} lb (+${(pr.value - pr.prev).toLocaleString()} lb)`;
+    default:
+      return "";
+  }
+}
+// Aggressive-but-clean celebration, shown once a set breaks a PR. Used both in the standalone
+// Log tab (dismissible) and pinned to a collapsed "logged" card in the guided run (permanent
+// for the session, since that card is the one thing that survives after the exercise input
+// collapses away).
+function PRCallout({ exMap, exId, prs, onDismiss }) {
+  if (!prs || prs.length === 0) return null;
+  const headline = prHeadline(prs);
+  return (
+    <div className="border border-red-700 bg-red-950/30 p-4 space-y-2 relative">
+      {onDismiss && (
+        <button onClick={onDismiss} className="absolute top-2 right-2 text-neutral-500 hover:text-white">
+          <X size={14} />
+        </button>
+      )}
+      <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-red-500">
+        <Award size={14} /> New PR
+      </div>
+      <div className="text-lg font-bold text-white truncate pr-6">{exMap[exId]?.name || exId}</div>
+      {headline && headline.weight != null && (
+        <div className="text-2xl font-bold text-white">
+          {headline.weight} × {headline.reps}
+        </div>
+      )}
+      <div className="space-y-0.5 text-sm text-neutral-300">
+        {prs.map((pr, i) => (
+          <div key={i}>{prLine(pr)}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedSet, onRestartProgram, onGoToTemplates }) {
   const [selectedExId, setSelectedExId] = useState(allExercises[0].id);
   const [exFilter, setExFilter] = useState("");
+  const [prBanner, setPrBanner] = useState(null);
+
+  useEffect(() => setPrBanner(null), [selectedExId]);
 
   const filteredExercises = useMemo(() => {
     const q = exFilter.trim().toLowerCase();
@@ -1942,6 +2490,8 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
         )}
       </div>
 
+      {prBanner && <PRCallout exMap={exMap} exId={prBanner.exId} prs={prBanner.prs} onDismiss={() => setPrBanner(null)} />}
+
       <ExerciseLogger
         exId={selectedExId}
         title={exMap[selectedExId]?.name}
@@ -1950,15 +2500,20 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
         exMap={exMap}
         allExercises={allExercises}
         onSwap={setSelectedExId}
-        onSaved={onLoggedSet}
+        onSaved={(entry) => {
+          const prs = detectPRs(entry.exId, entry, state.logs);
+          setPrBanner(prs.length > 0 ? { exId: entry.exId, prs } : null);
+          onLoggedSet(entry);
+        }}
       />
     </div>
   );
 }
 
 // ---------------- REST TIMER ----------------
-// Sticky widget with fixed presets (1:00 / 1:30 / 2:00 / 3:00). Auto-(re)starts at the
-// last-used duration whenever bumpToken changes (i.e. whenever a set gets logged).
+// Sticky widget with fixed presets (1:00 / 1:30 / 2:00 / 3:00) plus a category-aware
+// auto-start: whenever a set is logged, the caller computes the right default (compound /
+// isolation / conditioning / superset, from Settings) and bumps { token, seconds }.
 const REST_PRESETS = [60, 90, 120, 180];
 
 function formatRestTime(totalSeconds) {
@@ -2004,16 +2559,17 @@ function playRestCompleteBeep() {
 // Idle state is a slim bar; the instant it's running (or just hit zero) it expands into a
 // large, high-contrast readout meant to be legible from across a gym, with a vibration +
 // flash + beep on completion.
-function RestTimer({ bumpToken }) {
+function RestTimer({ bump }) {
   const [duration, setDuration] = useState(90);
   const [remaining, setRemaining] = useState(null);
+  const [paused, setPaused] = useState(false);
   const [justFinished, setJustFinished] = useState(false);
 
   useEffect(() => {
-    if (remaining === null || remaining <= 0) return;
+    if (remaining === null || remaining <= 0 || paused) return;
     const id = setInterval(() => setRemaining((r) => (r === null ? null : r - 1)), 1000);
     return () => clearInterval(id);
-  }, [remaining]);
+  }, [remaining, paused]);
 
   useEffect(() => {
     if (remaining !== 0) return;
@@ -2024,24 +2580,35 @@ function RestTimer({ bumpToken }) {
     return () => clearTimeout(id);
   }, [remaining]);
 
-  // Compares against the last-seen bumpToken (rather than a "have I ever run" flag) so
+  // Compares against the last-seen bump token (rather than a "have I ever run" flag) so
   // React StrictMode's double-invoke-on-commit in dev can't misfire this as a real bump.
-  const lastBumpToken = useRef(bumpToken);
+  const lastBumpToken = useRef(bump.token);
   useEffect(() => {
-    if (bumpToken === lastBumpToken.current) return;
-    lastBumpToken.current = bumpToken;
+    if (bump.token === lastBumpToken.current) return;
+    lastBumpToken.current = bump.token;
     unlockAudio();
-    setRemaining(duration);
+    setDuration(bump.seconds);
+    setRemaining(bump.seconds);
+    setPaused(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bumpToken]);
+  }, [bump.token]);
 
   const startPreset = (secs) => {
     unlockAudio();
     setDuration(secs);
     setRemaining(secs);
+    setPaused(false);
   };
-  const addThirty = () => setRemaining((r) => (r === null ? 30 : r + 30));
-  const skip = () => setRemaining(null);
+  const addSeconds = (n) => setRemaining((r) => (r === null ? n : r + n));
+  const skip = () => {
+    setRemaining(null);
+    setPaused(false);
+  };
+  const reset = () => {
+    setRemaining(duration);
+    setPaused(false);
+  };
+  const togglePause = () => setPaused((p) => !p);
 
   const isActive = remaining !== null;
 
@@ -2056,26 +2623,49 @@ function RestTimer({ bumpToken }) {
       </div>
 
       {isActive ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="text-center">
             {remaining > 0 ? (
-              <div className="text-7xl font-bold text-white tabular-nums leading-none">{formatRestTime(remaining)}</div>
+              <div className={`text-7xl font-bold tabular-nums leading-none ${paused ? "text-neutral-500" : "text-white"}`}>
+                {formatRestTime(remaining)}
+              </div>
             ) : (
               <div className="text-4xl font-bold text-red-500 leading-none">Rest complete</div>
             )}
+            {paused && remaining > 0 && <div className="text-[11px] uppercase tracking-widest text-neutral-500 mt-1">Paused</div>}
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={addThirty}
+              onClick={() => addSeconds(30)}
               className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600"
             >
               +30s
+            </button>
+            <button
+              onClick={() => addSeconds(60)}
+              className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600"
+            >
+              +60s
             </button>
             <button
               onClick={skip}
               className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
             >
               Skip
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={togglePause}
+              className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-300 hover:border-neutral-600 flex items-center justify-center gap-1.5"
+            >
+              {paused ? <Play size={12} /> : <Pause size={12} />} {paused ? "Resume" : "Pause"}
+            </button>
+            <button
+              onClick={reset}
+              className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-300 hover:border-neutral-600 flex items-center justify-center gap-1.5"
+            >
+              <RotateCcw size={12} /> Reset
             </button>
           </div>
         </div>
@@ -2108,16 +2698,100 @@ function RestTimer({ bumpToken }) {
 // target on screen to mis-tap. Saving a set writes to the same state.logs array the
 // standalone Log tab uses and bumps the rest timer. A "Finish workout" button ends the
 // session; it doesn't require every exercise to be logged.
-function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, onEditEntry, onDeleteEntry, onFinish, onExit, onSwap, onLoggedSet }) {
+function GuidedRunView({
+  run,
+  state,
+  updateState,
+  exMap,
+  allExercises,
+  onSaved,
+  onEditEntry,
+  onDeleteEntry,
+  onFinish,
+  onExit,
+  onSwap,
+  onLoggedSet,
+  onRate,
+}) {
   const [editingIdx, setEditingIdx] = useState(null);
+  const [prByIndex, setPrByIndex] = useState({});
+  const rirSystem = state.settings?.rirSystem || "rir";
 
   if (run.finished) {
+    const summary = (state.workoutSessions || []).find((s) => s.id === run.summaryId) || null;
     return (
       <div className="space-y-6">
         <div>
           <div className="text-[11px] uppercase tracking-widest text-red-600">{run.planName}</div>
-          <div className="text-xl font-bold text-white mt-1">Workout complete</div>
+          <div className="text-xl font-bold text-white mt-1">Session complete</div>
         </div>
+
+        {summary && (
+          <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Duration</div>
+                <div className="text-lg font-bold text-white">{formatSessionDuration(summary.durationSec)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Working sets</div>
+                <div className="text-lg font-bold text-white">{summary.workingSets}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Volume</div>
+                <div className="text-lg font-bold text-white">
+                  {summary.totalVolume.toLocaleString()} lb{summary.isVolumePR ? " — PR" : ""}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Total reps</div>
+                <div className="text-lg font-bold text-white">{summary.totalReps}</div>
+              </div>
+            </div>
+
+            {summary.perfDeltaPct != null && (
+              <div className="text-sm text-neutral-300">
+                Performance vs last {summary.planName}:{" "}
+                <span className={summary.perfDeltaPct >= 0 ? "text-green-500 font-bold" : "text-red-500 font-bold"}>
+                  {summary.perfDeltaPct >= 0 ? "+" : ""}
+                  {summary.perfDeltaPct}%
+                </span>
+              </div>
+            )}
+            {summary.avgRir != null && (
+              <div className="text-sm text-neutral-300">
+                Average {rirSystem === "rpe" ? "RPE" : "RIR"}: {rirSystem === "rpe" ? Math.round((10 - summary.avgRir) * 10) / 10 : summary.avgRir}
+              </div>
+            )}
+            {summary.mainMuscles.length > 0 && (
+              <div className="text-sm text-neutral-300">Main muscles trained: {summary.mainMuscles.join(", ")}</div>
+            )}
+            {summary.bestLift && (
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Best lift</div>
+                <div className="text-base text-white">
+                  {exMap[summary.bestLift.exId]?.name || summary.bestLift.exId} — {summary.bestLift.weight} × {summary.bestLift.reps}
+                </div>
+              </div>
+            )}
+            {summary.prs.length > 0 && (
+              <div className="flex items-center gap-1.5 text-sm text-red-500 font-bold">
+                <Award size={14} /> {summary.prs.length} PR{summary.prs.length > 1 ? "s" : ""} this session
+              </div>
+            )}
+
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1.5">Rate this session</div>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} onClick={() => onRate(summary.id, n)} className="p-0.5">
+                    <Star size={20} className={n <= (summary.rating || 0) ? "text-red-500 fill-red-500" : "text-neutral-700"} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {run.sessionEntries.length > 0 ? (
           <div className="space-y-1.5">
@@ -2176,6 +2850,7 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
                 <EditLogEntryPanel
                   entry={entry}
                   exMap={exMap}
+                  rirSystem={rirSystem}
                   onBack={() => setEditingIdx(null)}
                   onSave={(changes) => {
                     const updatedEntry = { ...entry, ...changes };
@@ -2194,20 +2869,23 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
                   }}
                 />
               ) : isLogged ? (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 text-xs text-green-500 mb-1">
-                      <Check size={14} /> Logged this session
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 text-xs text-green-500 mb-1">
+                        <Check size={14} /> Logged this session
+                      </div>
+                      <div className="text-xl font-bold text-white truncate">{exMap[currentExId]?.name || currentExId}</div>
+                      <div className="text-sm text-neutral-400 mt-1">{formatSetsVerbose(entry.sets)}</div>
                     </div>
-                    <div className="text-xl font-bold text-white truncate">{exMap[currentExId]?.name || currentExId}</div>
-                    <div className="text-sm text-neutral-400 mt-1">{formatSetsVerbose(entry.sets)}</div>
+                    <button
+                      onClick={() => setEditingIdx(idx)}
+                      className="shrink-0 text-xs uppercase tracking-widest text-red-500 hover:text-red-400"
+                    >
+                      Edit
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setEditingIdx(idx)}
-                    className="shrink-0 text-xs uppercase tracking-widest text-red-500 hover:text-red-400"
-                  >
-                    Edit
-                  </button>
+                  {prByIndex[idx] && <PRCallout exMap={exMap} exId={currentExId} prs={prByIndex[idx]} />}
                 </div>
               ) : isActive ? (
                 <ExerciseLogger
@@ -2219,8 +2897,10 @@ function GuidedRunView({ run, state, updateState, exMap, allExercises, onSaved, 
                   exMap={exMap}
                   allExercises={allExercises}
                   onSaved={(savedEntry) => {
+                    const prs = detectPRs(currentExId, savedEntry, state.logs);
+                    if (prs.length > 0) setPrByIndex((m) => ({ ...m, [idx]: prs }));
                     onSaved(idx, savedEntry);
-                    onLoggedSet?.();
+                    onLoggedSet?.(savedEntry);
                   }}
                   onSwap={(newExId) => onSwap(idx, newExId)}
                   saveLabel="Log set"
@@ -2398,7 +3078,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
       notes: notes.trim(),
     };
     updateState((prev) => ({ ...prev, cardioLogs: [entry, ...(prev.cardioLogs || [])], hasSeenOnboarding: true }));
-    onLoggedSet?.();
+    onLoggedSet?.("conditioning");
     setDistance("");
     setDuration("");
     setLoad("");
@@ -3575,8 +4255,86 @@ function SettingsTab({ state, updateState }) {
     completedPrograms: (state.completedPrograms || []).length,
   };
 
+  const settings = state.settings || { rirSystem: "rir", restDefaults: DEFAULT_REST_DEFAULTS, barWeight: 45 };
+  const updateSettings = (patch) => updateState((prev) => ({ ...prev, settings: { ...(prev.settings || {}), ...patch } }));
+  const updateRestDefault = (category, val) =>
+    updateSettings({ restDefaults: { ...(settings.restDefaults || DEFAULT_REST_DEFAULTS), [category]: Number(val) || 0 } });
+
   return (
     <div className="space-y-6">
+      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-4">
+        <div className="text-[11px] uppercase tracking-widest text-red-600">Training</div>
+
+        <div>
+          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Effort tracking</label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => updateSettings({ rirSystem: "rir" })}
+              className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
+                settings.rirSystem !== "rpe" ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+              }`}
+            >
+              RIR
+            </button>
+            <button
+              onClick={() => updateSettings({ rirSystem: "rpe" })}
+              className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
+                settings.rirSystem === "rpe" ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+              }`}
+            >
+              RPE
+            </button>
+          </div>
+          <p className="text-xs text-neutral-600 mt-1.5">Reps in reserve (0–5+) or rate of perceived exertion (6–10), logged per set.</p>
+        </div>
+
+        <div>
+          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Rest timer defaults (seconds)</label>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              ["compound", "Compound"],
+              ["isolation", "Isolation"],
+              ["conditioning", "Conditioning"],
+              ["superset", "Superset"],
+            ].map(([key, label]) => (
+              <div key={key}>
+                <div className="text-[10px] text-neutral-600 mb-1">{label}</div>
+                <input
+                  type="number"
+                  value={(settings.restDefaults || DEFAULT_REST_DEFAULTS)[key]}
+                  onChange={(e) => updateRestDefault(key, e.target.value)}
+                  className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Barbell weight</label>
+          <div className="flex gap-2 items-center">
+            {[45, 35].map((w) => (
+              <button
+                key={w}
+                onClick={() => updateSettings({ barWeight: w })}
+                className={`px-4 py-2 text-xs font-bold border ${
+                  settings.barWeight === w ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                }`}
+              >
+                {w} lb
+              </button>
+            ))}
+            <input
+              type="number"
+              value={settings.barWeight}
+              onChange={(e) => updateSettings({ barWeight: Number(e.target.value) || 0 })}
+              placeholder="Custom"
+              className="w-24 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-4">
         <div>
           <div className="text-[11px] uppercase tracking-widest text-red-600">Data backup</div>
