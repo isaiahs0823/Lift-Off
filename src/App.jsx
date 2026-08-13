@@ -1735,7 +1735,7 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, onBack, onSelect
 // Shared by the standalone logger's "Today's sets" and the edit panel's "Sets" — each set
 // row can carry its own nested drops array, added/removed independently of the set itself.
 // Row shape while editing: { weight: string, reps: string, drops: [{weight, reps}, ...] }.
-function SetRowsEditor({ sets, onChange, rirSystem = "rir" }) {
+function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
   const updateSetRow = (idx, field, val) => onChange(sets.map((row, i) => (i === idx ? { ...row, [field]: val } : row)));
   const addSetRow = () => onChange([...sets, { weight: "", reps: "", drops: [], setType: "working", rir: "", rpe: "" }]);
   const removeSetRow = (idx) => onChange(sets.filter((_, i) => i !== idx));
@@ -1814,54 +1814,58 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir" }) {
               <Copy size={10} /> Duplicate
             </button>
           </div>
-          <div className="flex items-center gap-1 pl-7 overflow-x-auto">
-            {SET_TYPES.map((t) => {
-              const active = (row.setType || "working") === t.value;
-              return (
-                <button
-                  key={t.value}
-                  onClick={() => updateSetRow(idx, "setType", t.value)}
-                  className={`shrink-0 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide border ${
-                    active ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
-                  }`}
-                >
-                  {t.short}
-                </button>
-              );
-            })}
-            <input
-              type="number"
-              placeholder={rirSystem === "rpe" ? "RPE" : "RIR"}
-              value={rirSystem === "rpe" ? row.rpe ?? "" : row.rir ?? ""}
-              onChange={(e) => updateSetRow(idx, rirSystem === "rpe" ? "rpe" : "rir", e.target.value)}
-              className="shrink-0 w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-1.5 py-0.5 text-[11px] text-center focus:outline-none focus:border-red-700"
-            />
-          </div>
-          {(row.drops || []).map((drop, dIdx) => (
-            <div key={dIdx} className="flex items-center gap-2 pl-7">
-              <span className="text-xs text-neutral-700">↳</span>
-              <input
-                type="number"
-                placeholder="Drop weight"
-                value={drop.weight}
-                onChange={(e) => updateDropRow(idx, dIdx, "weight", e.target.value)}
-                className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
-              />
-              <input
-                type="number"
-                placeholder="Drop reps"
-                value={drop.reps}
-                onChange={(e) => updateDropRow(idx, dIdx, "reps", e.target.value)}
-                className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
-              />
-              <button onClick={() => removeDropRow(idx, dIdx)} className="text-neutral-600 hover:text-red-600 p-1">
-                <Trash2 size={14} />
+          {!simple && (
+            <>
+              <div className="flex items-center gap-1 pl-7 overflow-x-auto">
+                {SET_TYPES.map((t) => {
+                  const active = (row.setType || "working") === t.value;
+                  return (
+                    <button
+                      key={t.value}
+                      onClick={() => updateSetRow(idx, "setType", t.value)}
+                      className={`shrink-0 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide border ${
+                        active ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+                      }`}
+                    >
+                      {t.short}
+                    </button>
+                  );
+                })}
+                <input
+                  type="number"
+                  placeholder={rirSystem === "rpe" ? "RPE" : "RIR"}
+                  value={rirSystem === "rpe" ? row.rpe ?? "" : row.rir ?? ""}
+                  onChange={(e) => updateSetRow(idx, rirSystem === "rpe" ? "rpe" : "rir", e.target.value)}
+                  className="shrink-0 w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-1.5 py-0.5 text-[11px] text-center focus:outline-none focus:border-red-700"
+                />
+              </div>
+              {(row.drops || []).map((drop, dIdx) => (
+                <div key={dIdx} className="flex items-center gap-2 pl-7">
+                  <span className="text-xs text-neutral-700">↳</span>
+                  <input
+                    type="number"
+                    placeholder="Drop weight"
+                    value={drop.weight}
+                    onChange={(e) => updateDropRow(idx, dIdx, "weight", e.target.value)}
+                    className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Drop reps"
+                    value={drop.reps}
+                    onChange={(e) => updateDropRow(idx, dIdx, "reps", e.target.value)}
+                    className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                  />
+                  <button onClick={() => removeDropRow(idx, dIdx)} className="text-neutral-600 hover:text-red-600 p-1">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              <button onClick={() => addDropRow(idx)} className="pl-7 flex items-center gap-1 text-[11px] text-neutral-600 hover:text-red-500">
+                <Plus size={11} /> Add drop
               </button>
-            </div>
-          ))}
-          <button onClick={() => addDropRow(idx)} className="pl-7 flex items-center gap-1 text-[11px] text-neutral-600 hover:text-red-500">
-            <Plus size={11} /> Add drop
-          </button>
+            </>
+          )}
         </div>
       ))}
       <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-neutral-500 hover:text-red-500">
@@ -1875,7 +1879,7 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir" }) {
 // Lets a previously-saved history entry be corrected (weight/reps per set and per drop,
 // target reps) or deleted outright. Edits flow back through the same state.logs array, so
 // suggestNext recomputes automatically off the corrected numbers.
-function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete, rirSystem = "rir" }) {
+function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete, rirSystem = "rir", simple = false }) {
   const [sets, setSets] = useState(
     entry.sets.map((s) => ({
       weight: String(s.weight),
@@ -1914,7 +1918,7 @@ function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete, rirSystem =
 
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Sets</label>
-        <SetRowsEditor sets={sets} onChange={setSets} rirSystem={rirSystem} />
+        <SetRowsEditor sets={sets} onChange={setSets} rirSystem={rirSystem} simple={simple} />
       </div>
 
       <button
@@ -2127,6 +2131,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
   const [swapOpen, setSwapOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState(null);
   const rirSystem = state.settings?.rirSystem || "rir";
+  const isSimple = (state.settings?.trainingDetail || "advanced") === "simple";
 
   const suggestion = useMemo(
     () => suggestNext(exId, state.logs, exMap, { readinessLogs: state.readinessLogs }),
@@ -2189,6 +2194,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         entry={entry}
         exMap={exMap}
         rirSystem={rirSystem}
+        simple={isSimple}
         onBack={() => setEditingEntryId(null)}
         onSave={(changes) => {
           updateState((prev) => ({
@@ -2299,7 +2305,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
             </button>
           )}
         </div>
-        <SetRowsEditor sets={setsInput} onChange={setSetsInput} rirSystem={rirSystem} />
+        <SetRowsEditor sets={setsInput} onChange={setSetsInput} rirSystem={rirSystem} simple={isSimple} />
       </div>
 
       <button
@@ -3122,6 +3128,7 @@ function GuidedRunView({
   const [editingIdx, setEditingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
   const rirSystem = state.settings?.rirSystem || "rir";
+  const isSimple = (state.settings?.trainingDetail || "advanced") === "simple";
 
   // Live elapsed-time clock for the Training Mode header — ticks off run.startedAt so it keeps
   // counting correctly even if the tab was backgrounded (no drift accumulation from setInterval).
@@ -3354,6 +3361,7 @@ function GuidedRunView({
                   entry={entry}
                   exMap={exMap}
                   rirSystem={rirSystem}
+                  simple={isSimple}
                   onBack={() => setEditingIdx(null)}
                   onSave={(changes) => {
                     const updatedEntry = { ...entry, ...changes };
