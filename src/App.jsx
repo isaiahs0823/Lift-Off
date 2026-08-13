@@ -2753,6 +2753,342 @@ function todayReadinessSummary(state) {
   return { loggedToday: true, score, band: readinessBand(score) };
 }
 
+// ---------------- TRAINING MODE: ONE-SET-AT-A-TIME CARD ----------------
+// Purpose-built for the guided run's *active* exercise only — large steppers (the number
+// between the +/- buttons is a real input, so typing is still "manual entry"), one dominant
+// Save Set button, and a per-set rest-timer bump via onSetSaved. Writes the exact same
+// { id, exId, date, sets, targetReps } shape to state.logs that ExerciseLogger always has, via
+// the same onSaved(entry) contract GuidedRunView already wires up — so detectPRs, suggestNext,
+// buildSessionSummary and exports don't need to know this exists. The standalone Log tab and
+// history-edit flow keep using ExerciseLogger/SetRowsEditor untouched.
+const RIR_CHIPS = [3, 2, 1, 0];
+const RPE_CHIPS = [7, 8, 9, 10];
+
+function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExercises, onSaved, onSwap, onSetSaved }) {
+  const rirSystem = state.settings?.rirSystem || "rir";
+  const trainingDetail = state.settings?.trainingDetail || "advanced";
+  const isSimple = trainingDetail === "simple";
+
+  const suggestion = useMemo(
+    () => suggestNext(exId, state.logs, exMap, { readinessLogs: state.readinessLogs }),
+    [exId, state.logs, exMap, state.readinessLogs]
+  );
+  const recentForEx = useMemo(
+    () => state.logs.filter((l) => l.exId === exId).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3),
+    [state.logs, exId]
+  );
+  const targetSetCount = exSlot?.sets || recentForEx[0]?.sets.length || 3;
+
+  const [confirmedSets, setConfirmedSets] = useState([]);
+  const [weight, setWeight] = useState(suggestion.suggestion ?? "");
+  const [reps, setReps] = useState(suggestion.targetReps ?? 8);
+  const [rirVal, setRirVal] = useState("");
+  const [setType, setSetType] = useState("working");
+  const [drops, setDrops] = useState([]);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [addingExtra, setAddingExtra] = useState(false);
+
+  const chips = rirSystem === "rpe" ? RPE_CHIPS : RIR_CHIPS;
+  const showDraft = confirmedSets.length < targetSetCount || addingExtra;
+
+  const bumpWeight = (delta) => setWeight((w) => Math.max(0, (Number(w) || 0) + delta));
+  const bumpReps = (delta) => setReps((r) => Math.max(0, (Number(r) || 0) + delta));
+
+  const saveSet = () => {
+    if (weight === "" || reps === "") return;
+    const raw = {
+      weight,
+      reps,
+      drops,
+      setType,
+      rir: rirSystem === "rir" ? rirVal : "",
+      rpe: rirSystem === "rpe" ? rirVal : "",
+    };
+    const cleaned = cleanSetsInput([raw])[0];
+    setConfirmedSets((prev) => [...prev, cleaned]);
+    onSetSaved?.();
+    setRirVal("");
+    setSetType("working");
+    setDrops([]);
+    setAdvancedOpen(false);
+    setAddingExtra(false);
+  };
+
+  const finishExercise = () => {
+    if (confirmedSets.length === 0) return;
+    const entry = {
+      id: `log_${Date.now()}`,
+      exId,
+      date: new Date().toISOString(),
+      sets: confirmedSets,
+      targetReps: Number(reps) || confirmedSets[0].reps,
+    };
+    updateState((prev) => ({ ...prev, logs: [entry, ...prev.logs], hasSeenOnboarding: true }));
+    onSaved?.(entry);
+  };
+
+  const useSuggested = () => {
+    if (suggestion.suggestion == null) return;
+    setWeight(suggestion.suggestion);
+    setReps(suggestion.targetReps ?? 8);
+  };
+  const duplicateLast = () => {
+    const last = confirmedSets[confirmedSets.length - 1] || recentForEx[0]?.sets?.[0];
+    if (!last) return;
+    setWeight(last.weight);
+    setReps(last.reps);
+  };
+
+  if (swapOpen) {
+    return (
+      <ExerciseSwapPicker
+        currentExId={exId}
+        allExercises={allExercises}
+        exMap={exMap}
+        onBack={() => setSwapOpen(false)}
+        onSelect={(newExId) => {
+          setSwapOpen(false);
+          onSwap(newExId);
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xl font-bold text-white truncate">{exMap[exId]?.name || exId}</div>
+          <div className="text-xs text-neutral-500 mt-0.5">{exMap[exId]?.muscle}</div>
+        </div>
+        {onSwap && (
+          <button
+            onClick={() => setSwapOpen(true)}
+            className="shrink-0 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500 flex items-center gap-1"
+          >
+            <ArrowLeftRight size={12} /> Swap
+          </button>
+        )}
+      </div>
+
+      {recentForEx.length > 0 && (
+        <div className="text-sm text-neutral-400">
+          <span className="text-neutral-600">Last time: </span>
+          {formatSetsVerbose(recentForEx[0].sets)}
+        </div>
+      )}
+
+      {suggestion.suggestion != null && (
+        <div className="text-sm text-neutral-300">
+          <span className="text-neutral-600">Today, suggested: </span>
+          <span className="text-white font-bold">
+            {suggestion.suggestion} lb x {suggestion.targetReps} reps
+          </span>
+        </div>
+      )}
+      {suggestion.reason && <div className="text-xs text-neutral-500">{suggestion.reason}</div>}
+
+      {confirmedSets.length > 0 && (
+        <div className="space-y-1">
+          {confirmedSets.map((s, i) => (
+            <div key={i} className="flex items-center gap-2 text-sm text-neutral-300">
+              <Check size={13} className="text-green-500 shrink-0" />
+              Set {i + 1}: {formatSetVerbose(s)}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showDraft && (
+        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-4">
+          <div className="text-[11px] uppercase tracking-widest text-red-600">
+            Set {confirmedSets.length + 1}
+            {targetSetCount ? ` of ${targetSetCount}` : ""}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => bumpWeight(-5)}
+              className="w-12 h-12 shrink-0 text-lg font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600"
+            >
+              -5
+            </button>
+            <div className="flex-1 text-center">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                className="w-full bg-transparent text-4xl font-bold text-white text-center focus:outline-none"
+              />
+              <div className="text-[10px] uppercase tracking-widest text-neutral-600">lb</div>
+            </div>
+            <button
+              onClick={() => bumpWeight(5)}
+              className="w-12 h-12 shrink-0 text-lg font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600"
+            >
+              +5
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => bumpReps(-1)}
+              className="w-12 h-12 shrink-0 text-lg font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600"
+            >
+              -1
+            </button>
+            <div className="flex-1 text-center">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={reps}
+                onChange={(e) => setReps(e.target.value)}
+                className="w-full bg-transparent text-4xl font-bold text-white text-center focus:outline-none"
+              />
+              <div className="text-[10px] uppercase tracking-widest text-neutral-600">reps</div>
+            </div>
+            <button
+              onClick={() => bumpReps(1)}
+              className="w-12 h-12 shrink-0 text-lg font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600"
+            >
+              +1
+            </button>
+          </div>
+
+          {!isSimple && (
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">
+                {rirSystem === "rpe" ? "RPE" : "RIR"}
+              </div>
+              <div className="flex gap-1.5">
+                {chips.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setRirVal((v) => (String(v) === String(c) ? "" : c))}
+                    className={`flex-1 py-2 text-sm font-bold border ${
+                      String(rirVal) === String(c)
+                        ? "bg-red-700 border-red-700 text-white"
+                        : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-4">
+            <button onClick={useSuggested} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+              Use suggested
+            </button>
+            <button onClick={duplicateLast} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+              Duplicate
+            </button>
+          </div>
+
+          {!isSimple && (
+            <div>
+              <button
+                onClick={() => setAdvancedOpen((o) => !o)}
+                className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+              >
+                Working set {advancedOpen ? "▴" : "▾"}
+              </button>
+              {advancedOpen && (
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center gap-1 overflow-x-auto">
+                    {SET_TYPES.map((t) => (
+                      <button
+                        key={t.value}
+                        onClick={() => setSetType(t.value)}
+                        className={`shrink-0 px-2 py-1 text-[10px] font-bold uppercase tracking-wide border ${
+                          setType === t.value
+                            ? "bg-red-700 border-red-700 text-white"
+                            : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+                        }`}
+                      >
+                        {t.short}
+                      </button>
+                    ))}
+                  </div>
+                  {drops.map((d, di) => (
+                    <div key={di} className="flex items-center gap-2">
+                      <span className="text-xs text-neutral-700">↳</span>
+                      <input
+                        type="number"
+                        placeholder="Drop weight"
+                        value={d.weight}
+                        onChange={(e) => setDrops((ds) => ds.map((x, i) => (i === di ? { ...x, weight: e.target.value } : x)))}
+                        className="flex-1 min-w-0 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Drop reps"
+                        value={d.reps}
+                        onChange={(e) => setDrops((ds) => ds.map((x, i) => (i === di ? { ...x, reps: e.target.value } : x)))}
+                        className="flex-1 min-w-0 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                      />
+                      <button onClick={() => setDrops((ds) => ds.filter((_, i) => i !== di))} className="text-neutral-600 hover:text-red-600 p-1">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setDrops((ds) => [...ds, { weight: "", reps: "" }])}
+                    className="flex items-center gap-1 text-[11px] text-neutral-600 hover:text-red-500"
+                  >
+                    <Plus size={11} /> Add drop
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={saveSet}
+            disabled={weight === "" || reps === ""}
+            className={`w-full py-4 text-sm uppercase tracking-widest font-bold border ${
+              weight !== "" && reps !== ""
+                ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
+                : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+            }`}
+          >
+            Save set
+          </button>
+        </div>
+      )}
+
+      {!showDraft && confirmedSets.length >= targetSetCount && (
+        <div className="space-y-2">
+          <button
+            onClick={finishExercise}
+            className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+          >
+            Finish exercise →
+          </button>
+          <button
+            onClick={() => setAddingExtra(true)}
+            className="w-full text-center text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+          >
+            + Add another set
+          </button>
+        </div>
+      )}
+      {showDraft && confirmedSets.length > 0 && confirmedSets.length < targetSetCount && (
+        <button onClick={finishExercise} className="w-full text-center text-[11px] uppercase tracking-widest text-neutral-600 hover:text-red-500 py-1">
+          Finish exercise now ({confirmedSets.length} set{confirmedSets.length > 1 ? "s" : ""} logged)
+        </button>
+      )}
+
+      <PlateCalculatorToggle defaultWeight={weight !== "" ? weight : suggestion.suggestion ?? undefined} barWeight={state.settings?.barWeight || 45} />
+      <ExerciseNotesPanel exId={exId} state={state} updateState={updateState} />
+    </div>
+  );
+}
+
 // ---------------- GUIDED PLAN RUNNER ----------------
 // Shows every exercise in the plan on one page so the whole session is visible at once, but
 // only the current, not-yet-logged exercise ever shows active input fields — logged ones
@@ -2779,6 +3115,15 @@ function GuidedRunView({
   const [editingIdx, setEditingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
   const rirSystem = state.settings?.rirSystem || "rir";
+
+  // Live elapsed-time clock for the Training Mode header — ticks off run.startedAt so it keeps
+  // counting correctly even if the tab was backgrounded (no drift accumulation from setInterval).
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (run.finished) return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [run.finished]);
 
   if (run.finished) {
     const summary = (state.workoutSessions || []).find((s) => s.id === run.summaryId) || null;
@@ -2937,18 +3282,35 @@ function GuidedRunView({
     preWorkout = generatePreWorkoutAdvice({ readiness: todayReadinessSummary(state) }, focus);
   }
 
+  const totalExercises = run.exercises.length;
+  const loggedCount = run.sessionEntries.length;
+  const stepNumber = Math.min(currentIdx === -1 ? totalExercises : currentIdx + 1, totalExercises);
+  const progressPct = totalExercises > 0 ? Math.round((loggedCount / totalExercises) * 100) : 0;
+  const elapsedSec = Math.max(0, Math.round((nowTick - new Date(run.startedAt).getTime()) / 1000));
+  const elapsedLabel = `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, "0")}`;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">{run.planName}</div>
-          <div className="text-xs text-neutral-500 mt-1">
-            {run.exercises.length} exercises · {run.sessionEntries.length} logged this session
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-widest text-red-600 truncate">{run.planName}</div>
+            <div className="text-sm text-neutral-400 mt-0.5">
+              Exercise {stepNumber} of {totalExercises} · {elapsedLabel}
+            </div>
+          </div>
+          <div className="shrink-0 flex items-center gap-3">
+            <button onClick={onExit} className="text-xs text-neutral-600 hover:text-red-600">
+              Exit
+            </button>
+            <button onClick={onFinish} className="text-xs uppercase tracking-widest font-bold text-red-500 hover:text-red-400">
+              Finish
+            </button>
           </div>
         </div>
-        <button onClick={onExit} className="text-xs text-neutral-600 hover:text-red-600">
-          Exit
-        </button>
+        <div className="h-1.5 bg-neutral-900 w-full">
+          <div className="h-1.5 bg-red-700 transition-all" style={{ width: `${progressPct}%` }} />
+        </div>
       </div>
 
       {preWorkout && (
@@ -3005,7 +3367,13 @@ function GuidedRunView({
                         <Check size={14} /> Logged this session
                       </div>
                       <div className="text-xl font-bold text-white truncate">{exMap[currentExId]?.name || currentExId}</div>
-                      <div className="text-sm text-neutral-400 mt-1">{formatSetsVerbose(entry.sets)}</div>
+                      <div className="space-y-0.5 mt-1.5">
+                        {entry.sets.map((s, i) => (
+                          <div key={i} className="text-sm text-neutral-400">
+                            Set {i + 1}: {formatSetVerbose(s)}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <button
                       onClick={() => setEditingIdx(idx)}
@@ -3017,10 +3385,10 @@ function GuidedRunView({
                   {prByIndex[idx] && <PRCallout exMap={exMap} exId={currentExId} prs={prByIndex[idx]} />}
                 </div>
               ) : isActive ? (
-                <ExerciseLogger
+                <TrainingExerciseCard
                   key={currentExId}
                   exId={currentExId}
-                  title={exMap[currentExId]?.name || currentExId}
+                  exSlot={exSlot}
                   state={state}
                   updateState={updateState}
                   exMap={exMap}
@@ -3029,15 +3397,17 @@ function GuidedRunView({
                     const prs = detectPRs(currentExId, savedEntry, state.logs);
                     if (prs.length > 0) setPrByIndex((m) => ({ ...m, [idx]: prs }));
                     onSaved(idx, savedEntry);
-                    // Mid-group (e.g. just logged A1 of an A1/A2 pair): no rest, straight into
-                    // the next movement. Rest only starts once the group's last exercise logs,
-                    // and uses the "superset" default rather than this one exercise's own
-                    // compound/isolation category.
-                    if (isLastInGroup(idx)) onLoggedSet?.(label ? "superset" : savedEntry);
                   }}
                   onSwap={(newExId) => onSwap(idx, newExId)}
-                  saveLabel="Log set"
-                  showHistory={false}
+                  onSetSaved={() => {
+                    // Mid-group (e.g. still on A1 of an A1/A2 pair): no rest, straight into the
+                    // next movement. Rest only starts once the group's last exercise logs a set,
+                    // and uses the "superset" default rather than this one exercise's own
+                    // compound/isolation category. Within a solo exercise (or the group's last
+                    // member), every individual saved set now bumps rest, not just the whole
+                    // exercise at once.
+                    if (isLastInGroup(idx)) onLoggedSet?.(label ? "superset" : { exId: currentExId });
+                  }}
                 />
               ) : (
                 <div className="text-base font-medium text-neutral-600">{exMap[currentExId]?.name || currentExId}</div>
