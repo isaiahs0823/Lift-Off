@@ -1794,14 +1794,14 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir" }) {
               placeholder="Weight"
               value={row.weight}
               onChange={(e) => updateSetRow(idx, "weight", e.target.value)}
-              className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+              className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
             />
             <input
               type="number"
               placeholder="Reps"
               value={row.reps}
               onChange={(e) => updateSetRow(idx, "reps", e.target.value)}
-              className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+              className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
             />
             {sets.length > 1 && (
               <button onClick={() => removeSetRow(idx)} className="text-neutral-600 hover:text-red-600 p-1">
@@ -1840,14 +1840,14 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir" }) {
                 placeholder="Drop weight"
                 value={drop.weight}
                 onChange={(e) => updateDropRow(idx, dIdx, "weight", e.target.value)}
-                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
               />
               <input
                 type="number"
                 placeholder="Drop reps"
                 value={drop.reps}
                 onChange={(e) => updateDropRow(idx, dIdx, "reps", e.target.value)}
-                className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
               />
               <button onClick={() => removeDropRow(idx, dIdx)} className="text-neutral-600 hover:text-red-600 p-1">
                 <Trash2 size={14} />
