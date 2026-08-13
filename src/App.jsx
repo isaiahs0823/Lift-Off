@@ -1613,6 +1613,7 @@ export default function LiftLog() {
                 exMap={exMap}
                 onStartRun={(plan, programContext) => startRun(plan, "templates", programContext)}
                 onRestartCompletedProgram={restartProgramById}
+                onGoToBuild={() => setTab("build")}
               />
             )}
             {tab === "build" && (
@@ -1622,6 +1623,7 @@ export default function LiftLog() {
                 allExercises={allExercises}
                 exMap={exMap}
                 onStartRun={(plan, programContext) => startRun(plan, "build", programContext)}
+                onGoToPlans={() => setTab("templates")}
               />
             )}
             {tab === "catalog" && <CatalogTab state={state} updateState={updateState} allExercises={allExercises} />}
@@ -3757,8 +3759,12 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
 }
 
 // ---------------- TEMPLATES TAB ----------------
-function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartCompletedProgram }) {
-  const [detail, setDetail] = useState(null); // { kind: "program" | "template", id }
+function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartCompletedProgram, onGoToBuild }) {
+  const [detail, setDetail] = useState(null); // { kind: "program" | "template" | "customPlan" | "customProgram", id }
+
+  const deleteCustomPlan = (id) => updateState((prev) => ({ ...prev, customPlans: prev.customPlans.filter((p) => p.id !== id) }));
+  const deleteCustomProgram = (id) =>
+    updateState((prev) => ({ ...prev, customPrograms: (prev.customPrograms || []).filter((p) => p.id !== id) }));
 
   const copyToCustom = (tpl) => {
     const newPlan = { ...tpl, id: `plan_${Date.now()}`, name: `${tpl.name} (copy)`, isCustom: true };
@@ -3791,6 +3797,98 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
   const isCurrent = (progId) =>
     state.currentProgram?.source === "builtin" && state.currentProgram.programId === progId;
   const isComplete = (progId) => isCurrent(progId) && currentProgramDay?.isComplete;
+  const isCurrentCustom = (progId) => state.currentProgram?.source === "custom" && state.currentProgram.programId === progId;
+  const isCompleteCustom = (progId) => isCurrentCustom(progId) && currentProgramDay?.isComplete;
+
+  if (detail?.kind === "customPlan") {
+    const p = state.customPlans.find((pl) => pl.id === detail.id);
+    if (!p) return null;
+    return (
+      <SlideInPanel title={p.name} subtitle={`${p.exercises.length} exercises`} onBack={() => setDetail(null)}>
+        <div className="space-y-1.5">
+          {p.exercises.map((e, i) => (
+            <div key={i} className="flex items-center justify-between text-xs text-neutral-400 py-1.5 border-t border-neutral-900">
+              <span className="text-sm">{exMap[e.exId]?.name || e.exId}{e.group ? ` (${e.group})` : ""}</span>
+              <span className="text-neutral-600">
+                {e.sets} x {e.reps}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => onStartRun(p)} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
+            <ChevronRight size={12} /> Start workout
+          </button>
+          <button
+            onClick={() => {
+              if (!window.confirm(`Delete "${p.name}"? This can't be undone.`)) return;
+              deleteCustomPlan(p.id);
+              setDetail(null);
+            }}
+            className="text-xs text-neutral-500 hover:text-red-600 flex items-center gap-1"
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        </div>
+      </SlideInPanel>
+    );
+  }
+
+  if (detail?.kind === "customProgram") {
+    const prog = (state.customPrograms || []).find((pr) => pr.id === detail.id);
+    if (!prog) return null;
+    return (
+      <SlideInPanel
+        title={prog.name}
+        subtitle={prog.weeks ? `${prog.days.length} days · ${prog.weeks} weeks` : `${prog.days.length} days`}
+        onBack={() => setDetail(null)}
+      >
+        {prog.days.map((day, di) => (
+          <div key={di} className="border-t border-neutral-900 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-red-500 flex items-center gap-1.5">
+                {day.label}
+                {isCurrentCustom(prog.id) && state.currentProgram.dayIndex === di && (
+                  <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Next up</span>
+                )}
+              </span>
+              <button
+                onClick={() =>
+                  onStartRun(
+                    { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
+                    { programId: prog.id, programName: prog.name, source: "custom", dayIndex: di, totalDays: prog.days.length }
+                  )
+                }
+                className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+              >
+                <ChevronRight size={11} /> Start workout
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {day.exercises.map((e, i) => (
+                <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
+                  <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
+                  <span className="text-neutral-600">
+                    {e.sets} x {e.reps}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        <button
+          onClick={() => {
+            if (!window.confirm(`Delete "${prog.name}"? This can't be undone.`)) return;
+            deleteCustomProgram(prog.id);
+            setDetail(null);
+          }}
+          className="text-xs text-neutral-500 hover:text-red-600 flex items-center gap-1"
+        >
+          <Trash2 size={12} /> Delete program
+        </button>
+      </SlideInPanel>
+    );
+  }
 
   if (detail?.kind === "program") {
     const prog = (state.programs || []).find((p) => p.id === detail.id);
@@ -3881,8 +3979,74 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
 
   return (
     <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[11px] uppercase tracking-widest text-red-600">Plans & programs</div>
+          <div className="text-xl font-bold text-white mt-1">Browse everything</div>
+        </div>
+        {onGoToBuild && (
+          <button onClick={onGoToBuild} className="shrink-0 flex items-center gap-1.5 text-xs uppercase tracking-widest text-red-500 hover:text-red-400">
+            <Plus size={14} /> Create plan
+          </button>
+        )}
+      </div>
+
+      {state.customPlans.length > 0 && (
+        <div className="space-y-3">
+          <div className="text-[11px] uppercase tracking-widest text-red-600">My plans</div>
+          <div className="space-y-2">
+            {state.customPlans.map((p) => (
+              <div key={p.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
+                <button onClick={() => setDetail({ kind: "customPlan", id: p.id })} className="flex-1 min-w-0 text-left">
+                  <div className="text-base text-white truncate">{p.name}</div>
+                  <div className="text-xs text-neutral-600">{p.exercises.length} exercises</div>
+                </button>
+                <button
+                  onClick={() => onStartRun(p)}
+                  className="shrink-0 ml-3 text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+                >
+                  <ChevronRight size={12} /> Start
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(state.customPrograms || []).length > 0 && (
+        <div className="space-y-3">
+          <div className="text-[11px] uppercase tracking-widest text-red-600">My programs</div>
+          <div className="space-y-2">
+            {state.customPrograms.map((prog) => (
+              <button
+                key={prog.id}
+                onClick={() => setDetail({ kind: "customProgram", id: prog.id })}
+                className="w-full flex items-center justify-between px-4 py-3 border border-neutral-800 bg-charcoal-panel text-left"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-medium text-white truncate">{prog.name}</span>
+                    {isCompleteCustom(prog.id) ? (
+                      <span className="text-[9px] uppercase tracking-widest bg-neutral-700 text-white px-1.5 py-0.5 shrink-0">Complete</span>
+                    ) : (
+                      isCurrentCustom(prog.id) && (
+                        <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
+                      )
+                    )}
+                  </div>
+                  <div className="text-[11px] text-neutral-500 mt-0.5 truncate">
+                    {prog.days.length} days{prog.weeks ? ` · ${prog.weeks} weeks` : ""}
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-neutral-600 shrink-0 ml-2" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Programs</div>
+        <div className="text-[11px] uppercase tracking-widest text-neutral-500">Programs</div>
         <p className="text-xs text-neutral-500">
           Full multi-day splits built around a specific look and training identity. Copy any single day into your
           own plans.
@@ -3962,12 +4126,13 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
 }
 
 // ---------------- BUILD PLAN TAB ----------------
-function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
+function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onGoToPlans }) {
   const [planName, setPlanName] = useState("");
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [exFilter, setExFilter] = useState("");
-  const [planSearch, setPlanSearch] = useState("");
-  const [detail, setDetail] = useState(null); // { kind: "plan" | "program", id }
+  const [supersetMode, setSupersetMode] = useState(false);
+  const [supersetPicks, setSupersetPicks] = useState([]);
+  const [justSaved, setJustSaved] = useState(false);
 
   const filteredExercises = useMemo(() => {
     const q = exFilter.trim().toLowerCase();
@@ -3978,10 +4143,51 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
   const addExercise = (exId) => {
     if (selectedExercises.some((e) => e.exId === exId)) return;
     setSelectedExercises((s) => [...s, { exId, sets: 3, reps: 10, group: "" }]);
+    setJustSaved(false);
   };
-  const removeExercise = (exId) => setSelectedExercises((s) => s.filter((e) => e.exId !== exId));
+  const removeExercise = (exId) => {
+    setSelectedExercises((s) => s.filter((e) => e.exId !== exId));
+    setSupersetPicks((p) => p.filter((id) => id !== exId));
+  };
   const updateExercise = (exId, field, val) =>
     setSelectedExercises((s) => s.map((e) => (e.exId === exId ? { ...e, [field]: field === "group" ? val : Number(val) } : e)));
+
+  // Simplified superset creation: pick 2+ exercises already added to the plan, tap "Create
+  // superset" once, and they're grouped under the next free letter and moved next to each
+  // other in the plan order — the raw group-letter text field is gone, but the underlying
+  // single-letter `group` field GuidedRunView reads is unchanged.
+  const toggleSupersetPick = (exId) =>
+    setSupersetPicks((picks) => (picks.includes(exId) ? picks.filter((id) => id !== exId) : [...picks, exId]));
+  const createSuperset = () => {
+    if (supersetPicks.length < 2) return;
+    const used = new Set(selectedExercises.map((e) => e.group).filter(Boolean));
+    let letter = "A";
+    for (let i = 0; i < 26; i++) {
+      const c = String.fromCharCode(65 + i);
+      if (!used.has(c)) {
+        letter = c;
+        break;
+      }
+    }
+    const pickedSet = new Set(supersetPicks);
+    const grouped = selectedExercises.filter((e) => pickedSet.has(e.exId)).map((e) => ({ ...e, group: letter }));
+    const next = [];
+    let inserted = false;
+    selectedExercises.forEach((e) => {
+      if (pickedSet.has(e.exId)) {
+        if (!inserted) {
+          next.push(...grouped);
+          inserted = true;
+        }
+      } else {
+        next.push(e);
+      }
+    });
+    setSelectedExercises(next);
+    setSupersetPicks([]);
+    setSupersetMode(false);
+  };
+  const ungroup = (exId) => updateExercise(exId, "group", "");
 
   const savePlan = () => {
     if (!planName.trim() || selectedExercises.length === 0) return;
@@ -3989,116 +4195,34 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
     updateState((prev) => ({ ...prev, customPlans: [...prev.customPlans, plan] }));
     setPlanName("");
     setSelectedExercises([]);
+    setJustSaved(true);
   };
-
-  const deletePlan = (id) => {
-    updateState((prev) => ({ ...prev, customPlans: prev.customPlans.filter((p) => p.id !== id) }));
-  };
-
-  const deleteProgram = (id) => {
-    updateState((prev) => ({ ...prev, customPrograms: (prev.customPrograms || []).filter((p) => p.id !== id) }));
-  };
-
-  const filteredPlans = useMemo(() => {
-    const q = planSearch.trim().toLowerCase();
-    if (!q) return state.customPlans;
-    return state.customPlans.filter((p) => p.name.toLowerCase().includes(q));
-  }, [planSearch, state.customPlans]);
-
-  const currentProgramDay = useMemo(() => resolveCurrentProgramDay(state), [state]);
-  const isCurrentCustom = (progId) => state.currentProgram?.source === "custom" && state.currentProgram.programId === progId;
-  const isCompleteCustom = (progId) => isCurrentCustom(progId) && currentProgramDay?.isComplete;
-
-  if (detail?.kind === "plan") {
-    const p = state.customPlans.find((pl) => pl.id === detail.id);
-    if (!p) return null;
-    return (
-      <SlideInPanel title={p.name} subtitle={`${p.exercises.length} exercises`} onBack={() => setDetail(null)}>
-        <div className="space-y-1.5">
-          {p.exercises.map((e, i) => (
-            <div key={i} className="flex items-center justify-between text-xs text-neutral-400 py-1.5 border-t border-neutral-900">
-              <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
-              <span className="text-neutral-600">
-                {e.sets} x {e.reps}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => onStartRun(p)} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
-            <ChevronRight size={12} /> Start workout
-          </button>
-          <button
-            onClick={() => {
-              deletePlan(p.id);
-              setDetail(null);
-            }}
-            className="text-xs text-neutral-500 hover:text-red-600 flex items-center gap-1"
-          >
-            <Trash2 size={12} /> Delete
-          </button>
-        </div>
-      </SlideInPanel>
-    );
-  }
-
-  if (detail?.kind === "program") {
-    const prog = (state.customPrograms || []).find((pr) => pr.id === detail.id);
-    if (!prog) return null;
-    return (
-      <SlideInPanel
-        title={prog.name}
-        subtitle={prog.weeks ? `${prog.days.length} days · ${prog.weeks} weeks` : `${prog.days.length} days`}
-        onBack={() => setDetail(null)}
-      >
-        {prog.days.map((day, di) => (
-          <div key={di} className="border-t border-neutral-900 pt-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-red-500 flex items-center gap-1.5">
-                {day.label}
-                {isCurrentCustom(prog.id) && state.currentProgram.dayIndex === di && (
-                  <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Next up</span>
-                )}
-              </span>
-              <button
-                onClick={() =>
-                  onStartRun(
-                    { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
-                    { programId: prog.id, programName: prog.name, source: "custom", dayIndex: di, totalDays: prog.days.length }
-                  )
-                }
-                className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
-              >
-                <ChevronRight size={11} /> Start workout
-              </button>
-            </div>
-            <div className="space-y-1.5">
-              {day.exercises.map((e, i) => (
-                <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
-                  <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
-                  <span className="text-neutral-600">
-                    {e.sets} x {e.reps}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-        <button
-          onClick={() => {
-            deleteProgram(prog.id);
-            setDetail(null);
-          }}
-          className="text-xs text-neutral-500 hover:text-red-600 flex items-center gap-1"
-        >
-          <Trash2 size={12} /> Delete program
-        </button>
-      </SlideInPanel>
-    );
-  }
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[11px] uppercase tracking-widest text-red-600">Create plan</div>
+          <div className="text-xl font-bold text-white mt-1">Build a workout</div>
+        </div>
+        {onGoToPlans && (
+          <button onClick={onGoToPlans} className="shrink-0 text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+            My plans →
+          </button>
+        )}
+      </div>
+
+      {justSaved && (
+        <div className="border border-red-900/40 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
+          <div className="text-sm text-neutral-300">Plan saved.</div>
+          {onGoToPlans && (
+            <button onClick={onGoToPlans} className="text-xs uppercase tracking-widest text-red-500 hover:text-red-400 flex items-center gap-1">
+              <ChevronRight size={12} /> View my plans
+            </button>
+          )}
+        </div>
+      )}
+
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Plan name</label>
         <input
@@ -4144,45 +4268,92 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
 
       {selectedExercises.length > 0 && (
         <div className="space-y-2">
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500">Plan exercises</label>
+          <div className="flex items-center justify-between">
+            <label className="block text-[11px] uppercase tracking-widest text-neutral-500">Plan exercises</label>
+            {selectedExercises.length >= 2 && !supersetMode && (
+              <button
+                onClick={() => setSupersetMode(true)}
+                className="text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400"
+              >
+                Group as superset
+              </button>
+            )}
+          </div>
+
+          {supersetMode && (
+            <div className="border border-red-900/40 bg-charcoal-panel p-3 space-y-2">
+              <div className="text-xs text-neutral-400">Select 2 or more exercises to superset, then confirm.</div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={createSuperset}
+                  disabled={supersetPicks.length < 2}
+                  className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
+                    supersetPicks.length >= 2
+                      ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
+                      : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+                  }`}
+                >
+                  Create superset ({supersetPicks.length})
+                </button>
+                <button
+                  onClick={() => {
+                    setSupersetMode(false);
+                    setSupersetPicks([]);
+                  }}
+                  className="px-4 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {selectedExercises.map((e) => (
             <div key={e.exId} className="border border-neutral-900 px-3 py-2 space-y-1.5">
               <div className="flex items-center gap-2">
+                {supersetMode && (
+                  <input
+                    type="checkbox"
+                    checked={supersetPicks.includes(e.exId)}
+                    onChange={() => toggleSupersetPick(e.exId)}
+                    className="shrink-0 w-4 h-4 accent-red-700"
+                  />
+                )}
                 <span className="flex-1 min-w-0 text-base text-neutral-200 truncate">{exMap[e.exId]?.name}</span>
-                <button onClick={() => removeExercise(e.exId)} className="shrink-0 text-neutral-600 hover:text-red-600">
-                  <X size={14} />
-                </button>
+                {e.group && !supersetMode && (
+                  <span className="shrink-0 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide bg-red-900/40 text-red-400 px-1.5 py-0.5">
+                    Superset {e.group}
+                    <button onClick={() => ungroup(e.exId)} className="hover:text-white">
+                      <X size={10} />
+                    </button>
+                  </span>
+                )}
+                {!supersetMode && (
+                  <button onClick={() => removeExercise(e.exId)} className="shrink-0 text-neutral-600 hover:text-red-600">
+                    <X size={14} />
+                  </button>
+                )}
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <input
-                  type="number"
-                  value={e.sets}
-                  onChange={(ev) => updateExercise(e.exId, "sets", ev.target.value)}
-                  className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
-                />
-                <span className="text-neutral-600 text-xs">sets</span>
-                <input
-                  type="number"
-                  value={e.reps}
-                  onChange={(ev) => updateExercise(e.exId, "reps", ev.target.value)}
-                  className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
-                />
-                <span className="text-neutral-600 text-xs">reps</span>
-                <input
-                  type="text"
-                  value={e.group || ""}
-                  onChange={(ev) => updateExercise(e.exId, "group", ev.target.value.slice(0, 1).toUpperCase())}
-                  placeholder="—"
-                  title="Superset group — give two or more exercises the same letter to group them"
-                  className="w-10 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs text-center uppercase"
-                />
-                <span className="text-neutral-600 text-xs">group</span>
-              </div>
+              {!supersetMode && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="number"
+                    value={e.sets}
+                    onChange={(ev) => updateExercise(e.exId, "sets", ev.target.value)}
+                    className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
+                  />
+                  <span className="text-neutral-600 text-xs">sets</span>
+                  <input
+                    type="number"
+                    value={e.reps}
+                    onChange={(ev) => updateExercise(e.exId, "reps", ev.target.value)}
+                    className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
+                  />
+                  <span className="text-neutral-600 text-xs">reps</span>
+                </div>
+              )}
             </div>
           ))}
-          <p className="text-[11px] text-neutral-600">
-            Give two or more consecutive exercises the same group letter to run them as a superset — logged back to back with no rest between them.
-          </p>
         </div>
       )}
 
@@ -4197,69 +4368,6 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun }) {
       >
         Save plan
       </button>
-
-      {state.customPlans.length > 0 && (
-        <div className="pt-4 border-t border-neutral-900 space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">My plans</div>
-          <input
-            type="text"
-            value={planSearch}
-            onChange={(e) => setPlanSearch(e.target.value)}
-            placeholder="Search my plans..."
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-xs focus:outline-none focus:border-red-700"
-          />
-          {filteredPlans.length === 0 && (
-            <div className="text-xs text-neutral-600 py-2 text-center">No plans match "{planSearch}".</div>
-          )}
-          {filteredPlans.map((p) => (
-            <div key={p.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
-              <button onClick={() => setDetail({ kind: "plan", id: p.id })} className="flex-1 min-w-0 text-left">
-                <div className="text-base text-white truncate">{p.name}</div>
-                <div className="text-xs text-neutral-600">{p.exercises.length} exercises</div>
-              </button>
-              <div className="flex items-center gap-3 shrink-0 ml-3">
-                <button
-                  onClick={() => onStartRun(p)}
-                  className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
-                >
-                  <ChevronRight size={12} /> Start workout
-                </button>
-                <button onClick={() => deletePlan(p.id)} className="text-neutral-600 hover:text-red-600">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {(state.customPrograms || []).length > 0 && (
-        <div className="pt-4 border-t border-neutral-900 space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">My programs</div>
-          {state.customPrograms.map((prog) => (
-            <div key={prog.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
-              <button onClick={() => setDetail({ kind: "program", id: prog.id })} className="flex-1 min-w-0 text-left">
-                <div className="flex items-center gap-2">
-                  <span className="text-base text-white truncate">{prog.name}</span>
-                  {isCompleteCustom(prog.id) ? (
-                    <span className="text-[9px] uppercase tracking-widest bg-neutral-700 text-white px-1.5 py-0.5 shrink-0">Complete</span>
-                  ) : (
-                    isCurrentCustom(prog.id) && (
-                      <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
-                    )
-                  )}
-                </div>
-                <div className="text-xs text-neutral-600">
-                  {prog.days.length} days{prog.weeks ? ` · ${prog.weeks} weeks` : ""}
-                </div>
-              </button>
-              <button onClick={() => deleteProgram(prog.id)} className="text-neutral-600 hover:text-red-600 shrink-0 ml-3">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

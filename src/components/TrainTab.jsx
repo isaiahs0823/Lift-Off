@@ -2,11 +2,13 @@ import React from "react";
 import { ChevronRight, ClipboardList, Timer, Dumbbell, Plus } from "lucide-react";
 import { resolveCurrentProgramDay } from "../utils/programSchedule.js";
 
-// Landing/menu for the Train section: current program front and center, then simple
-// navigation into the existing plan-browsing and cardio screens, with plan creation kept as
-// a secondary action rather than shown by default.
+// Landing/menu for the Train section, ordered Current Program -> My Plans -> Programs so the
+// most-used paths don't require a click into a submenu first; full browsing (built-in
+// programs, single-day templates, completed programs) and plan creation still live one tap
+// deeper, reached via "See all" / "Create plan" rather than shown by default.
 export default function TrainTab({ state, onStartRun, onNavigate }) {
   const programDay = resolveCurrentProgramDay(state);
+  const myPlans = (state.customPlans || []).slice(0, 3);
 
   return (
     <div className="space-y-4">
@@ -32,6 +34,26 @@ export default function TrainTab({ state, onStartRun, onNavigate }) {
         </div>
       )}
 
+      {myPlans.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-widest text-neutral-500">My plans</div>
+          {myPlans.map((p) => (
+            <div key={p.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
+              <div className="min-w-0">
+                <div className="text-base text-white truncate">{p.name}</div>
+                <div className="text-xs text-neutral-600">{p.exercises.length} exercises</div>
+              </div>
+              <button
+                onClick={() => onStartRun(p)}
+                className="shrink-0 ml-3 text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+              >
+                <ChevronRight size={12} /> Start
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <button
         onClick={() => onNavigate("templates")}
         className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-4 hover:border-neutral-600"
@@ -39,8 +61,8 @@ export default function TrainTab({ state, onStartRun, onNavigate }) {
         <div className="flex items-center gap-3">
           <ClipboardList size={18} className="text-neutral-500" />
           <div className="text-left">
-            <div className="text-base font-bold text-white">My plans & programs</div>
-            <div className="text-xs text-neutral-500">Custom plans, hero programs, single-day templates</div>
+            <div className="text-base font-bold text-white">Programs</div>
+            <div className="text-xs text-neutral-500">All plans, hero programs, single-day templates</div>
           </div>
         </div>
         <ChevronRight size={18} className="text-neutral-600 shrink-0" />
