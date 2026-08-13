@@ -205,6 +205,14 @@ const EXERCISE_LIBRARY = [
   { id: "sled_drag_forward", name: "Sled drag - forward", type: "compound", muscle: "Conditioning" },
   { id: "sled_drag_backward", name: "Sled drag - backward", type: "compound", muscle: "Conditioning" },
   { id: "ruck_march", name: "Weighted ruck march", type: "compound", muscle: "Conditioning" },
+  { id: "stairmaster", name: "StairMaster", type: "isolation", muscle: "Conditioning" },
+  { id: "treadmill_walk", name: "Treadmill walk", type: "isolation", muscle: "Conditioning" },
+  { id: "treadmill_incline_walk", name: "Treadmill incline walk", type: "isolation", muscle: "Conditioning" },
+  { id: "treadmill_jog", name: "Treadmill jog", type: "isolation", muscle: "Conditioning" },
+  { id: "elliptical", name: "Elliptical", type: "isolation", muscle: "Conditioning" },
+  { id: "stationary_bike", name: "Stationary bike", type: "isolation", muscle: "Conditioning" },
+  { id: "rowing_machine", name: "Rowing machine", type: "isolation", muscle: "Conditioning" },
+  { id: "jump_rope", name: "Jump rope", type: "isolation", muscle: "Conditioning" },
 
   // Arsenal Strength line
   { id: "arsenal_incline_fly", name: "Arsenal Incline Fly", type: "isolation", muscle: "Chest" },
