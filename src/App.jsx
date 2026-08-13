@@ -25,7 +25,12 @@ import {
   Calculator,
   Award,
   StickyNote,
+  Target,
+  Scale,
 } from "lucide-react";
+import { SlideInPanel } from "./components/SlideInPanel.jsx";
+import MissionTab from "./components/MissionTab.jsx";
+import ProgressTab from "./components/ProgressTab.jsx";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained)
 const BREAK_LOGO =
@@ -839,6 +844,10 @@ function loadInitialState() {
     },
     exerciseNotes: {}, // { [exId]: { general, machine, cue } }
     workoutSessions: [], // finished guided-run summaries — see buildSessionSummary()
+    goals: [], // { id, title, type, startValue, currentValue, targetValue, targetDate, units,
+    // priority: "primary"|"secondary", notes, status: "active"|"paused"|"completed",
+    // linkedExId?, metric?, history?, createdAt } — see src/utils/goalMath.js, goalData.js
+    bodyweightLogs: [], // { id, date, weight, waist, bodyFat, notes }
   };
 }
 
@@ -929,6 +938,8 @@ const BACKUP_DATA_KEYS = [
   "settings",
   "exerciseNotes",
   "workoutSessions",
+  "goals",
+  "bodyweightLogs",
 ];
 
 // Per-key fallback when a key is missing from state entirely (older saves) — objects default
@@ -1308,7 +1319,9 @@ function bestCardioStat(exId, cardioLogs) {
 
 const TABS = [
   { id: "log", label: "Log", icon: TrendingUp },
+  { id: "mission", label: "Mission", icon: Target },
   { id: "cardio", label: "Runs", icon: Timer },
+  { id: "progress", label: "Progress", icon: Scale },
   { id: "templates", label: "Templates", icon: ClipboardList },
   { id: "build", label: "Build plan", icon: Dumbbell },
   { id: "catalog", label: "Catalog", icon: Search },
@@ -1632,6 +1645,7 @@ export default function LiftLog() {
                   onGoToTemplates={goToTemplatesAndClearProgram}
                 />
               ))}
+            {tab === "mission" && <MissionTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
             {tab === "cardio" && (
               <CardioTab
                 state={state}
@@ -1641,6 +1655,7 @@ export default function LiftLog() {
                 onLoggedSet={bumpRestTimer}
               />
             )}
+            {tab === "progress" && <ProgressTab state={state} updateState={updateState} exMap={exMap} />}
             {tab === "templates" && (
               <TemplatesTab
                 state={state}
@@ -1692,30 +1707,6 @@ function Header() {
 // Full-width view that slides in from the right with a back arrow at the top, replacing
 // an accordion-expand or a dead-end tap. Used for Templates/My plans drill-down and the
 // exercise swap picker.
-function SlideInPanel({ title, subtitle, onBack, children }) {
-  const [entered, setEntered] = useState(false);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setEntered(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
-
-  return (
-    <div className="overflow-hidden">
-      <div className={`transform transition-transform duration-300 ease-out ${entered ? "translate-x-0" : "translate-x-full"}`}>
-        <div className="flex items-center gap-3 px-4 py-3 mb-4 border border-red-900/40 bg-charcoal-panel">
-          <button onClick={onBack} className="text-neutral-400 hover:text-red-500 p-1 -ml-1 shrink-0" aria-label="Back">
-            <ChevronLeft size={20} />
-          </button>
-          <div className="min-w-0">
-            <div className="text-sm font-bold text-white truncate">{title}</div>
-            {subtitle && <div className="text-xs text-neutral-500 mt-0.5 truncate">{subtitle}</div>}
-          </div>
-        </div>
-        <div className="space-y-4">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 // ---------------- EXERCISE SWAP PICKER ----------------
 // Filtered to the same muscle group as the exercise being swapped, with a search bar
@@ -4253,6 +4244,8 @@ function SettingsTab({ state, updateState }) {
     customPrograms: (state.customPrograms || []).length,
     photos: (state.photos || []).length,
     completedPrograms: (state.completedPrograms || []).length,
+    goals: (state.goals || []).length,
+    bodyweightLogs: (state.bodyweightLogs || []).length,
   };
 
   const settings = state.settings || { rirSystem: "rir", restDefaults: DEFAULT_REST_DEFAULTS, barWeight: 45 };
@@ -4352,6 +4345,8 @@ function SettingsTab({ state, updateState }) {
           <div>{counts.customPrograms} custom programs</div>
           <div>{counts.photos} progress photos</div>
           <div>{counts.completedPrograms} completed programs</div>
+          <div>{counts.goals} goals</div>
+          <div>{counts.bodyweightLogs} bodyweight entries</div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">
