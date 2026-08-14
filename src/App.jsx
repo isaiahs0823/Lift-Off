@@ -878,6 +878,9 @@ function loadInitialState() {
     weeklySchedule: null, // { mode: "fixed"|"rolling", fixedDays?, rollingSequence?, rollingCursor?, createdAt } — see src/utils/weeklySchedule.js
     scheduleLog: [], // sparse per-date overrides (skip/move/resolved) — see src/utils/weeklySchedule.js
     recoveryLogs: [], // { id, date, activity, notes } — logged from an Active Recovery scheduled day
+    athleteProfile: null, // Coach memory Layer 1 — see src/utils/athleteProfile.js
+    coachMemories: [], // Coach memory Layer 3, persisted/evolving — see src/utils/coachMemoryStore.js
+    commitments: [], // see src/utils/commitments.js
   };
 }
 
@@ -929,12 +932,15 @@ const BACKUP_DATA_KEYS = [
   "weeklySchedule",
   "scheduleLog",
   "recoveryLogs",
+  "athleteProfile",
+  "coachMemories",
+  "commitments",
 ];
 
 // Per-key fallback when a key is missing from state entirely (older saves) — objects default
-// to {}, currentProgram/weeklySchedule to null, everything else (arrays) to [].
+// to {}, currentProgram/weeklySchedule/athleteProfile to null, everything else (arrays) to [].
 function backupKeyDefault(key) {
-  if (key === "currentProgram" || key === "weeklySchedule") return null;
+  if (key === "currentProgram" || key === "weeklySchedule" || key === "athleteProfile") return null;
   if (key === "settings" || key === "exerciseNotes") return {};
   return [];
 }
