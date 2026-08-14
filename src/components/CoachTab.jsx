@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { buildCoachContext } from "../utils/coachContext.js";
 import { answerCoachQuestion } from "../services/coachService.js";
+import { syncCoachMemory } from "../utils/coachMemory.js";
 
 const QUICK_QUESTIONS = [
   "What should I do today?",
@@ -17,6 +18,18 @@ const QUICK_QUESTIONS = [
 export default function CoachTab({ state, updateState, exMap }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState(null);
+
+  // Promotes currently-detected patterns into persisted, evolving Coach memory (and ages out
+  // ones that stopped recurring) — a no-op once already in sync for this data, so it's safe to
+  // run on every mount. Respects the user's "learn from my data" toggle (section 14/40).
+  useEffect(() => {
+    if (state.athleteProfile && state.athleteProfile.learningEnabled === false) return;
+    const next = syncCoachMemory(state);
+    if (next !== state.coachMemories) {
+      updateState((prev) => ({ ...prev, coachMemories: next }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.workoutSessions, state.cardioLogs, state.logs, state.bodyweightLogs, state.readinessLogs, state.scheduleLog, state.weeklySchedule]);
 
   const ask = (q) => {
     const trimmed = q.trim();

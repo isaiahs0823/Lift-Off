@@ -91,14 +91,24 @@ export function confidenceLabel(evidenceCount) {
   return "high";
 }
 
+function dateKey(iso) {
+  return (iso || "").slice(0, 10);
+}
+
 // Upserts a detector-sourced observation for the current sync pass: re-detecting an existing
 // pattern bumps its evidence/confidence and revives it from improving/resolved back to active
 // (a pattern that comes back is active again, not a brand-new fact); nothing existing is
-// duplicated (section 34).
+// duplicated (section 34). Evidence only accrues once per calendar day — syncCoachMemory can
+// run on every app visit, and without this a single day of repeat visits would inflate
+// evidenceCount/confidence off the exact same underlying sessions, which would misrepresent how
+// many times the pattern has actually been observed.
 export function upsertObservedMemory(memories, { category, text, source, key, tags = [] }) {
   const existing = findSimilarMemory(memories, key, text);
   const now = new Date().toISOString();
   if (existing) {
+    if (existing.status === MEMORY_STATUS.ACTIVE && dateKey(existing.lastConfirmedAt) === dateKey(now)) {
+      return memories;
+    }
     const evidenceCount = existing.evidenceCount + 1;
     return memories.map((m) =>
       m.id === existing.id
@@ -122,6 +132,10 @@ export function upsertObservedMemory(memories, { category, text, source, key, ta
 // Called once per sync for every detector key that did NOT fire this pass — ages a standing
 // memory toward resolved instead of leaving a stale claim standing forever (section 16).
 // active -> improving on the first miss, improving -> resolved after 3 consecutive misses.
+// Unlike upsertObservedMemory's evidence bump, this isn't calendar-day-gated: the asymmetry is
+// deliberate — a pattern resolving slightly faster from repeat same-day visits is a minor,
+// harmless miscalibration, while inflating *confidence* off repeat visits would misrepresent
+// how many independent observations actually support a claim (section 12).
 export function decayMemory(memories, key) {
   const existing = memories.find((m) => m.key === key && m.status !== MEMORY_STATUS.RESOLVED && m.status !== MEMORY_STATUS.OUTDATED);
   if (!existing) return memories;

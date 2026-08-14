@@ -8,6 +8,7 @@ import { resolveCurrentProgramDay } from "../utils/programSchedule.js";
 import { buildCoachContext } from "../utils/coachContext.js";
 import { generateTodaySnapshot } from "../services/coachService.js";
 import { computeReadinessScore, readinessBand, BAND_LABEL } from "../utils/readiness.js";
+import { syncCoachMemory } from "../utils/coachMemory.js";
 import {
   hasSchedule,
   getTodaySchedule,
@@ -322,6 +323,17 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.weeklySchedule, state.scheduleLog, state.workoutSessions, state.cardioLogs, state.recoveryLogs]);
+
+  // Keeps persisted Coach memory (Layer 3) current every time Today is opened — promotes newly
+  // detected patterns, ages out ones that stopped recurring. See coachMemory.js's syncCoachMemory.
+  useEffect(() => {
+    if (state.athleteProfile && state.athleteProfile.learningEnabled === false) return;
+    const next = syncCoachMemory(state);
+    if (next !== state.coachMemories) {
+      updateState((prev) => ({ ...prev, coachMemories: next }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.workoutSessions, state.cardioLogs, state.logs, state.bodyweightLogs, state.readinessLogs, state.scheduleLog, state.weeklySchedule]);
 
   const startScheduled = (source) => {
     const run = buildRunFromSource(state, source);

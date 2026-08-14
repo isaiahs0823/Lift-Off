@@ -1,8 +1,13 @@
-// ---------------- COACH MEMORY ----------------
+// ---------------- COACH MEMORY (Layer 3 detectors) ----------------
 // Factual pattern detection from actually-logged behavior only — nothing here is invented or
 // inferred beyond what the data directly shows. Each detector requires a minimum sample size
 // before it's willing to claim a pattern exists, and returns nothing rather than guess when
-// the data's too thin.
+// the data's too thin. detectCoachMemory() itself is the original ephemeral "what's true right
+// now" read (used directly by coachContext for immediate answers); syncCoachMemory() is the
+// newer persistence layer on top of it — see its own comment below.
+
+import { upsertObservedMemory, decayMemory } from "./coachMemoryStore.js";
+import { repeatedScheduleMiss } from "./weeklySchedule.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -15,9 +20,16 @@ function isWarmup(s) {
 
 // The spec's flagship example: does conditioning work consistently disappear right after a
 // heavy lower-body session? Only claims the pattern once there are at least 3 leg sessions to
-// judge from, and only when it holds for a clear majority of them.
+// judge from, and only when it holds for a clear majority of them. Deliberately windowed to
+// the most recent 6 leg sessions (not all-time) so the pattern can actually resolve once
+// behavior changes — section 16/scenario E: six clean weeks should stop counting against a
+// habit from months ago.
+const LEG_DAY_WINDOW = 6;
 function legDayConditioningSkip(state) {
-  const legSessions = (state.workoutSessions || []).filter((s) => (s.mainMuscles || []).includes("Legs"));
+  const legSessions = [...(state.workoutSessions || [])]
+    .filter((s) => (s.mainMuscles || []).includes("Legs"))
+    .sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt))
+    .slice(0, LEG_DAY_WINDOW);
   if (legSessions.length < 3) return null;
   const cardioDates = (state.cardioLogs || []).map((c) => c.date);
   let skipped = 0;
@@ -33,6 +45,7 @@ function legDayConditioningSkip(state) {
   return {
     key: "leg_day_conditioning_skip",
     text: `Conditioning has been missing after leg day in ${skipped} of your last ${legSessions.length} leg sessions.`,
+    tags: ["conditioning", "cardio", "legs", "lower_body"],
   };
 }
 
@@ -79,7 +92,7 @@ function bodyweightPlateau(state) {
   const lastWeekRate = (avgWindow(7, weekAgo) ?? null) - (avgWindow(7, twoWeeksAgo) ?? null);
   if (Number.isNaN(thisWeekRate) || Number.isNaN(lastWeekRate)) return null;
   if (Math.abs(thisWeekRate) < 0.25 && Math.abs(lastWeekRate) < 0.25) {
-    return { key: "bodyweight_plateau", text: "Bodyweight has been flat for two straight weeks." };
+    return { key: "bodyweight_plateau", text: "Bodyweight has been flat for two straight weeks.", tags: ["bodyweight", "weight", "plateau"] };
   }
   return null;
 }
@@ -92,7 +105,11 @@ function recurringSoreness(state) {
   if (recent.length < 4) return null;
   const soreCount = recent.filter((r) => r.soreness >= 4).length;
   if (soreCount / recent.length < 0.6) return null;
-  return { key: "recurring_soreness", text: `Soreness has been rated high in ${soreCount} of your last ${recent.length} check-ins.` };
+  return {
+    key: "recurring_soreness",
+    text: `Soreness has been rated high in ${soreCount} of your last ${recent.length} check-ins.`,
+    tags: ["soreness", "recovery", "readiness"],
+  };
 }
 
 // Returns a small list of { key, text } facts — never more than a handful, never speculative.
@@ -110,7 +127,58 @@ export function detectCoachMemory(state) {
       key: "stalling_exercises",
       text: `${stalled.length} exercise${stalled.length > 1 ? "s have" : " has"} missed target reps at the same weight for 3 sessions straight.`,
       exIds: stalled.map((s) => s.exId),
+      tags: ["strength", "stall", "plateau", ...stalled.map((s) => s.exId)],
     });
   }
   return memory;
+}
+
+// ---------------- PERSISTED SYNC (Coach Memory Layer 3) ----------------
+// detectCoachMemory() above is a pure, ephemeral read — recomputed fresh every render, nothing
+// stored. This is the layer on top of it: promotes each currently-true fact into a standing,
+// evolving record in state.coachMemories (bumping its confidence/evidence if it already
+// exists), and ages any previously-detected pattern that *stopped* recurring toward resolved
+// instead of leaving a stale claim standing forever. Pure — returns the next memories array;
+// the caller applies it via updateState, same pattern as weeklySchedule.js's syncRollingToday.
+const DETECTOR_KEYS = ["leg_day_conditioning_skip", "bodyweight_plateau", "recurring_soreness", "stalling_exercises"];
+const INFERRED_KEYS = new Set(["bodyweight_plateau"]);
+
+export function syncCoachMemory(state) {
+  let memories = state.coachMemories || [];
+  const detected = detectCoachMemory(state);
+  const detectedKeys = new Set(detected.map((d) => d.key));
+
+  detected.forEach((d) => {
+    const category = d.key === "leg_day_conditioning_skip" ? "behavioralPatterns" : "trainingInsights";
+    const source = INFERRED_KEYS.has(d.key) ? "inferred" : "observed";
+    memories = upsertObservedMemory(memories, { category, text: d.text, source, key: d.key, tags: d.tags || [] });
+  });
+
+  DETECTOR_KEYS.forEach((key) => {
+    if (!detectedKeys.has(key)) memories = decayMemory(memories, key);
+  });
+
+  // Schedule-adherence patterns (repeated misses by type) use their own keyspace so they never
+  // collide with the training-data detectors above.
+  const scheduleMiss = repeatedScheduleMiss(state, 30);
+  const scheduleMissKeys = ["repeated_miss_workout", "repeated_miss_conditioning", "repeated_miss_recovery"];
+  if (scheduleMiss) {
+    const key = `repeated_miss_${scheduleMiss.type}`;
+    memories = upsertObservedMemory(memories, {
+      category: "behavioralPatterns",
+      text: scheduleMiss.text,
+      source: "observed",
+      key,
+      tags: [scheduleMiss.type, "schedule", "missed"],
+    });
+    scheduleMissKeys.filter((k) => k !== key).forEach((k) => {
+      memories = decayMemory(memories, k);
+    });
+  } else {
+    scheduleMissKeys.forEach((k) => {
+      memories = decayMemory(memories, k);
+    });
+  }
+
+  return memories;
 }
