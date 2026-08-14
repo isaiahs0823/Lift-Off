@@ -47,6 +47,7 @@ import MoreTab from "./components/MoreTab.jsx";
 import ScheduleEditor from "./components/ScheduleEditor.jsx";
 import AthleteProfileForm from "./components/AthleteProfileForm.jsx";
 import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
+import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
@@ -1629,6 +1630,7 @@ export default function LiftLog() {
             {tab === "coach" && <CoachTab state={state} updateState={updateState} exMap={exMap} onNavigate={setTab} />}
             {tab === "coachKnowledge" && <CoachKnowledgeScreen state={state} updateState={updateState} onNavigate={setTab} onBack={() => setTab("coach")} />}
             {tab === "coachProfile" && <AthleteProfileForm state={state} updateState={updateState} mode="edit" onDone={() => setTab("coach")} />}
+            {tab === "coachSettings" && <CoachSettingsScreen state={state} updateState={updateState} onNavigate={setTab} onBack={() => setTab("coach")} />}
             {tab === "cardio" && (
               <CardioTab
                 state={state}

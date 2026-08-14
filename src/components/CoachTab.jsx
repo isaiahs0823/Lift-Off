@@ -3,7 +3,7 @@ import { BookOpen, Settings as SettingsIcon } from "lucide-react";
 import { buildCoachContext } from "../utils/coachContext.js";
 import { answerCoachQuestion } from "../services/coachService.js";
 import { syncCoachMemory } from "../utils/coachMemory.js";
-import { hasProfile } from "../utils/athleteProfile.js";
+import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC } from "../utils/athleteProfile.js";
 import { detectCommitment, createCommitment, resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
 import AthleteProfileForm from "./AthleteProfileForm.jsx";
 
@@ -108,6 +108,7 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
 
   const history = state.coachHistory || [];
   const openCommitments = (state.commitments || []).filter((c) => c.status === "active");
+  const knowledgeLevel = coachKnowledgeLevel(state);
 
   if (showOnboarding) {
     return <AthleteProfileForm state={state} updateState={updateState} mode="onboarding" onDone={() => setShowOnboarding(false)} onSkip={() => setShowOnboarding(false)} />;
@@ -124,15 +125,18 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
           <button onClick={() => onNavigate?.("coachKnowledge")} className="text-neutral-500 hover:text-red-500 p-1" title="What Coach knows about you">
             <BookOpen size={18} />
           </button>
-          {/* Routes to the profile editor directly for now — Coach 2.0 Phase 5 adds a full
-              Coach Settings screen (style/length/memory toggle/clear memory) that this will
-              point at instead. */}
-          <button onClick={() => onNavigate?.("coachProfile")} className="text-neutral-500 hover:text-red-500 p-1" title="Coach settings">
+          <button onClick={() => onNavigate?.("coachSettings")} className="text-neutral-500 hover:text-red-500 p-1" title="Coach settings">
             <SettingsIcon size={18} />
           </button>
         </div>
       </div>
-      <p className="text-xs text-neutral-500 -mt-4">Knows your training. Learns your patterns. Holds you to the plan.</p>
+      {/* Reflects data volume only — not a gamified level or any claim of insight (section 45). */}
+      <div className="flex items-center gap-1.5 -mt-4">
+        <span className="text-[10px] uppercase tracking-widest text-neutral-600" title={KNOWLEDGE_LEVEL_DESC[knowledgeLevel]}>
+          {KNOWLEDGE_LEVEL_LABEL[knowledgeLevel]}
+        </span>
+      </div>
+      <p className="text-xs text-neutral-500 -mt-3">Knows your training. Learns your patterns. Holds you to the plan.</p>
 
       {openCommitments.length > 0 && (
         <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-2">
