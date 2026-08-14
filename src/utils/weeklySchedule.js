@@ -165,6 +165,11 @@ export function getScheduleDay(state, dateKeyStr) {
   const sched = state.weeklySchedule;
   const today = todayKey();
   if (!sched || !sched.mode) return { date: dateKeyStr, type: null, source: null, label: null, status: "none" };
+  // A recurring fixed schedule shouldn't retroactively claim dates before it existed as missed
+  // — someone who set up a schedule 3 days ago never "missed" a training day from 3 weeks ago.
+  if (sched.createdAt && dateKeyStr < dk(sched.createdAt)) {
+    return { date: dateKeyStr, type: null, source: null, label: null, status: "none" };
+  }
 
   const logEntry = scheduleLogAt(state, dateKeyStr);
   if (logEntry) {

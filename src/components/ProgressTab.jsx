@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ChevronRight, Award, Calendar, TrendingUp } from "lucide-react";
+import { ChevronRight, Award, Calendar, TrendingUp, ClipboardCheck } from "lucide-react";
 import BodyweightTab from "./BodyweightTab.jsx";
 import TrainingCalendar from "./TrainingCalendar.jsx";
 import AnalyticsTab from "./AnalyticsTab.jsx";
@@ -137,6 +137,22 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
       )}
 
       <div className="space-y-2 pt-2">
+        {/* Unconditional — the goal-gated Mission card above only appears with an active goal,
+            but weekly review/adherence (including the weekly schedule breakdown) is useful
+            with or without one, so it needs a way in that doesn't depend on having a goal set. */}
+        <button
+          onClick={() => onNavigate("mission")}
+          className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-4 hover:border-neutral-600"
+        >
+          <div className="flex items-center gap-3">
+            <ClipboardCheck size={18} className="text-neutral-500" />
+            <div className="text-left">
+              <div className="text-base font-bold text-white">Weekly review</div>
+              <div className="text-xs text-neutral-500">Adherence, streak, and goals</div>
+            </div>
+          </div>
+          <ChevronRight size={18} className="text-neutral-600 shrink-0" />
+        </button>
         {DRILL_DOWNS.map((d) => (
           <button
             key={d.id}

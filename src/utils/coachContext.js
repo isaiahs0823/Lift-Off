@@ -11,6 +11,7 @@ import { rollingAverage, weeklyRateOfChange } from "./bodyweightMath.js";
 import { computeReadinessScore, readinessBand } from "./readiness.js";
 import { resolveCurrentProgramDay } from "./programSchedule.js";
 import { detectCoachMemory } from "./coachMemory.js";
+import { hasSchedule, getTodaySchedule, getMissedEntry, computeScheduleAdherence, repeatedScheduleMiss } from "./weeklySchedule.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -97,6 +98,15 @@ export function buildCoachContext(state, exMap = {}) {
     target: cardioGoal ? cardioGoal.targetValue : null,
   };
 
+  const schedule = hasSchedule(state)
+    ? {
+        today: getTodaySchedule(state),
+        missed: getMissedEntry(state),
+        weeklyAdherence: computeScheduleAdherence(state, 7),
+        repeatedMiss: repeatedScheduleMiss(state, 30),
+      }
+    : null;
+
   return {
     userGoal: summarizeGoal(primary, state),
     secondaryGoals: secondary.map((g) => summarizeGoal(g, state)),
@@ -110,5 +120,6 @@ export function buildCoachContext(state, exMap = {}) {
     adherence,
     cardio,
     coachMemory: detectCoachMemory(state),
+    schedule,
   };
 }

@@ -13,6 +13,7 @@
 // that instead of manufacturing a reason to comment.
 
 import { computeWeeklyReview } from "../utils/weeklyReview.js";
+import { DAY_TYPE_LABEL, computeScheduleAdherence } from "../utils/weeklySchedule.js";
 
 const SAFETY_PATTERN =
   /\b(injur(y|ed|ies)|hurt|sharp pain|numb(ness)?|tingling|dizzy|dizziness|chest pain|can'?t breathe|shortness of breath|medication|prescri|steroid|anabolic|\bpeds?\b|sarms?|hgh|clenbuterol|starv(e|ing)|purg(e|ing)|dehydrat)\b/i;
@@ -30,7 +31,43 @@ export function isSafetyDeflection(text) {
 // question-driven). Priority order: a missed-session streak worth naming, then a moving
 // bodyweight trend, then goal progress, then a plain "nothing to report yet."
 export function generateTodaySnapshot(context) {
-  const { recentWeightTrend, daysSinceLastSession, userGoal } = context;
+  const { recentWeightTrend, daysSinceLastSession, userGoal, schedule, readiness } = context;
+
+  // A configured weekly schedule takes priority over the generic signals below — the whole
+  // point of section 11 is that the coach should talk about *today's actual plan*, not just
+  // trend-watch. Order matters: a repeated-miss pattern is worth naming before anything else,
+  // then a single fresh miss, then whatever today itself is.
+  if (schedule) {
+    if (schedule.repeatedMiss) return { message: schedule.repeatedMiss.text };
+    if (schedule.missed) {
+      const label = schedule.missed.label || DAY_TYPE_LABEL[schedule.missed.type];
+      return { message: `${label} was scheduled and didn't happen. One miss isn't the problem. Decide whether you're doing it today or moving it.` };
+    }
+    const today = schedule.today;
+    if (today?.type === "rest") {
+      if (readiness?.loggedToday && readiness.band === "green") {
+        return { message: "Rest day. Feeling good doesn't mean you need to manufacture extra work." };
+      }
+      return { message: "Rest day. Training is handled this week. Recover and be ready for what's next." };
+    }
+    if (today?.type === "workout") {
+      const label = today.label || "Training";
+      if (readiness?.loggedToday && readiness.band === "red") {
+        return { message: `${label} today. Readiness is poor. You can train, but reduce unnecessary volume and keep quality high.` };
+      }
+      if (readiness?.loggedToday) {
+        return { message: `${label} today. Readiness is ${readiness.score}. Train as planned.` };
+      }
+      return { message: `${label} today.` };
+    }
+    if (today?.type === "conditioning") {
+      return { message: `${today.label || "Conditioning"} today.` };
+    }
+    if (today?.type === "recovery") {
+      return { message: `${today.label || "Active recovery"} today — walk, mobility, easy movement.` };
+    }
+  }
+
   if (daysSinceLastSession != null && daysSinceLastSession >= 3) {
     return {
       message: `${daysSinceLastSession} days since your last session. One missed session means nothing. Don't turn it into a habit — get today's workout done.`,
@@ -113,9 +150,30 @@ export function generatePostWorkoutReview(summary) {
   return { message: lines.join(" ") };
 }
 
+// Compares the weakest scheduled category against the strongest one this week — only when
+// there are at least two categories to actually compare, so a single-category week (e.g. no
+// conditioning scheduled at all) doesn't produce a hollow "X is the weak point" against nothing.
+function scheduleWeeklyLine(scheduleAdherence) {
+  if (!scheduleAdherence) return null;
+  const parts = [
+    { label: "Strength work", v: scheduleAdherence.lifting },
+    { label: "Conditioning", v: scheduleAdherence.conditioning },
+    { label: "Recovery", v: scheduleAdherence.recovery },
+  ]
+    .filter((p) => p.v.scheduled > 0)
+    .map((p) => ({ ...p, pct: Math.round((p.v.completed / p.v.scheduled) * 100) }));
+  if (parts.length < 2) return null;
+  const best = parts.reduce((a, b) => (b.pct > a.pct ? b : a));
+  const worst = parts.reduce((a, b) => (b.pct < a.pct ? b : a));
+  if (best.pct === worst.pct) return "Every part of the plan got equal attention this week.";
+  return `${best.label} is consistent. ${worst.label} is the weak point this week.`;
+}
+
 // ---------- Weekly review ----------
-// review: output of computeWeeklyReview().
-export function generateWeeklyReview(review) {
+// review: output of computeWeeklyReview(). scheduleAdherence: optional output of
+// computeScheduleAdherence(state, 7) — adds a plan-breakdown line (section 12) when a weekly
+// schedule is configured, on top of the existing goal/trend-based summary.
+export function generateWeeklyReview(review, scheduleAdherence) {
   const lines = [];
   if (review.plannedSessions != null) {
     lines.push(
@@ -134,6 +192,8 @@ export function generateWeeklyReview(review) {
   } else {
     lines.push("No weak spot standing out this week. Keep executing the same plan.");
   }
+  const scheduleLine = scheduleWeeklyLine(scheduleAdherence);
+  if (scheduleLine) lines.push(scheduleLine);
   return { message: lines.join(" ") };
 }
 
@@ -215,7 +275,7 @@ function answerReviewToday(context, state) {
 function answerReview30(context, state) {
   if (!state) return { message: "History not available." };
   const review = computeWeeklyReview(state, 30);
-  return generateWeeklyReview(review);
+  return generateWeeklyReview(review, context?.schedule?.weeklyAdherence ? computeScheduleAdherence(state, 30) : null);
 }
 
 export function answerCoachQuestion(question, context, state) {
