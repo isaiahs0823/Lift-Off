@@ -45,6 +45,8 @@ import TodayTab from "./components/TodayTab.jsx";
 import TrainTab from "./components/TrainTab.jsx";
 import MoreTab from "./components/MoreTab.jsx";
 import ScheduleEditor from "./components/ScheduleEditor.jsx";
+import AthleteProfileForm from "./components/AthleteProfileForm.jsx";
+import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
@@ -1278,6 +1280,9 @@ const SECTION_OF = {
   today: "today",
   mission: "today",
   coach: "today",
+  coachKnowledge: "today",
+  coachProfile: "today",
+  coachSettings: "today",
   train: "train",
   log: "train",
   cardio: "train",
@@ -1621,7 +1626,9 @@ export default function LiftLog() {
               />
             )}
             {tab === "mission" && <MissionTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
-            {tab === "coach" && <CoachTab state={state} updateState={updateState} exMap={exMap} />}
+            {tab === "coach" && <CoachTab state={state} updateState={updateState} exMap={exMap} onNavigate={setTab} />}
+            {tab === "coachKnowledge" && <CoachKnowledgeScreen state={state} updateState={updateState} onNavigate={setTab} onBack={() => setTab("coach")} />}
+            {tab === "coachProfile" && <AthleteProfileForm state={state} updateState={updateState} mode="edit" onDone={() => setTab("coach")} />}
             {tab === "cardio" && (
               <CardioTab
                 state={state}

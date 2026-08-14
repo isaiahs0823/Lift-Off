@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
+import { BookOpen, Settings as SettingsIcon } from "lucide-react";
 import { buildCoachContext } from "../utils/coachContext.js";
 import { answerCoachQuestion } from "../services/coachService.js";
 import { syncCoachMemory } from "../utils/coachMemory.js";
+import { hasProfile } from "../utils/athleteProfile.js";
+import AthleteProfileForm from "./AthleteProfileForm.jsx";
 
 const QUICK_QUESTIONS = [
   "What should I do today?",
@@ -15,9 +18,10 @@ const QUICK_QUESTIONS = [
   "Review my last 30 days.",
 ];
 
-export default function CoachTab({ state, updateState, exMap }) {
+export default function CoachTab({ state, updateState, exMap, onNavigate }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(!hasProfile(state));
 
   // Promotes currently-detected patterns into persisted, evolving Coach memory (and ages out
   // ones that stopped recurring) — a no-op once already in sync for this data, so it's safe to
@@ -49,12 +53,30 @@ export default function CoachTab({ state, updateState, exMap }) {
 
   const history = state.coachHistory || [];
 
+  if (showOnboarding) {
+    return <AthleteProfileForm state={state} updateState={updateState} mode="onboarding" onDone={() => setShowOnboarding(false)} onSkip={() => setShowOnboarding(false)} />;
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Coach</div>
-        <div className="text-xl font-bold text-white mt-1">Coach Me</div>
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[11px] uppercase tracking-widest text-red-600">Coach</div>
+          <div className="text-xl font-bold text-white mt-1">BRK Coach</div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => onNavigate?.("coachKnowledge")} className="text-neutral-500 hover:text-red-500 p-1" title="What Coach knows about you">
+            <BookOpen size={18} />
+          </button>
+          {/* Routes to the profile editor directly for now — Coach 2.0 Phase 5 adds a full
+              Coach Settings screen (style/length/memory toggle/clear memory) that this will
+              point at instead. */}
+          <button onClick={() => onNavigate?.("coachProfile")} className="text-neutral-500 hover:text-red-500 p-1" title="Coach settings">
+            <SettingsIcon size={18} />
+          </button>
+        </div>
       </div>
+      <p className="text-xs text-neutral-500 -mt-4">Knows your training. Learns your patterns. Holds you to the plan.</p>
 
       {answer && (
         <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-2">
