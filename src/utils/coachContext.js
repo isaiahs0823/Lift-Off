@@ -12,6 +12,8 @@ import { computeReadinessScore, readinessBand } from "./readiness.js";
 import { resolveCurrentProgramDay } from "./programSchedule.js";
 import { detectCoachMemory } from "./coachMemory.js";
 import { hasSchedule, getTodaySchedule, getMissedEntry, computeScheduleAdherence, repeatedScheduleMiss } from "./weeklySchedule.js";
+import { resolveProfile } from "./athleteProfile.js";
+import { retrieveRelevantMemories } from "./coachMemoryStore.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -39,7 +41,10 @@ function summarizeGoal(goal, state) {
   };
 }
 
-export function buildCoachContext(state, exMap = {}) {
+// queryText (optional): the user's typed question, if any — used only to bias relevantMemories
+// toward what's actually being asked about (section 32). Everything else in the context is
+// query-independent so ambient uses (Today snapshot, weekly review) can omit it.
+export function buildCoachContext(state, exMap = {}, queryText = null) {
   const goals = state.goals || [];
   const activeGoals = goals.filter((g) => g.status === "active");
   const primary = activeGoals.find((g) => g.priority === "primary") || null;
@@ -107,6 +112,9 @@ export function buildCoachContext(state, exMap = {}) {
       }
     : null;
 
+  const athleteProfile = resolveProfile(state);
+  const memories = state.coachMemories || [];
+
   return {
     userGoal: summarizeGoal(primary, state),
     secondaryGoals: secondary.map((g) => summarizeGoal(g, state)),
@@ -121,5 +129,10 @@ export function buildCoachContext(state, exMap = {}) {
     cardio,
     coachMemory: detectCoachMemory(state),
     schedule,
+    athleteProfile,
+    coachPreferences: { style: athleteProfile.coachingStyle, length: athleteProfile.responseLength },
+    activeCommitments: (state.commitments || []).filter((c) => c.status === "active"),
+    behavioralPatterns: memories.filter((m) => (m.category === "behavioralPatterns" || m.category === "trainingInsights") && m.status !== "outdated"),
+    relevantMemories: retrieveRelevantMemories(memories, queryText, { limit: 3 }),
   };
 }

@@ -97,9 +97,22 @@ export function resolveDueCommitments(state) {
   return { commitments: next, resolved };
 }
 
-export function commitmentOutcomeMessage(c) {
+// style defaults to "balanced" so every existing call site (and the unit tests written against
+// it) keeps its original text unchanged — only "supportive" and "hard" get distinct framing,
+// matching the two extremes the coaching-style spec calls out by name (section 9/28).
+export function commitmentOutcomeMessage(c, style = "balanced") {
   if (c.outcome === "completed") {
+    if (style === "hard") return `You said ${c.target}. You did ${c.actualCount}. Good — now do it again. Once isn't a pattern yet.`;
+    if (style === "supportive") return `You said ${c.target} and got ${c.actualCount} done. That's real follow-through — nice work.`;
     return `You said ${c.target}. You did ${c.actualCount}. That's execution.`;
   }
+  if (style === "hard") return `You said ${c.target}. You did ${c.actualCount}. That's a broken commitment, not bad luck. Fix it or stop setting targets you don't intend to hit.`;
+  if (style === "supportive") return `You aimed for ${c.target} and got ${c.actualCount} in. That's alright — what's one thing that would make next week easier?`;
   return `You committed to ${c.text}. You completed ${c.actualCount}. What needs to change?`;
+}
+
+// Live progress-so-far for an active, gradable commitment — used by the UI to show "1/3" while
+// the week is still in progress, without waiting for resolveDueCommitments to close it out.
+export function commitmentProgress(state, commitment) {
+  return countActuals(state, commitment);
 }

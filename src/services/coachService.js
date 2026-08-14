@@ -255,13 +255,77 @@ function answerProgress(context) {
 }
 
 function answerWhatWrong(context) {
+  const style = context.athleteProfile?.coachingStyle || "balanced";
   if (context.adherence.overall >= 85 && (context.userGoal?.status === "ahead" || context.userGoal?.status === "on_track" || !context.userGoal)) {
+    if (style === "hard") return { message: "Nothing. Everything is moving. Stop looking for problems and go train." };
+    if (style === "supportive") return { message: "Nothing's wrong here — everything is moving in the right direction. No adjustment needed." };
     return { message: "Performance is improving. No adjustment needed." };
   }
   const weak = context.coachMemory?.[0];
   if (weak) return { message: weak.text };
   if (context.adherence.overall < 70) return { message: `Adherence is ${context.adherence.overall}% this week — that's the issue before anything about the training itself.` };
   return { message: "Nothing stands out as wrong. Keep executing." };
+}
+
+// "Coach with a spine" (section 8/28): pushes back on a program-change request when the data
+// doesn't support one, instead of agreeing just because it was asked. Only agrees when there's
+// a real, data-backed reason — a genuine stall, a goal that's actually behind, or adherence
+// that's actually low — never manufactures a reason to say yes.
+function answerProgramChange(context) {
+  const style = context.athleteProfile?.coachingStyle || "balanced";
+  const stallNote = context.coachMemory?.find((m) => m.key === "stalling_exercises");
+  const adherence = context.adherence?.overall ?? null;
+  const goalBehind = context.userGoal?.status === "behind";
+  const legitReason = !!stallNote || goalBehind || (adherence != null && adherence < 60);
+  if (!legitReason) {
+    if (style === "hard") return { message: "No. Nothing in the data says the program is the problem. Finish what you started before you go looking for a new one." };
+    if (style === "supportive") return { message: "I get wanting something new, but the data doesn't point to the program as the issue — what's actually feeling off?" };
+    return { message: "Nothing in the data supports switching right now — strength and adherence are both holding. What specifically feels off?" };
+  }
+  const reason = stallNote ? stallNote.text : goalBehind ? `${context.userGoal.title} is behind pace.` : `Adherence is ${adherence}% — that's the real issue.`;
+  if (style === "hard") return { message: `${reason} A program change is reasonable here — but only if execution stays the same, or it's just a new excuse.` };
+  if (style === "supportive") return { message: `${reason} A change makes sense here — let's figure out what to adjust.` };
+  return { message: `${reason} A program change is reasonable here.` };
+}
+
+// "Coach with a spine," other half: checks a stated claim about training against the actual
+// log instead of just agreeing (section 8). Contradicts with real numbers when the data
+// disagrees; confirms with real numbers when it doesn't.
+function answerClaimCheck(context) {
+  const style = context.athleteProfile?.coachingStyle || "balanced";
+  const adherence = context.adherence?.overall ?? null;
+  const daysSince = context.daysSinceLastSession;
+  const contradicted = (adherence != null && adherence < 70) || (daysSince != null && daysSince >= 3);
+  if (contradicted) {
+    const detail = adherence != null ? `Adherence this week is ${adherence}%.` : daysSince != null ? `${daysSince} days since your last session.` : "The log doesn't back that up.";
+    if (style === "hard") return { message: `That's not what the data shows. ${detail} Consistency means showing up, not intending to.` };
+    if (style === "supportive") return { message: `The data tells a different story right now — ${detail} No judgment, just worth being honest about it so we can fix it.` };
+    return { message: `${detail} That doesn't match "consistent." Worth being honest about it before anything else changes.` };
+  }
+  const detail = adherence != null ? `${adherence}% adherence this week backs it up.` : "The log backs it up.";
+  if (style === "hard") return { message: `Correct. ${detail} Keep it that way.` };
+  if (style === "supportive") return { message: `You're right, and it shows — ${detail} Keep going.` };
+  return { message: `Accurate. ${detail}` };
+}
+
+// Response-length tone (section 28): "short" is the existing default voice and is left
+// untouched to avoid regressing every message already tuned to be concise. "standard" adds one
+// supporting sentence; "detailed" adds the full supplementary context. Never truncates —
+// shortening an already-short message risks cutting the actual answer, not just flavor text.
+function buildExtraDetail(context) {
+  const mem = context.relevantMemories?.[0];
+  if (mem) return mem.text;
+  if (context.adherence) return `Adherence this week: ${context.adherence.overall}%.`;
+  return null;
+}
+export function applyResponseLength(message, length, extra) {
+  if (!extra) return message;
+  if (length === "detailed") return `${message} ${extra}`;
+  if (length === "standard") {
+    const firstSentence = extra.split(/(?<=[.!?])\s+/)[0] || extra;
+    return `${message} ${firstSentence}`;
+  }
+  return message;
 }
 
 function answerReviewToday(context, state) {
@@ -282,14 +346,23 @@ export function answerCoachQuestion(question, context, state) {
   if (isSafetyDeflection(question)) return { message: SAFETY_RESPONSE };
   const q = (question || "").toLowerCase();
 
-  if (/what should i do today|what.*today/.test(q)) return answerWhatToday(context);
-  if (/increase weight|add weight|more weight|heavier/.test(q)) return answerIncreaseWeight(context);
-  if (/stall|plateau|stuck/.test(q)) return answerStalled(context);
-  if (/sore/.test(q)) return answerSoreness(context);
-  if (/last 30|30 days|past month/.test(q)) return answerReview30(context, state);
-  if (/review.*today|today.*session/.test(q)) return answerReviewToday(context, state);
-  if (/doing wrong|what's wrong|going wrong/.test(q)) return answerWhatWrong(context);
-  if (/progress|on track/.test(q)) return answerProgress(context);
+  let result;
+  if (/what should i do today|what.*today/.test(q)) result = answerWhatToday(context);
+  else if (/change (my |the )?program|switch program|new program|different program|should i switch/.test(q)) result = answerProgramChange(context);
+  else if (/i'?ve been (training|working out|going)( to the gym)? (hard|consistently|every day|non-?stop)|i'?ve been consistent|i'?m doing everything right|haven'?t missed (a|any) (workout|session)/.test(q))
+    result = answerClaimCheck(context);
+  else if (/increase weight|add weight|more weight|heavier/.test(q)) result = answerIncreaseWeight(context);
+  else if (/stall|plateau|stuck/.test(q)) result = answerStalled(context);
+  else if (/sore/.test(q)) result = answerSoreness(context);
+  else if (/last 30|30 days|past month/.test(q)) result = answerReview30(context, state);
+  else if (/review.*today|today.*session/.test(q)) result = answerReviewToday(context, state);
+  else if (/doing wrong|what's wrong|going wrong/.test(q)) result = answerWhatWrong(context);
+  else if (/progress|on track/.test(q)) result = answerProgress(context);
+  else result = { message: `${fmtGoalLine(context.userGoal)} Adherence this week: ${context.adherence.overall}%. Ask about today's session, progress, or a specific lift for more.` };
 
-  return { message: `${fmtGoalLine(context.userGoal)} Adherence this week: ${context.adherence.overall}%. Ask about today's session, progress, or a specific lift for more.` };
+  const length = context.athleteProfile?.responseLength || "short";
+  if (length !== "short") {
+    result = { message: applyResponseLength(result.message, length, buildExtraDetail(context)) };
+  }
+  return result;
 }
