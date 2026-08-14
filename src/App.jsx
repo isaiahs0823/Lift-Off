@@ -44,6 +44,7 @@ import ShareCardButton from "./components/ShareCardButton.jsx";
 import TodayTab from "./components/TodayTab.jsx";
 import TrainTab from "./components/TrainTab.jsx";
 import MoreTab from "./components/MoreTab.jsx";
+import ScheduleEditor from "./components/ScheduleEditor.jsx";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
@@ -1282,6 +1283,7 @@ const SECTION_OF = {
   catalog: "more",
   top: "more",
   settings: "more",
+  schedule: "more",
 };
 
 export default function LiftLog() {
@@ -1644,6 +1646,7 @@ export default function LiftLog() {
                 onGoToPlans={() => setTab("templates")}
               />
             )}
+            {tab === "schedule" && <ScheduleEditor state={state} updateState={updateState} onBack={() => setTab("more")} />}
             {tab === "catalog" && <CatalogTab state={state} updateState={updateState} allExercises={allExercises} />}
             {tab === "top" && <TopUsedTab state={state} exMap={exMap} />}
             {tab === "photos" && <PhotosTab state={state} updateState={updateState} />}

@@ -1,7 +1,8 @@
 import React from "react";
-import { ChevronRight, Search, Flame, Settings as SettingsIcon, MessageCircle } from "lucide-react";
+import { ChevronRight, Search, Flame, Settings as SettingsIcon, MessageCircle, CalendarDays } from "lucide-react";
 
 const ITEMS = [
+  { id: "schedule", label: "Weekly schedule", desc: "Which days are training, conditioning, recovery, or rest", icon: CalendarDays },
   { id: "catalog", label: "Exercise catalog", desc: "Every movement in the library, plus your own", icon: Search },
   { id: "top", label: "Top used", desc: "Your most-logged exercises", icon: Flame },
   { id: "coach", label: "Coach history", desc: "Past coach messages and questions", icon: MessageCircle },
