@@ -4899,6 +4899,11 @@ function SettingsTab({ state, updateState }) {
         BACKUP_DATA_KEYS.forEach((key) => {
           if (key in result.data) next[key] = result.data[key];
         });
+        // hasSeenOnboarding isn't backup data (it's a local "is this device set up" flag), but
+        // a deliberate restore is never a fresh install — without this, importing real history
+        // into a blank browser profile would still show the welcome screen until the next
+        // full page reload triggers the same retroactive check loadInitialState() runs.
+        next.hasSeenOnboarding = true;
         return next;
       });
       setImportMessage({ type: "success", text: "Backup restored." });
@@ -4919,7 +4924,7 @@ function SettingsTab({ state, updateState }) {
     bodyweightLogs: (state.bodyweightLogs || []).length,
   };
 
-  const settings = state.settings || { rirSystem: "rir", restDefaults: DEFAULT_REST_DEFAULTS, barWeight: 45 };
+  const settings = { rirSystem: "rir", restDefaults: DEFAULT_REST_DEFAULTS, barWeight: 45, ...(state.settings || {}) };
   const updateSettings = (patch) => updateState((prev) => ({ ...prev, settings: { ...(prev.settings || {}), ...patch } }));
   const updateRestDefault = (category, val) =>
     updateSettings({ restDefaults: { ...(settings.restDefaults || DEFAULT_REST_DEFAULTS), [category]: Number(val) || 0 } });

@@ -1,6 +1,31 @@
 import React, { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Dumbbell, Timer, Scale, Camera, Award } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
+import { hasSchedule, getScheduleDay, DAY_TYPE_LABEL } from "../utils/weeklySchedule.js";
+
+// Compact, mobile-safe glyphs for a narrow 7-column month grid — the spec's fuller "REST" /
+// "MISSED" wording shows in the day-detail panel instead, where there's room for it.
+const CAL_GLYPH = { completed: "✓", pending: "●", upcoming: "○", rest: "–", missed: "×", skipped: "×", moved_away: "·", none: "" };
+const CAL_GLYPH_COLOR = {
+  completed: "text-green-500",
+  pending: "text-red-500",
+  upcoming: "text-neutral-700",
+  rest: "text-neutral-600",
+  missed: "text-red-600",
+  skipped: "text-red-600",
+  moved_away: "text-neutral-700",
+  none: "text-transparent",
+};
+const STATUS_WORD = {
+  completed: "Completed",
+  pending: "Scheduled today",
+  upcoming: "Upcoming",
+  rest: "Rest day",
+  missed: "Missed",
+  skipped: "Skipped",
+  moved_away: "Moved to another day",
+  none: "",
+};
 
 function dateKey(d) {
   return d.slice(0, 10);
@@ -48,10 +73,19 @@ function buildMonthData(state, year, month) {
   return byDay;
 }
 
-function DayDetail({ dateKeyStr, data, exMap, onBack }) {
+function DayDetail({ dateKeyStr, data, exMap, onBack, scheduleDay }) {
   const label = new Date(dateKeyStr + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   return (
     <SlideInPanel title={label} onBack={onBack}>
+      {scheduleDay && scheduleDay.status !== "none" && (
+        <div className="border border-neutral-800 bg-charcoal-panel p-3 flex items-center justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Scheduled</div>
+            <div className="text-sm text-white font-bold">{scheduleDay.label || DAY_TYPE_LABEL[scheduleDay.type]}</div>
+          </div>
+          <span className={`text-xs font-bold ${CAL_GLYPH_COLOR[scheduleDay.status]}`}>{STATUS_WORD[scheduleDay.status]}</span>
+        </div>
+      )}
       {data.sessions.length === 0 && data.cardio.length === 0 && !data.bodyweight && data.photos === 0 ? (
         <div className="text-sm text-neutral-500">Nothing logged this day.</div>
       ) : (
@@ -122,6 +156,8 @@ export default function TrainingCalendar({ state, exMap }) {
     } else setMonth((m) => m + 1);
   };
 
+  const scheduled = hasSchedule(state);
+
   if (selectedDay) {
     return (
       <DayDetail
@@ -129,6 +165,7 @@ export default function TrainingCalendar({ state, exMap }) {
         data={monthData[selectedDay] || { sessions: [], cardio: [], bodyweight: null, photos: 0 }}
         exMap={exMap}
         onBack={() => setSelectedDay(null)}
+        scheduleDay={scheduled ? getScheduleDay(state, selectedDay) : null}
       />
     );
   }
@@ -166,6 +203,9 @@ export default function TrainingCalendar({ state, exMap }) {
           const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
           const data = monthData[key];
           const isToday = key === todayKey;
+          const scheduleStatus = scheduled ? getScheduleDay(state, key).status : "none";
+          const scheduleGlyph = CAL_GLYPH[scheduleStatus];
+          const scheduleGlyphColor = CAL_GLYPH_COLOR[scheduleStatus];
           return (
             <button
               key={i}
@@ -174,6 +214,9 @@ export default function TrainingCalendar({ state, exMap }) {
                 isToday ? "border-red-700" : "border-neutral-900"
               } ${data ? "bg-charcoal-panel" : ""} hover:border-neutral-600`}
             >
+              {scheduleGlyph && (
+                <span className={`absolute top-0.5 right-0.5 text-[9px] leading-none font-bold ${scheduleGlyphColor}`}>{scheduleGlyph}</span>
+              )}
               <span className={isToday ? "text-red-500 font-bold" : "text-neutral-400"}>{d}</span>
               {data && (
                 <div className="flex items-center gap-0.5 mt-0.5">
@@ -202,6 +245,16 @@ export default function TrainingCalendar({ state, exMap }) {
           <Award size={10} className="text-red-500" /> PR
         </span>
       </div>
+
+      {scheduled && (
+        <div className="flex items-center gap-3 text-[10px] text-neutral-500 flex-wrap">
+          <span className="flex items-center gap-1"><span className="text-green-500 font-bold">✓</span> Completed</span>
+          <span className="flex items-center gap-1"><span className="text-red-500 font-bold">●</span> Scheduled</span>
+          <span className="flex items-center gap-1"><span className="text-neutral-700 font-bold">○</span> Upcoming</span>
+          <span className="flex items-center gap-1"><span className="text-neutral-600 font-bold">–</span> Rest</span>
+          <span className="flex items-center gap-1"><span className="text-red-600 font-bold">×</span> Missed</span>
+        </div>
+      )}
     </div>
   );
 }
