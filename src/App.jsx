@@ -874,6 +874,9 @@ function loadInitialState() {
     bodyweightLogs: [], // { id, date, weight, waist, bodyFat, notes }
     readinessLogs: [], // { id, date, sleepQuality, sleepHours, soreness, stress, motivation, energy, restingHR, notes }
     coachHistory: [], // { id, date, type: "morning_checkin"|"pre_workout"|"post_workout"|"weekly_review"|"question", question?, message }
+    weeklySchedule: null, // { mode: "fixed"|"rolling", fixedDays?, rollingSequence?, rollingCursor?, createdAt } — see src/utils/weeklySchedule.js
+    scheduleLog: [], // sparse per-date overrides (skip/move/resolved) — see src/utils/weeklySchedule.js
+    recoveryLogs: [], // { id, date, activity, notes } — logged from an Active Recovery scheduled day
   };
 }
 
@@ -922,12 +925,15 @@ const BACKUP_DATA_KEYS = [
   "bodyweightLogs",
   "readinessLogs",
   "coachHistory",
+  "weeklySchedule",
+  "scheduleLog",
+  "recoveryLogs",
 ];
 
 // Per-key fallback when a key is missing from state entirely (older saves) — objects default
-// to {}, currentProgram to null, everything else (arrays) to [].
+// to {}, currentProgram/weeklySchedule to null, everything else (arrays) to [].
 function backupKeyDefault(key) {
-  if (key === "currentProgram") return null;
+  if (key === "currentProgram" || key === "weeklySchedule") return null;
   if (key === "settings" || key === "exerciseNotes") return {};
   return [];
 }
