@@ -1459,6 +1459,12 @@ export default function LiftLog() {
   const swapRunExercise = (index, newExId) => {
     setActiveRun((run) => ({ ...run, swaps: { ...(run.swaps || {}), [index]: newExId } }));
   };
+  // Appends an exercise the plan never had (session-only, not saved back to the plan) — the
+  // slot lands at the end of run.exercises, so it becomes the active card once everything
+  // already queued ahead of it is logged, no matter when during the workout it's added.
+  const addRunExercise = (exId) => {
+    setActiveRun((run) => ({ ...run, exercises: [...run.exercises, { exId, sets: 3 }] }));
+  };
   const finishRun = () => {
     const summary = buildSessionSummary(activeRun, state.logs, state.workoutSessions || [], exMap);
     // Only worth a coach review when something was actually logged — an empty session has
@@ -1590,6 +1596,7 @@ export default function LiftLog() {
             onFinish={finishRun}
             onExit={exitRun}
             onSwap={swapRunExercise}
+            onAddExercise={addRunExercise}
             onLoggedSet={bumpRestTimer}
             onRate={rateSession}
             onAskCoach={() => {
@@ -1763,6 +1770,65 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, onBack, onSelect
         {results.length === 0 && (
           <div className="text-xs text-neutral-600 py-4 text-center">No matches. Try a different search.</div>
         )}
+      </div>
+    </SlideInPanel>
+  );
+}
+
+// Adds an exercise to the active session that was never part of the plan — search by name, or
+// browse a muscle group when nothing's typed yet. Distinct from ExerciseSwapPicker: no "current"
+// exercise to bias toward or exclude, so nothing shows until the user searches or picks a group.
+function AddExercisePicker({ allExercises, onBack, onSelect }) {
+  const [query, setQuery] = useState("");
+  const [muscle, setMuscle] = useState(null);
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q) return allExercises.filter((ex) => ex.name.toLowerCase().includes(q) || ex.muscle.toLowerCase().includes(q));
+    if (muscle) return allExercises.filter((ex) => ex.muscle === muscle);
+    return [];
+  }, [query, muscle, allExercises]);
+
+  return (
+    <SlideInPanel title="Add exercise" subtitle="This session only — added to the end of your workout" onBack={onBack}>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setMuscle(null);
+        }}
+        placeholder="Search the catalog..."
+        className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-xs focus:outline-none focus:border-red-700"
+      />
+      {!query && (
+        <div className="flex flex-wrap gap-1.5">
+          {MUSCLE_GROUPS.map((m) => (
+            <button
+              key={m}
+              onClick={() => setMuscle(m)}
+              className={`px-3 py-1.5 text-xs uppercase tracking-widest border ${
+                muscle === m ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="space-y-1.5">
+        {results.map((ex) => (
+          <button
+            key={ex.id}
+            onClick={() => onSelect(ex.id)}
+            className="w-full text-left px-3 py-2 text-sm border border-neutral-900 text-neutral-300 hover:border-red-700 hover:text-white"
+          >
+            {ex.name}
+            <span className="text-xs text-neutral-600 ml-2">{ex.muscle}</span>
+          </button>
+        ))}
+        {query && results.length === 0 && <div className="text-xs text-neutral-600 py-4 text-center">No matches. Try a different search.</div>}
+        {!query && !muscle && <div className="text-xs text-neutral-600 py-4 text-center">Search, or pick a muscle group above.</div>}
       </div>
     </SlideInPanel>
   );
@@ -3213,12 +3279,14 @@ function GuidedRunView({
   onFinish,
   onExit,
   onSwap,
+  onAddExercise,
   onLoggedSet,
   onRate,
   onAskCoach,
 }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
+  const [addingExercise, setAddingExercise] = useState(false);
   const rirSystem = state.settings?.rirSystem || "rir";
   const isSimple = (state.settings?.trainingDetail || "advanced") === "simple";
 
@@ -3402,6 +3470,22 @@ function GuidedRunView({
 
   return (
     <div className="space-y-6">
+      {/* Overlay, not a view-swap: the active exercise's confirmed-but-not-yet-"Finish
+          exercise"-locked sets live only in TrainingExerciseCard's local state, so navigating
+          away by unmounting it here would silently drop them. Staying mounted underneath keeps
+          in-progress sets intact no matter when mid-workout this gets opened. */}
+      {addingExercise && (
+        <div className="fixed inset-0 z-30 bg-charcoal-deep overflow-y-auto p-4 sm:p-6">
+          <AddExercisePicker
+            allExercises={allExercises}
+            onBack={() => setAddingExercise(false)}
+            onSelect={(exId) => {
+              onAddExercise(exId);
+              setAddingExercise(false);
+            }}
+          />
+        </div>
+      )}
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -3528,6 +3612,13 @@ function GuidedRunView({
           );
         })}
       </div>
+
+      <button
+        onClick={() => setAddingExercise(true)}
+        className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-red-700 hover:text-red-500 flex items-center justify-center gap-1.5"
+      >
+        <Plus size={14} /> Add exercise
+      </button>
 
       <button
         onClick={onFinish}
