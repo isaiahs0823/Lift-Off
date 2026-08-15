@@ -6,3 +6,22 @@ html, body, #root {
   height: 100%;
   background: #151515;
 }
+
+/* iOS Safari auto-zooms the page when a focused form control renders text smaller than 16px —
+   this is the single guarantee that never happens, regardless of which Tailwind text-size
+   utility (text-xs, text-sm, ...) a given input/select/textarea happens to carry. `!important`
+   is deliberate here: it's overriding utility classes with higher CSS specificity than a bare
+   element selector, which is the standard, documented fix for this exact iOS quirk. Checkboxes
+   are excluded since they don't trigger the zoom and shouldn't be visually resized. Scoped to
+   phone-width viewports so desktop rendering (if BRK is ever previewed wider) keeps its
+   original, tighter Tailwind-driven sizing — this fix exists for the iOS behavior specifically,
+   not as a general size bump.
+   Manual pinch-to-zoom is untouched — that's controlled by the viewport meta tag
+   (width=device-width, initial-scale=1.0, no maximum-scale/user-scalable), not by this rule. */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
