@@ -116,19 +116,44 @@ function sumTotals(items) {
   );
 }
 
-function buildMeal(label, time, macroShare, profile, { includeVeg = false, light = false } = {}) {
+// Meal-type-specific food preferences — the difference between "a technically valid set of
+// macros" and the spec's own example (eggs/oatmeal at breakfast, yogurt/banana pre-workout,
+// chicken/rice and beef/potato as *different* meals, not the same pairing four times a day).
+// Tried first, but always still filtered through availableFoods for restrictions/allergies —
+// falls back to the general rotation whenever a preferred name isn't actually available.
+const MEAL_TYPE_PROTEIN_PREF = {
+  breakfast: ["Eggs", "Egg whites", "Greek yogurt", "Cottage cheese"],
+  preworkout: ["Greek yogurt", "Cottage cheese", "Egg whites"],
+};
+const MEAL_TYPE_CARB_PREF = {
+  breakfast: ["Oatmeal", "Berries", "Banana"],
+  preworkout: ["Banana", "Berries"],
+};
+// Breakfast-coded carbs read oddly at lunch/dinner (oatmeal for dinner) — kept out of the
+// general lunch/dinner/snack rotation, still available via Swap for anyone who actually wants it.
+const MAIN_CARB_EXCLUDE = new Set(["Oatmeal", "Berries", "Banana"]);
+
+function pickFood(pool, preferredNames, rotation) {
+  if (pool.length === 0) return null;
+  const preferred = (preferredNames || []).map((n) => pool.find((f) => f.name === n)).filter(Boolean);
+  if (preferred.length > 0) return preferred[rotation % preferred.length];
+  return pool[rotation % pool.length];
+}
+
+function buildMeal(label, time, macroShare, profile, { includeVeg = false, mealType = "main", rotation = 0 } = {}) {
   const proteinPool = availableFoods("protein", profile);
-  const carbPool = availableFoods("carb", profile);
+  const rawCarbPool = availableFoods("carb", profile);
+  const carbPool = mealType === "main" ? rawCarbPool.filter((f) => !MAIN_CARB_EXCLUDE.has(f.name)) : rawCarbPool;
   const vegPool = availableFoods("veg", profile);
   if (proteinPool.length === 0 || carbPool.length === 0) return { id: `meal_${label}`, label, time, items: [], totals: { calories: 0, protein: 0, carbs: 0, fat: 0 } };
 
-  const protein = proteinPool[light ? Math.min(1, proteinPool.length - 1) : 0];
-  const carb = carbPool[light ? Math.min(1, carbPool.length - 1) : 0];
+  const protein = pickFood(proteinPool, MEAL_TYPE_PROTEIN_PREF[mealType], rotation);
+  const carb = pickFood(carbPool, MEAL_TYPE_CARB_PREF[mealType], rotation);
   const proteinMult = scaleFor(protein, macroShare.protein * 0.6, "protein");
   const carbMult = scaleFor(carb, macroShare.carbs * 0.7, "carbs");
 
   const items = [buildItem(protein, proteinMult), buildItem(carb, carbMult)];
-  if (includeVeg && vegPool.length > 0) items.push(buildItem(vegPool[0], 1));
+  if (includeVeg && vegPool.length > 0) items.push(buildItem(vegPool[rotation % vegPool.length], 1));
 
   return { id: `meal_${label.toLowerCase().replace(/\s+/g, "_")}`, label, time, items, totals: sumTotals(items) };
 }
@@ -146,10 +171,15 @@ export function generateMealPlan(profile, targets) {
 
   const mainLabels = ["Breakfast", "Lunch", "Dinner", "Snack 1", "Snack 2"].slice(0, mealCount);
   const mainTimes = ["7:00 AM", "12:00 PM", "7:00 PM", "3:00 PM", "9:00 PM"].slice(0, mealCount);
+  const mainMealTypes = { Breakfast: "breakfast" };
 
   const meals = mainLabels.map((label, i) =>
     buildMeal(label, mainTimes[i], { calories: targets.calories * mainFrac, protein: targets.protein * mainFrac, carbs: targets.carbs * mainFrac, fat: targets.fat * mainFrac }, profile, {
       includeVeg: label === "Lunch" || label === "Dinner",
+      mealType: mainMealTypes[label] || "main",
+      // Distinct rotation per slot (skipping Breakfast's own index) so Lunch/Dinner/Snacks
+      // don't all land on the same protein+carb pairing.
+      rotation: i,
     })
   );
 
@@ -159,7 +189,7 @@ export function generateMealPlan(profile, targets) {
       profile.trainingTime,
       { calories: targets.calories * preWorkoutFrac, protein: targets.protein * preWorkoutFrac, carbs: targets.carbs * preWorkoutFrac, fat: targets.fat * preWorkoutFrac },
       profile,
-      { light: true }
+      { mealType: "preworkout" }
     );
     // Insert before Dinner if there's one, otherwise append.
     const dinnerIdx = meals.findIndex((m) => m.label === "Dinner");
