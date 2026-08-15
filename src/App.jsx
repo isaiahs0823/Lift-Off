@@ -54,6 +54,9 @@ import NutritionHome from "./components/NutritionHome.jsx";
 import FoodLogScreen from "./components/FoodLogScreen.jsx";
 import MealPlanView from "./components/MealPlanView.jsx";
 import NutritionCheckInScreen from "./components/NutritionCheckInScreen.jsx";
+import ScanFoodChooser from "./components/ScanFoodChooser.jsx";
+import BarcodeScannerScreen from "./components/BarcodeScannerScreen.jsx";
+import NutritionLabelScannerScreen from "./components/NutritionLabelScannerScreen.jsx";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
@@ -1359,6 +1362,9 @@ const SECTION_OF = {
   nutritionLog: "coach",
   nutritionMealPlan: "coach",
   nutritionCheckIn: "coach",
+  nutritionScan: "coach",
+  nutritionScanBarcode: "coach",
+  nutritionScanLabel: "coach",
   train: "train",
   log: "train",
   cardio: "train",
@@ -1388,6 +1394,10 @@ export default function LiftLog() {
       return null;
     }
   });
+  // Transient hand-off from BarcodeScannerScreen's "unknown barcode" path to
+  // NutritionLabelScannerScreen — the scanned barcode gets attached to the food the user is
+  // about to build from the label photo. Navigation-only state, never persisted.
+  const [pendingScanBarcode, setPendingScanBarcode] = useState(null);
   // Keeps the in-progress (or just-finished-but-not-yet-exited) run surviving a closed tab,
   // backgrounded phone, or crash — otherwise closing mid-workout silently drops everything
   // that wasn't already saved as a logged set. Cleared once the user actually exits the run
@@ -1751,9 +1761,32 @@ export default function LiftLog() {
               />
             )}
             {tab === "nutrition" && <NutritionHome state={state} updateState={updateState} onNavigate={setTab} />}
-            {tab === "nutritionLog" && <FoodLogScreen state={state} updateState={updateState} onBack={() => setTab("nutrition")} />}
+            {tab === "nutritionLog" && <FoodLogScreen state={state} updateState={updateState} onBack={() => setTab("nutrition")} onNavigate={setTab} />}
             {tab === "nutritionMealPlan" && <MealPlanView state={state} updateState={updateState} onBack={() => setTab("nutrition")} />}
             {tab === "nutritionCheckIn" && <NutritionCheckInScreen state={state} updateState={updateState} onBack={() => setTab("nutrition")} />}
+            {tab === "nutritionScan" && <ScanFoodChooser onNavigate={setTab} />}
+            {tab === "nutritionScanBarcode" && (
+              <BarcodeScannerScreen
+                state={state}
+                updateState={updateState}
+                onNavigate={setTab}
+                onScanLabelForBarcode={(barcode) => {
+                  setPendingScanBarcode(barcode);
+                  setTab("nutritionScanLabel");
+                }}
+                onManualEntry={() => setTab("nutritionLog")}
+              />
+            )}
+            {tab === "nutritionScanLabel" && (
+              <NutritionLabelScannerScreen
+                updateState={updateState}
+                onNavigate={(next) => {
+                  setPendingScanBarcode(null);
+                  setTab(next);
+                }}
+                pendingBarcode={pendingScanBarcode}
+              />
+            )}
             {tab === "cardio" && (
               <CardioTab
                 state={state}

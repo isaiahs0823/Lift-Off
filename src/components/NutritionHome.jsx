@@ -80,9 +80,14 @@ export default function NutritionHome({ state, updateState, onNavigate }) {
                 <div className="text-[10px] uppercase tracking-widest text-neutral-500">Fat</div>
               </div>
             </div>
-            <button onClick={() => onNavigate("nutritionLog")} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
-              Log Food
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => onNavigate("nutritionLog")} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
+                Log Food
+              </button>
+              <button onClick={() => onNavigate("nutritionScan")} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500">
+                Scan Food
+              </button>
+            </div>
           </div>
 
           <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-2">

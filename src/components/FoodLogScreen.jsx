@@ -26,7 +26,7 @@ function MacroRow({ label, value, target }) {
 // Section 12/13/14 of the nutrition spec: food/serving/macros logging, Quick Add for
 // restaurant meals or known macros, and one-tap re-logging from recent/saved foods/saved
 // meals — the app gets faster to use as history builds, not slower.
-export default function FoodLogScreen({ state, updateState, onBack }) {
+export default function FoodLogScreen({ state, updateState, onBack, onNavigate }) {
   const dateKey = todayDateKey();
   const foodLogs = state.foodLogs || [];
   const savedFoods = state.savedFoods || [];
@@ -104,9 +104,19 @@ export default function FoodLogScreen({ state, updateState, onBack }) {
           Quick Add
         </button>
         <button onClick={() => setMode("full")} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600">
-          Add Food
+          Create Food
         </button>
       </div>
+      {onNavigate && (
+        <div className="flex gap-2">
+          <button onClick={() => onNavigate("nutritionScanBarcode")} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500">
+            Scan Barcode
+          </button>
+          <button onClick={() => onNavigate("nutritionScanLabel")} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500">
+            Scan Nutrition Label
+          </button>
+        </div>
+      )}
 
       {mode === "quick" && <QuickAddForm onCancel={() => setMode(null)} onSave={(e) => { logEntry(e); setMode(null); }} />}
       {mode === "full" && (
