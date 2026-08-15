@@ -415,22 +415,30 @@ function answerChangeExercises(context) {
   return { message: "Nothing here has stalled long enough to justify swapping it out. Keep executing before changing exercises." };
 }
 
+// Phase-aware check-in (sections 6/8/9) — "good" means something different in a Cut than a
+// Mass phase, so the same bodyweight-trend data reads differently depending on which is set.
 function answerPhaseCheck(context) {
-  const phase = context.athleteProfile?.physiquePhase;
-  if (phase !== "cut" && phase !== "contest_prep") {
-    return { message: "You're not currently set to a Cut phase — set that in Coach Settings under Current Phase if you want cut-specific check-ins." };
-  }
+  const phase = context.athleteProfile?.physiquePhase || "general_hypertrophy";
   const weeklyRate = context.recentWeightTrend?.weeklyRate;
   const adherence = context.adherence?.overall;
+  const goodAdherence = adherence != null && adherence >= 80;
   const parts = [];
-  if (weeklyRate != null) parts.push(`Bodyweight is trending ${weeklyRate < 0 ? "down" : "up"} ${Math.abs(weeklyRate).toFixed(1)} lb/week.`);
-  if (adherence != null) parts.push(`Training adherence is ${adherence}%.`);
-  if (weeklyRate != null && weeklyRate < 0 && adherence != null && adherence >= 80) {
-    parts.push("Exactly where you want it. Weight is moving and training is holding. Don't change anything.");
-  } else if (weeklyRate != null && weeklyRate >= 0) {
-    parts.push("Weight isn't trending down — worth a look at adherence and intake before touching training.");
+  if (weeklyRate != null) {
+    const dir = weeklyRate < 0 ? "down" : weeklyRate > 0 ? "up" : "flat";
+    parts.push(`Bodyweight is trending ${dir}${dir !== "flat" ? ` ${Math.abs(weeklyRate).toFixed(1)} lb/week` : ""}.`);
   }
-  return { message: parts.length > 0 ? parts.join(" ") : "Log a few more bodyweight entries and I can grade the cut properly." };
+  if (adherence != null) parts.push(`Training adherence is ${adherence}%.`);
+
+  if (phase === "cut" || phase === "contest_prep") {
+    if (weeklyRate != null && weeklyRate < 0 && goodAdherence) parts.push("Exactly where you want it. Weight is moving and training is holding. Don't change anything.");
+    else if (weeklyRate != null && weeklyRate >= 0) parts.push("Weight isn't trending down — worth a look at adherence and intake before touching training.");
+  } else if (phase === "mass" || phase === "lean_gain") {
+    if (weeklyRate != null && weeklyRate > 0 && goodAdherence) parts.push("Weight is moving in the right direction and training is holding. Don't change anything.");
+    else if (weeklyRate != null && weeklyRate <= 0) parts.push("Weight isn't trending up — worth a look at intake before touching training.");
+  } else if (phase === "maintenance" || phase === "recomposition") {
+    if (weeklyRate != null) parts.push(Math.abs(weeklyRate) < 0.5 ? "Weight is holding steady — that's the target here." : "Weight is moving more than expected for this phase — worth checking intake.");
+  }
+  return { message: parts.length > 0 ? parts.join(" ") : "Log a few more bodyweight entries and I can grade this properly." };
 }
 
 function answerRecoveryCheck(context) {
@@ -456,7 +464,7 @@ export function answerCoachQuestion(question, context, state) {
   else if (/volume too high|too much volume|volume.*high/.test(q)) result = answerVolumeCheck(context);
   else if (/falling behind|muscle group.*behind|behind.*muscle/.test(q)) result = answerWeakestMuscle(context);
   else if (/change exercises|swap exercises|different exercises/.test(q)) result = answerChangeExercises(context);
-  else if (/how is my cut|cut going|cutting.*going/.test(q)) result = answerPhaseCheck(context);
+  else if (/how is my (cut|bulk|mass|recomp)|cut going|cutting.*going|bulk(ing)?.*going|mass.*going/.test(q)) result = answerPhaseCheck(context);
   else if (/am i recovering|recovering\?|recovery.*ok/.test(q)) result = answerRecoveryCheck(context);
   else if (/stall|plateau|stuck/.test(q)) result = answerStalled(context);
   else if (/sore/.test(q)) result = answerSoreness(context);
