@@ -6,6 +6,9 @@ import {
   COACHING_STYLE_DESC,
   RESPONSE_LENGTHS,
   RESPONSE_LENGTH_LABEL,
+  PHYSIQUE_PHASES,
+  PHYSIQUE_PHASE_LABEL,
+  PHYSIQUE_PRIORITY_MUSCLES,
   resolveProfile,
 } from "../utils/athleteProfile.js";
 import { COACH_SPECIALTIES, getSpecialty } from "../coachSpecialties/index.js";
@@ -111,11 +114,93 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
                   </span>
                 </div>
                 <div className="text-xs text-neutral-500 mt-0.5">{sp.subtitle}</div>
+                {active && sp.id === "bodybuilding" && (profile.physiquePhase || profile.physiquePriorities?.primary) && (
+                  <div className="text-[11px] text-neutral-400 mt-1.5 pt-1.5 border-t border-red-900/40 space-y-0.5">
+                    {profile.physiquePhase && (
+                      <div>
+                        Current phase: <span className="text-white font-bold">{PHYSIQUE_PHASE_LABEL[profile.physiquePhase]}</span>
+                      </div>
+                    )}
+                    {profile.physiquePriorities?.primary && (
+                      <div>
+                        Primary focus: <span className="text-white font-bold">{profile.physiquePriorities.primary}</span>
+                      </div>
+                    )}
+                    {profile.physiquePriorities?.secondary && (
+                      <div>
+                        Secondary: <span className="text-white font-bold">{profile.physiquePriorities.secondary}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </button>
             );
           })}
         </div>
       </div>
+
+      {profile.coachSpecialty === "bodybuilding" && (
+        <>
+          <div>
+            <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Current phase</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {PHYSIQUE_PHASES.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => patch({ physiquePhase: p })}
+                  className={`py-2 px-2 text-[11px] font-bold uppercase tracking-wide border ${
+                    (profile.physiquePhase || "general_hypertrophy") === p
+                      ? "bg-red-700 border-red-700 text-white"
+                      : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                  }`}
+                >
+                  {PHYSIQUE_PHASE_LABEL[p]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Weak point focus</label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[10px] text-neutral-600 mb-1">Primary</div>
+                <select
+                  value={profile.physiquePriorities?.primary || ""}
+                  onChange={(e) =>
+                    patch({ physiquePriorities: { ...profile.physiquePriorities, primary: e.target.value || null } })
+                  }
+                  className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+                >
+                  <option value="">None set</option>
+                  {PHYSIQUE_PRIORITY_MUSCLES.map((m) => (
+                    <option key={m} value={m} disabled={m === profile.physiquePriorities?.secondary}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="text-[10px] text-neutral-600 mb-1">Secondary</div>
+                <select
+                  value={profile.physiquePriorities?.secondary || ""}
+                  onChange={(e) =>
+                    patch({ physiquePriorities: { ...profile.physiquePriorities, secondary: e.target.value || null } })
+                  }
+                  className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+                >
+                  <option value="">None set</option>
+                  {PHYSIQUE_PRIORITY_MUSCLES.map((m) => (
+                    <option key={m} value={m} disabled={m === profile.physiquePriorities?.primary}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">How should Coach talk to you?</label>
