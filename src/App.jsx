@@ -890,6 +890,8 @@ function loadInitialState() {
     athleteProfile: null, // Coach memory Layer 1 — see src/utils/athleteProfile.js
     coachMemories: [], // Coach memory Layer 3, persisted/evolving — see src/utils/coachMemoryStore.js
     commitments: [], // see src/utils/commitments.js
+    specialtyInterest: {}, // { [specialtyId]: true } — "Notify me" taps on locked Coach specialties, see src/coachSpecialties
+    coachAccess: null, // future trial/subscription scaffold, unenforced — see backupKeyDefault
   };
 }
 
@@ -944,13 +946,16 @@ const BACKUP_DATA_KEYS = [
   "athleteProfile",
   "coachMemories",
   "commitments",
+  "specialtyInterest",
+  "coachAccess",
 ];
 
 // Per-key fallback when a key is missing from state entirely (older saves) — objects default
-// to {}, currentProgram/weeklySchedule/athleteProfile to null, everything else (arrays) to [].
+// to {}, currentProgram/weeklySchedule/athleteProfile/coachAccess to null, everything else
+// (arrays) to [].
 function backupKeyDefault(key) {
-  if (key === "currentProgram" || key === "weeklySchedule" || key === "athleteProfile") return null;
-  if (key === "settings" || key === "exerciseNotes") return {};
+  if (key === "currentProgram" || key === "weeklySchedule" || key === "athleteProfile" || key === "coachAccess") return null;
+  if (key === "settings" || key === "exerciseNotes" || key === "specialtyInterest") return {};
   return [];
 }
 

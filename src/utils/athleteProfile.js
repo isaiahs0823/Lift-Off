@@ -25,6 +25,33 @@ export const RESPONSE_LENGTH_LABEL = { short: "Short", standard: "Standard", det
 export const EXPERIENCE_LEVELS = ["new", "beginner", "intermediate", "advanced"];
 export const EXPERIENCE_LABEL = { new: "Brand new", beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced" };
 
+// Bodybuilding-specialty fields (section 7/18 of the BB Coach spec) — only meaningful while
+// coachSpecialty === "bodybuilding", but kept on the general profile rather than nested under
+// the specialty so switching specialties later never has to migrate or discard them.
+export const PHYSIQUE_PHASES = ["general_hypertrophy", "cut", "maintenance", "lean_gain", "mass", "recomposition", "contest_prep"];
+export const PHYSIQUE_PHASE_LABEL = {
+  general_hypertrophy: "General Hypertrophy",
+  cut: "Cut",
+  maintenance: "Maintenance",
+  lean_gain: "Lean Gain",
+  mass: "Mass",
+  recomposition: "Recomposition",
+  contest_prep: "Contest / Photoshoot Prep",
+};
+export const PHYSIQUE_PRIORITY_MUSCLES = [
+  "Upper chest",
+  "Lats",
+  "Upper back",
+  "Side delts",
+  "Rear delts",
+  "Arms",
+  "Quads",
+  "Hamstrings",
+  "Glutes",
+  "Calves",
+  "Abs",
+];
+
 export function defaultAthleteProfile() {
   return {
     experience: null,
@@ -42,6 +69,10 @@ export function defaultAthleteProfile() {
     coachingStyle: "balanced",
     responseLength: "short",
     learningEnabled: true,
+    // "bodybuilding" is the only functional specialty right now — see src/coachSpecialties.
+    coachSpecialty: "bodybuilding",
+    physiquePhase: null, // null reads as "general hypertrophy" until the user sets one
+    physiquePriorities: { primary: null, secondary: null },
     onboardedAt: null,
     updatedAt: null,
   };

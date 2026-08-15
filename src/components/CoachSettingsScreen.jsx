@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import {
   COACHING_STYLES,
@@ -8,6 +8,7 @@ import {
   RESPONSE_LENGTH_LABEL,
   resolveProfile,
 } from "../utils/athleteProfile.js";
+import { COACH_SPECIALTIES, getSpecialty } from "../coachSpecialties/index.js";
 
 // The Coach-specific control panel (section 39): tone/length/learning toggle plus entry points
 // into the two deeper screens (full profile editor, What Coach Knows). Distinct from
@@ -16,9 +17,14 @@ import {
 // settings screen (not a form) is expected to behave.
 export default function CoachSettingsScreen({ state, updateState, onNavigate, onBack }) {
   const profile = resolveProfile(state);
+  const [previewId, setPreviewId] = useState(null);
+  const interest = state.specialtyInterest || {};
 
   const patch = (fields) => {
     updateState((prev) => ({ ...prev, athleteProfile: { ...resolveProfile(prev), ...fields, updatedAt: new Date().toISOString() } }));
+  };
+  const toggleInterest = (id) => {
+    updateState((prev) => ({ ...prev, specialtyInterest: { ...(prev.specialtyInterest || {}), [id]: !(prev.specialtyInterest || {})[id] } }));
   };
 
   const clearMemory = () => {
@@ -41,6 +47,74 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
             ← Back
           </button>
         )}
+      </div>
+
+      {/* Overlay, not a view-swap, matching AddExercisePicker's convention elsewhere in the app. */}
+      {previewId && (
+        <div className="fixed inset-0 z-30 bg-black/80 flex items-center justify-center p-4" onClick={() => setPreviewId(null)}>
+          <div className="max-w-xs w-full bg-charcoal-panel border border-neutral-800 p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+            {(() => {
+              const sp = getSpecialty(previewId);
+              const wantsIt = !!interest[previewId];
+              return (
+                <>
+                  <div>
+                    <div className="text-lg font-bold text-white">{sp.label}</div>
+                    <div className="text-xs text-neutral-500 mt-0.5">{sp.subtitle}</div>
+                  </div>
+                  <div className="text-sm text-neutral-300">{sp.description}</div>
+                  <div className="text-[10px] uppercase tracking-widest text-neutral-600">Coming soon</div>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => toggleInterest(previewId)}
+                      className={`flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border ${
+                        wantsIt ? "bg-red-700 border-red-700 text-white" : "border-red-700 text-red-500 hover:bg-red-950/30"
+                      }`}
+                    >
+                      {wantsIt ? "You'll be notified" : "Notify me"}
+                    </button>
+                    <button
+                      onClick={() => setPreviewId(null)}
+                      className="px-4 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Coach specialty</label>
+        <div className="space-y-1.5">
+          {COACH_SPECIALTIES.map((sp) => {
+            const active = sp.status === "active";
+            return (
+              <button
+                key={sp.id}
+                onClick={() => {
+                  if (!active) setPreviewId(sp.id);
+                }}
+                className={`w-full text-left px-3 py-2.5 border ${active ? "border-red-700 bg-red-950/20" : "border-neutral-800 hover:border-neutral-600"}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className={`text-sm font-bold ${active ? "text-white" : "text-neutral-300"}`}>{sp.label}</div>
+                  <span
+                    className={`shrink-0 text-[9px] uppercase tracking-widest px-1.5 py-0.5 ${
+                      active ? "bg-red-700 text-white" : "border border-neutral-700 text-neutral-500"
+                    }`}
+                  >
+                    {active ? "Active" : "Coming soon"}
+                  </span>
+                </div>
+                <div className="text-xs text-neutral-500 mt-0.5">{sp.subtitle}</div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div>
