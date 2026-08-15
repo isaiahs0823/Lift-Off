@@ -51,6 +51,26 @@ export const PHYSIQUE_PRIORITY_MUSCLES = [
   "Calves",
   "Abs",
 ];
+// Every exercise in the catalog only carries a coarse muscle category (Chest/Back/Shoulders/
+// Legs/Arms/Core — see EXERCISE_LIBRARY in App.jsx), not a fine-grained one — there's no
+// per-exercise "upper chest" vs. "lower chest" tag to check volume against directly. This maps
+// each selectable weak-point option to the coarse category its actual logged volume lives
+// under, so "is my weak point getting trained" can check real data honestly (as "is Shoulders
+// getting trained," not a precision it can't back up) while still letting the user pick
+// something more specific and meaningful to them than the six coarse categories alone.
+export const PHYSIQUE_MUSCLE_PARENT = {
+  "Upper chest": "Chest",
+  Lats: "Back",
+  "Upper back": "Back",
+  "Side delts": "Shoulders",
+  "Rear delts": "Shoulders",
+  Arms: "Arms",
+  Quads: "Legs",
+  Hamstrings: "Legs",
+  Glutes: "Legs",
+  Calves: "Legs",
+  Abs: "Core",
+};
 
 export function defaultAthleteProfile() {
   return {

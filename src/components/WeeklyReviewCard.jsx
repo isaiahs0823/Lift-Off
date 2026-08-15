@@ -1,10 +1,14 @@
 import React from "react";
-import { MessageCircle, Flame } from "lucide-react";
+import { MessageCircle, Flame, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { computeWeeklyReview } from "../utils/weeklyReview.js";
 import { generateWeeklyReview } from "../services/coachService.js";
 import ShareCardButton from "./ShareCardButton.jsx";
 import { buildWeeklyReviewShareCard } from "../utils/shareCard.js";
 import { hasSchedule, computeScheduleAdherence, computeScheduleStreak } from "../utils/weeklySchedule.js";
+import { muscleVolumeTrend } from "../utils/muscleVolume.js";
+
+const TREND_ICON = { up: ArrowUp, down: ArrowDown, flat: Minus };
+const TREND_COLOR = { up: "text-green-500", down: "text-red-500", flat: "text-neutral-500" };
 
 const STRENGTH_LABEL = {
   improving: "Improving",
@@ -18,11 +22,15 @@ function fmtDelta(v, digits = 1) {
   return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}`;
 }
 
-export default function WeeklyReviewCard({ state }) {
+export default function WeeklyReviewCard({ state, exMap }) {
   const review = computeWeeklyReview(state, 7);
   const scheduled = hasSchedule(state);
   const scheduleAdherence = scheduled ? computeScheduleAdherence(state, 7) : null;
   const streak = scheduled ? computeScheduleStreak(state) : 0;
+  // Bodybuilding-specific (section 19) — visual-only, doesn't change the Coach line's own text.
+  const isBodybuilding = state.athleteProfile?.coachSpecialty === "bodybuilding";
+  const muscleTrend = isBodybuilding && exMap ? muscleVolumeTrend(state, exMap) : null;
+  const muscleEntries = muscleTrend ? Object.entries(muscleTrend) : [];
 
   return (
     <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
@@ -117,6 +125,23 @@ export default function WeeklyReviewCard({ state }) {
       {review.weakestArea && (
         <div className="text-xs text-neutral-400 border-t border-neutral-900 pt-3">
           Weakest area this week: <span className="text-white">{review.weakestArea.label}</span> ({review.weakestArea.pct}%)
+        </div>
+      )}
+
+      {muscleEntries.length > 0 && (
+        <div className="border-t border-neutral-900 pt-3">
+          <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1.5">Muscle progression</div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            {muscleEntries.map(([muscle, trend]) => {
+              const Icon = TREND_ICON[trend];
+              return (
+                <div key={muscle} className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-400">{muscle}</span>
+                  <Icon size={13} className={TREND_COLOR[trend]} />
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

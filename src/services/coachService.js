@@ -15,6 +15,7 @@
 import { computeWeeklyReview } from "../utils/weeklyReview.js";
 import { DAY_TYPE_LABEL, computeScheduleAdherence } from "../utils/weeklySchedule.js";
 import { sessionPRCount } from "../utils/prSummary.js";
+import { PHYSIQUE_MUSCLE_PARENT } from "../utils/athleteProfile.js";
 
 const SAFETY_PATTERN =
   /\b(injur(y|ed|ies)|hurt|sharp pain|numb(ness)?|tingling|dizzy|dizziness|chest pain|can'?t breathe|shortness of breath|medication|prescri|steroid|anabolic|\bpeds?\b|sarms?|hgh|clenbuterol|starv(e|ing)|purg(e|ing)|dehydrat)\b/i;
@@ -370,14 +371,42 @@ function answerWeakestMuscle(context) {
   const trend = context.muscleVolumeTrend || {};
   const declining = Object.entries(trend).filter(([, t]) => t === "down");
   const primary = context.athleteProfile?.physiquePriorities?.primary;
-  if (primary) {
-    const primaryVolume = (context.muscleVolume || {})[primary] || 0;
-    if (primaryVolume === 0) return { message: `${primary} is your stated priority but hasn't been trained this week — that's the actual gap.` };
+  // Weak-point options are more specific than the app's per-exercise muscle tags (see
+  // PHYSIQUE_MUSCLE_PARENT) — checked, and phrased, against the coarse category actual volume
+  // data lives under, so this never overclaims precision the data can't back up.
+  const parent = primary ? PHYSIQUE_MUSCLE_PARENT[primary] || primary : null;
+  if (primary && parent) {
+    const parentVolume = (context.muscleVolume || {})[parent] || 0;
+    if (parentVolume === 0) {
+      return { message: `${primary} is your stated priority, and ${parent} work (which covers it) hasn't shown up this week at all — that's the actual gap.` };
+    }
   }
   if (declining.length > 0) {
     return { message: `${declining.map(([m]) => m).join(", ")} volume dropped versus last week. That's the one worth watching.` };
   }
   return { message: "Nothing stands out as falling behind this week — volume is holding across the board." };
+}
+
+// "Coach with a spine" for volume specifically (section 25): a request for more volume on a
+// muscle that's already well-trained and progressing gets pushed back with the real numbers,
+// the same principle as answerProgramChange but scoped to one muscle group instead of the
+// whole program.
+const MUSCLE_CATEGORIES = ["Chest", "Back", "Shoulders", "Legs", "Arms", "Core"];
+function answerVolumeIncrease(context, question) {
+  const style = context.athleteProfile?.coachingStyle || "balanced";
+  const q = (question || "").toLowerCase();
+  const muscle = MUSCLE_CATEGORIES.find((m) => q.includes(m.toLowerCase()));
+  if (!muscle) return { message: "Which muscle group, specifically? I can check the actual numbers once I know where." };
+  const sets = (context.muscleVolume || {})[muscle] || 0;
+  const trend = (context.muscleVolumeTrend || {})[muscle];
+  const alreadyHigh = sets >= 14; // a working floor, not an exact science — see muscleVolume.js
+  if (sets > 0 && alreadyHigh && trend !== "down") {
+    const detail = `${muscle} is already at ${sets} working sets this week and ${trend === "up" ? "trending up" : "holding steady"}.`;
+    if (style === "hard") return { message: `No. ${detail} More volume isn't solving a problem that isn't there.` };
+    if (style === "supportive") return { message: `I hear you, but ${detail[0].toLowerCase()}${detail.slice(1)} Adding more isn't the move right now.` };
+    return { message: `${detail} More volume isn't solving a problem that isn't there.` };
+  }
+  return { message: `${muscle} is at ${sets} working sets this week${trend === "down" ? " and trending down" : ""}. Adding volume here is reasonable.` };
 }
 
 function answerChangeExercises(context) {
@@ -422,6 +451,8 @@ export function answerCoachQuestion(question, context, state) {
   else if (/i'?ve been (training|working out|going)( to the gym)? (hard|consistently|every day|non-?stop)|i'?ve been consistent|i'?m doing everything right|haven'?t missed (a|any) (workout|session)/.test(q))
     result = answerClaimCheck(context);
   else if (/increase weight|add weight|more weight|heavier/.test(q)) result = answerIncreaseWeight(context);
+  else if (/need more volume|more (chest|back|shoulder|leg|arm|core)s? volume|should i add (more )?volume|add more sets/.test(q))
+    result = answerVolumeIncrease(context, q);
   else if (/volume too high|too much volume|volume.*high/.test(q)) result = answerVolumeCheck(context);
   else if (/falling behind|muscle group.*behind|behind.*muscle/.test(q)) result = answerWeakestMuscle(context);
   else if (/change exercises|swap exercises|different exercises/.test(q)) result = answerChangeExercises(context);

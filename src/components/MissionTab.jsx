@@ -248,7 +248,7 @@ export default function MissionTab({ state, updateState, allExercises, exMap }) 
 
       <AdherenceCard state={state} />
 
-      <WeeklyReviewCard state={state} />
+      <WeeklyReviewCard state={state} exMap={exMap} />
 
       {inactiveGoals.length > 0 && (
         <div className="space-y-2">
