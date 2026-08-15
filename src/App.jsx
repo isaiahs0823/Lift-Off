@@ -940,6 +940,26 @@ function migrateProgramNames(state) {
   return { ...state, customPlans, customPrograms, currentProgram };
 }
 
+// One-time corrective fix for a Coach onboarding bug that shipped briefly: an earlier build
+// auto-migrated anyone with pre-existing Coach data (Athlete Profile / history / memories)
+// straight past "Select Your Coach," silently defaulting them to Bodybuilding — treating old
+// Coach usage as proof a specialty had been explicitly chosen, which it never was. That path
+// is the only place `coachOnboarding.migrationNoticeShown` was ever written; the corrected
+// picker flow no longer writes that field at all, so its mere presence on a saved record is
+// an unambiguous fingerprint of "this user was silently auto-migrated by the old bug, not by
+// their own explicit confirmation." For exactly those records, resets specialtySelected back
+// to false so they see the real picker once, the way they should have originally — every
+// other field (their Athlete Profile, history, memories, commitments, everything else) is
+// left completely untouched.
+function migrateStaleCoachOnboarding(state) {
+  const onboarding = state.coachOnboarding;
+  if (onboarding && Object.prototype.hasOwnProperty.call(onboarding, "migrationNoticeShown")) {
+    const { migrationNoticeShown, ...rest } = onboarding;
+    return { ...state, coachOnboarding: { ...rest, specialtySelected: false, specialty: null, confirmedAt: null } };
+  }
+  return state;
+}
+
 // ---------- Data export / import ----------
 // Everything the user has actually created — not the built-in templates/programs, which
 // ship with the app and always come from source, never from a backup file.
@@ -1395,6 +1415,7 @@ export default function LiftLog() {
           // built-in library — which is exactly what happened with this rename.
           const merged = { ...s, ...parsed, templates: DEFAULT_TEMPLATES, programs: HERO_PROGRAMS };
           let migrated = migrateProgramNames(merged);
+          migrated = migrateStaleCoachOnboarding(migrated);
           // Backward-compat: a returning user whose save predates the onboarding flag
           // already clearly isn't a fresh install — retroactively mark them as having
           // seen it so they never see the welcome screen. A brand-new install has no
