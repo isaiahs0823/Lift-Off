@@ -44,9 +44,13 @@ export function resolveCurrentProgramDay(state) {
   }
 
   const day = prog.days[effectiveDayIndex];
+  // Only relevant when completedToday — the actual next day up, for a small "Next lift"
+  // pointer rather than making tomorrow's workout the dominant thing on today's card.
+  const nextDayLabel = completedToday ? prog.days[cp.dayIndex]?.label ?? null : null;
   return {
     isComplete: false,
     completedToday,
+    nextDayLabel,
     programName: prog.name,
     dayLabel: day.label,
     dayIndex: effectiveDayIndex,

@@ -466,7 +466,25 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
       ) : (
         <div className="border-2 border-red-700 bg-charcoal-panel p-5 space-y-3">
           <div className="text-[11px] uppercase tracking-widest text-red-600">Today</div>
-          {todayPlan ? (
+          {todayPlan && programDay.completedToday ? (
+            // Today's own workout is the whole story once it's done — no invitation to start
+            // tomorrow's, and no dominant CTA at all (that's what read as "started the next
+            // workout"). A small "Next lift" link is the only nod to what's coming up.
+            <>
+              <div className="flex items-center gap-2 text-green-500 font-bold text-lg">
+                <Check size={18} /> {todayPlan.name}
+              </div>
+              <div className="text-sm text-neutral-400">Completed today</div>
+              {programDay.nextDayLabel && (
+                <button
+                  onClick={() => onNavigate("train")}
+                  className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500 flex items-center gap-1 pt-1"
+                >
+                  Next lift: {programDay.nextDayLabel} <ChevronRight size={12} />
+                </button>
+              )}
+            </>
+          ) : todayPlan ? (
             <>
               <div className="text-2xl font-bold text-white">{todayPlan.name}</div>
               <div className="text-sm text-neutral-400">
@@ -475,16 +493,11 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
               {lastCompletedDaysAgo != null && (
                 <div className="text-xs text-neutral-600">Last completed {lastCompletedDaysAgo === 0 ? "today" : `${lastCompletedDaysAgo} day${lastCompletedDaysAgo === 1 ? "" : "s"} ago`}</div>
               )}
-              {programDay.completedToday && (
-                <div className="text-sm text-green-500 font-bold flex items-center gap-1.5">
-                  <Check size={14} /> Completed today
-                </div>
-              )}
               <button
                 onClick={() => onStartRun(todayPlan, programDay.programContext)}
                 className="w-full py-4 text-sm uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
               >
-                {programDay.completedToday ? "Log another session" : "Start workout"}
+                Start workout
               </button>
             </>
           ) : (
