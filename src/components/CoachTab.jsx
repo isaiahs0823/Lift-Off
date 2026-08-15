@@ -12,9 +12,11 @@ import {
   PHYSIQUE_PHASE_LABEL,
 } from "../utils/athleteProfile.js";
 import { detectCommitment, createCommitment, resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
+import { resolveCoachOnboarding, isExistingCoachUser } from "../utils/coachOnboarding.js";
 import { BODYBUILDING_QUICK_QUESTIONS } from "../coachSpecialties/bodybuilding.js";
-import { COACH_SPECIALTIES } from "../coachSpecialties/index.js";
+import { getSpecialty } from "../coachSpecialties/index.js";
 import AthleteProfileForm from "./AthleteProfileForm.jsx";
+import CoachSpecialtySelect from "./CoachSpecialtySelect.jsx";
 
 const GENERAL_QUICK_QUESTIONS = [
   "What should I do today?",
@@ -34,6 +36,32 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
   const [answer, setAnswer] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(!hasProfile(state));
   const [pendingCommitment, setPendingCommitment] = useState(null);
+
+  const existingCoachUser = isExistingCoachUser(state);
+  const [showSpecialtySelect, setShowSpecialtySelect] = useState(
+    !resolveCoachOnboarding(state).specialtySelected && !existingCoachUser
+  );
+
+  // Existing users (real profile/history/memory already on file) never had a chance to see the
+  // "Select Your Coach" screen — it didn't exist yet. Rather than force them through it,
+  // silently assign them the only specialty that was ever functional (bodybuilding, already
+  // their default) and surface a one-time notice instead (section 9).
+  useEffect(() => {
+    const onboarding = resolveCoachOnboarding(state);
+    if (!onboarding.specialtySelected && existingCoachUser) {
+      updateState((prev) => ({
+        ...prev,
+        coachOnboarding: {
+          ...resolveCoachOnboarding(prev),
+          specialtySelected: true,
+          specialty: resolveProfile(prev).coachSpecialty || "bodybuilding",
+          confirmedAt: new Date().toISOString(),
+          migrationNoticeShown: false,
+        },
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Promotes currently-detected patterns into persisted, evolving Coach memory (and ages out
   // ones that stopped recurring) — a no-op once already in sync for this data, so it's safe to
@@ -119,23 +147,31 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
   const openCommitments = (state.commitments || []).filter((c) => c.status === "active");
   const knowledgeLevel = coachKnowledgeLevel(state);
   const QUICK_QUESTIONS = state.athleteProfile?.coachSpecialty === "bodybuilding" ? BODYBUILDING_QUICK_QUESTIONS : GENERAL_QUICK_QUESTIONS;
+  const onboardingState = resolveCoachOnboarding(state);
 
-  // Options for specialties still "coming_soon" are rendered disabled — the browser itself
-  // blocks selecting them, so this can never silently switch to a specialty with no real logic
-  // behind it (see coachSpecialties/index.js). The fuller preview + "Notify me" flow still
-  // lives in Coach Settings; this is just quick, visible access to the same choice.
-  const setSpecialty = (id) => {
-    updateState((prev) => ({ ...prev, athleteProfile: { ...resolveProfile(prev), coachSpecialty: id, updatedAt: new Date().toISOString() } }));
-  };
+  // First-time selection must happen before Athlete Profile even opens (section 1/6): who's
+  // coaching you, then tell that coach about you. Existing users are migrated straight past
+  // this in the effect above, so they only ever land here on a genuinely first-ever visit.
+  if (showSpecialtySelect) {
+    return (
+      <CoachSpecialtySelect
+        state={state}
+        updateState={updateState}
+        mode="onboarding"
+        onSelectComplete={() => setShowSpecialtySelect(false)}
+      />
+    );
+  }
 
   if (showOnboarding) {
     return <AthleteProfileForm state={state} updateState={updateState} mode="onboarding" onDone={() => setShowOnboarding(false)} onSkip={() => setShowOnboarding(false)} />;
   }
 
-  const activeSpecialty = COACH_SPECIALTIES.find((sp) => sp.id === (state.athleteProfile?.coachSpecialty || "bodybuilding"));
+  const activeSpecialty = getSpecialty(state.athleteProfile?.coachSpecialty || "bodybuilding");
   const phase = state.athleteProfile?.physiquePhase;
   const priorities = state.athleteProfile?.physiquePriorities;
   const hasFocus = priorities?.primary || priorities?.secondary;
+  const showMigrationNotice = existingCoachUser && onboardingState.specialtySelected && !onboardingState.migrationNoticeShown;
 
   return (
     <div className="space-y-6">
@@ -151,6 +187,23 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
       </div>
       <p className="text-xs text-neutral-500 -mt-3">Knows your training. Learns your patterns. Holds you to the plan.</p>
 
+      {showMigrationNotice && (
+        <div className="border border-red-900/40 bg-charcoal-panel p-4 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-bold text-white">Bodybuilding Coach is now active</div>
+            <div className="text-xs text-neutral-500 mt-0.5">You can change your Coach at any time in Coach Settings.</div>
+          </div>
+          <button
+            onClick={() =>
+              updateState((prev) => ({ ...prev, coachOnboarding: { ...resolveCoachOnboarding(prev), migrationNoticeShown: true } }))
+            }
+            className="shrink-0 text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <button
         onClick={() => onNavigate?.("coachSettings")}
         className="w-full text-left border border-neutral-800 bg-charcoal-panel p-4 space-y-1 hover:border-red-700"
@@ -161,22 +214,6 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
           {hasFocus ? ` · Focus: ${[priorities.primary, priorities.secondary].filter(Boolean).join(", ")}` : ""}
         </div>
       </button>
-
-      <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Coach type</label>
-        <select
-          value={state.athleteProfile?.coachSpecialty || "bodybuilding"}
-          onChange={(e) => setSpecialty(e.target.value)}
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
-        >
-          {COACH_SPECIALTIES.map((sp) => (
-            <option key={sp.id} value={sp.id} disabled={sp.status !== "active"}>
-              {sp.label}
-              {sp.status !== "active" ? " (Coming soon)" : ""}
-            </option>
-          ))}
-        </select>
-      </div>
 
       <div className="border border-neutral-800 divide-y divide-neutral-900">
         <button onClick={() => onNavigate?.("coachKnowledge")} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-charcoal-panel">

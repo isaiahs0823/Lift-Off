@@ -87,10 +87,15 @@ function bodyweightPlateau(state) {
     return w.reduce((s, e) => s + e.weight, 0) / w.length;
   };
   const now = new Date();
-  const thisWeekRate = (avgWindow(7, now) ?? null) - (avgWindow(7, weekAgo) ?? null);
   const twoWeeksAgo = new Date(weekAgo.getTime() - 7 * MS_PER_DAY);
-  const lastWeekRate = (avgWindow(7, weekAgo) ?? null) - (avgWindow(7, twoWeeksAgo) ?? null);
-  if (Number.isNaN(thisWeekRate) || Number.isNaN(lastWeekRate)) return null;
+  const thisWeekAvg = avgWindow(7, now);
+  const priorWeekAvg = avgWindow(7, weekAgo);
+  const twoWeeksAgoAvg = avgWindow(7, twoWeeksAgo);
+  // `null - null` coerces to 0 in JS, not NaN — without an explicit null check here, zero
+  // logged bodyweight entries reads as a rate of exactly 0 and falsely claims a plateau.
+  if (thisWeekAvg == null || priorWeekAvg == null || twoWeeksAgoAvg == null) return null;
+  const thisWeekRate = thisWeekAvg - priorWeekAvg;
+  const lastWeekRate = priorWeekAvg - twoWeeksAgoAvg;
   if (Math.abs(thisWeekRate) < 0.25 && Math.abs(lastWeekRate) < 0.25) {
     return { key: "bodyweight_plateau", text: "Bodyweight has been flat for two straight weeks.", tags: ["bodyweight", "weight", "plateau"] };
   }

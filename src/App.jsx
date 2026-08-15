@@ -49,6 +49,7 @@ import ScheduleEditor from "./components/ScheduleEditor.jsx";
 import AthleteProfileForm from "./components/AthleteProfileForm.jsx";
 import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
+import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
@@ -892,6 +893,7 @@ function loadInitialState() {
     commitments: [], // see src/utils/commitments.js
     specialtyInterest: {}, // { [specialtyId]: true } — "Notify me" taps on locked Coach specialties, see src/coachSpecialties
     coachAccess: null, // future trial/subscription scaffold, unenforced — see backupKeyDefault
+    coachOnboarding: null, // { specialtySelected, specialty, confirmedAt, migrationNoticeShown } — see src/utils/coachOnboarding.js
   };
 }
 
@@ -948,13 +950,14 @@ const BACKUP_DATA_KEYS = [
   "commitments",
   "specialtyInterest",
   "coachAccess",
+  "coachOnboarding",
 ];
 
 // Per-key fallback when a key is missing from state entirely (older saves) — objects default
-// to {}, currentProgram/weeklySchedule/athleteProfile/coachAccess to null, everything else
-// (arrays) to [].
+// to {}, currentProgram/weeklySchedule/athleteProfile/coachAccess/coachOnboarding to null,
+// everything else (arrays) to [].
 function backupKeyDefault(key) {
-  if (key === "currentProgram" || key === "weeklySchedule" || key === "athleteProfile" || key === "coachAccess") return null;
+  if (key === "currentProgram" || key === "weeklySchedule" || key === "athleteProfile" || key === "coachAccess" || key === "coachOnboarding") return null;
   if (key === "settings" || key === "exerciseNotes" || key === "specialtyInterest") return {};
   return [];
 }
@@ -1296,6 +1299,7 @@ const SECTION_OF = {
   coachKnowledge: "coach",
   coachProfile: "coach",
   coachSettings: "coach",
+  coachSelect: "coach",
   train: "train",
   log: "train",
   cardio: "train",
@@ -1677,6 +1681,15 @@ export default function LiftLog() {
             {tab === "coachKnowledge" && <CoachKnowledgeScreen state={state} updateState={updateState} onNavigate={setTab} onBack={() => setTab("coach")} />}
             {tab === "coachProfile" && <AthleteProfileForm state={state} updateState={updateState} mode="edit" onDone={() => setTab("coach")} />}
             {tab === "coachSettings" && <CoachSettingsScreen state={state} updateState={updateState} onNavigate={setTab} onBack={() => setTab("coach")} />}
+            {tab === "coachSelect" && (
+              <CoachSpecialtySelect
+                state={state}
+                updateState={updateState}
+                mode="change"
+                onSelectComplete={() => setTab("coachSettings")}
+                onCancel={() => setTab("coachSettings")}
+              />
+            )}
             {tab === "cardio" && (
               <CardioTab
                 state={state}
