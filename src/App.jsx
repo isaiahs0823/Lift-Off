@@ -1471,19 +1471,20 @@ export default function LiftLog() {
     // nothing to grade.
     const coachMessage = summary.exerciseCount > 0 ? generatePostWorkoutReview(summary).message : null;
     const summaryWithCoach = coachMessage ? { ...summary, coachMessage } : summary;
+    const coachHistoryId = coachMessage ? `coach_${Date.now()}` : null;
     updateState((prev) => ({
       ...prev,
       workoutSessions: [summaryWithCoach, ...(prev.workoutSessions || [])],
       ...(coachMessage
         ? {
             coachHistory: [
-              { id: `coach_${Date.now()}`, date: new Date().toISOString(), type: "post_workout", message: coachMessage },
+              { id: coachHistoryId, date: new Date().toISOString(), type: "post_workout", message: coachMessage },
               ...(prev.coachHistory || []),
             ],
           }
         : {}),
     }));
-    setActiveRun((run) => ({ ...run, finished: true, summaryId: summary.id }));
+    setActiveRun((run) => ({ ...run, finished: true, summaryId: summary.id, coachHistoryId }));
     if (activeRun?.programContext) {
       const ctx = activeRun.programContext;
       updateState((prev) => ({
@@ -1495,6 +1496,23 @@ export default function LiftLog() {
         },
       }));
     }
+  };
+  // Undoes exactly what finishRun() committed (the session summary, its coach note, and the
+  // program-day advance) so tapping "Add exercise" from the Session Complete screen can safely
+  // go back to logging — finishing again afterward recomputes everything correctly with the
+  // extra exercise included, instead of leaving a stale summary and a double-advanced program day.
+  const reopenRun = () => {
+    if (!activeRun) return;
+    const { summaryId, coachHistoryId, programContext: ctx } = activeRun;
+    updateState((prev) => {
+      const next = { ...prev, workoutSessions: (prev.workoutSessions || []).filter((s) => s.id !== summaryId) };
+      if (coachHistoryId) next.coachHistory = (prev.coachHistory || []).filter((h) => h.id !== coachHistoryId);
+      if (ctx && prev.currentProgram?.programId === ctx.programId && prev.currentProgram?.source === ctx.source) {
+        next.currentProgram = { ...prev.currentProgram, dayIndex: ctx.dayIndex };
+      }
+      return next;
+    });
+    setActiveRun((run) => ({ ...run, finished: false, summaryId: null, coachHistoryId: null }));
   };
   const exitRun = () => {
     setTab(activeRun?.returnTab || "templates");
@@ -1597,6 +1615,7 @@ export default function LiftLog() {
             onExit={exitRun}
             onSwap={swapRunExercise}
             onAddExercise={addRunExercise}
+            onReopen={reopenRun}
             onLoggedSet={bumpRestTimer}
             onRate={rateSession}
             onAskCoach={() => {
@@ -3280,6 +3299,7 @@ function GuidedRunView({
   onExit,
   onSwap,
   onAddExercise,
+  onReopen,
   onLoggedSet,
   onRate,
   onAskCoach,
@@ -3408,6 +3428,16 @@ function GuidedRunView({
         ) : (
           <div className="text-sm text-neutral-500">Nothing logged this session.</div>
         )}
+
+        <button
+          onClick={() => {
+            onReopen();
+            setAddingExercise(true);
+          }}
+          className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-red-700 hover:text-red-500 flex items-center justify-center gap-1.5"
+        >
+          <Plus size={14} /> Add exercise
+        </button>
 
         <button
           onClick={onExit}
