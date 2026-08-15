@@ -29,9 +29,6 @@ export default function CoachSpecialtySelect({ state, updateState, mode = "onboa
         specialtySelected: true,
         specialty: id,
         confirmedAt: new Date().toISOString(),
-        // An explicit pick through this screen never needs the generic "we migrated you"
-        // banner — that's only for existing users auto-assigned bodybuilding with no picker.
-        migrationNoticeShown: true,
       },
     }));
   };

@@ -897,7 +897,7 @@ function loadInitialState() {
     commitments: [], // see src/utils/commitments.js
     specialtyInterest: {}, // { [specialtyId]: true } — "Notify me" taps on locked Coach specialties, see src/coachSpecialties
     coachAccess: null, // future trial/subscription scaffold, unenforced — see backupKeyDefault
-    coachOnboarding: null, // { specialtySelected, specialty, confirmedAt, migrationNoticeShown } — see src/utils/coachOnboarding.js
+    coachOnboarding: null, // { specialtySelected, specialty, confirmedAt } — see src/utils/coachOnboarding.js
     // ---------------- NUTRITION ----------------
     // See src/utils/nutrition.js for shape helpers/defaults. Kept as flat top-level state keys
     // (not nested under one "nutrition" object) so each piece follows the same persist/backup
