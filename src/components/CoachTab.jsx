@@ -3,9 +3,10 @@ import { BookOpen, Settings as SettingsIcon } from "lucide-react";
 import { buildCoachContext } from "../utils/coachContext.js";
 import { answerCoachQuestion } from "../services/coachService.js";
 import { syncCoachMemory } from "../utils/coachMemory.js";
-import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC } from "../utils/athleteProfile.js";
+import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC, resolveProfile } from "../utils/athleteProfile.js";
 import { detectCommitment, createCommitment, resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
 import { BODYBUILDING_QUICK_QUESTIONS } from "../coachSpecialties/bodybuilding.js";
+import { COACH_SPECIALTIES } from "../coachSpecialties/index.js";
 import AthleteProfileForm from "./AthleteProfileForm.jsx";
 
 const GENERAL_QUICK_QUESTIONS = [
@@ -112,6 +113,14 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
   const knowledgeLevel = coachKnowledgeLevel(state);
   const QUICK_QUESTIONS = state.athleteProfile?.coachSpecialty === "bodybuilding" ? BODYBUILDING_QUICK_QUESTIONS : GENERAL_QUICK_QUESTIONS;
 
+  // Options for specialties still "coming_soon" are rendered disabled — the browser itself
+  // blocks selecting them, so this can never silently switch to a specialty with no real logic
+  // behind it (see coachSpecialties/index.js). The fuller preview + "Notify me" flow still
+  // lives in Coach Settings; this is just quick, visible access to the same choice.
+  const setSpecialty = (id) => {
+    updateState((prev) => ({ ...prev, athleteProfile: { ...resolveProfile(prev), coachSpecialty: id, updatedAt: new Date().toISOString() } }));
+  };
+
   if (showOnboarding) {
     return <AthleteProfileForm state={state} updateState={updateState} mode="onboarding" onDone={() => setShowOnboarding(false)} onSkip={() => setShowOnboarding(false)} />;
   }
@@ -139,6 +148,22 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
         </span>
       </div>
       <p className="text-xs text-neutral-500 -mt-3">Knows your training. Learns your patterns. Holds you to the plan.</p>
+
+      <div>
+        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Coach type</label>
+        <select
+          value={state.athleteProfile?.coachSpecialty || "bodybuilding"}
+          onChange={(e) => setSpecialty(e.target.value)}
+          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+        >
+          {COACH_SPECIALTIES.map((sp) => (
+            <option key={sp.id} value={sp.id} disabled={sp.status !== "active"}>
+              {sp.label}
+              {sp.status !== "active" ? " (Coming soon)" : ""}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {openCommitments.length > 0 && (
         <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-2">
