@@ -12,7 +12,17 @@ export function resolveCurrentProgramDay(state) {
   if (!cp) return null;
   const list = cp.source === "custom" ? state.customPrograms || [] : state.programs || [];
   const prog = list.find((p) => p.id === cp.programId);
-  if (!prog || !prog.days || !prog.days[cp.dayIndex]) return null;
+
+  // dayIndex advances the instant a workout finishes (see finishRun in App.jsx), so by itself
+  // it always points at the *next* day to start. Without this, the Today card would jump
+  // straight to tomorrow's workout the moment today's is logged, instead of staying on today's
+  // day for the rest of the calendar day. lastCompletedAt/lastCompletedDayIndex record what was
+  // actually finished and when, so the resolved day only moves forward once the real date does.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const completedToday = !!(cp.lastCompletedAt && cp.lastCompletedAt.slice(0, 10) === todayStr);
+  const effectiveDayIndex = completedToday && cp.lastCompletedDayIndex != null ? cp.lastCompletedDayIndex : cp.dayIndex;
+
+  if (!prog || !prog.days || !prog.days[effectiveDayIndex]) return null;
 
   const totalWeeks = prog.weeks || null;
   let weekNumber = null;
@@ -25,7 +35,7 @@ export function resolveCurrentProgramDay(state) {
     programId: prog.id,
     programName: prog.name,
     source: cp.source,
-    dayIndex: cp.dayIndex,
+    dayIndex: effectiveDayIndex,
     totalDays: prog.days.length,
   };
 
@@ -33,12 +43,13 @@ export function resolveCurrentProgramDay(state) {
     return { isComplete: true, programName: prog.name, totalWeeks, programContext };
   }
 
-  const day = prog.days[cp.dayIndex];
+  const day = prog.days[effectiveDayIndex];
   return {
     isComplete: false,
+    completedToday,
     programName: prog.name,
     dayLabel: day.label,
-    dayIndex: cp.dayIndex,
+    dayIndex: effectiveDayIndex,
     totalDays: prog.days.length,
     weekNumber,
     totalWeeks,

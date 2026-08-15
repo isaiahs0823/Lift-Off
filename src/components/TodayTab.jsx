@@ -475,11 +475,16 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
               {lastCompletedDaysAgo != null && (
                 <div className="text-xs text-neutral-600">Last completed {lastCompletedDaysAgo === 0 ? "today" : `${lastCompletedDaysAgo} day${lastCompletedDaysAgo === 1 ? "" : "s"} ago`}</div>
               )}
+              {programDay.completedToday && (
+                <div className="text-sm text-green-500 font-bold flex items-center gap-1.5">
+                  <Check size={14} /> Completed today
+                </div>
+              )}
               <button
                 onClick={() => onStartRun(todayPlan, programDay.programContext)}
                 className="w-full py-4 text-sm uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
               >
-                Start workout
+                {programDay.completedToday ? "Log another session" : "Start workout"}
               </button>
             </>
           ) : (

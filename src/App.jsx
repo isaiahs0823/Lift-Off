@@ -1493,14 +1493,22 @@ export default function LiftLog() {
           ...ctx,
           dayIndex: (ctx.dayIndex + 1) % ctx.totalDays,
           startDate: prev.currentProgram?.startDate || new Date().toISOString(),
+          // dayIndex above already points at the *next* day — these two record what was
+          // actually just finished and when, so the Today card keeps showing today's day
+          // (see resolveCurrentProgramDay) instead of jumping to tomorrow's within the same
+          // calendar day.
+          lastCompletedAt: new Date().toISOString(),
+          lastCompletedDayIndex: ctx.dayIndex,
         },
       }));
     }
   };
-  // Undoes exactly what finishRun() committed (the session summary, its coach note, and the
-  // program-day advance) so tapping "Add exercise" from the Session Complete screen can safely
-  // go back to logging — finishing again afterward recomputes everything correctly with the
-  // extra exercise included, instead of leaving a stale summary and a double-advanced program day.
+  // Undoes exactly what finishRun() committed (the session summary, its coach note, the
+  // program-day advance, and the today-completed marker) so tapping "Add exercise" from the
+  // Session Complete screen can safely go back to logging — finishing again afterward
+  // recomputes everything correctly with the extra exercise included, instead of leaving a
+  // stale summary, a double-advanced program day, or a "completed today" Today card pointing
+  // at a session that no longer exists.
   const reopenRun = () => {
     if (!activeRun) return;
     const { summaryId, coachHistoryId, programContext: ctx } = activeRun;
@@ -1508,7 +1516,7 @@ export default function LiftLog() {
       const next = { ...prev, workoutSessions: (prev.workoutSessions || []).filter((s) => s.id !== summaryId) };
       if (coachHistoryId) next.coachHistory = (prev.coachHistory || []).filter((h) => h.id !== coachHistoryId);
       if (ctx && prev.currentProgram?.programId === ctx.programId && prev.currentProgram?.source === ctx.source) {
-        next.currentProgram = { ...prev.currentProgram, dayIndex: ctx.dayIndex };
+        next.currentProgram = { ...prev.currentProgram, dayIndex: ctx.dayIndex, lastCompletedAt: null, lastCompletedDayIndex: null };
       }
       return next;
     });
