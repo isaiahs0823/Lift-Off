@@ -51,6 +51,41 @@ export function phaseFraming(phase) {
   }
 }
 
+// Compares the top comparable set between two sessions of the same exercise and classifies
+// what actually happened — bodybuilding-specific because it treats reps-at-the-same-load and
+// RIR movement as real signal, not just the weight on the bar (sections 10-14). A powerlifting
+// coach would weight this differently; that's the point of specialty-specific reasoning.
+export function interpretSetProgression(prev, curr) {
+  if (!prev || !curr) return null;
+  if (curr.weight > prev.weight) {
+    return { kind: "load_progress", message: `Added load: ${prev.weight} → ${curr.weight} lb.` };
+  }
+  if (curr.weight === prev.weight && curr.reps > prev.reps) {
+    return { kind: "rep_progress", message: `Reps climbed at the same load: ${prev.reps} → ${curr.reps} at ${curr.weight} lb.` };
+  }
+  if (curr.weight === prev.weight && curr.reps === prev.reps) {
+    if (curr.rir != null && prev.rir != null) {
+      if (curr.rir > prev.rir) {
+        return {
+          kind: "effort_progress",
+          message: `Same ${curr.weight} lb × ${curr.reps}, but with more in the tank than last time (${prev.rir} → ${curr.rir} RIR) — that's real improvement, even with no new weight or reps.`,
+        };
+      }
+      if (curr.rir < prev.rir) {
+        return {
+          kind: "effort_regress",
+          message: `Same ${curr.weight} lb × ${curr.reps}, but it took more effort to get there (${prev.rir} → ${curr.rir} RIR) — that's not clearly progress, even though the numbers match.`,
+        };
+      }
+    }
+    return { kind: "flat", message: `Repeated ${curr.weight} lb × ${curr.reps} at the same effort.` };
+  }
+  if (curr.weight < prev.weight || curr.reps < prev.reps) {
+    return { kind: "regressed", message: `Dropped from ${prev.weight} lb × ${prev.reps} to ${curr.weight} lb × ${curr.reps}.` };
+  }
+  return { kind: "flat", message: "No clear change from last time." };
+}
+
 export const BODYBUILDING_QUICK_QUESTIONS = [
   "How was today's workout?",
   "Am I progressing?",

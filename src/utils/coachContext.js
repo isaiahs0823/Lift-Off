@@ -14,6 +14,7 @@ import { detectCoachMemory } from "./coachMemory.js";
 import { hasSchedule, getTodaySchedule, getMissedEntry, computeScheduleAdherence, repeatedScheduleMiss } from "./weeklySchedule.js";
 import { resolveProfile } from "./athleteProfile.js";
 import { retrieveRelevantMemories } from "./coachMemoryStore.js";
+import { weeklyMuscleVolume, muscleVolumeTrend } from "./muscleVolume.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -134,5 +135,9 @@ export function buildCoachContext(state, exMap = {}, queryText = null) {
     activeCommitments: (state.commitments || []).filter((c) => c.status === "active"),
     behavioralPatterns: memories.filter((m) => (m.category === "behavioralPatterns" || m.category === "trainingInsights") && m.status !== "outdated"),
     relevantMemories: retrieveRelevantMemories(memories, queryText, { limit: 3 }),
+    // Specialty-agnostic to compute (just a sum of logged working sets by muscle group) — the
+    // Bodybuilding-specific *interpretation* of these numbers lives in coachService.js, not here.
+    muscleVolume: weeklyMuscleVolume(state, exMap, 7),
+    muscleVolumeTrend: muscleVolumeTrend(state, exMap),
   };
 }

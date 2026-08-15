@@ -5,9 +5,10 @@ import { answerCoachQuestion } from "../services/coachService.js";
 import { syncCoachMemory } from "../utils/coachMemory.js";
 import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC } from "../utils/athleteProfile.js";
 import { detectCommitment, createCommitment, resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
+import { BODYBUILDING_QUICK_QUESTIONS } from "../coachSpecialties/bodybuilding.js";
 import AthleteProfileForm from "./AthleteProfileForm.jsx";
 
-const QUICK_QUESTIONS = [
+const GENERAL_QUICK_QUESTIONS = [
   "What should I do today?",
   "Should I increase weight?",
   "Why has my weight stalled?",
@@ -109,6 +110,7 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
   const history = state.coachHistory || [];
   const openCommitments = (state.commitments || []).filter((c) => c.status === "active");
   const knowledgeLevel = coachKnowledgeLevel(state);
+  const QUICK_QUESTIONS = state.athleteProfile?.coachSpecialty === "bodybuilding" ? BODYBUILDING_QUICK_QUESTIONS : GENERAL_QUICK_QUESTIONS;
 
   if (showOnboarding) {
     return <AthleteProfileForm state={state} updateState={updateState} mode="onboarding" onDone={() => setShowOnboarding(false)} onSkip={() => setShowOnboarding(false)} />;

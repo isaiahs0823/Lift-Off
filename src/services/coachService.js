@@ -345,6 +345,72 @@ function answerReview30(context, state) {
   const review = computeWeeklyReview(state, 30);
   return generateWeeklyReview(review, context?.schedule?.weeklyAdherence ? computeScheduleAdherence(state, 30) : null);
 }
+function answerReviewWeek(context, state) {
+  if (!state) return { message: "History not available." };
+  const review = computeWeeklyReview(state, 7);
+  return generateWeeklyReview(review, context?.schedule?.weeklyAdherence ? computeScheduleAdherence(state, 7) : null);
+}
+
+// ---------- Bodybuilding-specialty answers (section 24) ----------
+// Bodybuilding is the only functional Coach specialty right now (see src/coachSpecialties) —
+// these read directly from context.muscleVolume/muscleVolumeTrend (computed generically in
+// coachContext.js) and context.athleteProfile's physiquePhase/physiquePriorities.
+
+function answerVolumeCheck(context) {
+  const volume = context.muscleVolume || {};
+  const entries = Object.entries(volume).sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) return { message: "No sets logged this week yet — nothing to judge volume against." };
+  const summary = entries.map(([m, c]) => `${m} ${c}`).join(", ");
+  return {
+    message: `This week: ${summary}. Nothing here reads as excessive on its own — volume is only a problem if performance or recovery is actually suffering for it, and that's not showing up yet.`,
+  };
+}
+
+function answerWeakestMuscle(context) {
+  const trend = context.muscleVolumeTrend || {};
+  const declining = Object.entries(trend).filter(([, t]) => t === "down");
+  const primary = context.athleteProfile?.physiquePriorities?.primary;
+  if (primary) {
+    const primaryVolume = (context.muscleVolume || {})[primary] || 0;
+    if (primaryVolume === 0) return { message: `${primary} is your stated priority but hasn't been trained this week — that's the actual gap.` };
+  }
+  if (declining.length > 0) {
+    return { message: `${declining.map(([m]) => m).join(", ")} volume dropped versus last week. That's the one worth watching.` };
+  }
+  return { message: "Nothing stands out as falling behind this week — volume is holding across the board." };
+}
+
+function answerChangeExercises(context) {
+  const stalling = context.coachMemory?.find((m) => m.key === "stalling_exercises");
+  if (stalling) return { message: `${stalling.text} That's worth swapping or adjusting — everything else is progressing, leave that alone.` };
+  return { message: "Nothing here has stalled long enough to justify swapping it out. Keep executing before changing exercises." };
+}
+
+function answerPhaseCheck(context) {
+  const phase = context.athleteProfile?.physiquePhase;
+  if (phase !== "cut" && phase !== "contest_prep") {
+    return { message: "You're not currently set to a Cut phase — set that in Coach Settings under Current Phase if you want cut-specific check-ins." };
+  }
+  const weeklyRate = context.recentWeightTrend?.weeklyRate;
+  const adherence = context.adherence?.overall;
+  const parts = [];
+  if (weeklyRate != null) parts.push(`Bodyweight is trending ${weeklyRate < 0 ? "down" : "up"} ${Math.abs(weeklyRate).toFixed(1)} lb/week.`);
+  if (adherence != null) parts.push(`Training adherence is ${adherence}%.`);
+  if (weeklyRate != null && weeklyRate < 0 && adherence != null && adherence >= 80) {
+    parts.push("Exactly where you want it. Weight is moving and training is holding. Don't change anything.");
+  } else if (weeklyRate != null && weeklyRate >= 0) {
+    parts.push("Weight isn't trending down — worth a look at adherence and intake before touching training.");
+  }
+  return { message: parts.length > 0 ? parts.join(" ") : "Log a few more bodyweight entries and I can grade the cut properly." };
+}
+
+function answerRecoveryCheck(context) {
+  const readiness = context.readiness;
+  if (!readiness?.loggedToday) return { message: "No readiness check-in today — log one and I can give you a real answer." };
+  if (readiness.band === "red") return { message: `Readiness is RED (${readiness.score}). Recovery is behind — prioritize sleep and back off intensity today.` };
+  if (readiness.band === "yellow") return { message: `Readiness is YELLOW (${readiness.score}). Recovering, but not fully. Fine to train, keep it controlled.` };
+  return { message: `Readiness is GREEN (${readiness.score}). Recovery looks good.` };
+}
 
 export function answerCoachQuestion(question, context, state) {
   if (isSafetyDeflection(question)) return { message: SAFETY_RESPONSE };
@@ -356,10 +422,16 @@ export function answerCoachQuestion(question, context, state) {
   else if (/i'?ve been (training|working out|going)( to the gym)? (hard|consistently|every day|non-?stop)|i'?ve been consistent|i'?m doing everything right|haven'?t missed (a|any) (workout|session)/.test(q))
     result = answerClaimCheck(context);
   else if (/increase weight|add weight|more weight|heavier/.test(q)) result = answerIncreaseWeight(context);
+  else if (/volume too high|too much volume|volume.*high/.test(q)) result = answerVolumeCheck(context);
+  else if (/falling behind|muscle group.*behind|behind.*muscle/.test(q)) result = answerWeakestMuscle(context);
+  else if (/change exercises|swap exercises|different exercises/.test(q)) result = answerChangeExercises(context);
+  else if (/how is my cut|cut going|cutting.*going/.test(q)) result = answerPhaseCheck(context);
+  else if (/am i recovering|recovering\?|recovery.*ok/.test(q)) result = answerRecoveryCheck(context);
   else if (/stall|plateau|stuck/.test(q)) result = answerStalled(context);
   else if (/sore/.test(q)) result = answerSoreness(context);
   else if (/last 30|30 days|past month/.test(q)) result = answerReview30(context, state);
-  else if (/review.*today|today.*session/.test(q)) result = answerReviewToday(context, state);
+  else if (/review my week|review this week/.test(q)) result = answerReviewWeek(context, state);
+  else if (/how was today.*workout|review.*today|today.*session/.test(q)) result = answerReviewToday(context, state);
   else if (/doing wrong|what's wrong|going wrong/.test(q)) result = answerWhatWrong(context);
   else if (/progress|on track/.test(q)) result = answerProgress(context);
   else result = { message: `${fmtGoalLine(context.userGoal)} Adherence this week: ${context.adherence.overall}%. Ask about today's session, progress, or a specific lift for more.` };
