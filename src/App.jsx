@@ -1285,16 +1285,17 @@ function bestCardioStat(exId, cardioLogs) {
 const TOP_TABS = [
   { id: "today", label: "Today", icon: Home },
   { id: "train", label: "Train", icon: Dumbbell },
+  { id: "coach", label: "Coach", icon: MessageCircle },
   { id: "progress", label: "Progress", icon: Scale },
   { id: "more", label: "More", icon: MoreHorizontal },
 ];
 const SECTION_OF = {
   today: "today",
   mission: "today",
-  coach: "today",
-  coachKnowledge: "today",
-  coachProfile: "today",
-  coachSettings: "today",
+  coach: "coach",
+  coachKnowledge: "coach",
+  coachProfile: "coach",
+  coachSettings: "coach",
   train: "train",
   log: "train",
   cardio: "train",

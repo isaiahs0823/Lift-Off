@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { BookOpen, Settings as SettingsIcon } from "lucide-react";
+import { BookOpen, Settings as SettingsIcon, ChevronRight } from "lucide-react";
 import { buildCoachContext } from "../utils/coachContext.js";
 import { answerCoachQuestion } from "../services/coachService.js";
 import { syncCoachMemory } from "../utils/coachMemory.js";
-import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC, resolveProfile } from "../utils/athleteProfile.js";
+import {
+  hasProfile,
+  coachKnowledgeLevel,
+  KNOWLEDGE_LEVEL_LABEL,
+  KNOWLEDGE_LEVEL_DESC,
+  resolveProfile,
+  PHYSIQUE_PHASE_LABEL,
+} from "../utils/athleteProfile.js";
 import { detectCommitment, createCommitment, resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
 import { BODYBUILDING_QUICK_QUESTIONS } from "../coachSpecialties/bodybuilding.js";
 import { COACH_SPECIALTIES } from "../coachSpecialties/index.js";
@@ -15,7 +22,7 @@ const GENERAL_QUICK_QUESTIONS = [
   "Why has my weight stalled?",
   "Should I train through soreness?",
   "How is my progress?",
-  "What am I doing wrong?",
+  "What is holding me back?",
   "Am I on track?",
   "Review today's session.",
   "Review my last 30 days.",
@@ -125,29 +132,35 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
     return <AthleteProfileForm state={state} updateState={updateState} mode="onboarding" onDone={() => setShowOnboarding(false)} onSkip={() => setShowOnboarding(false)} />;
   }
 
+  const activeSpecialty = COACH_SPECIALTIES.find((sp) => sp.id === (state.athleteProfile?.coachSpecialty || "bodybuilding"));
+  const phase = state.athleteProfile?.physiquePhase;
+  const priorities = state.athleteProfile?.physiquePriorities;
+  const hasFocus = priorities?.primary || priorities?.secondary;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Coach</div>
-          <div className="text-xl font-bold text-white mt-1">BRK Coach</div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => onNavigate?.("coachKnowledge")} className="text-neutral-500 hover:text-red-500 p-1" title="What Coach knows about you">
-            <BookOpen size={18} />
-          </button>
-          <button onClick={() => onNavigate?.("coachSettings")} className="text-neutral-500 hover:text-red-500 p-1" title="Coach settings">
-            <SettingsIcon size={18} />
-          </button>
-        </div>
+      <div>
+        <div className="text-[11px] uppercase tracking-widest text-red-600">Coach</div>
+        <div className="text-xl font-bold text-white mt-1">BRK Coach</div>
       </div>
       {/* Reflects data volume only — not a gamified level or any claim of insight (section 45). */}
       <div className="flex items-center gap-1.5 -mt-4">
         <span className="text-[10px] uppercase tracking-widest text-neutral-600" title={KNOWLEDGE_LEVEL_DESC[knowledgeLevel]}>
-          {KNOWLEDGE_LEVEL_LABEL[knowledgeLevel]}
+          Coach Context: {KNOWLEDGE_LEVEL_LABEL[knowledgeLevel]}
         </span>
       </div>
       <p className="text-xs text-neutral-500 -mt-3">Knows your training. Learns your patterns. Holds you to the plan.</p>
+
+      <button
+        onClick={() => onNavigate?.("coachSettings")}
+        className="w-full text-left border border-neutral-800 bg-charcoal-panel p-4 space-y-1 hover:border-red-700"
+      >
+        <div className="text-[11px] uppercase tracking-widest text-neutral-500">{activeSpecialty?.label || "Coach"}</div>
+        <div className="text-sm text-neutral-300">
+          {phase ? PHYSIQUE_PHASE_LABEL[phase] || "General Hypertrophy" : "General Hypertrophy"}
+          {hasFocus ? ` · Focus: ${[priorities.primary, priorities.secondary].filter(Boolean).join(", ")}` : ""}
+        </div>
+      </button>
 
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Coach type</label>
@@ -165,9 +178,24 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
         </select>
       </div>
 
+      <div className="border border-neutral-800 divide-y divide-neutral-900">
+        <button onClick={() => onNavigate?.("coachKnowledge")} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-charcoal-panel">
+          <span className="flex items-center gap-2 text-sm text-neutral-200">
+            <BookOpen size={16} className="text-neutral-500" /> What Coach Knows About You
+          </span>
+          <ChevronRight size={16} className="text-neutral-600" />
+        </button>
+        <button onClick={() => onNavigate?.("coachSettings")} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-charcoal-panel">
+          <span className="flex items-center gap-2 text-sm text-neutral-200">
+            <SettingsIcon size={16} className="text-neutral-500" /> Coach Settings
+          </span>
+          <ChevronRight size={16} className="text-neutral-600" />
+        </button>
+      </div>
+
       {openCommitments.length > 0 && (
         <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Your commitments</div>
+          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Active Commitments</div>
           {openCommitments.map((c) => {
             const progress = c.type !== "custom" ? commitmentProgress(state, c) : null;
             return (

@@ -96,4 +96,5 @@ export const BODYBUILDING_QUICK_QUESTIONS = [
   "How is my cut going?",
   "Am I recovering?",
   "Review my week.",
+  "What is holding me back?",
 ];

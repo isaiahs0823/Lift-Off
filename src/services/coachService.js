@@ -471,7 +471,7 @@ export function answerCoachQuestion(question, context, state) {
   else if (/last 30|30 days|past month/.test(q)) result = answerReview30(context, state);
   else if (/review my week|review this week/.test(q)) result = answerReviewWeek(context, state);
   else if (/how was today.*workout|review.*today|today.*session/.test(q)) result = answerReviewToday(context, state);
-  else if (/doing wrong|what's wrong|going wrong/.test(q)) result = answerWhatWrong(context);
+  else if (/doing wrong|what's wrong|going wrong|holding me back|held back/.test(q)) result = answerWhatWrong(context);
   else if (/progress|on track/.test(q)) result = answerProgress(context);
   else result = { message: `${fmtGoalLine(context.userGoal)} Adherence this week: ${context.adherence.overall}%. Ask about today's session, progress, or a specific lift for more.` };
 
