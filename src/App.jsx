@@ -4043,6 +4043,16 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
   const isComplete = (progId) => isCurrent(progId) && currentProgramDay?.isComplete;
   const isCurrentCustom = (progId) => state.currentProgram?.source === "custom" && state.currentProgram.programId === progId;
   const isCompleteCustom = (progId) => isCurrentCustom(progId) && currentProgramDay?.isComplete;
+  // Manually corrects which day the active program is parked on — for when it's drifted from
+  // where the athlete actually is (e.g. dayIndex already advanced past a day before this
+  // tracking existed, or a day was skipped/repeated outside the normal finish-a-workout flow).
+  // Unlike "Start workout," this doesn't log anything — it just repoints the Today card.
+  const setCurrentProgramDay = (di) => {
+    updateState((prev) => ({
+      ...prev,
+      currentProgram: { ...prev.currentProgram, dayIndex: di, lastCompletedAt: null, lastCompletedDayIndex: null },
+    }));
+  };
 
   if (detail?.kind === "customPlan") {
     const p = state.customPlans.find((pl) => pl.id === detail.id);
@@ -4096,17 +4106,24 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
                   <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Next up</span>
                 )}
               </span>
-              <button
-                onClick={() =>
-                  onStartRun(
-                    { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
-                    { programId: prog.id, programName: prog.name, source: "custom", dayIndex: di, totalDays: prog.days.length }
-                  )
-                }
-                className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
-              >
-                <ChevronRight size={11} /> Start workout
-              </button>
+              <div className="flex items-center gap-3">
+                {isCurrentCustom(prog.id) && state.currentProgram.dayIndex !== di && (
+                  <button onClick={() => setCurrentProgramDay(di)} className="text-[11px] text-neutral-500 hover:text-neutral-300">
+                    Set as today
+                  </button>
+                )}
+                <button
+                  onClick={() =>
+                    onStartRun(
+                      { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
+                      { programId: prog.id, programName: prog.name, source: "custom", dayIndex: di, totalDays: prog.days.length }
+                    )
+                  }
+                  className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+                >
+                  <ChevronRight size={11} /> Start workout
+                </button>
+              </div>
             </div>
             <div className="space-y-1.5">
               {day.exercises.map((e, i) => (
@@ -4159,6 +4176,11 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
                 )}
               </span>
               <div className="flex items-center gap-3">
+                {isCurrent(prog.id) && state.currentProgram.dayIndex !== di && (
+                  <button onClick={() => setCurrentProgramDay(di)} className="text-[11px] text-neutral-500 hover:text-neutral-300">
+                    Set as today
+                  </button>
+                )}
                 <button
                   onClick={() =>
                     onStartRun(
