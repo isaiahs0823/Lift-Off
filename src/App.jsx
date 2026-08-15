@@ -31,6 +31,7 @@ import {
   Copy,
   Home,
   MoreHorizontal,
+  Pencil,
 } from "lucide-react";
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
@@ -2836,12 +2837,34 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [addingExtra, setAddingExtra] = useState(false);
+  const [editingSetIndex, setEditingSetIndex] = useState(null);
+  const [editWeight, setEditWeight] = useState("");
+  const [editReps, setEditReps] = useState("");
 
   const chips = rirSystem === "rpe" ? RPE_CHIPS : RIR_CHIPS;
   const showDraft = confirmedSets.length < targetSetCount || addingExtra;
 
   const bumpWeight = (delta) => setWeight((w) => Math.max(0, (Number(w) || 0) + delta));
   const bumpReps = (delta) => setReps((r) => Math.max(0, (Number(r) || 0) + delta));
+
+  // Mid-exercise correction (a fat-fingered weight/reps entry shouldn't have to wait until the
+  // whole workout is finished and edited from history) — edits the already-confirmed set in
+  // place, preserving its rir/rpe/setType/drops, before it's ever written to state.logs.
+  const startEditSet = (i) => {
+    setEditingSetIndex(i);
+    setEditWeight(String(confirmedSets[i].weight));
+    setEditReps(String(confirmedSets[i].reps));
+  };
+  const cancelEditSet = () => setEditingSetIndex(null);
+  const saveEditSet = () => {
+    if (editWeight === "" || editReps === "") return;
+    const i = editingSetIndex;
+    setConfirmedSets((prev) => {
+      const merged = cleanSetsInput([{ ...prev[i], weight: editWeight, reps: editReps }])[0];
+      return prev.map((s, idx) => (idx === i ? merged : s));
+    });
+    setEditingSetIndex(null);
+  };
 
   const saveSet = () => {
     if (weight === "" || reps === "") return;
@@ -2939,12 +2962,45 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
 
       {confirmedSets.length > 0 && (
         <div className="space-y-1">
-          {confirmedSets.map((s, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm text-neutral-300">
-              <Check size={13} className="text-green-500 shrink-0" />
-              Set {i + 1}: {formatSetVerbose(s)}
-            </div>
-          ))}
+          {confirmedSets.map((s, i) =>
+            editingSetIndex === i ? (
+              <div key={i} className="flex items-center gap-2 text-sm border border-red-900/40 bg-charcoal-panel p-2">
+                <span className="text-neutral-500 shrink-0">Set {i + 1}:</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={editWeight}
+                  onChange={(e) => setEditWeight(e.target.value)}
+                  className="w-16 bg-charcoal-deep border border-neutral-800 text-white text-center px-1 py-1 focus:outline-none focus:border-red-700"
+                />
+                <span className="text-neutral-600 text-xs">lb x</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={editReps}
+                  onChange={(e) => setEditReps(e.target.value)}
+                  className="w-14 bg-charcoal-deep border border-neutral-800 text-white text-center px-1 py-1 focus:outline-none focus:border-red-700"
+                />
+                <span className="text-neutral-600 text-xs">reps</span>
+                <button onClick={saveEditSet} className="ml-auto shrink-0 text-green-500 hover:text-green-400 p-1">
+                  <Check size={16} />
+                </button>
+                <button onClick={cancelEditSet} className="shrink-0 text-neutral-500 hover:text-red-500 p-1">
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <div key={i} className="flex items-center gap-2 text-sm text-neutral-300">
+                <Check size={13} className="text-green-500 shrink-0" />
+                <span className="flex-1">
+                  Set {i + 1}: {formatSetVerbose(s)}
+                </span>
+                <button onClick={() => startEditSet(i)} className="shrink-0 text-neutral-600 hover:text-red-500 p-1" aria-label={`Edit set ${i + 1}`}>
+                  <Pencil size={13} />
+                </button>
+              </div>
+            )
+          )}
         </div>
       )}
 
