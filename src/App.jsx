@@ -2914,7 +2914,10 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
   const targetSetCount = exSlot?.sets || recentForEx[0]?.sets.length || 3;
 
   const [confirmedSets, setConfirmedSets] = useState([]);
-  const [weight, setWeight] = useState(suggestion.suggestion ?? "");
+  // Defaults to 0, not "", when there's no suggestion (a brand-new exercise — exactly the
+  // common case right after "Add exercise"): an empty weight field left Save Set silently
+  // disabled with no obvious reason, reading as broken rather than "type a number first."
+  const [weight, setWeight] = useState(suggestion.suggestion ?? 0);
   const [reps, setReps] = useState(suggestion.targetReps ?? 8);
   const [rirVal, setRirVal] = useState("");
   const [setType, setSetType] = useState("working");
@@ -3043,7 +3046,9 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
           </span>
         </div>
       )}
-      {suggestion.reason && <div className="text-xs text-neutral-500">{suggestion.reason}</div>}
+      {suggestion.reason && (
+        <div className={`text-xs ${suggestion.suggestion == null ? "text-yellow-500" : "text-neutral-500"}`}>{suggestion.reason}</div>
+      )}
 
       {confirmedSets.length > 0 && (
         <div className="space-y-1">
