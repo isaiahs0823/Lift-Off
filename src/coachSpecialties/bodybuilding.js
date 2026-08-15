@@ -51,6 +51,35 @@ export function phaseFraming(phase) {
   }
 }
 
+// Nutrition section 38 — how the Bodybuilding Coach reads nutrition data specifically depends
+// on physique phase, same "what counts as good" reasoning as phaseFraming() above but applied
+// to the nutrition side (weight trend + adherence) instead of the training side.
+export function nutritionPhaseFraming(phase) {
+  switch (phase) {
+    case "cut":
+    case "contest_prep":
+      return {
+        emphasis: "fat_loss_retention",
+        text: "Cutting: judged on fat loss while holding onto muscle and training performance — not just how fast the scale drops.",
+      };
+    case "lean_gain":
+    case "mass":
+      return {
+        emphasis: "controlled_gain",
+        text: "Building: judged on muscle gain with a controlled, deliberate bodyweight trend — not how fast the scale climbs.",
+      };
+    case "recomposition":
+      return {
+        emphasis: "long_horizon_composition",
+        text: "Recomping: judged on performance and body-composition trends over a longer horizon — week-to-week scale movement is expected to be noisy.",
+      };
+    case "maintenance":
+      return { emphasis: "stability", text: "Maintaining: judged on bodyweight stability and training performance." };
+    default:
+      return { emphasis: "general", text: "General hypertrophy: judged on progressive overload with a stable-to-slightly-favorable bodyweight trend." };
+  }
+}
+
 // Compares the top comparable set between two sessions of the same exercise and classifies
 // what actually happened — bodybuilding-specific because it treats reps-at-the-same-load and
 // RIR movement as real signal, not just the weight on the bar (sections 10-14). A powerlifting

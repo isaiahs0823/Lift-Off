@@ -50,6 +50,10 @@ import AthleteProfileForm from "./components/AthleteProfileForm.jsx";
 import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
+import NutritionHome from "./components/NutritionHome.jsx";
+import FoodLogScreen from "./components/FoodLogScreen.jsx";
+import MealPlanView from "./components/MealPlanView.jsx";
+import NutritionCheckInScreen from "./components/NutritionCheckInScreen.jsx";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
@@ -894,6 +898,19 @@ function loadInitialState() {
     specialtyInterest: {}, // { [specialtyId]: true } — "Notify me" taps on locked Coach specialties, see src/coachSpecialties
     coachAccess: null, // future trial/subscription scaffold, unenforced — see backupKeyDefault
     coachOnboarding: null, // { specialtySelected, specialty, confirmedAt, migrationNoticeShown } — see src/utils/coachOnboarding.js
+    // ---------------- NUTRITION ----------------
+    // See src/utils/nutrition.js for shape helpers/defaults. Kept as flat top-level state keys
+    // (not nested under one "nutrition" object) so each piece follows the same persist/backup
+    // convention as every other data type here, and so a future cloud sync can map each entity
+    // to its own table without an unpacking step.
+    nutritionProfile: null, // assessment answers + realistic-adherence + control level — Layer 1, mirrors athleteProfile.js
+    nutritionTargets: null, // { calories, protein, carbs, fat, estimatedMaintenance, method, history: [...] }
+    foodLogs: [], // { id, date, time, meal, food, servingDesc, calories, protein, carbs, fat, fiber?, source }
+    savedFoods: [], // { id, name, servingDesc, calories, protein, carbs, fat, fiber?, lastUsedAt }
+    savedMeals: [], // { id, name, items: [{ name, calories, protein, carbs, fat }], totals, lastUsedAt }
+    nutritionMealPlan: null, // generated FULL MEAL PLAN — { meals: [{ id, label, time, items, totals }], generatedAt }
+    nutritionCheckIns: [], // { id, date, hunger, energy, trainingPerformance, difficulty (1-5), events, canRepeat }
+    nutritionCoachAdjustments: [], // { id, date, fromCalories, toCalories, fromMacros, toMacros, reason, status }
   };
 }
 
@@ -951,13 +968,31 @@ const BACKUP_DATA_KEYS = [
   "specialtyInterest",
   "coachAccess",
   "coachOnboarding",
+  "nutritionProfile",
+  "nutritionTargets",
+  "foodLogs",
+  "savedFoods",
+  "savedMeals",
+  "nutritionMealPlan",
+  "nutritionCheckIns",
+  "nutritionCoachAdjustments",
 ];
 
 // Per-key fallback when a key is missing from state entirely (older saves) — objects default
-// to {}, currentProgram/weeklySchedule/athleteProfile/coachAccess/coachOnboarding to null,
-// everything else (arrays) to [].
+// to {}, currentProgram/weeklySchedule/athleteProfile/coachAccess/coachOnboarding/
+// nutritionProfile/nutritionTargets/nutritionMealPlan to null, everything else (arrays) to [].
 function backupKeyDefault(key) {
-  if (key === "currentProgram" || key === "weeklySchedule" || key === "athleteProfile" || key === "coachAccess" || key === "coachOnboarding") return null;
+  if (
+    key === "currentProgram" ||
+    key === "weeklySchedule" ||
+    key === "athleteProfile" ||
+    key === "coachAccess" ||
+    key === "coachOnboarding" ||
+    key === "nutritionProfile" ||
+    key === "nutritionTargets" ||
+    key === "nutritionMealPlan"
+  )
+    return null;
   if (key === "settings" || key === "exerciseNotes" || key === "specialtyInterest") return {};
   return [];
 }
@@ -1300,6 +1335,10 @@ const SECTION_OF = {
   coachProfile: "coach",
   coachSettings: "coach",
   coachSelect: "coach",
+  nutrition: "coach",
+  nutritionLog: "coach",
+  nutritionMealPlan: "coach",
+  nutritionCheckIn: "coach",
   train: "train",
   log: "train",
   cardio: "train",
@@ -1690,6 +1729,10 @@ export default function LiftLog() {
                 onCancel={() => setTab("coachSettings")}
               />
             )}
+            {tab === "nutrition" && <NutritionHome state={state} updateState={updateState} onNavigate={setTab} />}
+            {tab === "nutritionLog" && <FoodLogScreen state={state} updateState={updateState} onBack={() => setTab("nutrition")} />}
+            {tab === "nutritionMealPlan" && <MealPlanView state={state} updateState={updateState} onBack={() => setTab("nutrition")} />}
+            {tab === "nutritionCheckIn" && <NutritionCheckInScreen state={state} updateState={updateState} onBack={() => setTab("nutrition")} />}
             {tab === "cardio" && (
               <CardioTab
                 state={state}

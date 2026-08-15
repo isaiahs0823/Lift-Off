@@ -62,6 +62,24 @@ export function paceClassification(weeklyRate, targetWeeklyRate) {
   return "slow";
 }
 
+// Checks `weeks` trailing weekly windows and requires every one of them to show near-zero
+// change — "flat for 3 weeks," not "flat this week." Returns false (not "flat") when there
+// isn't enough history to back the claim, same never-react-to-one-data-point rule as the rest
+// of this file. Used by nutrition's plan-vs-adherence reasoning (section 19/20 of the
+// nutrition spec) as well as anywhere else a genuine bodyweight plateau needs checking.
+export function isFlatTrend(entries, weeks = 3, thresholdPerWeek = 0.25) {
+  const now = new Date();
+  for (let i = 0; i < weeks; i++) {
+    const asOf = new Date(now.getTime() - i * 7 * MS_PER_DAY);
+    const priorAsOf = new Date(asOf.getTime() - 7 * MS_PER_DAY);
+    const recentAvg = rollingAverage(entries, "weight", 7, asOf);
+    const priorAvg = rollingAverage(entries, "weight", 7, priorAsOf);
+    if (recentAvg == null || priorAvg == null) return false;
+    if (Math.abs(recentAvg - priorAvg) >= thresholdPerWeek) return false;
+  }
+  return true;
+}
+
 export const PACE_LABEL = {
   no_data: "Not enough data yet",
   stalled: "Stalled",

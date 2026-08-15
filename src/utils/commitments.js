@@ -11,17 +11,50 @@ const TYPE_KEYWORDS = {
   workout: /workouts?|sessions?|lifts?|lifting|training\s*days?/i,
 };
 const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7 };
+const MACRO_KEYWORDS = { protein: "protein", calories: "calories", carbs: "carbs", carbohydrates: "carbs", fat: "fat" };
+
+function wordToNumber(numWord) {
+  return NUMBER_WORDS[numWord.toLowerCase()] ?? parseInt(numWord, 10);
+}
+
+// Nutrition section 32: two additional narrow, well-defined phrasings — kept just as strict as
+// the training patterns below, and just as gradable against real logged data (dailyTotals /
+// foodLogs), not a general free-text nutrition-intent parser.
+function detectNutritionCommitment(text) {
+  const macroMatch = (text || "").match(
+    /\b(?:i'?m|i will|i'?ll)\s+(?:hit|hitting|reach|reaching)\s+(?:at least\s+)?(\d+)\s*g?\s*(protein|calories|carbs|carbohydrates|fat)\s+(\d+|one|two|three|four|five|six|seven)\s+days?\s+(?:this|next)?\s*week\b/i
+  );
+  if (macroMatch) {
+    const macroTarget = parseInt(macroMatch[1], 10);
+    const macro = MACRO_KEYWORDS[macroMatch[2].toLowerCase()];
+    const target = wordToNumber(macroMatch[3]);
+    if (macroTarget > 0 && target >= 1 && target <= 7) {
+      return { text: `hit ${macroTarget}g ${macro} ${target} days this week`, type: "nutrition_macro", target, macro, macroTarget, period: "this_week" };
+    }
+  }
+
+  const logMatch = (text || "").match(/\b(?:i'?m|i will|i'?ll)\s+log(?:ging)?\s+(?:everything|my food|all my food)\s+(?:for\s+)?(\d+|one|two|three|four|five|six|seven)\s+days?\b/i);
+  if (logMatch) {
+    const target = wordToNumber(logMatch[1]);
+    if (target >= 1 && target <= 14) {
+      return { text: `log everything ${target} days`, type: "nutrition_logging", target, period: "this_week" };
+    }
+  }
+  return null;
+}
 
 // Matches "I'm doing/I will do/I'll complete <N> <thing> this/next week" — case-insensitive,
 // N as a digit or spelled-out word up to seven. Returns null for anything else, including
 // vaguer statements like "I should train more this week."
 export function detectCommitment(text) {
+  const nutrition = detectNutritionCommitment(text);
+  if (nutrition) return nutrition;
+
   const m = (text || "").match(
     /\b(?:i'?m|i will|i'?ll)\s+(?:doing|do|complete|completing)\s+(\d+|one|two|three|four|five|six|seven)\s+([a-z\s]+?)\s+(this|next)\s+week\b/i
   );
   if (!m) return null;
-  const numWord = m[1].toLowerCase();
-  const target = NUMBER_WORDS[numWord] ?? parseInt(numWord, 10);
+  const target = wordToNumber(m[1]);
   if (!target || target < 1 || target > 14) return null;
   const rawType = m[2].trim();
   let type = "custom";
@@ -43,7 +76,7 @@ function weekRange(period) {
   return { start, end };
 }
 
-export function createCommitment({ text, type, target, period }) {
+export function createCommitment({ text, type, target, period, macro, macroTarget }) {
   const { start, end } = weekRange(period);
   const now = new Date().toISOString();
   return {
@@ -52,6 +85,8 @@ export function createCommitment({ text, type, target, period }) {
     type,
     target,
     period,
+    macro, // "protein" | "calories" | "carbs" | "fat" — only set for type "nutrition_macro"
+    macroTarget, // gram/kcal threshold that counts as "hit" that day
     startDate: start.toISOString(),
     endDate: end.toISOString(),
     status: "active",
@@ -74,6 +109,18 @@ function countActuals(state, commitment) {
   }
   if (commitment.type === "workout") {
     return (state.workoutSessions || []).filter((s) => inRange(s.finishedAt)).length;
+  }
+  if (commitment.type === "nutrition_macro") {
+    const byDate = {};
+    (state.foodLogs || []).forEach((f) => {
+      if (!inRange(f.date)) return;
+      byDate[f.date] = (byDate[f.date] || 0) + (f[commitment.macro] || 0);
+    });
+    return Object.values(byDate).filter((v) => v >= commitment.macroTarget).length;
+  }
+  if (commitment.type === "nutrition_logging") {
+    const daysLogged = new Set((state.foodLogs || []).filter((f) => inRange(f.date)).map((f) => f.date));
+    return daysLogged.size;
   }
   return null;
 }

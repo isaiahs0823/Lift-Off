@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { BookOpen, Settings as SettingsIcon, ChevronRight } from "lucide-react";
+import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple } from "lucide-react";
 import { buildCoachContext } from "../utils/coachContext.js";
 import { answerCoachQuestion } from "../services/coachService.js";
 import { syncCoachMemory } from "../utils/coachMemory.js";
@@ -225,6 +225,12 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
         <button onClick={() => onNavigate?.("coachSettings")} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-charcoal-panel">
           <span className="flex items-center gap-2 text-sm text-neutral-200">
             <SettingsIcon size={16} className="text-neutral-500" /> Coach Settings
+          </span>
+          <ChevronRight size={16} className="text-neutral-600" />
+        </button>
+        <button onClick={() => onNavigate?.("nutrition")} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-charcoal-panel">
+          <span className="flex items-center gap-2 text-sm text-neutral-200">
+            <Apple size={16} className="text-neutral-500" /> Nutrition Plan
           </span>
           <ChevronRight size={16} className="text-neutral-600" />
         </button>

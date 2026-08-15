@@ -8,6 +8,7 @@
 
 import { upsertObservedMemory, decayMemory } from "./coachMemoryStore.js";
 import { repeatedScheduleMiss } from "./weeklySchedule.js";
+import { detectNutritionMemory, NUTRITION_DETECTOR_KEYS } from "./nutritionMemory.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -145,16 +146,17 @@ export function detectCoachMemory(state) {
 // exists), and ages any previously-detected pattern that *stopped* recurring toward resolved
 // instead of leaving a stale claim standing forever. Pure — returns the next memories array;
 // the caller applies it via updateState, same pattern as weeklySchedule.js's syncRollingToday.
-const DETECTOR_KEYS = ["leg_day_conditioning_skip", "bodyweight_plateau", "recurring_soreness", "stalling_exercises"];
+const DETECTOR_KEYS = ["leg_day_conditioning_skip", "bodyweight_plateau", "recurring_soreness", "stalling_exercises", ...NUTRITION_DETECTOR_KEYS];
 const INFERRED_KEYS = new Set(["bodyweight_plateau"]);
+const NUTRITION_KEY_SET = new Set(NUTRITION_DETECTOR_KEYS);
 
 export function syncCoachMemory(state) {
   let memories = state.coachMemories || [];
-  const detected = detectCoachMemory(state);
+  const detected = [...detectCoachMemory(state), ...detectNutritionMemory(state)];
   const detectedKeys = new Set(detected.map((d) => d.key));
 
   detected.forEach((d) => {
-    const category = d.key === "leg_day_conditioning_skip" ? "behavioralPatterns" : "trainingInsights";
+    const category = d.key === "leg_day_conditioning_skip" || NUTRITION_KEY_SET.has(d.key) ? "behavioralPatterns" : "trainingInsights";
     const source = INFERRED_KEYS.has(d.key) ? "inferred" : "observed";
     memories = upsertObservedMemory(memories, { category, text: d.text, source, key: d.key, tags: d.tags || [] });
   });

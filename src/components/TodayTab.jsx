@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ChevronRight, MessageCircle, Award, Scale, Timer, Check } from "lucide-react";
 import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
+import NutritionCard from "./NutritionCard.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue, goalHistory } from "../utils/goalData.js";
 import { goalProgressPct, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
@@ -517,6 +518,8 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
       {!scheduleOn && !dismissedPrompt && (
         <SetupSchedulePrompt onSetup={() => onNavigate("schedule")} onLater={() => setDismissedPrompt(true)} />
       )}
+
+      <NutritionCard state={state} onNavigate={onNavigate} />
 
       <div className="border border-neutral-800 bg-charcoal-panel p-4">
         <div className="text-[11px] uppercase tracking-widest text-red-600 mb-1.5 flex items-center gap-1.5">
