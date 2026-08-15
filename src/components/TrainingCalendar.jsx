@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Dumbbell, Timer, Scale, Camera, Award } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
 import { hasSchedule, getScheduleDay, DAY_TYPE_LABEL } from "../utils/weeklySchedule.js";
+import { sessionPRCount } from "../utils/prSummary.js";
 
 // Compact, mobile-safe glyphs for a narrow 7-column month grid — the spec's fuller "REST" /
 // "MISSED" wording shows in the day-detail panel instead, where there's room for it.
@@ -97,7 +98,7 @@ function DayDetail({ dateKeyStr, data, exMap, onBack, scheduleDay }) {
               </div>
               <div className="text-xs text-neutral-400 mt-1">
                 {s.workingSets} working sets · {s.totalVolume.toLocaleString()} lb volume
-                {s.prs?.length > 0 ? ` · ${s.prs.length} PR${s.prs.length > 1 ? "s" : ""}` : ""}
+                {sessionPRCount(s) > 0 ? ` · ${sessionPRCount(s)} PR${sessionPRCount(s) > 1 ? "s" : ""}` : ""}
               </div>
             </div>
           ))}

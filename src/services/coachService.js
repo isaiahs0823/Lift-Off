@@ -14,6 +14,7 @@
 
 import { computeWeeklyReview } from "../utils/weeklyReview.js";
 import { DAY_TYPE_LABEL, computeScheduleAdherence } from "../utils/weeklySchedule.js";
+import { sessionPRCount } from "../utils/prSummary.js";
 
 const SAFETY_PATTERN =
   /\b(injur(y|ed|ies)|hurt|sharp pain|numb(ness)?|tingling|dizzy|dizziness|chest pain|can'?t breathe|shortness of breath|medication|prescri|steroid|anabolic|\bpeds?\b|sarms?|hgh|clenbuterol|starv(e|ing)|purg(e|ing)|dehydrat)\b/i;
@@ -129,10 +130,13 @@ export function generatePreWorkoutAdvice(context, focus) {
 // summary: a state.workoutSessions record (see buildSessionSummary in App.jsx).
 export function generatePostWorkoutReview(summary) {
   if (!summary) return { message: "Session data not found." };
-  const { prs = [], perfDeltaPct, avgRir } = summary;
+  const { perfDeltaPct, avgRir } = summary;
+  // Counts by exercise, not raw PR-type occurrence — one improved set can trip weight + e1RM +
+  // volume PRs at once, which is one meaningful event, not three (see utils/prSummary.js).
+  const prCount = sessionPRCount(summary);
   const lines = [];
-  if (prs.length > 0) {
-    lines.push(`${prs.length} PR${prs.length > 1 ? "s" : ""} this session. Strength is trending the right way.`);
+  if (prCount > 0) {
+    lines.push(`${prCount} PR${prCount > 1 ? "s" : ""} this session. Strength is trending the right way.`);
   }
   if (perfDeltaPct != null) {
     if (perfDeltaPct > 5) lines.push(`Volume is up ${perfDeltaPct}% versus last time on this plan. Real progress, not noise.`);
@@ -146,7 +150,7 @@ export function generatePostWorkoutReview(summary) {
   if (lines.length === 0) {
     lines.push("Session logged. No prior comparable session yet to grade it against — that baseline starts now.");
   }
-  lines.push(lines.length > 1 || prs.length > 0 ? "Leave it alone. Recover and repeat." : "Nothing to adjust. Recover and repeat.");
+  lines.push(lines.length > 1 || prCount > 0 ? "Leave it alone. Recover and repeat." : "Nothing to adjust. Recover and repeat.");
   return { message: lines.join(" ") };
 }
 

@@ -52,6 +52,7 @@ import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
+import { featuredAndOtherPRs, sessionPRCount, prDeltaLabel, prHeroLabel, prPreviousLabel, PR_TYPE_LABEL } from "./utils/prSummary.js";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained)
 const BREAK_LOGO =
@@ -3343,6 +3344,54 @@ function GuidedRunView({
 
         {summary && (
           <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
+            {(() => {
+              const { featured, others } = featuredAndOtherPRs(summary);
+              if (featured) {
+                const pr = featured.pr;
+                return (
+                  <div className="space-y-1.5 pb-3 border-b border-neutral-900">
+                    <div className="flex items-center justify-between">
+                      <div className="text-[11px] uppercase tracking-widest text-red-600 font-bold flex items-center gap-1.5">
+                        <Award size={12} /> New PR
+                      </div>
+                      {others.length > 0 && (
+                        <div className="text-[10px] uppercase tracking-widest text-neutral-500">{others.length + 1} PRs</div>
+                      )}
+                    </div>
+                    <div className="text-lg font-bold text-white leading-tight">{exMap[featured.exId]?.name || featured.exId}</div>
+                    <div className="text-3xl font-bold text-white leading-tight">{prHeroLabel(pr)}</div>
+                    <div className="text-[11px] uppercase tracking-widest text-red-500 font-bold">{PR_TYPE_LABEL[pr.type]}</div>
+                    <div className="text-xs text-neutral-500">
+                      Previous: {prPreviousLabel(pr)} <span className="text-green-500 font-bold">{prDeltaLabel(pr)}</span>
+                    </div>
+                    {others.length > 0 && (
+                      <div className="pt-2 mt-1 border-t border-neutral-900 space-y-1">
+                        <div className="text-[10px] uppercase tracking-widest text-neutral-600">Other PRs</div>
+                        {others.map(({ exId, pr: op }) => (
+                          <div key={exId} className="flex items-center justify-between text-xs text-neutral-400">
+                            <span className="truncate">{exMap[exId]?.name || exId}</span>
+                            <span className="text-red-500 font-bold shrink-0 ml-2">{prDeltaLabel(op)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              if (summary.bestLift) {
+                return (
+                  <div className="space-y-1 pb-3 border-b border-neutral-900">
+                    <div className="text-[10px] uppercase tracking-widest text-neutral-500">Best lift</div>
+                    <div className="text-lg font-bold text-white leading-tight">{exMap[summary.bestLift.exId]?.name || summary.bestLift.exId}</div>
+                    <div className="text-2xl font-bold text-white leading-tight">
+                      {summary.bestLift.weight} × {summary.bestLift.reps}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <div className="text-[10px] uppercase tracking-widest text-neutral-500">Duration</div>
@@ -3381,19 +3430,6 @@ function GuidedRunView({
             {summary.mainMuscles.length > 0 && (
               <div className="text-sm text-neutral-300">Main muscles trained: {summary.mainMuscles.join(", ")}</div>
             )}
-            {summary.bestLift && (
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Best lift</div>
-                <div className="text-base text-white">
-                  {exMap[summary.bestLift.exId]?.name || summary.bestLift.exId} — {summary.bestLift.weight} × {summary.bestLift.reps}
-                </div>
-              </div>
-            )}
-            {summary.prs.length > 0 && (
-              <div className="flex items-center gap-1.5 text-sm text-red-500 font-bold">
-                <Award size={14} /> {summary.prs.length} PR{summary.prs.length > 1 ? "s" : ""} this session
-              </div>
-            )}
 
             {summary.coachMessage && (
               <div className="border-t border-neutral-900 pt-3">
@@ -3427,17 +3463,40 @@ function GuidedRunView({
         )}
 
         {run.sessionEntries.length > 0 ? (
-          <div className="space-y-1.5">
-            {run.sessionEntries.map(({ entry }, i) => (
-              <div key={entry.id || i} className="border border-neutral-800 bg-charcoal-panel px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-base text-white">{exMap[entry.exId]?.name || entry.exId}</span>
-                  <span className="text-xs text-neutral-500">Target {entry.targetReps}</span>
-                </div>
-                <div className="text-xs text-neutral-400 mt-1">{entry.sets.map(formatSetCompact).join(", ")}</div>
+          (() => {
+            // "Baseline established" only means *this exercise* had no prior log before this
+            // session, independent of PR status — an exercise's first-ever log can never be a
+            // PR (detectPRs requires a prior entry to compare against), so the two tags never
+            // collide on the same card.
+            const sessionEntryIds = new Set(run.sessionEntries.map((se) => se.entry.id));
+            const priorExIds = new Set((state.logs || []).filter((l) => !sessionEntryIds.has(l.id)).map((l) => l.exId));
+            const prExIds = new Set((summary?.prs || []).map((p) => p.exId));
+            return (
+              <div className="space-y-1.5">
+                {run.sessionEntries.map(({ entry }, i) => {
+                  const hasPR = prExIds.has(entry.exId);
+                  const isBaseline = !hasPR && !priorExIds.has(entry.exId);
+                  return (
+                    <div key={entry.id || i} className="border border-neutral-800 bg-charcoal-panel px-4 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-base text-white flex items-center gap-1.5 min-w-0">
+                          <span className="truncate">{exMap[entry.exId]?.name || entry.exId}</span>
+                          {hasPR && <span className="shrink-0 text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">PR</span>}
+                          {isBaseline && (
+                            <span className="shrink-0 text-[9px] uppercase tracking-widest border border-neutral-700 text-neutral-500 px-1.5 py-0.5">
+                              Baseline
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-xs text-neutral-500 shrink-0">Target {entry.targetReps}</span>
+                      </div>
+                      <div className="text-xs text-neutral-400 mt-1">{entry.sets.map(formatSetCompact).join(", ")}</div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
+            );
+          })()
         ) : (
           <div className="text-sm text-neutral-500">Nothing logged this session.</div>
         )}
