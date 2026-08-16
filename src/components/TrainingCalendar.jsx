@@ -74,7 +74,7 @@ function buildMonthData(state, year, month) {
   return byDay;
 }
 
-function DayDetail({ dateKeyStr, data, exMap, onBack, scheduleDay }) {
+function DayDetail({ dateKeyStr, data, exMap, onBack, scheduleDay, onViewWorkout }) {
   const label = new Date(dateKeyStr + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   return (
     <SlideInPanel title={label} onBack={onBack}>
@@ -91,17 +91,32 @@ function DayDetail({ dateKeyStr, data, exMap, onBack, scheduleDay }) {
         <div className="text-sm text-neutral-500">Nothing logged this day.</div>
       ) : (
         <div className="space-y-3">
-          {data.sessions.map((s) => (
-            <div key={s.id} className="border border-neutral-800 bg-charcoal-panel p-3">
-              <div className="flex items-center gap-1.5 text-sm text-white font-bold">
-                <Dumbbell size={14} className="text-red-500" /> {s.planName}
+          {data.sessions.map((s) =>
+            onViewWorkout ? (
+              <button key={s.id} onClick={() => onViewWorkout(s.id)} className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 hover:border-red-700">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-sm text-white font-bold min-w-0">
+                    <Dumbbell size={14} className="text-red-500 shrink-0" /> <span className="truncate">{s.planName}</span>
+                  </div>
+                  <ChevronRight size={14} className="text-neutral-600 shrink-0" />
+                </div>
+                <div className="text-xs text-neutral-400 mt-1">
+                  {s.workingSets} working sets · {s.totalVolume.toLocaleString()} lb volume
+                  {sessionPRCount(s) > 0 ? ` · ${sessionPRCount(s)} PR${sessionPRCount(s) > 1 ? "s" : ""}` : ""}
+                </div>
+              </button>
+            ) : (
+              <div key={s.id} className="border border-neutral-800 bg-charcoal-panel p-3">
+                <div className="flex items-center gap-1.5 text-sm text-white font-bold">
+                  <Dumbbell size={14} className="text-red-500" /> {s.planName}
+                </div>
+                <div className="text-xs text-neutral-400 mt-1">
+                  {s.workingSets} working sets · {s.totalVolume.toLocaleString()} lb volume
+                  {sessionPRCount(s) > 0 ? ` · ${sessionPRCount(s)} PR${sessionPRCount(s) > 1 ? "s" : ""}` : ""}
+                </div>
               </div>
-              <div className="text-xs text-neutral-400 mt-1">
-                {s.workingSets} working sets · {s.totalVolume.toLocaleString()} lb volume
-                {sessionPRCount(s) > 0 ? ` · ${sessionPRCount(s)} PR${sessionPRCount(s) > 1 ? "s" : ""}` : ""}
-              </div>
-            </div>
-          ))}
+            )
+          )}
           {data.cardio.map((c) => (
             <div key={c.id} className="border border-neutral-800 bg-charcoal-panel p-3">
               <div className="flex items-center gap-1.5 text-sm text-white font-bold">
@@ -136,7 +151,7 @@ function DayDetail({ dateKeyStr, data, exMap, onBack, scheduleDay }) {
   );
 }
 
-export default function TrainingCalendar({ state, exMap }) {
+export default function TrainingCalendar({ state, exMap, onViewWorkout }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -167,6 +182,7 @@ export default function TrainingCalendar({ state, exMap }) {
         exMap={exMap}
         onBack={() => setSelectedDay(null)}
         scheduleDay={scheduled ? getScheduleDay(state, selectedDay) : null}
+        onViewWorkout={onViewWorkout}
       />
     );
   }

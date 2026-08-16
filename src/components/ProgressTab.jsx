@@ -174,7 +174,7 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
   );
 }
 
-export default function ProgressTab({ state, updateState, allExercises, exMap, onNavigate }) {
+export default function ProgressTab({ state, updateState, allExercises, exMap, onNavigate, onViewWorkout }) {
   const [view, setView] = useState("landing");
 
   if (view !== "landing") {
@@ -184,7 +184,7 @@ export default function ProgressTab({ state, updateState, allExercises, exMap, o
           ← Progress
         </button>
         {view === "body" && <BodyweightTab state={state} updateState={updateState} />}
-        {view === "calendar" && <TrainingCalendar state={state} exMap={exMap} />}
+        {view === "calendar" && <TrainingCalendar state={state} exMap={exMap} onViewWorkout={onViewWorkout} />}
         {view === "analytics" && <AnalyticsTab state={state} allExercises={allExercises} exMap={exMap} />}
       </div>
     );

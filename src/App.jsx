@@ -60,6 +60,9 @@ import NutritionLabelScannerScreen from "./components/NutritionLabelScannerScree
 import AddFoodScreen from "./components/AddFoodScreen.jsx";
 import FoodDetailScreen from "./components/FoodDetailScreen.jsx";
 import { todayDateKey } from "./utils/nutrition.js";
+import { SET_TYPES, isWarmup, countedSets, formatSetCompact, rirRpeSuffix, formatSetVerbose, formatSetsVerbose, formatSessionDuration } from "./utils/workoutSets.js";
+import WorkoutHistoryDetail from "./components/WorkoutHistoryDetail.jsx";
+import { findMostRecentSessionForPlan } from "./utils/workoutHistory.js";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
@@ -1063,51 +1066,6 @@ function parseBackupFile(text) {
   return { ok: true, data };
 }
 
-// ---------- Set type classification ----------
-// "working" is the implicit default — a set with no setType at all (every set logged before
-// this feature existed, plus any new set that's never had its chip tapped) is treated as a
-// normal working set everywhere below.
-const SET_TYPES = [
-  { value: "working", label: "Working", short: "WK" },
-  { value: "warmup", label: "Warm-up", short: "W" },
-  { value: "top", label: "Top set", short: "TOP" },
-  { value: "backoff", label: "Back-off", short: "BO" },
-  { value: "dropset", label: "Drop set", short: "DS" },
-  { value: "failure", label: "Failure", short: "F" },
-  { value: "amrap", label: "AMRAP", short: "AMRAP" },
-];
-function isWarmup(s) {
-  return s.setType === "warmup";
-}
-// Warm-ups never distort PRs, volume, or progression math — this is the one filter every
-// analytics/progression helper below runs sets through first.
-function countedSets(sets) {
-  return sets.filter((s) => !isWarmup(s));
-}
-
-// ---------- Dropset / RIR-RPE formatting helpers ----------
-// A set is { weight, reps, drops?: [{ weight, reps }, ...], setType?, rir?, rpe? }. drops,
-// setType, rir, rpe are only present when they carry a non-default value.
-function formatSetCompact(s) {
-  const parts = [`${s.weight}x${s.reps}`, ...(s.drops || []).map((d) => `${d.weight}x${d.reps}`)];
-  return parts.join(" → ");
-}
-function rirRpeSuffix(s) {
-  if (s.rir != null) return ` @${s.rir} RIR`;
-  if (s.rpe != null) return ` @RPE ${s.rpe}`;
-  return "";
-}
-function formatSetVerbose(s) {
-  const parts = [
-    `${s.weight} lb x ${s.reps} reps${rirRpeSuffix(s)}`,
-    ...(s.drops || []).map((d) => `${d.weight} lb x ${d.reps} reps`),
-  ];
-  return parts.join(" → ");
-}
-function formatSetsVerbose(sets) {
-  return sets.map(formatSetVerbose).join(", ");
-}
-
 // Turns the raw editor rows (string inputs, possibly-empty drop rows) into the clean shape
 // saved to state.logs. A set is dropped entirely if its own weight/reps are blank; an
 // individual blank drop row is dropped without affecting the rest. drops/setType/rir/rpe are
@@ -1297,12 +1255,13 @@ function buildSessionSummary(run, allLogs, priorSessions, exMap) {
     perfDeltaPct,
     bestLift,
     rating: null,
+    // Snapshot of exactly what was performed, in performed order — independent of state.logs
+    // going forward, so editing/deleting a log entry later can never retroactively change what
+    // a historical Workout History Detail view shows for this session (see
+    // components/WorkoutHistoryDetail.jsx). Sessions finished before this field existed simply
+    // won't have it; the detail screen degrades gracefully rather than reconstructing a guess.
+    entries: entries.map((e) => ({ exId: e.exId, sets: e.sets, targetReps: e.targetReps })),
   };
-}
-
-function formatSessionDuration(totalSeconds) {
-  const mins = Math.round(totalSeconds / 60);
-  return mins < 1 ? "<1 min" : `${mins} min`;
 }
 
 function usageCounts(logs) {
@@ -1372,6 +1331,7 @@ const SECTION_OF = {
   nutritionScanLabel: "coach",
   foodSearch: "coach",
   foodDetail: "coach",
+  workoutDetail: "today",
   train: "train",
   log: "train",
   cardio: "train",
@@ -1416,6 +1376,14 @@ export default function LiftLog() {
   // FoodLogScreen would reset to today on every remount, silently losing "I was reviewing
   // yesterday" context right after adding something).
   const [dailyLogDate, setDailyLogDate] = useState(() => todayDateKey());
+  // Which completed session Workout History Detail is currently showing — set by whichever
+  // entry point (Today, Program day list, Training Calendar, Session Complete) the user tapped
+  // "View Workout" from, all of which open this same id + the same detail screen.
+  const [selectedSessionId, setSelectedSessionId] = useState(null);
+  const viewWorkout = (sessionId) => {
+    setSelectedSessionId(sessionId);
+    setTab("workoutDetail");
+  };
   // Keeps the in-progress (or just-finished-but-not-yet-exited) run surviving a closed tab,
   // backgrounded phone, or crash — otherwise closing mid-workout silently drops everything
   // that wasn't already saved as a logged set. Cleared once the user actually exits the run
@@ -1729,6 +1697,10 @@ export default function LiftLog() {
               exitRun();
               setTab("coach");
             }}
+            onViewWorkout={(sessionId) => {
+              exitRun();
+              viewWorkout(sessionId);
+            }}
           />
         ) : (
           <>
@@ -1748,8 +1720,17 @@ export default function LiftLog() {
                   activeRun={activeRun}
                   onStartRun={(plan, programContext) => startRun(plan, "today", programContext)}
                   onNavigate={setTab}
+                  onViewWorkout={viewWorkout}
                 />
               ))}
+            {tab === "workoutDetail" && (
+              <WorkoutHistoryDetail
+                session={(state.workoutSessions || []).find((s) => s.id === selectedSessionId) || null}
+                state={state}
+                exMap={exMap}
+                onBack={() => setTab("today")}
+              />
+            )}
             {tab === "train" && <TrainTab state={state} onStartRun={(plan, programContext) => startRun(plan, "train", programContext)} onNavigate={setTab} />}
             {tab === "more" && <MoreTab state={state} updateState={updateState} onNavigate={setTab} />}
             {tab === "log" && (
@@ -1852,7 +1833,9 @@ export default function LiftLog() {
                 onLoggedSet={bumpRestTimer}
               />
             )}
-            {tab === "progress" && <ProgressTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} onNavigate={setTab} />}
+            {tab === "progress" && (
+              <ProgressTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} onNavigate={setTab} onViewWorkout={viewWorkout} />
+            )}
             {tab === "templates" && (
               <TemplatesTab
                 state={state}
@@ -1861,6 +1844,7 @@ export default function LiftLog() {
                 onStartRun={(plan, programContext) => startRun(plan, "templates", programContext)}
                 onRestartCompletedProgram={restartProgramById}
                 onGoToBuild={() => setTab("build")}
+                onViewWorkout={viewWorkout}
               />
             )}
             {tab === "build" && (
@@ -3441,6 +3425,7 @@ function GuidedRunView({
   onLoggedSet,
   onRate,
   onAskCoach,
+  onViewWorkout,
 }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
@@ -3584,6 +3569,15 @@ function GuidedRunView({
               <ShareCardButton buildDataUrl={() => buildWorkoutShareCard(summary)} filename="brk-lift-session.png" />
             </div>
           </div>
+        )}
+
+        {summary && onViewWorkout && (
+          <button
+            onClick={() => onViewWorkout(summary.id)}
+            className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
+          >
+            View Workout
+          </button>
         )}
 
         {run.sessionEntries.length > 0 ? (
@@ -4186,7 +4180,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
 }
 
 // ---------------- TEMPLATES TAB ----------------
-function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartCompletedProgram, onGoToBuild }) {
+function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartCompletedProgram, onGoToBuild, onViewWorkout }) {
   const [detail, setDetail] = useState(null); // { kind: "program" | "template" | "customPlan" | "customProgram", id }
 
   const deleteCustomPlan = (id) => updateState((prev) => ({ ...prev, customPlans: prev.customPlans.filter((p) => p.id !== id) }));
@@ -4235,6 +4229,24 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
       ...prev,
       currentProgram: { ...prev.currentProgram, dayIndex: di, lastCompletedAt: null, lastCompletedDayIndex: null },
     }));
+  };
+
+  // A day's completion status is derived by matching its plan name against workoutSessions —
+  // there's no programId/dayIndex stored on the session itself (see buildSessionSummary), only
+  // the exact name it was started under, which onStartRun always sets to `${program} — ${day}`.
+  const dayCompletionRow = (planName) => {
+    const session = findMostRecentSessionForPlan(state.workoutSessions, planName);
+    if (!session) return null;
+    return (
+      <div className="flex items-center justify-between text-xs text-neutral-500 pt-1.5 mt-1.5 border-t border-neutral-900">
+        <span>Completed {new Date(session.finishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+        {onViewWorkout && (
+          <button onClick={() => onViewWorkout(session.id)} className="text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400 flex items-center gap-1">
+            View Workout <ChevronRight size={11} />
+          </button>
+        )}
+      </div>
+    );
   };
 
   if (detail?.kind === "customPlan") {
@@ -4318,6 +4330,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
                 </div>
               ))}
             </div>
+            {dayCompletionRow(`${prog.name} — ${day.label}`)}
           </div>
         ))}
         <button
@@ -4393,6 +4406,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
                 </div>
               ))}
             </div>
+            {dayCompletionRow(`${prog.name} — ${day.label}`)}
           </div>
         ))}
       </SlideInPanel>

@@ -6,6 +6,8 @@ import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodywe
 import { resolveGoalCurrentValue, goalHistory } from "../utils/goalData.js";
 import { goalProgressPct, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
 import { resolveCurrentProgramDay } from "../utils/programSchedule.js";
+import { findTodaysSessionForPlan } from "../utils/workoutHistory.js";
+import { formatSessionDuration } from "../utils/workoutSets.js";
 import { buildCoachContext } from "../utils/coachContext.js";
 import { generateTodaySnapshot } from "../services/coachService.js";
 import { computeReadinessScore, readinessBand, BAND_LABEL } from "../utils/readiness.js";
@@ -265,7 +267,7 @@ function SetupSchedulePrompt({ onSetup, onLater }) {
   );
 }
 
-export default function TodayTab({ state, updateState, exMap, allExercises, activeRun, onStartRun, onNavigate }) {
+export default function TodayTab({ state, updateState, exMap, allExercises, activeRun, onStartRun, onNavigate, onViewWorkout }) {
   const entries = state.bodyweightLogs || [];
   const currentWeight = latestValue(entries, "weight");
   const avg7 = rollingAverage(entries, "weight", 7);
@@ -410,6 +412,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
       ) : scheduleOn && todaySchedule?.type === "conditioning" ? (
         (() => {
           const run = buildRunFromSource(state, todaySchedule.source);
+          const completedSession = todaySchedule.status === "completed" && run ? findTodaysSessionForPlan(state.workoutSessions, run.plan.name) : null;
           return (
             <div className="border-2 border-red-700 bg-charcoal-panel p-5 space-y-3">
               <div className="text-[11px] uppercase tracking-widest text-red-600 flex items-center gap-1.5">
@@ -419,8 +422,21 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
               {run && <div className="text-sm text-neutral-400">{run.plan.exercises.length} exercises · Est. {estimateMinutes(run.plan)} min</div>}
               {todaySchedule.status === "completed" && (
                 <div className="text-sm text-green-500 font-bold flex items-center gap-1.5">
-                  <Check size={14} /> Completed today
+                  <Check size={14} /> Complete
                 </div>
+              )}
+              {completedSession && (
+                <div className="text-sm text-neutral-400">
+                  {formatSessionDuration(completedSession.durationSec)} · {completedSession.workingSets} working sets · {completedSession.totalVolume.toLocaleString()} lb volume
+                </div>
+              )}
+              {completedSession && onViewWorkout && (
+                <button
+                  onClick={() => onViewWorkout(completedSession.id)}
+                  className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
+                >
+                  View Workout
+                </button>
               )}
               <button
                 onClick={() => (run ? startScheduled(todaySchedule.source) : onNavigate("cardio"))}
@@ -434,6 +450,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
       ) : scheduleOn && todaySchedule?.type === "workout" ? (
         (() => {
           const run = buildRunFromSource(state, todaySchedule.source);
+          const completedSession = todaySchedule.status === "completed" && run ? findTodaysSessionForPlan(state.workoutSessions, run.plan.name) : null;
           return (
             <div className="border-2 border-red-700 bg-charcoal-panel p-5 space-y-3">
               <div className="text-[11px] uppercase tracking-widest text-red-600">Today</div>
@@ -452,8 +469,21 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
               )}
               {todaySchedule.status === "completed" && (
                 <div className="text-sm text-green-500 font-bold flex items-center gap-1.5">
-                  <Check size={14} /> Completed today
+                  <Check size={14} /> Complete
                 </div>
+              )}
+              {completedSession && (
+                <div className="text-sm text-neutral-400">
+                  {formatSessionDuration(completedSession.durationSec)} · {completedSession.workingSets} working sets · {completedSession.totalVolume.toLocaleString()} lb volume
+                </div>
+              )}
+              {completedSession && onViewWorkout && (
+                <button
+                  onClick={() => onViewWorkout(completedSession.id)}
+                  className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
+                >
+                  View Workout
+                </button>
               )}
               <button
                 onClick={() => (run ? startScheduled(todaySchedule.source) : onNavigate("train"))}
@@ -471,20 +501,38 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
             // Today's own workout is the whole story once it's done — no invitation to start
             // tomorrow's, and no dominant CTA at all (that's what read as "started the next
             // workout"). A small "Next lift" link is the only nod to what's coming up.
-            <>
-              <div className="flex items-center gap-2 text-green-500 font-bold text-lg">
-                <Check size={18} /> {todayPlan.name}
-              </div>
-              <div className="text-sm text-neutral-400">Completed today</div>
-              {programDay.nextDayLabel && (
-                <button
-                  onClick={() => onNavigate("train")}
-                  className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500 flex items-center gap-1 pt-1"
-                >
-                  Next lift: {programDay.nextDayLabel} <ChevronRight size={12} />
-                </button>
-              )}
-            </>
+            (() => {
+              const completedSession = findTodaysSessionForPlan(state.workoutSessions, todayPlan.name);
+              return (
+                <>
+                  <div className="flex items-center gap-2 text-green-500 font-bold text-lg">
+                    <Check size={18} /> {todayPlan.name}
+                  </div>
+                  <div className="text-sm text-neutral-400">Complete</div>
+                  {completedSession && (
+                    <div className="text-sm text-neutral-400">
+                      {formatSessionDuration(completedSession.durationSec)} · {completedSession.workingSets} working sets · {completedSession.totalVolume.toLocaleString()} lb volume
+                    </div>
+                  )}
+                  {completedSession && onViewWorkout && (
+                    <button
+                      onClick={() => onViewWorkout(completedSession.id)}
+                      className="w-full py-3 text-sm uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+                    >
+                      View Workout
+                    </button>
+                  )}
+                  {programDay.nextDayLabel && (
+                    <button
+                      onClick={() => onNavigate("train")}
+                      className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500 flex items-center gap-1 pt-1"
+                    >
+                      Next lift: {programDay.nextDayLabel} <ChevronRight size={12} />
+                    </button>
+                  )}
+                </>
+              );
+            })()
           ) : todayPlan ? (
             <>
               <div className="text-2xl font-bold text-white">{todayPlan.name}</div>
