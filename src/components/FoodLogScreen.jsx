@@ -1,14 +1,42 @@
 import React, { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2, Pencil, Check, X, Plus } from "lucide-react";
 import { dailyTotals, todayDateKey, MEAL_SLOTS, MEAL_SLOT_LABEL } from "../utils/nutrition.js";
+import { guessMealSlot } from "./foodEntryForms.jsx";
 
-function guessMealSlot() {
-  const h = new Date().getHours();
-  if (h < 10) return "breakfast";
-  if (h < 14) return "lunch";
-  if (h < 17) return "snack";
-  if (h < 21) return "dinner";
-  return "snack";
+const MEAL_DISPLAY_GROUPS = ["breakfast", "lunch", "dinner", "snack"];
+const MEAL_GROUP_LABEL = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snacks" };
+
+// pre_workout/post_workout log entries fold into the Snacks section visually (spec's daily log
+// mockup only shows 4 meal buckets) but keep their own label on the item row itself, so nothing
+// about the original meal choice is lost — just grouped for a cleaner day view.
+function groupFor(meal) {
+  return MEAL_DISPLAY_GROUPS.includes(meal) ? meal : "snack";
+}
+
+function shiftDateKey(dateKey, deltaDays) {
+  const d = new Date(dateKey + "T00:00:00");
+  d.setDate(d.getDate() + deltaDays);
+  return todayDateKey(d);
+}
+
+function dateLabel(dateKey) {
+  const today = todayDateKey();
+  if (dateKey === today) return "Today";
+  if (dateKey === shiftDateKey(today, -1)) return "Yesterday";
+  if (dateKey === shiftDateKey(today, 1)) return "Tomorrow";
+  return new Date(dateKey + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+function sumMacros(entries) {
+  return entries.reduce(
+    (acc, f) => ({
+      calories: acc.calories + (f.calories || 0),
+      protein: acc.protein + (f.protein || 0),
+      carbs: acc.carbs + (f.carbs || 0),
+      fat: acc.fat + (f.fat || 0),
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
 }
 
 function MacroRow({ label, value, target }) {
@@ -23,57 +51,159 @@ function MacroRow({ label, value, target }) {
   );
 }
 
-// Section 12/13/14 of the nutrition spec: food/serving/macros logging, Quick Add for
-// restaurant meals or known macros, and one-tap re-logging from recent/saved foods/saved
-// meals — the app gets faster to use as history builds, not slower.
-export default function FoodLogScreen({ state, updateState, onBack, onNavigate }) {
-  const dateKey = todayDateKey();
+// Rescales a previously-logged entry's macros proportionally from its own recorded quantity —
+// e.g. entry was 255g at 150 kcal, user corrects it to 300g -> 176.5 kcal. Only possible when
+// the entry carries serving_quantity (anything logged through Food Detail does; legacy quick-
+// add/manual entries never had a "quantity" concept in the first place, so they just don't
+// offer this control — direct macro edits still work for those).
+function rescaleEntry(entry, newQuantity) {
+  if (!entry.serving_quantity || entry.serving_quantity <= 0 || !(newQuantity > 0)) return null;
+  const ratio = newQuantity / entry.serving_quantity;
+  const scale = (v) => (typeof v === "number" ? v * ratio : v);
+  return {
+    serving_quantity: newQuantity,
+    serving_grams: entry.serving_grams != null ? entry.serving_grams * ratio : null,
+    calories: scale(entry.calories),
+    protein: scale(entry.protein),
+    carbs: scale(entry.carbs),
+    fat: scale(entry.fat),
+    fiber: scale(entry.fiber),
+  };
+}
+
+function LoggedItemRow({ entry, editing, onStartEdit, onCancelEdit, onSave, onDelete }) {
+  const [meal, setMeal] = useState(entry.meal);
+  const [quantity, setQuantity] = useState(entry.serving_quantity != null ? String(entry.serving_quantity) : "");
+  const [calories, setCalories] = useState(String(Math.round(entry.calories || 0)));
+  const [protein, setProtein] = useState(String(Math.round(entry.protein || 0)));
+  const [carbs, setCarbs] = useState(String(Math.round(entry.carbs || 0)));
+  const [fat, setFat] = useState(String(Math.round(entry.fat || 0)));
+
+  if (!editing) {
+    const macroBits = [];
+    if (entry.protein != null) macroBits.push(`${Math.round(entry.protein)}p`);
+    if (entry.carbs != null) macroBits.push(`${Math.round(entry.carbs)}c`);
+    if (entry.fat != null) macroBits.push(`${Math.round(entry.fat)}f`);
+    return (
+      <button onClick={onStartEdit} className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 flex items-center justify-between hover:border-neutral-600">
+        <div className="min-w-0">
+          <div className="text-sm text-white font-bold truncate">{entry.food || "Quick add"}</div>
+          <div className="text-xs text-neutral-500 truncate">
+            {entry.servingDesc ? `${entry.servingDesc} · ` : ""}
+            {entry.calories != null ? `${Math.round(entry.calories)} kcal` : "—"}
+            {macroBits.length > 0 && ` · ${macroBits.join(" / ")}`}
+            {(entry.meal === "pre_workout" || entry.meal === "post_workout") && ` · ${MEAL_SLOT_LABEL[entry.meal]}`}
+          </div>
+        </div>
+        <Pencil size={14} className="text-neutral-600 shrink-0 ml-2" />
+      </button>
+    );
+  }
+
+  const canRescale = entry.serving_quantity != null;
+
+  const save = () => {
+    let patch = { meal, calories: Number(calories) || 0, protein: Number(protein) || 0, carbs: Number(carbs) || 0, fat: Number(fat) || 0 };
+    if (canRescale && quantity !== "" && Number(quantity) !== entry.serving_quantity) {
+      const rescaled = rescaleEntry(entry, Number(quantity));
+      if (rescaled) patch = { ...patch, ...rescaled };
+    }
+    onSave(patch);
+  };
+
+  return (
+    <div className="border border-red-900/40 bg-charcoal-panel p-3 space-y-2.5">
+      <div className="text-sm text-white font-bold">{entry.food || "Quick add"}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {MEAL_SLOTS.map((m) => (
+          <button
+            key={m}
+            onClick={() => setMeal(m)}
+            className={`px-2 py-1 text-[10px] border ${meal === m ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+          >
+            {MEAL_SLOT_LABEL[m]}
+          </button>
+        ))}
+      </div>
+      {canRescale && (
+        <div>
+          <label className="block text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Serving quantity</label>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            className="w-24 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-1.5 text-sm focus:outline-none focus:border-red-700"
+          />
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <input type="number" inputMode="decimal" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="Calories" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-1.5 text-sm focus:outline-none focus:border-red-700" />
+        <input type="number" inputMode="decimal" value={protein} onChange={(e) => setProtein(e.target.value)} placeholder="Protein" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-1.5 text-sm focus:outline-none focus:border-red-700" />
+        <input type="number" inputMode="decimal" value={carbs} onChange={(e) => setCarbs(e.target.value)} placeholder="Carbs" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-1.5 text-sm focus:outline-none focus:border-red-700" />
+        <input type="number" inputMode="decimal" value={fat} onChange={(e) => setFat(e.target.value)} placeholder="Fat" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-1.5 text-sm focus:outline-none focus:border-red-700" />
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={save} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1">
+          <Check size={14} /> Save
+        </button>
+        <button onClick={onCancelEdit} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600 flex items-center justify-center gap-1">
+          <X size={14} /> Cancel
+        </button>
+        <button onClick={onDelete} className="p-2 text-neutral-600 hover:text-red-500" aria-label="Delete">
+          <Trash2 size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// The daily food log (spec sections 7/8/21/22): date-navigable, meal-grouped, editable in
+// place. Search/scan/quick-add/create-food all live one level up on AddFoodScreen — this
+// screen is purely "what did I eat, organized by meal and day."
+export default function FoodLogScreen({ state, updateState, onNavigate, onAddFood, selectedDate, onChangeDate }) {
+  const [editingId, setEditingId] = useState(null);
   const foodLogs = state.foodLogs || [];
-  const savedFoods = state.savedFoods || [];
   const savedMeals = state.savedMeals || [];
   const targets = state.nutritionTargets;
-  const todayEntries = foodLogs.filter((f) => f.date === dateKey).sort((a, b) => (b.time || "").localeCompare(a.time || ""));
-  const totals = dailyTotals(foodLogs, dateKey);
+  const totals = dailyTotals(foodLogs, selectedDate);
+  const dayEntries = foodLogs.filter((f) => f.date === selectedDate).sort((a, b) => (b.time || "").localeCompare(a.time || ""));
+  const tomorrowKey = shiftDateKey(todayDateKey(), 1);
+  const yesterdayEntries = foodLogs.filter((f) => f.date === shiftDateKey(selectedDate, -1));
 
-  const [mode, setMode] = useState(null); // null | "quick" | "full"
-
-  const logEntry = (entry) => {
+  // Repetitive diets (spec section 13) — copy an entire meal forward from the previous day
+  // instead of re-searching/re-entering the same foods. Only offered when today's version of
+  // that meal is still empty, so it can't silently duplicate something already logged.
+  const copyMealFromYesterday = (group) => {
+    const items = yesterdayEntries.filter((f) => groupFor(f.meal) === group);
+    if (items.length === 0) return;
     updateState((prev) => ({
       ...prev,
-      foodLogs: [{ id: `food_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, date: dateKey, time: new Date().toISOString(), ...entry }, ...(prev.foodLogs || [])],
+      foodLogs: [
+        ...items.map((f) => ({ ...f, id: `food_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, date: selectedDate, time: new Date().toISOString() })),
+        ...(prev.foodLogs || []),
+      ],
     }));
   };
 
+  const patchEntry = (id, patch) => {
+    updateState((prev) => ({ ...prev, foodLogs: (prev.foodLogs || []).map((f) => (f.id === id ? { ...f, ...patch } : f)) }));
+    setEditingId(null);
+  };
   const deleteEntry = (id) => {
     updateState((prev) => ({ ...prev, foodLogs: (prev.foodLogs || []).filter((f) => f.id !== id) }));
+    setEditingId(null);
   };
-
-  const logFromSaved = (food) => {
-    logEntry({ meal: guessMealSlot(), food: food.name, servingDesc: food.servingDesc, calories: food.calories, protein: food.protein, carbs: food.carbs, fat: food.fat, fiber: food.fiber || 0, source: "food" });
-    updateState((prev) => ({
-      ...prev,
-      savedFoods: (prev.savedFoods || []).map((f) => (f.id === food.id ? { ...f, lastUsedAt: new Date().toISOString() } : f)),
-    }));
-  };
-
   const logSavedMeal = (meal) => {
-    logEntry({ meal: guessMealSlot(), food: meal.name, servingDesc: null, ...meal.totals, source: "saved_meal" });
     updateState((prev) => ({
       ...prev,
+      foodLogs: [
+        { id: `food_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, date: selectedDate, time: new Date().toISOString(), meal: guessMealSlot(), food: meal.name, servingDesc: null, ...meal.totals, source: "saved_meal" },
+        ...(prev.foodLogs || []),
+      ],
       savedMeals: (prev.savedMeals || []).map((m) => (m.id === meal.id ? { ...m, lastUsedAt: new Date().toISOString() } : m)),
     }));
   };
-
-  // Recent = distinct foods from the last ~20 logged entries, most-recent first — separate
-  // from savedFoods (an explicit "keep this" action), so the list gets useful automatically.
-  const recentFoods = [];
-  const seen = new Set();
-  for (const f of foodLogs.slice(0, 40)) {
-    if (!f.food || seen.has(f.food)) continue;
-    seen.add(f.food);
-    recentFoods.push(f);
-    if (recentFoods.length >= 8) break;
-  }
 
   return (
     <div className="space-y-6">
@@ -82,8 +212,23 @@ export default function FoodLogScreen({ state, updateState, onBack, onNavigate }
           <div className="text-[11px] uppercase tracking-widest text-red-600">Nutrition</div>
           <div className="text-xl font-bold text-white mt-1">Food Log</div>
         </div>
-        <button onClick={onBack} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+        <button onClick={() => onNavigate("nutrition")} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
           ← Back
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between border border-neutral-800 bg-charcoal-panel px-2 py-2.5">
+        <button onClick={() => onChangeDate(shiftDateKey(selectedDate, -1))} className="p-2 text-neutral-400 hover:text-red-500" aria-label="Previous day">
+          <ChevronLeft size={18} />
+        </button>
+        <div className="text-sm font-bold uppercase tracking-widest text-white">{dateLabel(selectedDate)}</div>
+        <button
+          onClick={() => onChangeDate(shiftDateKey(selectedDate, 1))}
+          disabled={selectedDate >= tomorrowKey}
+          className="p-2 text-neutral-400 hover:text-red-500 disabled:opacity-30 disabled:hover:text-neutral-400"
+          aria-label="Next day"
+        >
+          <ChevronRight size={18} />
         </button>
       </div>
 
@@ -99,63 +244,55 @@ export default function FoodLogScreen({ state, updateState, onBack, onNavigate }
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <button onClick={() => setMode("quick")} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
-          Quick Add
-        </button>
-        <button onClick={() => setMode("full")} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600">
-          Create Food
-        </button>
-      </div>
-      {onNavigate && (
-        <div className="flex gap-2">
-          <button onClick={() => onNavigate("nutritionScanBarcode")} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500">
-            Scan Barcode
-          </button>
-          <button onClick={() => onNavigate("nutritionScanLabel")} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500">
-            Scan Nutrition Label
-          </button>
-        </div>
-      )}
+      <button
+        onClick={() => onAddFood(guessMealSlot(), selectedDate)}
+        className="w-full py-3 text-sm uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+      >
+        Search Food
+      </button>
 
-      {mode === "quick" && <QuickAddForm onCancel={() => setMode(null)} onSave={(e) => { logEntry(e); setMode(null); }} />}
-      {mode === "full" && (
-        <FullAddForm
-          onCancel={() => setMode(null)}
-          onSave={(entry, saveToFoods) => {
-            logEntry(entry);
-            if (saveToFoods) {
-              updateState((prev) => ({
-                ...prev,
-                savedFoods: [
-                  { id: `savedfood_${Date.now()}`, name: entry.food, servingDesc: entry.servingDesc, calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat, fiber: entry.fiber, lastUsedAt: new Date().toISOString() },
-                  ...(prev.savedFoods || []),
-                ],
-              }));
-            }
-            setMode(null);
-          }}
-        />
-      )}
-
-      {todayEntries.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Today</div>
-          {todayEntries.map((f) => (
-            <div key={f.id} className="border border-neutral-800 bg-charcoal-panel p-3 flex items-center justify-between">
-              <div>
-                <div className="text-sm text-white font-bold">{f.food || "Quick add"}</div>
-                <div className="text-xs text-neutral-500">
-                  {MEAL_SLOT_LABEL[f.meal] || f.meal} · {Math.round(f.calories)} kcal · {Math.round(f.protein)}p / {Math.round(f.carbs)}c / {Math.round(f.fat)}f
+      {MEAL_DISPLAY_GROUPS.map((group) => {
+        const items = dayEntries.filter((f) => groupFor(f.meal) === group);
+        const groupTotals = sumMacros(items);
+        const canCopyFromYesterday = items.length === 0 && yesterdayEntries.some((f) => groupFor(f.meal) === group);
+        return (
+          <div key={group} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] uppercase tracking-widest text-neutral-500">{MEAL_GROUP_LABEL[group]}</div>
+              {items.length > 0 && (
+                <div className="text-[11px] text-neutral-500">
+                  {Math.round(groupTotals.calories)} kcal · {Math.round(groupTotals.protein)}P · {Math.round(groupTotals.carbs)}C · {Math.round(groupTotals.fat)}F
                 </div>
-              </div>
-              <button onClick={() => deleteEntry(f.id)} className="text-neutral-600 hover:text-red-500 p-1">
-                <Trash2 size={16} />
-              </button>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+            {canCopyFromYesterday && (
+              <button
+                onClick={() => copyMealFromYesterday(group)}
+                className="w-full py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-500 hover:border-red-700 hover:text-red-500"
+              >
+                Copy {MEAL_GROUP_LABEL[group]} from yesterday
+              </button>
+            )}
+            {items.map((entry) => (
+              <LoggedItemRow
+                key={entry.id}
+                entry={entry}
+                editing={editingId === entry.id}
+                onStartEdit={() => setEditingId(entry.id)}
+                onCancelEdit={() => setEditingId(null)}
+                onSave={(patch) => patchEntry(entry.id, patch)}
+                onDelete={() => deleteEntry(entry.id)}
+              />
+            ))}
+            <button
+              onClick={() => onAddFood(group, selectedDate)}
+              className="w-full py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-500 hover:border-red-700 hover:text-red-500 flex items-center justify-center gap-1"
+            >
+              <Plus size={12} /> Add Food
+            </button>
+          </div>
+        );
+      })}
 
       {savedMeals.length > 0 && (
         <div className="space-y-2">
@@ -175,157 +312,6 @@ export default function FoodLogScreen({ state, updateState, onBack, onNavigate }
           ))}
         </div>
       )}
-
-      {savedFoods.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Favorites</div>
-          {savedFoods.map((f) => (
-            <button key={f.id} onClick={() => logFromSaved(f)} className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 flex items-center justify-between hover:border-red-700">
-              <div>
-                <div className="text-sm text-white font-bold">{f.name}</div>
-                <div className="text-xs text-neutral-500">{f.calories} kcal · {f.protein}p / {f.carbs}c / {f.fat}f</div>
-              </div>
-              <Plus size={16} className="text-red-500 shrink-0" />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {recentFoods.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Recent</div>
-          {recentFoods.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => logEntry({ meal: guessMealSlot(), food: f.food, servingDesc: f.servingDesc, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat, fiber: f.fiber || 0, source: "recent" })}
-              className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 flex items-center justify-between hover:border-red-700"
-            >
-              <div>
-                <div className="text-sm text-white font-bold">{f.food}</div>
-                <div className="text-xs text-neutral-500">{Math.round(f.calories)} kcal · {Math.round(f.protein)}p / {Math.round(f.carbs)}c / {Math.round(f.fat)}f</div>
-              </div>
-              <Plus size={16} className="text-red-500 shrink-0" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function QuickAddForm({ onSave, onCancel }) {
-  const [meal, setMeal] = useState(guessMealSlot());
-  const [calories, setCalories] = useState("");
-  const [protein, setProtein] = useState("");
-  const [carbs, setCarbs] = useState("");
-  const [fat, setFat] = useState("");
-
-  const save = () => {
-    if (calories === "") return;
-    onSave({
-      meal,
-      food: "Quick add",
-      servingDesc: null,
-      calories: Number(calories) || 0,
-      protein: Number(protein) || 0,
-      carbs: Number(carbs) || 0,
-      fat: Number(fat) || 0,
-      fiber: 0,
-      source: "quick",
-    });
-  };
-
-  return (
-    <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
-      <div className="text-[11px] uppercase tracking-widest text-neutral-500">Quick add — for restaurant meals or known macros</div>
-      <MealChips meal={meal} setMeal={setMeal} />
-      <div className="grid grid-cols-2 gap-3">
-        <input type="number" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="Calories" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
-        <input type="number" value={protein} onChange={(e) => setProtein(e.target.value)} placeholder="Protein (g)" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
-        <input type="number" value={carbs} onChange={(e) => setCarbs(e.target.value)} placeholder="Carbs (g)" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
-        <input type="number" value={fat} onChange={(e) => setFat(e.target.value)} placeholder="Fat (g)" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
-      </div>
-      <div className="flex gap-2">
-        <button onClick={save} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
-          Save
-        </button>
-        <button onClick={onCancel} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function FullAddForm({ onSave, onCancel }) {
-  const [meal, setMeal] = useState(guessMealSlot());
-  const [food, setFood] = useState("");
-  const [servingDesc, setServingDesc] = useState("");
-  const [calories, setCalories] = useState("");
-  const [protein, setProtein] = useState("");
-  const [carbs, setCarbs] = useState("");
-  const [fat, setFat] = useState("");
-  const [fiber, setFiber] = useState("");
-  const [saveToFoods, setSaveToFoods] = useState(false);
-
-  const save = () => {
-    if (!food.trim() || calories === "") return;
-    onSave(
-      {
-        meal,
-        food: food.trim(),
-        servingDesc: servingDesc.trim() || null,
-        calories: Number(calories) || 0,
-        protein: Number(protein) || 0,
-        carbs: Number(carbs) || 0,
-        fat: Number(fat) || 0,
-        fiber: Number(fiber) || 0,
-        source: "manual",
-      },
-      saveToFoods
-    );
-  };
-
-  return (
-    <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
-      <MealChips meal={meal} setMeal={setMeal} />
-      <input type="text" value={food} onChange={(e) => setFood(e.target.value)} placeholder="Food name" className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
-      <input type="text" value={servingDesc} onChange={(e) => setServingDesc(e.target.value)} placeholder="Serving (e.g. 6oz, 1 cup) — optional" className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
-      <div className="grid grid-cols-2 gap-3">
-        <input type="number" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="Calories" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
-        <input type="number" value={protein} onChange={(e) => setProtein(e.target.value)} placeholder="Protein (g)" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
-        <input type="number" value={carbs} onChange={(e) => setCarbs(e.target.value)} placeholder="Carbs (g)" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
-        <input type="number" value={fat} onChange={(e) => setFat(e.target.value)} placeholder="Fat (g)" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
-      </div>
-      <input type="number" value={fiber} onChange={(e) => setFiber(e.target.value)} placeholder="Fiber (g) — optional" className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
-      <label className="flex items-center gap-2 text-xs text-neutral-400">
-        <input type="checkbox" checked={saveToFoods} onChange={(e) => setSaveToFoods(e.target.checked)} />
-        Save to My Foods for quick re-logging
-      </label>
-      <div className="flex gap-2">
-        <button onClick={save} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
-          Save
-        </button>
-        <button onClick={onCancel} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function MealChips({ meal, setMeal }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {MEAL_SLOTS.map((m) => (
-        <button
-          key={m}
-          onClick={() => setMeal(m)}
-          className={`px-2.5 py-1.5 text-[11px] border ${meal === m ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
-        >
-          {MEAL_SLOT_LABEL[m]}
-        </button>
-      ))}
     </div>
   );
 }

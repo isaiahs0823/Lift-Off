@@ -57,6 +57,9 @@ import NutritionCheckInScreen from "./components/NutritionCheckInScreen.jsx";
 import ScanFoodChooser from "./components/ScanFoodChooser.jsx";
 import BarcodeScannerScreen from "./components/BarcodeScannerScreen.jsx";
 import NutritionLabelScannerScreen from "./components/NutritionLabelScannerScreen.jsx";
+import AddFoodScreen from "./components/AddFoodScreen.jsx";
+import FoodDetailScreen from "./components/FoodDetailScreen.jsx";
+import { todayDateKey } from "./utils/nutrition.js";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
@@ -908,9 +911,10 @@ function loadInitialState() {
     // to its own table without an unpacking step.
     nutritionProfile: null, // assessment answers + realistic-adherence + control level — Layer 1, mirrors athleteProfile.js
     nutritionTargets: null, // { calories, protein, carbs, fat, estimatedMaintenance, method, history: [...] }
-    foodLogs: [], // { id, date, time, meal, food, servingDesc, calories, protein, carbs, fat, fiber?, source }
+    foodLogs: [], // { id, date, time, meal, food, brand?, servingDesc, serving_quantity?, serving_unit?, serving_grams?, calories, protein, carbs, fat, fiber?, source, food_id?, fdcId? } — source: manual|quick|food|saved_meal|recent|barcode|usda
     savedFoods: [], // { id, name, servingDesc, calories, protein, carbs, fat, fiber?, lastUsedAt }
     savedMeals: [], // { id, name, items: [{ name, calories, protein, carbs, fat }], totals, lastUsedAt }
+    favoriteFoods: [], // { id, name, brand?, servingDesc, basis, servingGrams, calories, protein, carbs, fat, fiber?, source, fdcId?, favoritedAt } — see src/utils/foodSearchService.js
     nutritionMealPlan: null, // generated FULL MEAL PLAN — { meals: [{ id, label, time, items, totals }], generatedAt }
     nutritionCheckIns: [], // { id, date, hunger, energy, trainingPerformance, difficulty (1-5), events, canRepeat }
     nutritionCoachAdjustments: [], // { id, date, fromCalories, toCalories, fromMacros, toMacros, reason, status }
@@ -996,6 +1000,7 @@ const BACKUP_DATA_KEYS = [
   "foodLogs",
   "savedFoods",
   "savedMeals",
+  "favoriteFoods",
   "nutritionMealPlan",
   "nutritionCheckIns",
   "nutritionCoachAdjustments",
@@ -1365,6 +1370,8 @@ const SECTION_OF = {
   nutritionScan: "coach",
   nutritionScanBarcode: "coach",
   nutritionScanLabel: "coach",
+  foodSearch: "coach",
+  foodDetail: "coach",
   train: "train",
   log: "train",
   cardio: "train",
@@ -1398,6 +1405,17 @@ export default function LiftLog() {
   // NutritionLabelScannerScreen — the scanned barcode gets attached to the food the user is
   // about to build from the label photo. Navigation-only state, never persisted.
   const [pendingScanBarcode, setPendingScanBarcode] = useState(null);
+  // Hand-off from the Daily Food Log's "+ Add Food" (per meal, or the top-level Search Food)
+  // into AddFoodScreen, and from AddFoodScreen's search results into FoodDetailScreen — which
+  // meal/date to log into, and which food object was selected. Navigation-only, never persisted.
+  const [pendingFoodMeal, setPendingFoodMeal] = useState(null);
+  const [pendingFoodDate, setPendingFoodDate] = useState(null);
+  const [pendingSelectedFood, setPendingSelectedFood] = useState(null);
+  // Which day the Daily Food Log is viewing — lifted out of FoodLogScreen itself so it
+  // survives navigating away to Add Food/Food Detail and back (a plain useState inside
+  // FoodLogScreen would reset to today on every remount, silently losing "I was reviewing
+  // yesterday" context right after adding something).
+  const [dailyLogDate, setDailyLogDate] = useState(() => todayDateKey());
   // Keeps the in-progress (or just-finished-but-not-yet-exited) run surviving a closed tab,
   // backgrounded phone, or crash — otherwise closing mid-workout silently drops everything
   // that wasn't already saved as a logged set. Cleared once the user actually exits the run
@@ -1761,7 +1779,45 @@ export default function LiftLog() {
               />
             )}
             {tab === "nutrition" && <NutritionHome state={state} updateState={updateState} onNavigate={setTab} />}
-            {tab === "nutritionLog" && <FoodLogScreen state={state} updateState={updateState} onBack={() => setTab("nutrition")} onNavigate={setTab} />}
+            {tab === "nutritionLog" && (
+              <FoodLogScreen
+                state={state}
+                updateState={updateState}
+                onNavigate={setTab}
+                selectedDate={dailyLogDate}
+                onChangeDate={setDailyLogDate}
+                onAddFood={(meal, dateKey) => {
+                  setPendingFoodMeal(meal);
+                  setPendingFoodDate(dateKey);
+                  setTab("foodSearch");
+                }}
+              />
+            )}
+            {tab === "foodSearch" && (
+              <AddFoodScreen
+                state={state}
+                updateState={updateState}
+                onNavigate={setTab}
+                initialMeal={pendingFoodMeal}
+                dateKey={pendingFoodDate || dailyLogDate}
+                onSelectFood={(food, meal, dateKey) => {
+                  setPendingSelectedFood(food);
+                  setPendingFoodMeal(meal);
+                  setPendingFoodDate(dateKey);
+                  setTab("foodDetail");
+                }}
+              />
+            )}
+            {tab === "foodDetail" && (
+              <FoodDetailScreen
+                state={state}
+                updateState={updateState}
+                onNavigate={setTab}
+                food={pendingSelectedFood}
+                meal={pendingFoodMeal}
+                dateKey={pendingFoodDate}
+              />
+            )}
             {tab === "nutritionMealPlan" && <MealPlanView state={state} updateState={updateState} onBack={() => setTab("nutrition")} />}
             {tab === "nutritionCheckIn" && <NutritionCheckInScreen state={state} updateState={updateState} onBack={() => setTab("nutrition")} />}
             {tab === "nutritionScan" && <ScanFoodChooser onNavigate={setTab} />}
