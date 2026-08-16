@@ -1988,14 +1988,6 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
   const removeSetRow = (idx) => onChange(sets.filter((_, i) => i !== idx));
   // Quick logging: nudge a row's weight/reps without retyping, or clone it as the next set —
   // the common case mid-workout is "same weight, one more rep" or "just repeat that."
-  const bumpField = (idx, field, delta) =>
-    onChange(
-      sets.map((row, i) => {
-        if (i !== idx) return row;
-        const current = row[field] === "" ? 0 : Number(row[field]);
-        return { ...row, [field]: String(Math.max(0, current + delta)) };
-      })
-    );
   const duplicateSetRow = (idx) =>
     onChange([...sets.slice(0, idx + 1), { ...sets[idx], drops: (sets[idx].drops || []).map((d) => ({ ...d } )) }, ...sets.slice(idx + 1)]);
   const addDropRow = (idx) =>
@@ -2017,6 +2009,7 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
             <span className="text-xs text-neutral-600 w-5">{idx + 1}</span>
             <input
               type="number"
+              inputMode="decimal"
               placeholder="Weight"
               value={row.weight}
               onChange={(e) => updateSetRow(idx, "weight", e.target.value)}
@@ -2024,6 +2017,7 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
             />
             <input
               type="number"
+              inputMode="numeric"
               placeholder="Reps"
               value={row.reps}
               onChange={(e) => updateSetRow(idx, "reps", e.target.value)}
@@ -2036,24 +2030,6 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
             )}
           </div>
           <div className="flex items-center gap-1.5 pl-7 overflow-x-auto">
-            <button
-              onClick={() => bumpField(idx, "weight", -5)}
-              className="shrink-0 px-2 py-1 text-[11px] font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
-            >
-              -5
-            </button>
-            <button
-              onClick={() => bumpField(idx, "weight", 5)}
-              className="shrink-0 px-2 py-1 text-[11px] font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
-            >
-              +5 wt
-            </button>
-            <button
-              onClick={() => bumpField(idx, "reps", 1)}
-              className="shrink-0 px-2 py-1 text-[11px] font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
-            >
-              +1 rep
-            </button>
             <button
               onClick={() => duplicateSetRow(idx)}
               className="shrink-0 flex items-center gap-1 px-2 py-1 text-[11px] font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
@@ -3057,9 +3033,6 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
   const chips = rirSystem === "rpe" ? RPE_CHIPS : RIR_CHIPS;
   const showDraft = confirmedSets.length < targetSetCount || addingExtra;
 
-  const bumpWeight = (delta) => setWeight((w) => Math.max(0, (Number(w) || 0) + delta));
-  const bumpReps = (delta) => setReps((r) => Math.max(0, (Number(r) || 0) + delta));
-
   // Mid-exercise correction (a fat-fingered weight/reps entry shouldn't have to wait until the
   // whole workout is finished and edited from history) — edits the already-confirmed set in
   // place, preserving its rir/rpe/setType/drops, before it's ever written to state.logs.
@@ -3226,54 +3199,33 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
             {targetSetCount ? ` of ${targetSetCount}` : ""}
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => bumpWeight(-5)}
-              className="w-12 h-12 shrink-0 text-lg font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600"
-            >
-              -5
-            </button>
-            <div className="flex-1 text-center">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">Weight</div>
+            <div className="flex items-baseline justify-center gap-1.5 border border-neutral-800 bg-charcoal-deep px-3 py-3">
               <input
                 type="number"
                 inputMode="decimal"
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
-                className="w-full bg-transparent text-4xl font-bold text-white text-center focus:outline-none"
+                placeholder="Enter weight"
+                className="min-w-0 flex-1 bg-transparent text-4xl font-bold text-white text-center focus:outline-none placeholder:text-neutral-700"
               />
-              <div className="text-[10px] uppercase tracking-widest text-neutral-600">lb</div>
+              <span className="shrink-0 text-sm font-bold text-neutral-500">lb</span>
             </div>
-            <button
-              onClick={() => bumpWeight(5)}
-              className="w-12 h-12 shrink-0 text-lg font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600"
-            >
-              +5
-            </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => bumpReps(-1)}
-              className="w-12 h-12 shrink-0 text-lg font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600"
-            >
-              -1
-            </button>
-            <div className="flex-1 text-center">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">Reps</div>
+            <div className="border border-neutral-800 bg-charcoal-deep px-3 py-3">
               <input
                 type="number"
                 inputMode="numeric"
                 value={reps}
                 onChange={(e) => setReps(e.target.value)}
-                className="w-full bg-transparent text-4xl font-bold text-white text-center focus:outline-none"
+                placeholder="Enter reps"
+                className="w-full bg-transparent text-4xl font-bold text-white text-center focus:outline-none placeholder:text-neutral-700"
               />
-              <div className="text-[10px] uppercase tracking-widest text-neutral-600">reps</div>
             </div>
-            <button
-              onClick={() => bumpReps(1)}
-              className="w-12 h-12 shrink-0 text-lg font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600"
-            >
-              +1
-            </button>
           </div>
 
           {!isSimple && (
