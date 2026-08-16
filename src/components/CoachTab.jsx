@@ -1,53 +1,67 @@
-import React, { useEffect, useState } from "react";
-import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple } from "lucide-react";
-import { buildCoachContext } from "../utils/coachContext.js";
-import { answerCoachQuestion } from "../services/coachService.js";
+import React, { useEffect, useRef, useState } from "react";
+import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff } from "lucide-react";
 import { syncCoachMemory } from "../utils/coachMemory.js";
-import {
-  hasProfile,
-  coachKnowledgeLevel,
-  KNOWLEDGE_LEVEL_LABEL,
-  KNOWLEDGE_LEVEL_DESC,
-  PHYSIQUE_PHASE_LABEL,
-} from "../utils/athleteProfile.js";
-import { detectCommitment, createCommitment, resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
+import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC, PHYSIQUE_PHASE_LABEL } from "../utils/athleteProfile.js";
+import { resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
 import { resolveCoachOnboarding } from "../utils/coachOnboarding.js";
 import { BODYBUILDING_QUICK_QUESTIONS } from "../coachSpecialties/bodybuilding.js";
 import { getSpecialty } from "../coachSpecialties/index.js";
 import AthleteProfileForm from "./AthleteProfileForm.jsx";
 import CoachSpecialtySelect from "./CoachSpecialtySelect.jsx";
+import CoachProposalCard from "./CoachProposalCard.jsx";
+import { buildCompactCoachContext } from "../utils/coachChatContext.js";
+import { runCoachTurn } from "../services/coachChatService.js";
+import { createToolRunner } from "../services/coachToolRunner.js";
+import {
+  getActiveConversation,
+  upsertConversation,
+  appendMessage,
+  visibleMessages,
+  messagesForApi,
+  extractProposalFromToolResults,
+  resolveProposalOnMessage,
+} from "../utils/coachConversations.js";
 
 const GENERAL_QUICK_QUESTIONS = [
-  "What should I do today?",
-  "Should I increase weight?",
-  "Why has my weight stalled?",
-  "Should I train through soreness?",
-  "How is my progress?",
+  "How was my last workout?",
+  "What should I focus on today?",
+  "Am I recovering well?",
+  "Should we adjust my calories?",
   "What is holding me back?",
-  "Am I on track?",
-  "Review today's session.",
-  "Review my last 30 days.",
-  "Should I switch programs?",
+  "How is my progression?",
 ];
 
-export default function CoachTab({ state, updateState, exMap, onNavigate }) {
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState(null);
+// The real multi-turn AI chat (spec's core deliverable) — everything above the chat panel
+// (specialty card, knowledge/settings/nutrition nav, active commitments) is the same
+// functionality CoachTab always had, just no longer the dominant thing on screen. Chat is now
+// the central experience; those stay one tap away, exactly as before.
+export default function CoachTab({ state, updateState, exMap, allExercises, onNavigate, openContext }) {
   const [showOnboarding, setShowOnboarding] = useState(!hasProfile(state));
-  const [pendingCommitment, setPendingCommitment] = useState(null);
-
-  // coachOnboarding.specialtySelected is the ONLY source of truth for whether this screen has
-  // been seen — never inferred from athleteProfile/coachHistory/coachMemories existing. Old
-  // Coach usage predates the specialty selector entirely, so it is not evidence that a
-  // specialty was ever chosen; an athlete who trained under BRK before this feature shipped
-  // still gets the picker exactly once. Athlete Profile (gated separately below by
-  // hasProfile()) is untouched by this — someone who already completed it skips straight to
-  // Coach Home after confirming a specialty, never repeats the questionnaire.
   const [showSpecialtySelect, setShowSpecialtySelect] = useState(!resolveCoachOnboarding(state).specialtySelected);
 
-  // Promotes currently-detected patterns into persisted, evolving Coach memory (and ages out
-  // ones that stopped recurring) — a no-op once already in sync for this data, so it's safe to
-  // run on every mount. Respects the user's "learn from my data" toggle (section 14/40).
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
+  const [error, setError] = useState(null);
+  const [isOnline, setIsOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  const abortRef = useRef(null);
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
+  // Cancel any in-flight request the instant this screen goes away — never leave a streaming
+  // fetch running after the user has navigated off Coach (spec section 24).
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   useEffect(() => {
     if (state.athleteProfile && state.athleteProfile.learningEnabled === false) return;
     const next = syncCoachMemory(state);
@@ -57,11 +71,6 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.workoutSessions, state.cardioLogs, state.logs, state.bodyweightLogs, state.readinessLogs, state.scheduleLog, state.weeklySchedule]);
 
-  // Closes out any commitment whose week has ended and grades it against real logged data
-  // (section 22/23) — commitments are the user's own stated intent, so this always runs
-  // regardless of the "learn from my data" toggle, which only gates inferred behavioral
-  // patterns. Naturally idempotent: once a commitment's status flips off "active", a later pass
-  // over the same data no longer counts it as newly resolved, so no duplicate history entries.
   useEffect(() => {
     const { commitments, resolved } = resolveDueCommitments(state);
     if (resolved.length === 0) return;
@@ -70,89 +79,102 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
       ...prev,
       commitments,
       coachHistory: [
-        ...resolved.map((c) => ({
-          id: `coach_${Date.now()}_${c.id}`,
-          date: new Date().toISOString(),
-          type: "commitment_result",
-          question: c.text,
-          message: commitmentOutcomeMessage(c, style),
-        })),
+        ...resolved.map((c) => ({ id: `coach_${Date.now()}_${c.id}`, date: new Date().toISOString(), type: "commitment_result", question: c.text, message: commitmentOutcomeMessage(c, style) })),
         ...(prev.coachHistory || []),
       ],
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.commitments, state.cardioLogs, state.workoutSessions]);
 
-  const ask = (q) => {
-    const trimmed = q.trim();
-    if (!trimmed) return;
-    const detected = detectCommitment(trimmed);
-    if (detected) {
-      setPendingCommitment({ ...detected, rawText: trimmed });
-      setQuestion("");
-      return;
+  const specialty = state.athleteProfile?.coachSpecialty || "bodybuilding";
+  const coachingStyle = state.athleteProfile?.coachingStyle || "balanced";
+  const { conversation } = getActiveConversation(state, specialty);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [conversation.messages.length, streamingText]);
+
+  const runTurn = async (convoWithUserMessage) => {
+    setSending(true);
+    setStreamingText("");
+    setError(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const compactContext = buildCompactCoachContext(state, exMap, [...convoWithUserMessage.messages].reverse().find((m) => m.role === "user")?.content || "");
+    if (openContext?.type === "workout" && openContext.sessionId) compactContext.referencedWorkoutSessionId = openContext.sessionId;
+    if (openContext?.type === "nutrition" && openContext.dateKey) compactContext.referencedDate = openContext.dateKey;
+
+    const executeTool = createToolRunner({ state, updateState, exMap, allExercises });
+
+    try {
+      const result = await runCoachTurn({
+        messages: messagesForApi(convoWithUserMessage),
+        context: compactContext,
+        specialty,
+        coachingStyle,
+        signal: controller.signal,
+        executeTool,
+        onContentDelta: (_delta, full) => setStreamingText(full),
+      });
+
+      const proposal = extractProposalFromToolResults(result.appended);
+      let finalConvo = convoWithUserMessage;
+      for (const m of result.appended) {
+        const isFinalAssistantText = m.role === "assistant" && !!m.content;
+        finalConvo = appendMessage(finalConvo, isFinalAssistantText && proposal ? { ...m, metadata: { proposal } } : m);
+      }
+      updateState((prev) => upsertConversation(prev, finalConvo));
+    } catch (e) {
+      if (e?.name !== "AbortError") {
+        setError(e?.message || "Coach couldn't respond right now.");
+      }
+    } finally {
+      setSending(false);
+      setStreamingText("");
+      abortRef.current = null;
     }
-    const context = buildCoachContext(state, exMap, trimmed);
-    const { message } = answerCoachQuestion(trimmed, context, state);
-    setAnswer({ question: trimmed, message });
-    updateState((prev) => ({
-      ...prev,
-      coachHistory: [
-        { id: `coach_${Date.now()}`, date: new Date().toISOString(), type: "question", question: trimmed, message },
-        ...(prev.coachHistory || []),
-      ],
-    }));
-    setQuestion("");
   };
 
-  const confirmCommitment = (accept) => {
-    if (!pendingCommitment) return;
-    if (accept) {
-      const c = createCommitment(pendingCommitment);
-      const message = `Locked in: ${c.text}, ${c.period === "next_week" ? "next week" : "this week"}. I'll check in when the week's up.`;
-      updateState((prev) => ({
-        ...prev,
-        commitments: [...(prev.commitments || []), c],
-        coachHistory: [
-          { id: `coach_${Date.now()}`, date: new Date().toISOString(), type: "commitment", question: pendingCommitment.rawText, message },
-          ...(prev.coachHistory || []),
-        ],
-      }));
-      setAnswer({ question: pendingCommitment.rawText, message });
-    } else {
-      setAnswer({ question: pendingCommitment.rawText, message: "Not tracked as a commitment." });
-    }
-    setPendingCommitment(null);
+  const send = (text) => {
+    const trimmed = (text || "").trim();
+    if (!trimmed || sending) return;
+    setInput("");
+    const convoWithUserMessage = appendMessage(conversation, { role: "user", content: trimmed });
+    updateState((prev) => upsertConversation(prev, convoWithUserMessage));
+    runTurn(convoWithUserMessage);
+  };
+
+  const retry = () => {
+    // The failed turn's user message is already persisted (never lost) — just re-run the model
+    // call against the same conversation state, no new user message appended.
+    runTurn(conversation);
+  };
+
+  const resolveProposal = (messageId, status) => {
+    updateState((prev) => upsertConversation(prev, resolveProposalOnMessage(getActiveConversation(prev, specialty).conversation, messageId, status)));
   };
 
   const history = state.coachHistory || [];
   const openCommitments = (state.commitments || []).filter((c) => c.status === "active");
   const knowledgeLevel = coachKnowledgeLevel(state);
-  const QUICK_QUESTIONS = state.athleteProfile?.coachSpecialty === "bodybuilding" ? BODYBUILDING_QUICK_QUESTIONS : GENERAL_QUICK_QUESTIONS;
+  const QUICK_QUESTIONS = specialty === "bodybuilding" ? BODYBUILDING_QUICK_QUESTIONS : GENERAL_QUICK_QUESTIONS;
 
-  // First-time selection must happen before Athlete Profile even opens (section 1/6): who's
-  // coaching you, then tell that coach about you. Runs for every user who hasn't explicitly
-  // confirmed a specialty — including someone with years of existing Coach data, since that
-  // data predates this screen and was never itself a specialty choice.
   if (showSpecialtySelect) {
-    return (
-      <CoachSpecialtySelect
-        state={state}
-        updateState={updateState}
-        mode="onboarding"
-        onSelectComplete={() => setShowSpecialtySelect(false)}
-      />
-    );
+    return <CoachSpecialtySelect state={state} updateState={updateState} mode="onboarding" onSelectComplete={() => setShowSpecialtySelect(false)} />;
   }
-
   if (showOnboarding) {
     return <AthleteProfileForm state={state} updateState={updateState} mode="onboarding" onDone={() => setShowOnboarding(false)} onSkip={() => setShowOnboarding(false)} />;
   }
 
-  const activeSpecialty = getSpecialty(state.athleteProfile?.coachSpecialty || "bodybuilding");
+  const activeSpecialty = getSpecialty(specialty);
   const phase = state.athleteProfile?.physiquePhase;
   const priorities = state.athleteProfile?.physiquePriorities;
   const hasFocus = priorities?.primary || priorities?.secondary;
+
+  const bubbles = visibleMessages(conversation).filter((m) => m.content);
+  const showThinking = sending && streamingText === "";
+  const showStreaming = sending && streamingText !== "";
 
   return (
     <div className="space-y-6">
@@ -160,18 +182,13 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
         <div className="text-[11px] uppercase tracking-widest text-red-600">Coach</div>
         <div className="text-xl font-bold text-white mt-1">BRK Coach</div>
       </div>
-      {/* Reflects data volume only — not a gamified level or any claim of insight (section 45). */}
       <div className="flex items-center gap-1.5 -mt-4">
         <span className="text-[10px] uppercase tracking-widest text-neutral-600" title={KNOWLEDGE_LEVEL_DESC[knowledgeLevel]}>
           Coach Context: {KNOWLEDGE_LEVEL_LABEL[knowledgeLevel]}
         </span>
       </div>
-      <p className="text-xs text-neutral-500 -mt-3">Knows your training. Learns your patterns. Holds you to the plan.</p>
 
-      <button
-        onClick={() => onNavigate?.("coachSettings")}
-        className="w-full text-left border border-neutral-800 bg-charcoal-panel p-4 space-y-1 hover:border-red-700"
-      >
+      <button onClick={() => onNavigate?.("coachSettings")} className="w-full text-left border border-neutral-800 bg-charcoal-panel p-4 space-y-1 hover:border-red-700">
         <div className="text-[11px] uppercase tracking-widest text-neutral-500">{activeSpecialty?.label || "Coach"}</div>
         <div className="text-sm text-neutral-300">
           {phase ? PHYSIQUE_PHASE_LABEL[phase] || "General Hypertrophy" : "General Hypertrophy"}
@@ -207,69 +224,107 @@ export default function CoachTab({ state, updateState, exMap, onNavigate }) {
             const progress = c.type !== "custom" ? commitmentProgress(state, c) : null;
             return (
               <div key={c.id} className="text-sm text-neutral-300 flex items-center justify-between">
-                <span>{c.text} — {c.period === "next_week" ? "next week" : "this week"}</span>
-                {progress != null && <span className="text-neutral-500 text-xs shrink-0 ml-2">{progress}/{c.target}</span>}
+                <span>
+                  {c.text} — {c.period === "next_week" ? "next week" : "this week"}
+                </span>
+                {progress != null && (
+                  <span className="text-neutral-500 text-xs shrink-0 ml-2">
+                    {progress}/{c.target}
+                  </span>
+                )}
               </div>
             );
           })}
         </div>
       )}
 
-      {pendingCommitment && (
-        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
-          <div className="text-sm text-white">Hold you to that? {pendingCommitment.text}, {pendingCommitment.period === "next_week" ? "next week" : "this week"}.</div>
-          <div className="flex gap-2">
-            <button onClick={() => confirmCommitment(true)} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
-              Yes
-            </button>
-            <button onClick={() => confirmCommitment(false)} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
-              No
-            </button>
+      {openContext?.label && (
+        <div className="text-xs text-neutral-500 border border-neutral-800 bg-charcoal-panel px-3 py-2">
+          Referencing: <span className="text-neutral-300">{openContext.label}</span>
+        </div>
+      )}
+
+      {!isOnline && (
+        <div className="flex items-center gap-2 text-xs text-amber-500 border border-amber-900/40 bg-charcoal-panel px-3 py-2">
+          <WifiOff size={13} /> You're offline — Coach needs a connection to respond.
+        </div>
+      )}
+
+      <div className="border border-neutral-800 bg-charcoal-panel flex flex-col h-[65vh] min-h-[420px]">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {bubbles.length === 0 && !showThinking && !showStreaming && (
+            <div className="text-sm text-neutral-500 text-center py-6">
+              Ask about a workout, your progress, nutrition, or what to focus on today.
+            </div>
+          )}
+          {bubbles.map((m) => (
+            <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[85%] px-3.5 py-2.5 text-sm whitespace-pre-line ${m.role === "user" ? "bg-red-700 text-white" : "bg-charcoal-deep border border-neutral-800 text-neutral-200"}`}>
+                {m.content}
+                {m.role === "assistant" && m.metadata?.proposal && (
+                  <CoachProposalCard proposal={m.metadata.proposal} updateState={updateState} onResolve={(status) => resolveProposal(m.id, status)} />
+                )}
+              </div>
+            </div>
+          ))}
+          {showThinking && (
+            <div className="flex justify-start">
+              <div className="max-w-[85%] px-3.5 py-2.5 text-sm bg-charcoal-deep border border-neutral-800 text-neutral-500 italic">Coach is thinking…</div>
+            </div>
+          )}
+          {showStreaming && (
+            <div className="flex justify-start">
+              <div className="max-w-[85%] px-3.5 py-2.5 text-sm bg-charcoal-deep border border-neutral-800 text-neutral-200 whitespace-pre-line">{streamingText}</div>
+            </div>
+          )}
+          {error && (
+            <div className="flex justify-start">
+              <div className="max-w-[85%] px-3.5 py-2.5 text-sm bg-charcoal-panel border border-red-900/40 text-neutral-300 space-y-2">
+                <div>Coach couldn't respond right now.</div>
+                <button onClick={retry} className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-red-500 hover:text-red-400">
+                  <RotateCcw size={12} /> Try Again
+                </button>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {bubbles.length === 0 && (
+          <div className="flex flex-wrap gap-1.5 px-3 pb-2">
+            {QUICK_QUESTIONS.map((q) => (
+              <button key={q} onClick={() => send(q)} disabled={sending || !isOnline} className="px-2.5 py-1.5 text-[11px] border border-neutral-800 text-neutral-400 hover:border-red-700 hover:text-red-500 disabled:opacity-40">
+                {q}
+              </button>
+            ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {answer && (
-        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">{answer.question}</div>
-          <div className="text-base text-white whitespace-pre-line">{answer.message}</div>
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        {QUICK_QUESTIONS.map((q) => (
+        <div className="border-t border-neutral-800 p-3 flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send(input)}
+            placeholder="Ask your coach..."
+            disabled={sending || !isOnline}
+            className="flex-1 min-w-0 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2.5 text-base focus:outline-none focus:border-red-700 disabled:opacity-60"
+          />
           <button
-            key={q}
-            onClick={() => ask(q)}
-            className="px-3 py-2 text-xs border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500"
+            onClick={() => send(input)}
+            disabled={sending || !isOnline || !input.trim()}
+            className="shrink-0 px-4 py-2.5 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600 disabled:opacity-40 flex items-center gap-1.5"
           >
-            {q}
+            <Send size={14} /> Send
           </button>
-        ))}
-      </div>
-
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && ask(question)}
-          placeholder="Ask the coach anything..."
-          className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
-        />
-        <button
-          onClick={() => ask(question)}
-          className="shrink-0 px-4 py-2 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
-        >
-          Ask
-        </button>
+        </div>
       </div>
 
       {history.length > 0 && (
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Coach history</div>
+          <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Earlier Coach notes</div>
           <div className="space-y-3">
-            {history.slice(0, 30).map((h) => (
+            {history.slice(0, 10).map((h) => (
               <div key={h.id} className="border-b border-neutral-900 pb-2">
                 <div className="text-[11px] text-neutral-600">
                   {new Date(h.date).toLocaleString()}

@@ -12,7 +12,7 @@ import NutritionAdjustmentCard from "./NutritionAdjustmentCard.jsx";
 // exactly once, the same pattern CoachTab.jsx uses for Athlete Profile — after that, this is
 // the daily home: targets, today's totals, adherence, and Coach's read on whether the plan or
 // the execution is the actual issue.
-export default function NutritionHome({ state, updateState, onNavigate }) {
+export default function NutritionHome({ state, updateState, onNavigate, onAskCoach }) {
   const [showAssessment, setShowAssessment] = useState(!hasNutritionProfile(state));
   const [showWhy, setShowWhy] = useState(false);
   const [adjustmentResolved, setAdjustmentResolved] = useState(false);
@@ -88,6 +88,11 @@ export default function NutritionHome({ state, updateState, onNavigate }) {
                 Scan Food
               </button>
             </div>
+            {onAskCoach && (
+              <button onClick={onAskCoach} className="w-full py-2 text-[11px] uppercase tracking-widest font-bold text-neutral-500 hover:text-red-500">
+                Ask Coach
+              </button>
+            )}
           </div>
 
           <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-2">

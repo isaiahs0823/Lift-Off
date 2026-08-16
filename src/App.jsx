@@ -907,6 +907,7 @@ function loadInitialState() {
     specialtyInterest: {}, // { [specialtyId]: true } — "Notify me" taps on locked Coach specialties, see src/coachSpecialties
     coachAccess: null, // future trial/subscription scaffold, unenforced — see backupKeyDefault
     coachOnboarding: null, // { specialtySelected, specialty, confirmedAt } — see src/utils/coachOnboarding.js
+    coachConversations: [], // real multi-turn AI chat threads — { id, createdAt, updatedAt, specialty, messages: [...] } — see src/utils/coachConversations.js
     // ---------------- NUTRITION ----------------
     // See src/utils/nutrition.js for shape helpers/defaults. Kept as flat top-level state keys
     // (not nested under one "nutrition" object) so each piece follows the same persist/backup
@@ -998,6 +999,7 @@ const BACKUP_DATA_KEYS = [
   "specialtyInterest",
   "coachAccess",
   "coachOnboarding",
+  "coachConversations",
   "nutritionProfile",
   "nutritionTargets",
   "foodLogs",
@@ -1376,6 +1378,11 @@ export default function LiftLog() {
   // FoodLogScreen would reset to today on every remount, silently losing "I was reviewing
   // yesterday" context right after adding something).
   const [dailyLogDate, setDailyLogDate] = useState(() => todayDateKey());
+  // What the AI Coach chat should reference when opened from somewhere other than its own
+  // tab — a just-finished session, or a specific date's nutrition — so the compact context sent
+  // with the athlete's first message already points the model at the right tool call (spec
+  // sections 31-33). Cleared whenever the athlete navigates to Coach on their own.
+  const [pendingCoachContext, setPendingCoachContext] = useState(null);
   // Which completed session Workout History Detail is currently showing — set by whichever
   // entry point (Today, Program day list, Training Calendar, Session Complete) the user tapped
   // "View Workout" from, all of which open this same id + the same detail screen.
@@ -1694,6 +1701,9 @@ export default function LiftLog() {
             onLoggedSet={bumpRestTimer}
             onRate={rateSession}
             onAskCoach={() => {
+              if (activeRun?.summaryId) {
+                setPendingCoachContext({ type: "workout", sessionId: activeRun.summaryId, label: activeRun.planName });
+              }
               exitRun();
               setTab("coach");
             }}
@@ -1729,6 +1739,10 @@ export default function LiftLog() {
                 state={state}
                 exMap={exMap}
                 onBack={() => setTab("today")}
+                onAskCoach={(session) => {
+                  setPendingCoachContext({ type: "workout", sessionId: session.id, label: session.planName });
+                  setTab("coach");
+                }}
               />
             )}
             {tab === "train" && <TrainTab state={state} onStartRun={(plan, programContext) => startRun(plan, "train", programContext)} onNavigate={setTab} />}
@@ -1746,7 +1760,16 @@ export default function LiftLog() {
               />
             )}
             {tab === "mission" && <MissionTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} />}
-            {tab === "coach" && <CoachTab state={state} updateState={updateState} exMap={exMap} onNavigate={setTab} />}
+            {tab === "coach" && (
+              <CoachTab
+                state={state}
+                updateState={updateState}
+                exMap={exMap}
+                allExercises={allExercises}
+                onNavigate={setTab}
+                openContext={pendingCoachContext}
+              />
+            )}
             {tab === "coachKnowledge" && <CoachKnowledgeScreen state={state} updateState={updateState} onNavigate={setTab} onBack={() => setTab("coach")} />}
             {tab === "coachProfile" && <AthleteProfileForm state={state} updateState={updateState} mode="edit" onDone={() => setTab("coach")} />}
             {tab === "coachSettings" && <CoachSettingsScreen state={state} updateState={updateState} onNavigate={setTab} onBack={() => setTab("coach")} />}
@@ -1759,7 +1782,17 @@ export default function LiftLog() {
                 onCancel={() => setTab("coachSettings")}
               />
             )}
-            {tab === "nutrition" && <NutritionHome state={state} updateState={updateState} onNavigate={setTab} />}
+            {tab === "nutrition" && (
+              <NutritionHome
+                state={state}
+                updateState={updateState}
+                onNavigate={setTab}
+                onAskCoach={() => {
+                  setPendingCoachContext({ type: "nutrition", dateKey: todayDateKey(), label: "Today's nutrition" });
+                  setTab("coach");
+                }}
+              />
+            )}
             {tab === "nutritionLog" && (
               <FoodLogScreen
                 state={state}

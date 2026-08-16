@@ -31,7 +31,7 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
       "Clear everything Coach has learned from conversations and detected patterns? Your workout history, goals, and logged data are never touched — this only resets Coach's own memory and chat history."
     );
     if (!ok) return;
-    updateState((prev) => ({ ...prev, coachMemories: [], coachHistory: [] }));
+    updateState((prev) => ({ ...prev, coachMemories: [], coachHistory: [], coachConversations: [] }));
   };
 
   return (

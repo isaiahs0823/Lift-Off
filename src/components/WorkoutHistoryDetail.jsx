@@ -16,7 +16,7 @@ function fmtTime(iso) {
 // supposed to be — what actually happened"). Every entry point (Today, Program day list,
 // Training Calendar, Session Complete) opens this exact component with a session object looked
 // up by its stable id — there is deliberately only one implementation of this screen.
-export default function WorkoutHistoryDetail({ session, state, exMap, onBack }) {
+export default function WorkoutHistoryDetail({ session, state, exMap, onBack, onAskCoach }) {
   const [collapsed, setCollapsed] = useState({});
 
   if (!session) {
@@ -163,6 +163,15 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack }) 
       <div className="border-t border-neutral-900 pt-3">
         <ShareCardButton buildDataUrl={() => buildWorkoutShareCard(session)} filename="brk-lift-session.png" label="Share Workout" />
       </div>
+
+      {onAskCoach && (
+        <button
+          onClick={() => onAskCoach(session)}
+          className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
+        >
+          Ask Coach About This Workout
+        </button>
+      )}
 
       <button onClick={onBack} className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
         Done
