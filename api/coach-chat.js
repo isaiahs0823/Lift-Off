@@ -1,10 +1,10 @@
 // ---------------- BRK COACH CHAT — serverless proxy ----------------
 // Holds the LLM API key server-side (never shipped to the client) and owns model selection,
-// system instructions, and request validation — see spec section 3/4. BRK has no backend
-// database, so this endpoint is stateless: it never touches "the athlete's data" itself. The
-// client sends a compact context snapshot + tool schemas; if the model wants deeper data it
-// requests a tool call, the client executes it locally (coachTools.js) and calls this endpoint
-// again with the tool result appended. This endpoint's only job is talking to the model.
+// system instructions, and request validation. BRK has no backend database, so this endpoint is
+// stateless: it never touches "the athlete's data" itself. The client sends a compact context
+// snapshot + tool schemas; if the model wants deeper data it requests a tool call, the client
+// executes it locally (coachTools.js) and calls this endpoint again with the tool result
+// appended. This endpoint's only job is talking to the model and making failures diagnosable.
 import { buildCoachSystemPrompt } from "./_lib/coachPrompt.js";
 import { streamChatCompletion } from "./_lib/coachAIProvider.js";
 import { COACH_TOOL_SCHEMAS } from "../src/utils/coachToolSchemas.js";
@@ -14,6 +14,11 @@ const MAX_MESSAGE_CHARS = 6000; // a single message this long is almost certainl
 const MAX_CONTEXT_CHARS = 8000;
 const VALID_ROLES = new Set(["system", "user", "assistant", "tool"]);
 const VALID_STYLES = new Set(["supportive", "balanced", "direct", "hard"]);
+// Current, low-cost OpenAI model with tool-calling support. Override with COACH_MODEL — do not
+// assume this name stays valid forever; if OpenAI ever retires/renames it, classifyOpenAIError()
+// maps the resulting 404/model_not_found straight to a clear client message and a specific
+// server log line naming the exact model that failed, rather than a guess.
+const DEFAULT_MODEL = "gpt-4o-mini";
 
 function validateMessages(messages) {
   if (!Array.isArray(messages) || messages.length === 0) return "messages must be a non-empty array.";
@@ -27,6 +32,48 @@ function validateMessages(messages) {
   return null;
 }
 
+// Section 6 — a malformed tool schema must never silently surface as the generic "couldn't
+// respond" message. Validated once per request (cheap — the schema list is small and static)
+// so a bad edit to coachToolSchemas.js is caught here, in a clearly-labeled log line naming the
+// exact tool, rather than showing up as an opaque upstream 400.
+export function validateToolSchemas(tools) {
+  const problems = [];
+  const seenNames = new Set();
+  for (const t of tools) {
+    const name = t?.function?.name;
+    if (typeof name !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(name)) {
+      problems.push(`Tool has an invalid or missing name: ${JSON.stringify(name)}`);
+      continue;
+    }
+    if (seenNames.has(name)) problems.push(`Duplicate tool name: ${name}`);
+    seenNames.add(name);
+    if (typeof t.function.description !== "string" || !t.function.description) problems.push(`Tool "${name}" is missing a description.`);
+    const params = t.function.parameters;
+    if (!params || params.type !== "object" || typeof params.properties !== "object" || params.properties === null) {
+      problems.push(`Tool "${name}" has invalid parameters (must be a JSON Schema object with a properties map).`);
+    }
+  }
+  return problems;
+}
+
+// Safe server-side log — every field here is either a status code, a provider-defined
+// enum/code, or the configured model name. NEVER logs: the API key, the Authorization header,
+// athlete context, or conversation content.
+function logOpenAIError(details) {
+  console.error("BRK Coach OpenAI error", {
+    status: details.status ?? null,
+    type: details.type ?? null,
+    code: details.code ?? null,
+    model: details.model ?? null,
+    message: details.message ?? null,
+  });
+}
+
+function mapUpstreamStatusForClient(status) {
+  if (status === 429) return 429;
+  return 502; // never mirror an upstream 401/404/etc. onto BRK's own response status — those are OpenAI's auth/routing, not a fact about this request
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -34,10 +81,14 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
+  const model = process.env.COACH_MODEL || DEFAULT_MODEL;
+  // Section 3 — confirms configuration state on every request without ever printing the key
+  // itself. Cheap enough to always log; the moment production starts failing, this line alone
+  // tells you whether it's even worth looking further.
+  console.log("BRK Coach config check", { OPENAI_API_KEY_configured: !!apiKey, COACH_MODEL: model });
+
   if (!apiKey) {
-    // Never pretend Coach worked — a clear, honest error the client renders as a real failure
-    // state, not a silent no-op (spec section 4).
-    res.status(503).json({ error: "AI Coach is not configured on the server yet." });
+    res.status(503).json({ error: "AI Coach is not configured yet." });
     return;
   }
 
@@ -59,6 +110,14 @@ export default async function handler(req, res) {
     res.status(400).json({ error: messageError });
     return;
   }
+
+  const toolProblems = validateToolSchemas(COACH_TOOL_SCHEMAS);
+  if (toolProblems.length > 0) {
+    console.error("BRK Coach tool schema validation failed", toolProblems);
+    res.status(500).json({ error: "AI Coach couldn't respond right now." });
+    return;
+  }
+
   const style = VALID_STYLES.has(coachingStyle) ? coachingStyle : "balanced";
   const specialtyId = typeof specialty === "string" && specialty ? specialty : "bodybuilding";
 
@@ -80,28 +139,25 @@ export default async function handler(req, res) {
   const timeout = setTimeout(() => controller.abort(), 45000);
 
   try {
-    const upstream = await streamChatCompletion({
-      apiKey,
-      model: process.env.COACH_MODEL || "gpt-4o-mini",
-      messages: [...systemMessages, ...messages],
-      tools: COACH_TOOL_SCHEMAS,
-      signal: controller.signal,
-    });
+    const result = await streamChatCompletion(
+      { apiKey, model, messages: [...systemMessages, ...messages], tools: COACH_TOOL_SCHEMAS, signal: controller.signal },
+      res,
+      { onUnhandledEvent: (event) => console.warn("BRK Coach: unrecognized Responses API stream event", { event, model }) }
+    );
+    clearTimeout(timeout);
 
-    if (!upstream.ok || !upstream.body) {
-      const status = upstream.status === 429 ? 429 : 502;
-      res.status(status).json({ error: status === 429 ? "AI Coach is rate-limited right now — try again shortly." : "AI Coach couldn't respond right now." });
+    if (!result.ok) {
+      logOpenAIError(result);
+      if (!res.headersSent) {
+        res.status(mapUpstreamStatusForClient(result.status)).json({ error: result.clientMessage });
+      }
       return;
     }
-
-    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
-    const reader = upstream.body.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      res.write(value);
+    if (result.streamedFailure) {
+      // Streaming had already started (200 sent) when this happened, so the client already
+      // received a real HTTP response — this log is the only way the actual cause is visible.
+      logOpenAIError({ status: null, type: result.streamedFailure.type, code: result.streamedFailure.code, message: result.streamedFailure.message, model });
     }
-    res.end();
   } catch (e) {
     clearTimeout(timeout);
     if (res.headersSent) {
@@ -109,8 +165,7 @@ export default async function handler(req, res) {
       return;
     }
     const isAbort = e?.name === "AbortError";
+    console.error("BRK Coach request failed", { error: e?.message || String(e), model, aborted: isAbort });
     res.status(isAbort ? 504 : 502).json({ error: isAbort ? "AI Coach timed out." : "AI Coach couldn't respond right now." });
-    return;
   }
-  clearTimeout(timeout);
 }
