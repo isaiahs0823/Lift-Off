@@ -61,9 +61,11 @@ export const COACH_TOOL_EXECUTORS = {
     };
   },
 
-  getCurrentProgram(state) {
+  getCurrentProgram(state, exMap) {
     const resolved = resolveCurrentProgramDay(state);
     if (!resolved) return { hasActiveProgram: false };
+    const list = resolved.programContext?.source === "custom" ? state.customPrograms || [] : state.programs || [];
+    const program = list.find((p) => p.id === resolved.programContext?.programId);
     return {
       hasActiveProgram: true,
       programName: resolved.programName,
@@ -72,6 +74,30 @@ export const COACH_TOOL_EXECUTORS = {
       weekNumber: resolved.weekNumber,
       totalWeeks: resolved.totalWeeks,
       completedToday: !!resolved.completedToday,
+      // Full day/exercise structure — needed for "take my current program and change X" requests
+      // (program-builder spec section 33). Omitted from the compact per-turn context on purpose;
+      // this tool is how the model gets it when actually needed.
+      scheduleMode: program?.scheduleMode || null,
+      days: (program?.days || []).map((d) => ({
+        label: d.label,
+        weekday: d.weekday || null,
+        exercises: (d.exercises || []).map((ex) => ({ exercise: exMap[ex.exId]?.name || ex.exId, sets: ex.sets, reps: ex.reps })),
+      })),
+    };
+  },
+
+  getExerciseLibrary(state, exMap, allExercises, { muscle, query } = {}) {
+    let list = allExercises || [];
+    if (muscle) list = list.filter((e) => (e.muscle || "").toLowerCase() === String(muscle).toLowerCase());
+    if (query) {
+      const q = String(query).toLowerCase();
+      list = list.filter((e) => e.name.toLowerCase().includes(q));
+    }
+    const capped = list.slice(0, 40);
+    return {
+      count: capped.length,
+      truncated: list.length > capped.length,
+      exercises: capped.map((e) => ({ id: e.id, name: e.name, type: e.type, muscle: e.muscle })),
     };
   },
 
@@ -224,8 +250,9 @@ export const COACH_TOOL_EXECUTORS = {
     return { applicable: true, proposal };
   },
 
-  // saveMemory and proposeCommitment are handled specially by coachToolRunner.js (they need to
-  // call updateState / render a confirmation card) rather than returning plain data.
+  // saveMemory, proposeCommitment, and proposeProgram are handled specially by
+  // coachToolRunner.js (they need to call updateState / validate / render a confirmation card)
+  // rather than returning plain data.
 };
 
 export function findExerciseByName(allExercises, nameQuery) {

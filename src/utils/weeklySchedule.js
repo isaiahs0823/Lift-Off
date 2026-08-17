@@ -93,6 +93,26 @@ export function suggestFixedScheduleForCurrentProgram(programDayCount) {
   }
   return days;
 }
+// AI Program Builder (spec section 21) — unlike suggestFixedScheduleForCurrentProgram above,
+// this one DOES know which weekday each program day belongs to, because the athlete told Coach
+// explicitly ("Monday chest, Tuesday back..."). Only touches weekdays the program actually
+// assigns; every other weekday keeps whatever was already there (an existing conditioning day,
+// a rest day, etc.) rather than being silently overwritten. Every workout slot still points at
+// { kind: "currentProgram" } for the same reason suggestFixedScheduleForCurrentProgram does —
+// resolveCurrentProgramDay already owns "which exact day is next," this only decides "which
+// weekdays are training days at all." Correct weekday alignment (Monday really means the
+// program's Monday-labeled day) depends on the program's day order matching the sequence of
+// scheduled workout weekdays and on the athlete not skipping days — the same accepted limitation
+// noted above for { kind: "currentProgram" } generally, not something new this introduces.
+export function buildFixedScheduleFromProgramDays(programDays, existingFixedDays) {
+  const fixedDays = { ...defaultFixedDays(), ...(existingFixedDays || {}) };
+  for (const day of programDays || []) {
+    if (!day.weekday || !WEEKDAYS.includes(day.weekday)) continue;
+    fixedDays[day.weekday] = { type: "workout", source: { kind: "currentProgram" }, label: day.label };
+  }
+  return fixedDays;
+}
+
 export function suggestRollingSequenceForProgram(programDayCount) {
   const seq = [];
   let sinceRest = 0;

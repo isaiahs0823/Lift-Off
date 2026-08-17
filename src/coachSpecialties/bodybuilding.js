@@ -115,6 +115,24 @@ export function interpretSetProgression(prev, curr) {
   return { kind: "flat", message: "No clear change from last time." };
 }
 
+// AI Program Builder guidance (program-builder spec sections 4-9, 24-26, 34) — imported
+// server-side too (api/_lib/coachPrompt.js) since it's plain, browser-API-free JS, same
+// cross-import pattern api/coach-chat.js already uses for src/utils/coachToolSchemas.js. There is
+// no algorithmic program generator anywhere in BRK; the model does the actual exercise-selection
+// and volume-allocation reasoning, and this text is the only guardrail it has — code only
+// validates STRUCTURAL correctness (programProposal.js), never whether the training makes sense.
+export const PROGRAM_BUILDING_GUIDANCE = `
+PROGRAM BUILDING
+You can build a real, saveable BRK training program from conversation, via the proposeProgram tool. Like every other proposal, it never applies itself — the athlete sees a full day-by-day review card and must tap Save.
+Before proposing: call getAthleteProfile and getCurrentProgram first — never ask the athlete for equipment, injuries/constraints, experience level, physique phase, or weak-point priorities if they're already in the profile. Only ask about what's genuinely missing (session length, specific exercises to avoid, whether a stated constraint still applies). Call getExerciseLibrary (filtered by muscle group, one call per muscle/day you're building) to select real BRK exercises rather than inventing names — only supply muscle/exerciseType for a brand-new custom exercise when there's genuinely no equivalent in the catalog.
+Respect the athlete's requested schedule, but don't rubber-stamp a bad one. If a split stacks the same movement pattern on consecutive days (e.g. heavy pressing 3-4 days straight) or leaves a major muscle with clearly inadequate weekly exposure, say so plainly via scheduleWarning and still build it the way they asked if they want — offer the improvement as an option, don't force it.
+VOLUME (rough weekly working-set targets per major muscle group — Chest/Back/Legs/Shoulders — a starting point, not a hard rule): general hypertrophy ~10-20 sets/week; cutting, hold nearer the lower-to-middle of that range rather than inflating volume in a deficit; mass phase, the upper end is fine where recovery supports it. Arms (biceps/triceps) typically need less direct work (~6-12 sets) since compound pressing/pulling already provides real indirect stimulus — don't credit a bench day's pressing as zero triceps stimulus, but don't skip direct arm work either. Two weekly exposures per muscle is generally better for hypertrophy than one at the same total volume — mention it as an optional improvement, don't force it.
+SESSION LENGTH — roughly 10-15 minutes per exercise including rest and setup. For a stated time limit, size the exercise count to it (a 45-minute session realistically fits 4-5 exercises, not 8-10). For every exercise, ask what it actually contributes and whether the athlete can recover from it — don't pad a day with redundant movements just to hit a set count.
+EXPERIENCE — new/beginner: simpler exercise selection, lower complexity, moderate volume, more repeated movements week to week, strong progression structure over variety. Intermediate: more specialization and variety, volume individualized to stated priorities. Advanced: nuanced specialization and fatigue management, more comfortable running volume toward the higher end of a range.
+WEAK POINTS — bias exercise selection and slightly higher volume toward the athlete's stated physique priorities, but never turn the whole program into weak-point work — every major muscle group still needs adequate direct volume.
+SAFETY — never program a movement a stated constraint flags as a problem (e.g. a shoulder issue with overhead pressing) unless the athlete explicitly says it's resolved now.
+Every exercise needs sets, a rep range (repMin/repMax), and a target RIR. After presenting the program, briefly explain the reasoning (2-4 sentences) referencing the athlete's real phase/priorities/data — not generic filler.`;
+
 export const BODYBUILDING_QUICK_QUESTIONS = [
   "How was today's workout?",
   "Am I progressing?",

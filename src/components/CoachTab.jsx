@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff } from "lucide-react";
+import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff, ListChecks } from "lucide-react";
 import { syncCoachMemory } from "../utils/coachMemory.js";
 import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC, PHYSIQUE_PHASE_LABEL } from "../utils/athleteProfile.js";
 import { resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
@@ -9,6 +9,7 @@ import { getSpecialty } from "../coachSpecialties/index.js";
 import AthleteProfileForm from "./AthleteProfileForm.jsx";
 import CoachSpecialtySelect from "./CoachSpecialtySelect.jsx";
 import CoachProposalCard from "./CoachProposalCard.jsx";
+import ScheduleBuilderPicker from "./ScheduleBuilderPicker.jsx";
 import { buildCompactCoachContext } from "../utils/coachChatContext.js";
 import { runCoachTurn } from "../services/coachChatService.js";
 import { createToolRunner } from "../services/coachToolRunner.js";
@@ -20,6 +21,7 @@ import {
   messagesForApi,
   extractProposalFromToolResults,
   resolveProposalOnMessage,
+  supersedePendingProposals,
 } from "../utils/coachConversations.js";
 
 const GENERAL_QUICK_QUESTIONS = [
@@ -38,6 +40,7 @@ const GENERAL_QUICK_QUESTIONS = [
 export default function CoachTab({ state, updateState, exMap, allExercises, onNavigate, openContext }) {
   const [showOnboarding, setShowOnboarding] = useState(!hasProfile(state));
   const [showSpecialtySelect, setShowSpecialtySelect] = useState(!resolveCoachOnboarding(state).specialtySelected);
+  const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -119,7 +122,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
       });
 
       const proposal = extractProposalFromToolResults(result.appended);
-      let finalConvo = convoWithUserMessage;
+      let finalConvo = proposal?.proposalType === "program" ? supersedePendingProposals(convoWithUserMessage, "program") : convoWithUserMessage;
       for (const m of result.appended) {
         const isFinalAssistantText = m.role === "assistant" && !!m.content;
         finalConvo = appendMessage(finalConvo, isFinalAssistantText && proposal ? { ...m, metadata: { proposal } } : m);
@@ -165,6 +168,17 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
   }
   if (showOnboarding) {
     return <AthleteProfileForm state={state} updateState={updateState} mode="onboarding" onDone={() => setShowOnboarding(false)} onSkip={() => setShowOnboarding(false)} />;
+  }
+  if (showScheduleBuilder) {
+    return (
+      <ScheduleBuilderPicker
+        onBack={() => setShowScheduleBuilder(false)}
+        onSubmit={(text) => {
+          setShowScheduleBuilder(false);
+          send(text);
+        }}
+      />
+    );
   }
 
   const activeSpecialty = getSpecialty(specialty);
@@ -215,6 +229,12 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
           </span>
           <ChevronRight size={16} className="text-neutral-600" />
         </button>
+        <button onClick={() => setShowScheduleBuilder(true)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-charcoal-panel">
+          <span className="flex items-center gap-2 text-sm text-neutral-200">
+            <ListChecks size={16} className="text-neutral-500" /> Build a Program
+          </span>
+          <ChevronRight size={16} className="text-neutral-600" />
+        </button>
       </div>
 
       {openCommitments.length > 0 && (
@@ -262,7 +282,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
               <div className={`max-w-[85%] px-3.5 py-2.5 text-sm whitespace-pre-line ${m.role === "user" ? "bg-red-700 text-white" : "bg-charcoal-deep border border-neutral-800 text-neutral-200"}`}>
                 {m.content}
                 {m.role === "assistant" && m.metadata?.proposal && (
-                  <CoachProposalCard proposal={m.metadata.proposal} updateState={updateState} onResolve={(status) => resolveProposal(m.id, status)} />
+                  <CoachProposalCard proposal={m.metadata.proposal} updateState={updateState} exMap={exMap} allExercises={allExercises} onResolve={(status) => resolveProposal(m.id, status)} />
                 )}
               </div>
             </div>

@@ -11,6 +11,9 @@
 // only the athlete's own tap calls the real mutation). saveMemory is the one tool that writes
 // immediately — memory is low-stakes and already editable/deletable in "What Coach Knows About
 // You," unlike a program, nutrition target, or commitment.
+import { SCHEDULE_MODES, WEEKDAYS } from "./programProposal.js";
+import { PHYSIQUE_PHASES } from "./athleteProfile.js";
+
 export const COACH_TOOL_SCHEMAS = [
   {
     type: "function",
@@ -179,6 +182,84 @@ export const COACH_TOOL_SCHEMAS = [
       description:
         "Check whether BRK's existing nutrition-adjustment logic recommends a calorie/macro target change right now, based on real bodyweight-trend-vs-adherence evidence. Returns the proposal for you to present — it does NOT apply anything. Only call this when the athlete is asking about their nutrition targets/progress, not proactively every turn.",
       parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "getExerciseLibrary",
+      description:
+        "BRK's exercise catalog (built-in + this athlete's own custom exercises) for selecting real exercises when building or modifying a program. Always filter by muscle group — call this once per muscle group/day you're building rather than requesting everything at once; results are capped and an unfiltered call returns a much less useful list.",
+      parameters: {
+        type: "object",
+        properties: {
+          muscle: { type: "string", description: "Muscle group to filter to, e.g. 'Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'. Strongly recommended." },
+          query: { type: "string", description: "Optional substring to further filter by exercise name." },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "proposeProgram",
+      description:
+        "Propose a complete, structured training program for the athlete to review and save. Does NOT save or activate anything — the athlete sees a full day-by-day review card (exercises, sets, reps, RIR, weekly volume) and must explicitly tap Save. Call getAthleteProfile, getCurrentProgram, and getExerciseLibrary first so the proposal reflects real BRK data and a real exercise catalog, never invented ones. If the proposal fails validation, the result tells you exactly what to fix — repair it and call this again rather than giving up.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          tagline: { type: "string" },
+          goal: { type: "string", description: "Short goal label, e.g. 'hypertrophy'." },
+          phase: { type: "string", enum: PHYSIQUE_PHASES },
+          reasoning: { type: "string", description: "2-4 sentences explaining why this program is built this way — reference the athlete's real phase/priorities/data, not generic filler." },
+          scheduleWarning: {
+            type: "string",
+            description: "Set ONLY if the athlete's requested schedule has a real recovery/overlap concern (e.g. pressing 4 days straight, a muscle with excessive overlapping fatigue). Explain the concern briefly. The proposed program can still follow the athlete's exact request — this is a heads-up, not a refusal.",
+          },
+          scheduleMode: { type: "string", enum: SCHEDULE_MODES },
+          weeks: { type: "integer", minimum: 1, maximum: 52 },
+          days: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                label: { type: "string" },
+                weekday: { type: "string", enum: WEEKDAYS, description: "Only meaningful when scheduleMode is 'fixed'." },
+                focusMuscles: { type: "array", items: { type: "string" } },
+                exercises: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      exerciseId: { type: "string", description: "Set this when the exercise was found via getExerciseLibrary." },
+                      exerciseName: { type: "string" },
+                      muscle: { type: "string", description: "Required only if this exercise doesn't already exist in BRK — used to create it." },
+                      exerciseType: { type: "string", enum: ["compound", "isolation"], description: "Required only if this exercise doesn't already exist in BRK — used to create it." },
+                      order: { type: "integer" },
+                      sets: { type: "integer" },
+                      repMin: { type: "integer" },
+                      repMax: { type: "integer" },
+                      targetRir: { type: "integer" },
+                      restSeconds: { type: "integer" },
+                      notes: { type: "string" },
+                      group: { type: "string", description: "Single uppercase letter (e.g. 'A') to mark a superset/giant-set with other exercises sharing the same letter. Omit for a standalone exercise." },
+                    },
+                    required: ["exerciseName", "order", "sets", "repMin", "repMax", "targetRir"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["id", "label", "exercises"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["name", "scheduleMode", "days", "reasoning"],
+        additionalProperties: false,
+      },
     },
   },
 ];

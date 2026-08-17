@@ -34,9 +34,27 @@ export function appendMessage(conversation, message) {
   return { ...conversation, updatedAt: full.createdAt, messages: [...conversation.messages, full] };
 }
 
+// A "program" tool result deliberately omits the full proposal (see coachToolRunner.js — a
+// multi-day program's JSON can be 5-10k+ chars, and re-embedding it risked tripping
+// api/coach-chat.js's per-message character cap). The full data is still right there, uncapped,
+// in the same turn's assistant tool_calls arguments — this finds it by call id.
+function findToolCallArguments(appendedMessages, toolCallId) {
+  for (const m of appendedMessages) {
+    if (m.role !== "assistant" || !Array.isArray(m.tool_calls)) continue;
+    const tc = m.tool_calls.find((t) => t.id === toolCallId);
+    if (!tc) continue;
+    try {
+      return JSON.parse(tc.function.arguments);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 // Scans one turn's appended tool-result messages for a write-adjacent proposal (commitment /
-// nutrition target change — see coachToolRunner.js) so the caller can attach it to the turn's
-// final assistant message as metadata.proposal, which is what the chat UI renders an
+// nutrition target change / program — see coachToolRunner.js) so the caller can attach it to the
+// turn's final assistant message as metadata.proposal, which is what the chat UI renders an
 // Accept/Modify/Decline card from. Returns null when the turn didn't touch a propose-* tool.
 export function extractProposalFromToolResults(appendedMessages) {
   for (const m of appendedMessages) {
@@ -51,8 +69,32 @@ export function extractProposalFromToolResults(appendedMessages) {
     if (parsed?.proposalType === "nutrition_target_change" && parsed.applicable) {
       return { proposalType: "nutrition_target_change", proposal: parsed.proposal, status: "pending" };
     }
+    if (parsed?.proposalType === "program" && parsed.valid) {
+      const proposal = findToolCallArguments(appendedMessages, m.tool_call_id);
+      if (!proposal) continue; // shouldn't happen, but never render a card with no actual data
+      return { proposalType: "program", proposal: { ...proposal, plannedVolume: parsed.plannedVolume }, status: "pending" };
+    }
   }
   return null;
+}
+
+// A program proposal is higher-stakes than a commitment/nutrition one to leave stacked: if the
+// athlete asks for a change ("I don't want barbell squats") and Coach re-proposes, an EARLIER
+// still-pending program card would otherwise keep offering its own working "Save Program" button
+// with the stale content — someone could tap the wrong one and save the version they just asked
+// to change. Marks any earlier pending proposal of the SAME type as superseded (a distinct status
+// from declined — nothing was rejected, it was just replaced) so only the newest one stays
+// actionable. Only applied to "program" proposals; commitments/nutrition changes don't carry this
+// risk (accepting an old one doesn't overwrite something the athlete just asked to be different).
+export function supersedePendingProposals(conversation, proposalType) {
+  return {
+    ...conversation,
+    messages: conversation.messages.map((m) =>
+      m.metadata?.proposal?.proposalType === proposalType && m.metadata.proposal.status === "pending"
+        ? { ...m, metadata: { ...m.metadata, proposal: { ...m.metadata.proposal, status: "superseded" } } }
+        : m
+    ),
+  };
 }
 
 // Marks a specific message's proposal as resolved (accepted/modified/declined) so its card
