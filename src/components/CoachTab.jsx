@@ -46,6 +46,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
   const [sending, setSending] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState(null);
+  const [errorRequestId, setErrorRequestId] = useState(null);
   const [isOnline, setIsOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   const abortRef = useRef(null);
   const bottomRef = useRef(null);
@@ -101,6 +102,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
     setSending(true);
     setStreamingText("");
     setError(null);
+    setErrorRequestId(null);
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -131,6 +133,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
     } catch (e) {
       if (e?.name !== "AbortError") {
         setError(e?.message || "Coach couldn't respond right now.");
+        setErrorRequestId(e?.requestId || null);
       }
     } finally {
       setSending(false);
@@ -300,7 +303,12 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
           {error && (
             <div className="flex justify-start">
               <div className="max-w-[85%] px-3.5 py-2.5 text-sm bg-charcoal-panel border border-red-900/40 text-neutral-300 space-y-2">
-                <div>Coach couldn't respond right now.</div>
+                {/* Shows the actual server-classified message (auth/quota/model/invalid-request/
+                    generic) — this used to be a single hardcoded string regardless of what the
+                    server actually said, which meant a correct, specific classification server-side
+                    never reached anyone looking at the app. */}
+                <div>{error}</div>
+                {errorRequestId && <div className="text-[10px] text-neutral-600">Error ID: {errorRequestId}</div>}
                 <button onClick={retry} className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-red-500 hover:text-red-400">
                   <RotateCcw size={12} /> Try Again
                 </button>

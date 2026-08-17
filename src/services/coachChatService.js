@@ -17,6 +17,7 @@ async function streamOneCompletion({ messages, context, specialty, coachingStyle
     const body = await res.json().catch(() => null);
     const err = new Error(body?.error || "Coach couldn't respond right now.");
     err.status = res.status;
+    err.requestId = body?.requestId || null;
     throw err;
   }
 

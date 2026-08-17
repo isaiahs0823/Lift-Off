@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import {
   COACHING_STYLES,
@@ -24,6 +24,36 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
 
   const patch = (fields) => {
     updateState((prev) => ({ ...prev, athleteProfile: { ...resolveProfile(prev), ...fields, updatedAt: new Date().toISOString() } }));
+  };
+
+  const [connState, setConnState] = useState("idle"); // "idle" | "testing" | "connected" | "failed"
+  const [connResult, setConnResult] = useState(null);
+
+  // Production-incident tooling — tests the SAME deployed /api/coach-chat backend and
+  // OPENAI_API_KEY the real Coach chat uses, layered: the server checks the provider/key/model
+  // in isolation first, then streaming, and reports exactly which layer failed rather than
+  // collapsing everything into one generic result.
+  const testConnection = async () => {
+    setConnState("testing");
+    setConnResult(null);
+    try {
+      const res = await fetch("/api/coach-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectionTest: true }),
+      });
+      const body = await res.json().catch(() => null);
+      if (body?.ok) {
+        setConnState("connected");
+        setConnResult({ model: body.model, requestId: body.requestId });
+      } else {
+        setConnState("failed");
+        setConnResult({ reason: body?.reason || body?.error || "Unknown failure.", layer: body?.layer, model: body?.model, requestId: body?.requestId });
+      }
+    } catch {
+      setConnState("failed");
+      setConnResult({ reason: "Network request to BRK's own backend failed.", requestId: null });
+    }
   };
 
   const clearMemory = () => {
@@ -205,6 +235,41 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
           Edit full athlete profile
           <ChevronRight size={16} className="text-neutral-600" />
         </button>
+      </div>
+
+      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
+        <div className="text-[11px] uppercase tracking-widest text-red-600">AI Connection</div>
+
+        {connState === "idle" && (
+          <button onClick={testConnection} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30">
+            Test Connection
+          </button>
+        )}
+
+        {connState === "testing" && <div className="text-sm text-neutral-400">Testing…</div>}
+
+        {connState === "connected" && (
+          <div className="space-y-1.5">
+            <div className="text-sm font-bold text-green-500">CONNECTED</div>
+            <div className="text-xs text-neutral-500">
+              Model: <span className="text-neutral-300">{connResult?.model}</span>
+            </div>
+            <button onClick={testConnection} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+              Test again
+            </button>
+          </div>
+        )}
+
+        {connState === "failed" && (
+          <div className="space-y-1.5">
+            <div className="text-sm font-bold text-red-500">FAILED</div>
+            <div className="text-xs text-neutral-400">Reason: {connResult?.reason}</div>
+            {connResult?.requestId && <div className="text-[10px] text-neutral-600">Error ID: {connResult.requestId}</div>}
+            <button onClick={testConnection} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+              Retry
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="border border-neutral-800 p-4 space-y-2">

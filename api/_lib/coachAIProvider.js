@@ -14,6 +14,19 @@
 // specific line in Vercel logs instead of another silent "couldn't respond" dead end.
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 
+// The Responses API's role taxonomy replaced Chat Completions' "system" role with "developer"
+// for instruction-priority input items — "system" was never guaranteed valid there. Sending it
+// directly (as this file did before) is the leading suspect for a persistent 400
+// invalid_request_error that the old error classification (which only mapped 400 to a specific
+// message when it mentioned "model") would silently collapse into the fully generic "Coach
+// couldn't respond right now." on every single request — exactly the reported symptom. This
+// mapping is the fix; classifyOpenAIError below also now surfaces ANY 400 with a distinct,
+// specific message instead of swallowing it, so if this hypothesis is wrong, the real cause is
+// visible in the next log line instead of hidden again.
+function toResponsesRole(role) {
+  return role === "system" ? "developer" : role;
+}
+
 // BRK's internal message shape (role/content/tool_calls/tool_call_id/name — the Chat-Completions
 // convention already used everywhere else in this codebase) converted into Responses API `input`
 // items. A tool_calls-bearing assistant message becomes one function_call item per call; a
@@ -33,7 +46,7 @@ function toResponsesInput(messages) {
       input.push({ type: "function_call_output", call_id: m.tool_call_id, output: m.content ?? "" });
       continue;
     }
-    input.push({ role: m.role, content: m.content ?? "" });
+    input.push({ role: toResponsesRole(m.role), content: m.content ?? "" });
   }
   return input;
 }
@@ -46,17 +59,26 @@ function toResponsesTools(tools) {
 
 // Turns an upstream HTTP/JSON error into (a) a safe, specific server log payload and (b) a
 // client-safe message — never the raw provider message, which can echo request internals.
+// Every status/code combination OpenAI can realistically return now maps to a distinct message
+// (previously, any 400 that didn't happen to mention "model" fell all the way through to the
+// fully generic message, indistinguishable from a network failure or an unclassified 5xx — this
+// is exactly the kind of gap that turns a one-line log fix into a mystery).
 export function classifyOpenAIError(status, errBody, model) {
   const err = errBody?.error || {};
   const code = err.code || null;
   const type = err.type || null;
   const message = err.message || null;
   let clientMessage;
-  if (status === 401) clientMessage = "AI Coach authentication failed.";
-  else if (status === 404 || code === "model_not_found") clientMessage = "AI Coach model is unavailable.";
-  else if (status === 400 && (code === "model_not_found" || /model/i.test(message || ""))) clientMessage = "AI Coach model is unavailable.";
+  if (status === 401 || code === "invalid_api_key") clientMessage = "AI authentication failed.";
+  else if (status === 404 || code === "model_not_found") clientMessage = "Configured AI model is unavailable.";
+  else if (status === 400 && (code === "model_not_found" || /model/i.test(message || ""))) clientMessage = "Configured AI model is unavailable.";
   else if (status === 429) {
-    clientMessage = type === "insufficient_quota" || code === "insufficient_quota" ? "AI Coach is temporarily unavailable — quota exceeded." : "AI Coach is busy right now. Try again shortly.";
+    clientMessage = type === "insufficient_quota" || code === "insufficient_quota" ? "AI billing/quota is unavailable." : "AI Coach is busy right now. Try again shortly.";
+  } else if (status === 400) {
+    // Any other 400 — malformed request shape, an invalid field value (e.g. a bad role), etc.
+    // Distinct from the fully generic message specifically so this is never confused with an
+    // unclassified upstream failure again.
+    clientMessage = "BRK sent an invalid AI request.";
   } else clientMessage = "AI Coach couldn't respond right now.";
   return { ok: false, status, code, type, message, model, clientMessage };
 }
@@ -97,14 +119,137 @@ const KNOWN_NOOP_EVENTS = new Set([
   "response.function_call_arguments.done",
 ]);
 
+// ---------------- CONNECTION DIAGNOSTICS ----------------
+// Two isolated probes, deliberately separate from the real chat pipeline and from each other —
+// no BRK tools, no athlete context, no system/developer prompt, no `res` writing (self-contained,
+// never touches the real chat UI's response stream). The point is to answer "which layer is
+// actually broken" with evidence instead of guessing: probeNonStreaming rules provider/key/
+// billing/model/request-format in or out on its own; only if that passes does probeStreaming test
+// whether the SSE event translation itself is the problem. api/coach-chat.js's connectionTest
+// mode runs them in that order and reports exactly which one failed.
+
+// Pulls the plain text out of a non-streaming Responses API response body. The API's JSON
+// includes a top-level `output_text` convenience field in current versions, but this also walks
+// `output[]` directly (message items -> content[] -> output_text parts) so a probe never reports
+// a false failure just because that convenience field is missing on some response.
+function extractResponsesOutputText(json) {
+  if (typeof json?.output_text === "string") return json.output_text;
+  if (Array.isArray(json?.output)) {
+    return json.output
+      .filter((item) => item?.type === "message")
+      .flatMap((item) => (Array.isArray(item.content) ? item.content : []))
+      .filter((part) => part?.type === "output_text" || part?.type === "text")
+      .map((part) => part.text || "")
+      .join("");
+  }
+  return "";
+}
+
+// Phase 4 of the incident spec — a minimal non-streaming request. If this fails, the problem is
+// provider/key/billing/model/request-format, full stop; none of BRK's own streaming-translation
+// or tool code is anywhere in the loop for this check.
+export async function probeNonStreaming({ apiKey, model }) {
+  const startedAt = Date.now();
+  let upstream;
+  try {
+    upstream = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, input: [{ role: "user", content: "Reply with exactly: BRK_AI_OK" }], stream: false, max_output_tokens: 20 }),
+    });
+  } catch (e) {
+    return { ok: false, status: null, code: "network_error", type: "network_error", message: e?.message || String(e), model, clientMessage: "AI Coach couldn't respond right now.", elapsedMs: Date.now() - startedAt };
+  }
+  const elapsedMs = Date.now() - startedAt;
+  if (!upstream.ok) {
+    let errBody = null;
+    try {
+      errBody = await upstream.json();
+    } catch {
+      // not JSON — classifyOpenAIError handles a null body fine
+    }
+    return { ...classifyOpenAIError(upstream.status, errBody, model), elapsedMs };
+  }
+  let json = null;
+  try {
+    json = await upstream.json();
+  } catch {
+    return { ok: false, status: upstream.status, code: "bad_json", type: null, message: "Response body was not valid JSON.", model, clientMessage: "AI Coach couldn't respond right now.", elapsedMs };
+  }
+  return { ok: true, model, status: upstream.status, text: extractResponsesOutputText(json), elapsedMs };
+}
+
+// Phase 5 of the incident spec — streaming, still with no tools/context, isolating the SSE
+// event-translation layer specifically now that probeNonStreaming has already confirmed the
+// provider/key/model layer independently. Reuses the same event names streamChatCompletion
+// handles below, so a translation bug shows up here identically to how it'd show up in real
+// Coach chat — but without ever touching a real client-facing response.
+export async function probeStreaming({ apiKey, model }) {
+  const startedAt = Date.now();
+  let upstream;
+  try {
+    upstream = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, input: [{ role: "user", content: "Reply with exactly: BRK_STREAM_OK" }], stream: true, max_output_tokens: 20 }),
+    });
+  } catch (e) {
+    return { ok: false, status: null, code: "network_error", type: "network_error", message: e?.message || String(e), model, clientMessage: "AI Coach couldn't respond right now.", elapsedMs: Date.now() - startedAt };
+  }
+  if (!upstream.ok) {
+    let errBody = null;
+    try {
+      errBody = await upstream.json();
+    } catch {
+      // not JSON
+    }
+    return { ...classifyOpenAIError(upstream.status, errBody, model), elapsedMs: Date.now() - startedAt };
+  }
+  if (!upstream.body) {
+    return { ok: false, status: upstream.status, code: null, type: null, message: "Upstream returned no response body.", model, clientMessage: "AI Coach couldn't respond right now.", elapsedMs: Date.now() - startedAt };
+  }
+
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let sawCompleted = false;
+  let sawFailure = null;
+  const unhandledEvents = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() ?? "";
+    for (const block of blocks) {
+      if (!block.trim()) continue;
+      const parsed = parseSSEBlock(block);
+      if (!parsed) continue;
+      const { event, data } = parsed;
+      if (event === "response.output_text.delta") text += data.delta ?? "";
+      else if (event === "response.completed") sawCompleted = true;
+      else if (event === "response.failed" || event === "error") sawFailure = data.response?.error || data.error || { message: "Unknown streaming failure." };
+      else if (!KNOWN_NOOP_EVENTS.has(event)) unhandledEvents.push(event || "(event with no type)");
+    }
+  }
+
+  const elapsedMs = Date.now() - startedAt;
+  if (sawFailure) {
+    return { ok: false, status: null, code: sawFailure.code || null, type: sawFailure.type || null, message: sawFailure.message || null, model, clientMessage: "AI Coach couldn't respond right now.", elapsedMs };
+  }
+  return { ok: true, model, text, sawCompleted, unhandledEvents, elapsedMs };
+}
+
 // Fetches a streaming Responses API completion and writes it to `res` as Chat-Completions-delta
 // SSE, exactly like api/coach-chat.js already wrote when piping Chat Completions directly.
 // Returns { ok: true, streamedFailure? } once the response has been fully written and res.end()
 // called, or { ok: false, ...classifyOpenAIError() } WITHOUT having touched `res` at all (so the
 // caller can still send a normal JSON error response) when the request fails before streaming
 // starts.
-export async function streamChatCompletion({ apiKey, model, messages, tools, signal }, res, { onUnhandledEvent } = {}) {
-  console.log("BRK Coach upstream request starting", { model, aborted: signal?.aborted === true });
+export async function streamChatCompletion({ apiKey, model, messages, tools, signal, requestId, diagnostic }, res, { onUnhandledEvent } = {}) {
+  console.log("BRK Coach upstream request starting", { requestId, model, diagnostic: !!diagnostic, toolsEnabled: !!tools?.length, aborted: signal?.aborted === true });
 
   let upstream;
   try {
@@ -128,12 +273,12 @@ export async function streamChatCompletion({ apiKey, model, messages, tools, sig
       // signal is whether it was ALREADY aborted before this function even started (a bug
       // aborting too early) vs. aborted during the fetch call itself (the 45s ceiling in
       // coach-chat.js, the only legitimate source now that req "close" no longer aborts).
-      console.error("BRK Coach upstream fetch aborted", { model });
+      console.error("BRK Coach upstream fetch aborted", { requestId, model });
     }
     throw e;
   }
 
-  console.log("BRK Coach upstream response received", { model, status: upstream.status, ok: upstream.ok });
+  console.log("BRK Coach upstream response received", { requestId, model, status: upstream.status, ok: upstream.ok });
 
   if (!upstream.ok) {
     let errBody = null;
