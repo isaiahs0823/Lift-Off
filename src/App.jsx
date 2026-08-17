@@ -1483,6 +1483,10 @@ export default function LiftLog() {
   // "conditioning" — there's no exMap lookup for a run/row).
   const bumpRestTimer = useCallback(
     (arg) => {
+      // Called synchronously from the Save Set click handler — the real user-gesture call
+      // stack, and a more reliable place for iOS to honor an AudioContext resume() than a
+      // useEffect reacting to the resulting state change one render later.
+      unlockAudio();
       const defaults = { ...DEFAULT_REST_DEFAULTS, ...(state.settings?.restDefaults || {}) };
       let category = "compound";
       if (typeof arg === "string" && defaults[arg] != null) category = arg;
@@ -1681,7 +1685,7 @@ export default function LiftLog() {
   return (
     <div className="w-full bg-charcoal-deep text-neutral-200 font-sans min-h-[600px]">
       <Header />
-      <RestTimer bump={restBump} />
+      <RestTimer bump={restBump} settings={state.settings} />
       <div className={`p-4 sm:p-6 ${!activeRun ? "pb-24" : ""}`}>
         {activeRun ? (
           <GuidedRunView
@@ -2887,59 +2891,215 @@ function formatRestTime(totalSeconds) {
 // playing (Spotify/Apple Music/etc.) instead of pausing it, the way <audio>/<video> often do
 // on mobile. A single AudioContext is reused and resumed on user gestures (autoplay policy
 // requires that) so it's already unlocked by the time the countdown actually hits zero.
+//
+// ROOT CAUSE of the beep going silent: iOS can auto-suspend an AudioContext after backgrounding
+// or a period of inactivity — extremely common mid-rest, since resting is exactly when someone
+// checks a text or locks the phone. ctx.resume() returns a Promise, and the old code never
+// handled its rejection; a resume that silently failed (or a resume attempted from inside a
+// useEffect instead of a real click-handler call stack, which iOS is stricter about) meant the
+// beep call ran against a still-suspended context and produced nothing, with no error anywhere
+// to notice. Both are fixed below: unlockAudio() is now also called synchronously inside
+// bumpRestTimer() itself (the actual click-handler call stack from Save Set), and every
+// resume()/play attempt is wrapped so a rejection can never silently eat the alert or throw.
 let sharedAudioCtx = null;
 function unlockAudio() {
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) return;
-  if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
-  if (sharedAudioCtx.state === "suspended") sharedAudioCtx.resume();
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+    if (sharedAudioCtx.state === "suspended") sharedAudioCtx.resume().catch(() => {});
+  } catch {
+    // No Web Audio support or construction failed — foreground sound just won't play; nothing
+    // else in the app depends on this.
+  }
 }
 function playRestCompleteBeep() {
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) return;
-  if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
-  const ctx = sharedAudioCtx;
-  if (ctx.state === "suspended") ctx.resume();
-  const now = ctx.currentTime;
-  [0, 0.22, 0.44].forEach((offset) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0, now + offset);
-    gain.gain.linearRampToValueAtTime(0.35, now + offset + 0.015);
-    gain.gain.linearRampToValueAtTime(0, now + offset + 0.18);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(now + offset);
-    osc.stop(now + offset + 0.2);
-  });
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+    const ctx = sharedAudioCtx;
+    const play = () => {
+      const now = ctx.currentTime;
+      [0, 0.22, 0.44].forEach((offset) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0, now + offset);
+        gain.gain.linearRampToValueAtTime(0.35, now + offset + 0.015);
+        gain.gain.linearRampToValueAtTime(0, now + offset + 0.18);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + offset);
+        osc.stop(now + offset + 0.2);
+      });
+    };
+    if (ctx.state === "suspended") {
+      ctx.resume().then(play).catch(() => {});
+    } else {
+      play();
+    }
+  } catch {
+    // Never let a beep failure take down the rest of the completion flow.
+  }
+}
+
+// Shows a system notification for a rest-complete event that happens while the tab is hidden
+// but JS is still actually running (switched tabs, not fully suspended) — works on several
+// desktop/Android browsers without any server involvement, and uses public/sw.js's
+// registration.showNotification() when that worker is active (see main.jsx) since it's better
+// supported for a backgrounded-but-alive tab than a bare `new Notification()`.
+//
+// The honest boundary: this is NOT the same as a true screen-locked iOS notification. Once iOS
+// fully suspends a backgrounded/locked PWA, no JS at all runs — not this function, not the
+// service worker's own script — until the athlete reopens the app. Making a notification appear
+// in that state requires real Web Push: a server holding the athlete's push subscription, plus
+// something to actually trigger the send at the right moment. BRK has no backend database or
+// job scheduler today (only two stateless serverless proxies), so that path doesn't exist yet.
+// Nothing here pretends otherwise — this function only ever fires from live, running JS.
+async function showBackgroundNotification() {
+  try {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    const title = "REST COMPLETE";
+    const options = { body: "Time for your next set.", icon: "/apple-touch-icon.png", tag: "brk-rest-complete", renotify: true };
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, options);
+      return;
+    }
+    new Notification(title, options);
+  } catch {
+    // Best-effort only — never let a notification failure affect the rest timer itself.
+  }
+}
+
+// Persists the active/paused rest timer (spec section 12) so a refresh mid-rest recovers
+// against the real expiration timestamp instead of losing the timer or resetting it — mirrors
+// the existing liftlog-active-run pattern (its own small key, not folded into the big app-state
+// blob that only persists on the normal debounce cycle). alertedFor is included so a refresh
+// landing exactly after completion but before the athlete has acted doesn't re-alert.
+const REST_TIMER_STORAGE_KEY = "liftlog-rest-timer";
+function loadPersistedRestTimer() {
+  try {
+    const raw = window.localStorage.getItem(REST_TIMER_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor }) {
+  try {
+    if (endsAt != null || pausedRemainingMs != null) {
+      window.localStorage.setItem(REST_TIMER_STORAGE_KEY, JSON.stringify({ duration, endsAt, pausedRemainingMs, alertedFor }));
+    } else {
+      window.localStorage.removeItem(REST_TIMER_STORAGE_KEY);
+    }
+  } catch {
+    // storage unavailable
+  }
+}
+
+// The one place a rest-complete event is ever handled (spec section 3) — avoids the old bug
+// class of duplicated completion logic (interval tick + resume reconciliation each doing their
+// own thing) firing the alert more than once or handling foreground/background differently by
+// accident.
+function triggerRestCompleteAlert({ sound = true, vibration = true, backgroundAlerts = true } = {}) {
+  if (typeof document !== "undefined" && document.visibilityState === "visible") {
+    if (sound) playRestCompleteBeep();
+    if (vibration && navigator.vibrate) {
+      try {
+        navigator.vibrate([300, 150, 300, 150, 300]);
+      } catch {
+        // Some browsers throw if called outside a user gesture context — never fatal.
+      }
+    }
+  } else if (backgroundAlerts) {
+    showBackgroundNotification();
+  }
 }
 
 // Global rest timer widget — mounted once at the app shell so it survives tab switches.
 // Idle state is a slim bar; the instant it's running (or just hit zero) it expands into a
 // large, high-contrast readout meant to be legible from across a gym, with a vibration +
 // flash + beep on completion.
-function RestTimer({ bump }) {
-  const [duration, setDuration] = useState(90);
-  const [remaining, setRemaining] = useState(null);
-  const [paused, setPaused] = useState(false);
+//
+// Tracks an absolute endsAt timestamp (spec section 4) instead of decrementing a counter, so a
+// throttled/paused setInterval while backgrounded can never cause drift — the displayed
+// countdown and the completion check are always derived fresh from endsAt - Date.now(), not
+// from how many ticks actually fired. visibilitychange/pageshow/focus (section 5) force an
+// immediate recompute the instant BRK becomes active again, so returning from background jumps
+// straight to "complete" rather than resuming a stale number.
+function RestTimer({ bump, settings }) {
+  const initial = loadPersistedRestTimer();
+  const [duration, setDuration] = useState(initial?.duration ?? 90);
+  const [endsAt, setEndsAt] = useState(initial?.endsAt ?? null); // absolute ms timestamp; null while idle
+  const [pausedRemainingMs, setPausedRemainingMs] = useState(initial?.pausedRemainingMs ?? null); // set only while paused (endsAt is null then)
   const [justFinished, setJustFinished] = useState(false);
+  const [, forceTick] = useState(0);
+  // Dedup guard (section 13) — keyed on the endsAt value itself, so each distinct timer
+  // instance (a new preset/bump always gets a new endsAt) can only ever alert once, regardless
+  // of how many things try to trigger completion (an interval tick, a visibility reconciliation,
+  // both racing on return-from-background). Seeded from the persisted value so a refresh landing
+  // right after completion doesn't re-alert.
+  const alertedForRef = useRef(initial?.alertedFor ?? null);
 
-  useEffect(() => {
-    if (remaining === null || remaining <= 0 || paused) return;
-    const id = setInterval(() => setRemaining((r) => (r === null ? null : r - 1)), 1000);
-    return () => clearInterval(id);
-  }, [remaining, paused]);
+  const soundEnabled = settings?.restTimerSound !== false;
+  const vibrationEnabled = settings?.restTimerVibration !== false;
+  const backgroundAlertsEnabled = settings?.restTimerBackgroundAlerts !== false;
 
-  useEffect(() => {
-    if (remaining !== 0) return;
-    playRestCompleteBeep();
-    if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]);
+  const paused = pausedRemainingMs !== null;
+  const isActive = endsAt !== null || paused;
+  const remaining = paused ? Math.ceil(pausedRemainingMs / 1000) : endsAt != null ? Math.ceil(Math.max(0, endsAt - Date.now()) / 1000) : null;
+
+  const fireCompletionIfDue = useCallback(() => {
+    if (endsAt == null) return;
+    if (Date.now() < endsAt) return;
+    if (alertedForRef.current === endsAt) return;
+    alertedForRef.current = endsAt;
+    persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor: endsAt });
+    triggerRestCompleteAlert({ sound: soundEnabled, vibration: vibrationEnabled, backgroundAlerts: backgroundAlertsEnabled });
     setJustFinished(true);
-    const id = setTimeout(() => setJustFinished(false), 2000);
-    return () => clearTimeout(id);
-  }, [remaining]);
+    setTimeout(() => setJustFinished(false), 2000);
+  }, [endsAt, duration, pausedRemainingMs, soundEnabled, vibrationEnabled, backgroundAlertsEnabled]);
+
+  // Persists on every meaningful state change, and once more immediately on mount to catch
+  // "the stored timer already expired while BRK was closed" without waiting for the next tick.
+  useEffect(() => {
+    persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor: alertedForRef.current });
+  }, [duration, endsAt, pausedRemainingMs]);
+  useEffect(() => {
+    fireCompletionIfDue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Forces a re-render every second while genuinely running so the countdown visibly ticks, and
+  // checks completion on every tick. If iOS throttles/skips ticks while backgrounded, nothing
+  // breaks — the visibilitychange/focus reconciliation below catches up the instant BRK is
+  // active again, computing straight from the real clock.
+  useEffect(() => {
+    if (endsAt == null) return;
+    const id = setInterval(() => {
+      forceTick((t) => t + 1);
+      fireCompletionIfDue();
+    }, 1000);
+    return () => clearInterval(id);
+  }, [endsAt, fireCompletionIfDue]);
+
+  useEffect(() => {
+    const reconcile = () => {
+      forceTick((t) => t + 1);
+      fireCompletionIfDue();
+    };
+    document.addEventListener("visibilitychange", reconcile);
+    window.addEventListener("pageshow", reconcile);
+    window.addEventListener("focus", reconcile);
+    return () => {
+      document.removeEventListener("visibilitychange", reconcile);
+      window.removeEventListener("pageshow", reconcile);
+      window.removeEventListener("focus", reconcile);
+    };
+  }, [fireCompletionIfDue]);
 
   // Compares against the last-seen bump token (rather than a "have I ever run" flag) so
   // React StrictMode's double-invoke-on-commit in dev can't misfire this as a real bump.
@@ -2947,31 +3107,45 @@ function RestTimer({ bump }) {
   useEffect(() => {
     if (bump.token === lastBumpToken.current) return;
     lastBumpToken.current = bump.token;
-    unlockAudio();
     setDuration(bump.seconds);
-    setRemaining(bump.seconds);
-    setPaused(false);
+    setEndsAt(Date.now() + bump.seconds * 1000);
+    setPausedRemainingMs(null);
+    alertedForRef.current = null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bump.token]);
 
   const startPreset = (secs) => {
-    unlockAudio();
+    unlockAudio(); // a real click handler — the most reliable place iOS honors a resume() call
     setDuration(secs);
-    setRemaining(secs);
-    setPaused(false);
+    setEndsAt(Date.now() + secs * 1000);
+    setPausedRemainingMs(null);
+    alertedForRef.current = null;
   };
-  const addSeconds = (n) => setRemaining((r) => (r === null ? n : r + n));
+  const addSeconds = (n) => {
+    if (paused) {
+      setPausedRemainingMs((r) => (r ?? 0) + n * 1000);
+      return;
+    }
+    setEndsAt((prev) => (prev == null ? Date.now() + n * 1000 : prev + n * 1000));
+  };
   const skip = () => {
-    setRemaining(null);
-    setPaused(false);
+    setEndsAt(null);
+    setPausedRemainingMs(null);
   };
   const reset = () => {
-    setRemaining(duration);
-    setPaused(false);
+    setEndsAt(Date.now() + duration * 1000);
+    setPausedRemainingMs(null);
+    alertedForRef.current = null;
   };
-  const togglePause = () => setPaused((p) => !p);
-
-  const isActive = remaining !== null;
+  const togglePause = () => {
+    if (paused) {
+      setEndsAt(Date.now() + pausedRemainingMs);
+      setPausedRemainingMs(null);
+    } else if (endsAt != null) {
+      setPausedRemainingMs(Math.max(0, endsAt - Date.now()));
+      setEndsAt(null);
+    }
+  };
 
   return (
     <div
@@ -5324,9 +5498,28 @@ function PhotosTab({ state, updateState }) {
 // server. Export/import cover every piece of user-created data — logs, cardio logs,
 // custom exercises, custom plans and programs, and which program is currently active —
 // not just workout logs.
+function notificationPermissionState() {
+  if (typeof Notification === "undefined") return "unsupported";
+  return Notification.permission; // "default" | "granted" | "denied"
+}
+
 function SettingsTab({ state, updateState }) {
   const fileInputRef = useRef(null);
   const [importMessage, setImportMessage] = useState(null); // { type: "error" | "success", text }
+  // Section 10 — tracked as real state (not read fresh every render) so requesting permission
+  // from the Enable button updates this screen immediately without needing a remount.
+  const [notifPermission, setNotifPermission] = useState(notificationPermissionState);
+  const requestRestTimerAlerts = async () => {
+    // Only ever called from this button's onClick — a direct user gesture, never on load
+    // (section 6). Browsers refuse/ignore a requestPermission() call made outside one anyway.
+    if (typeof Notification === "undefined") return;
+    try {
+      const result = await Notification.requestPermission();
+      setNotifPermission(result);
+    } catch {
+      setNotifPermission(notificationPermissionState());
+    }
+  };
 
   const handleExport = () => {
     exportBackupFile(state);
@@ -5462,6 +5655,81 @@ function SettingsTab({ state, updateState }) {
               className="w-24 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
             />
           </div>
+        </div>
+      </div>
+
+      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-4">
+        <div className="text-[11px] uppercase tracking-widest text-red-600">Rest Timer Alerts</div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm text-neutral-200">Rest timer sound</div>
+            <div className="text-xs text-neutral-600">Plays a beep when rest ends, while BRK is open.</div>
+          </div>
+          <div className="flex gap-1.5 shrink-0 ml-3">
+            <button
+              onClick={() => updateSettings({ restTimerSound: true })}
+              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerSound !== false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+            >
+              ON
+            </button>
+            <button
+              onClick={() => updateSettings({ restTimerSound: false })}
+              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerSound === false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+            >
+              OFF
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-neutral-200">Vibration</div>
+          <div className="flex gap-1.5 shrink-0 ml-3">
+            <button
+              onClick={() => updateSettings({ restTimerVibration: true })}
+              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerVibration !== false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+            >
+              ON
+            </button>
+            <button
+              onClick={() => updateSettings({ restTimerVibration: false })}
+              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerVibration === false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+            >
+              OFF
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-neutral-200">Background alerts</div>
+            {notifPermission === "granted" && (
+              <div className="flex gap-1.5 shrink-0 ml-3">
+                <button
+                  onClick={() => updateSettings({ restTimerBackgroundAlerts: true })}
+                  className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerBackgroundAlerts !== false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+                >
+                  ON
+                </button>
+                <button
+                  onClick={() => updateSettings({ restTimerBackgroundAlerts: false })}
+                  className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerBackgroundAlerts === false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+                >
+                  OFF
+                </button>
+              </div>
+            )}
+          </div>
+          {notifPermission === "default" && (
+            <div className="mt-2 space-y-2">
+              <p className="text-xs text-neutral-500">BRK can notify you when your rest timer ends while your phone is locked or you're using another app.</p>
+              <button onClick={requestRestTimerAlerts} className="px-4 py-2 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
+                Enable
+              </button>
+            </div>
+          )}
+          {notifPermission === "denied" && <p className="text-xs text-neutral-600 mt-1">OFF — Notification permission denied</p>}
+          {notifPermission === "unsupported" && <p className="text-xs text-neutral-600 mt-1">Not supported in this browser. Foreground sound still works.</p>}
         </div>
       </div>
 
