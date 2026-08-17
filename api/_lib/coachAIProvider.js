@@ -104,20 +104,36 @@ const KNOWN_NOOP_EVENTS = new Set([
 // caller can still send a normal JSON error response) when the request fails before streaming
 // starts.
 export async function streamChatCompletion({ apiKey, model, messages, tools, signal }, res, { onUnhandledEvent } = {}) {
-  const upstream = await fetch(OPENAI_RESPONSES_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      input: toResponsesInput(messages),
-      tools: tools && tools.length ? toResponsesTools(tools) : undefined,
-      tool_choice: tools && tools.length ? "auto" : undefined,
-      stream: true,
-      max_output_tokens: 700,
-      temperature: 0.4,
-    }),
-    signal,
-  });
+  console.log("BRK Coach upstream request starting", { model, aborted: signal?.aborted === true });
+
+  let upstream;
+  try {
+    upstream = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        input: toResponsesInput(messages),
+        tools: tools && tools.length ? toResponsesTools(tools) : undefined,
+        tool_choice: tools && tools.length ? "auto" : undefined,
+        stream: true,
+        max_output_tokens: 700,
+        temperature: 0.4,
+      }),
+      signal,
+    });
+  } catch (e) {
+    if (e?.name === "AbortError") {
+      // signal.aborted is necessarily true by the time an AbortError is thrown — the useful
+      // signal is whether it was ALREADY aborted before this function even started (a bug
+      // aborting too early) vs. aborted during the fetch call itself (the 45s ceiling in
+      // coach-chat.js, the only legitimate source now that req "close" no longer aborts).
+      console.error("BRK Coach upstream fetch aborted", { model });
+    }
+    throw e;
+  }
+
+  console.log("BRK Coach upstream response received", { model, status: upstream.status, ok: upstream.ok });
 
   if (!upstream.ok) {
     let errBody = null;

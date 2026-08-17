@@ -104,43 +104,65 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { messages, context, specialty, coachingStyle } = body;
+  const { messages, context, specialty, coachingStyle, diagnostic } = body;
   const messageError = validateMessages(messages);
   if (messageError) {
     res.status(400).json({ error: messageError });
     return;
   }
 
-  const toolProblems = validateToolSchemas(COACH_TOOL_SCHEMAS);
-  if (toolProblems.length > 0) {
-    console.error("BRK Coach tool schema validation failed", toolProblems);
-    res.status(500).json({ error: "AI Coach couldn't respond right now." });
-    return;
+  // Diagnostic mode — a plain request with `{ diagnostic: true, messages: [...] }` skips BRK
+  // tools, athlete context, and the identity system prompt entirely, so a bare curl against the
+  // production endpoint (e.g. "Say hello.") can confirm the API key/model/provider are working
+  // in isolation, without the tool-schema or context pipeline able to hide or cause the failure.
+  const isDiagnostic = diagnostic === true;
+
+  let toolsToSend;
+  let systemMessages;
+  if (isDiagnostic) {
+    console.log("BRK Coach diagnostic request (no tools, no context, no history)", { model });
+    toolsToSend = undefined;
+    systemMessages = [];
+  } else {
+    const toolProblems = validateToolSchemas(COACH_TOOL_SCHEMAS);
+    if (toolProblems.length > 0) {
+      console.error("BRK Coach tool schema validation failed", toolProblems);
+      res.status(500).json({ error: "AI Coach couldn't respond right now." });
+      return;
+    }
+    toolsToSend = COACH_TOOL_SCHEMAS;
+
+    const style = VALID_STYLES.has(coachingStyle) ? coachingStyle : "balanced";
+    const specialtyId = typeof specialty === "string" && specialty ? specialty : "bodybuilding";
+
+    let contextJson = "";
+    try {
+      contextJson = JSON.stringify(context || {});
+    } catch {
+      contextJson = "{}";
+    }
+    if (contextJson.length > MAX_CONTEXT_CHARS) contextJson = contextJson.slice(0, MAX_CONTEXT_CHARS) + "…(truncated)";
+
+    systemMessages = [
+      { role: "system", content: buildCoachSystemPrompt({ specialty: specialtyId, coachingStyle: style }) },
+      { role: "system", content: `Current athlete context (compact — call a tool for anything more specific than this):\n${contextJson}` },
+    ];
   }
 
-  const style = VALID_STYLES.has(coachingStyle) ? coachingStyle : "balanced";
-  const specialtyId = typeof specialty === "string" && specialty ? specialty : "bodybuilding";
-
-  let contextJson = "";
-  try {
-    contextJson = JSON.stringify(context || {});
-  } catch {
-    contextJson = "{}";
-  }
-  if (contextJson.length > MAX_CONTEXT_CHARS) contextJson = contextJson.slice(0, MAX_CONTEXT_CHARS) + "…(truncated)";
-
-  const systemMessages = [
-    { role: "system", content: buildCoachSystemPrompt({ specialty: specialtyId, coachingStyle: style }) },
-    { role: "system", content: `Current athlete context (compact — call a tool for anything more specific than this):\n${contextJson}` },
-  ];
-
+  // Only the 45s ceiling aborts the upstream request now. This previously also aborted on the
+  // request's "close" event to catch a genuine client disconnect, but in the Vercel/Node runtime
+  // IncomingMessage can emit "close" once the request has simply finished being received — not
+  // only on a real disconnect — which was killing the OpenAI fetch immediately after the POST
+  // body finished arriving, before any response could stream back. Until a signal that reliably
+  // tells "client actually disconnected" apart from "request finished normally" is confirmed for
+  // this runtime, rely on the timeout alone rather than guess wrong again.
   const controller = new AbortController();
-  req.on?.("close", () => controller.abort());
   const timeout = setTimeout(() => controller.abort(), 45000);
+  const requestStartedAt = Date.now();
 
   try {
     const result = await streamChatCompletion(
-      { apiKey, model, messages: [...systemMessages, ...messages], tools: COACH_TOOL_SCHEMAS, signal: controller.signal },
+      { apiKey, model, messages: [...systemMessages, ...messages], tools: toolsToSend, signal: controller.signal },
       res,
       { onUnhandledEvent: (event) => console.warn("BRK Coach: unrecognized Responses API stream event", { event, model }) }
     );
@@ -160,11 +182,18 @@ export default async function handler(req, res) {
     }
   } catch (e) {
     clearTimeout(timeout);
+    const isAbort = e?.name === "AbortError";
+    if (isAbort) {
+      const elapsedMs = Date.now() - requestStartedAt;
+      // The only thing that can abort the request now is the 45s timeout, so timedOut should
+      // always be true here. If it's ever false, something other than the timeout is calling
+      // controller.abort() and that needs investigating — this line is what would catch it.
+      console.error("BRK Coach upstream aborted", { model, elapsedMs, timedOut: elapsedMs >= 44000, headersSentBeforeAbort: res.headersSent });
+    }
     if (res.headersSent) {
       res.end();
       return;
     }
-    const isAbort = e?.name === "AbortError";
     console.error("BRK Coach request failed", { error: e?.message || String(e), model, aborted: isAbort });
     res.status(isAbort ? 504 : 502).json({ error: isAbort ? "AI Coach timed out." : "AI Coach couldn't respond right now." });
   }
