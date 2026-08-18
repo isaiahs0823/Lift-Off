@@ -52,6 +52,8 @@ import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
 import DataWorkbookScreen from "./components/DataWorkbookScreen.jsx";
+import IntervalTimerScreen from "./components/IntervalTimerScreen.jsx";
+import { unlockAudio, playCompletionBeep, vibratePattern } from "./utils/timerAudio.js";
 import NutritionHome from "./components/NutritionHome.jsx";
 import FoodLogScreen from "./components/FoodLogScreen.jsx";
 import MealPlanView from "./components/MealPlanView.jsx";
@@ -1349,6 +1351,7 @@ const SECTION_OF = {
   settings: "more",
   schedule: "more",
   dataWorkbook: "more",
+  intervalTimer: "train",
 };
 
 export default function LiftLog() {
@@ -1871,7 +1874,11 @@ export default function LiftLog() {
                 allExercises={allExercises}
                 exMap={exMap}
                 onLoggedSet={bumpRestTimer}
+                onNavigate={setTab}
               />
+            )}
+            {tab === "intervalTimer" && (
+              <IntervalTimerScreen updateState={updateState} allExercises={allExercises} onBack={() => setTab("cardio")} />
             )}
             {tab === "progress" && (
               <ProgressTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} onNavigate={setTab} onViewWorkout={viewWorkout} />
@@ -2907,49 +2914,10 @@ function formatRestTime(totalSeconds) {
 // to notice. Both are fixed below: unlockAudio() is now also called synchronously inside
 // bumpRestTimer() itself (the actual click-handler call stack from Save Set), and every
 // resume()/play attempt is wrapped so a rejection can never silently eat the alert or throw.
-let sharedAudioCtx = null;
-function unlockAudio() {
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
-    if (sharedAudioCtx.state === "suspended") sharedAudioCtx.resume().catch(() => {});
-  } catch {
-    // No Web Audio support or construction failed — foreground sound just won't play; nothing
-    // else in the app depends on this.
-  }
-}
-function playRestCompleteBeep() {
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
-    const ctx = sharedAudioCtx;
-    const play = () => {
-      const now = ctx.currentTime;
-      [0, 0.22, 0.44].forEach((offset) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0, now + offset);
-        gain.gain.linearRampToValueAtTime(0.35, now + offset + 0.015);
-        gain.gain.linearRampToValueAtTime(0, now + offset + 0.18);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + offset);
-        osc.stop(now + offset + 0.2);
-      });
-    };
-    if (ctx.state === "suspended") {
-      ctx.resume().then(play).catch(() => {});
-    } else {
-      play();
-    }
-  } catch {
-    // Never let a beep failure take down the rest of the completion flow.
-  }
-}
+//
+// This logic now lives in utils/timerAudio.js (imported above) so the Cardio Interval Timer
+// reuses the exact same proven unlock/resume handling instead of a second, divergent copy.
+const playRestCompleteBeep = playCompletionBeep;
 
 // Shows a system notification for a rest-complete event that happens while the tab is hidden
 // but JS is still actually running (switched tabs, not fully suspended) — works on several
@@ -3013,13 +2981,7 @@ function persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor
 function triggerRestCompleteAlert({ sound = true, vibration = true, backgroundAlerts = true } = {}) {
   if (typeof document !== "undefined" && document.visibilityState === "visible") {
     if (sound) playRestCompleteBeep();
-    if (vibration && navigator.vibrate) {
-      try {
-        navigator.vibrate([300, 150, 300, 150, 300]);
-      } catch {
-        // Some browsers throw if called outside a user gesture context — never fatal.
-      }
-    }
+    if (vibration) vibratePattern([300, 150, 300, 150, 300]);
   } else if (backgroundAlerts) {
     showBackgroundNotification();
   }
@@ -4169,7 +4131,7 @@ function EditCardioEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
 }
 
 // ---------------- CARDIO TAB ----------------
-function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
+function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNavigate }) {
   const conditioningExercises = useMemo(
     () => allExercises.filter((ex) => ex.muscle === "Conditioning"),
     [allExercises]
@@ -4256,6 +4218,20 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet }) {
 
   return (
     <div className="space-y-6">
+      <button
+        onClick={() => onNavigate?.("intervalTimer")}
+        className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-4 hover:border-neutral-600"
+      >
+        <div className="flex items-center gap-3 text-left">
+          <Timer size={18} className="text-neutral-500 shrink-0" />
+          <div>
+            <div className="text-base font-bold text-white">Interval Timer</div>
+            <div className="text-xs text-neutral-500 mt-0.5">Alternate timed work and recovery intervals automatically.</div>
+          </div>
+        </div>
+        <ChevronRight size={18} className="text-neutral-600 shrink-0" />
+      </button>
+
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Run / conditioning work</label>
         <select
