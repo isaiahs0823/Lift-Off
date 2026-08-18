@@ -32,6 +32,7 @@ import {
   Home,
   MoreHorizontal,
   Pencil,
+  FileSpreadsheet,
 } from "lucide-react";
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
@@ -50,6 +51,7 @@ import AthleteProfileForm from "./components/AthleteProfileForm.jsx";
 import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
+import DataWorkbookScreen from "./components/DataWorkbookScreen.jsx";
 import NutritionHome from "./components/NutritionHome.jsx";
 import FoodLogScreen from "./components/FoodLogScreen.jsx";
 import MealPlanView from "./components/MealPlanView.jsx";
@@ -1346,6 +1348,7 @@ const SECTION_OF = {
   top: "more",
   settings: "more",
   schedule: "more",
+  dataWorkbook: "more",
 };
 
 export default function LiftLog() {
@@ -1898,7 +1901,10 @@ export default function LiftLog() {
             {tab === "catalog" && <CatalogTab state={state} updateState={updateState} allExercises={allExercises} />}
             {tab === "top" && <TopUsedTab state={state} exMap={exMap} />}
             {tab === "photos" && <PhotosTab state={state} updateState={updateState} />}
-            {tab === "settings" && <SettingsTab state={state} updateState={updateState} />}
+            {tab === "settings" && <SettingsTab state={state} updateState={updateState} onNavigate={setTab} />}
+            {tab === "dataWorkbook" && (
+              <DataWorkbookScreen state={state} exMap={exMap} onBack={() => setTab("settings")} onViewWorkout={viewWorkout} />
+            )}
           </>
         )}
       </div>
@@ -5503,7 +5509,7 @@ function notificationPermissionState() {
   return Notification.permission; // "default" | "granted" | "denied"
 }
 
-function SettingsTab({ state, updateState }) {
+function SettingsTab({ state, updateState, onNavigate }) {
   const fileInputRef = useRef(null);
   const [importMessage, setImportMessage] = useState(null); // { type: "error" | "success", text }
   // Section 10 — tracked as real state (not read fresh every render) so requesting permission
@@ -5731,6 +5737,23 @@ function SettingsTab({ state, updateState }) {
           {notifPermission === "denied" && <p className="text-xs text-neutral-600 mt-1">OFF — Notification permission denied</p>}
           {notifPermission === "unsupported" && <p className="text-xs text-neutral-600 mt-1">Not supported in this browser. Foreground sound still works.</p>}
         </div>
+      </div>
+
+      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
+        <div className="text-[11px] uppercase tracking-widest text-red-600">Data &amp; Privacy</div>
+        <button
+          onClick={() => onNavigate?.("dataWorkbook")}
+          className="w-full flex items-center justify-between border border-neutral-800 p-3 hover:border-neutral-600"
+        >
+          <div className="text-left flex items-center gap-3">
+            <FileSpreadsheet size={18} className="text-neutral-500 shrink-0" />
+            <div>
+              <div className="text-sm font-bold text-white">My Data Workbook</div>
+              <div className="text-xs text-neutral-500 mt-0.5">Review, filter, and export the fitness data BRK has collected.</div>
+            </div>
+          </div>
+          <ChevronRight size={18} className="text-neutral-600 shrink-0" />
+        </button>
       </div>
 
       <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-4">
