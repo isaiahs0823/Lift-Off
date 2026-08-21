@@ -278,6 +278,92 @@ const EXERCISE_LIBRARY = [
   { id: "arsenal_tricep_kickback_dip", name: "Arsenal Tricep Kickback / Dip", type: "isolation", muscle: "Arms" },
   { id: "arsenal_seated_iso_bicep_curl_2", name: "Arsenal Seated ISO Bicep Curl (2)", type: "isolation", muscle: "Arms" },
   { id: "arsenal_seated_tricep_extension_2", name: "Arsenal Seated Tricep Extension (2)", type: "isolation", muscle: "Arms" },
+
+  // Hammer Strength line — Plate-Loaded, Select (selectorized), MTS (selectorized iso-lateral),
+  // and Ground Base equipment families. The equipment family lives in the exercise name itself
+  // (e.g. "MTS", "Select", "Plate-Loaded") rather than a separate field, matching how the
+  // Arsenal Strength line above encodes its own equipment distinctions — this schema has no
+  // equipment/brand/secondary-muscle/alias field to add one to. Movements that share a single
+  // physical machine but train genuinely different muscles (the Select Pectoral Fly / Rear
+  // Deltoid combo unit, the Chest/Back combo unit) are still separate records here so each has
+  // its own independent progression history, exactly as a distinct movement pattern would.
+  { id: "hammer_strength_iso_bench_press", name: "Hammer Strength Iso-Lateral Bench Press", type: "compound", muscle: "Chest" },
+  { id: "hammer_strength_iso_horizontal_bench_press", name: "Hammer Strength Iso-Lateral Horizontal Bench Press", type: "compound", muscle: "Chest" },
+  { id: "hammer_strength_iso_incline_press", name: "Hammer Strength Iso-Lateral Incline Press", type: "compound", muscle: "Chest" },
+  { id: "hammer_strength_iso_super_incline_press", name: "Hammer Strength Iso-Lateral Super Incline Press", type: "compound", muscle: "Chest" },
+  { id: "hammer_strength_iso_decline_chest_press", name: "Hammer Strength Iso-Lateral Decline Chest Press", type: "compound", muscle: "Chest" },
+  { id: "hammer_strength_iso_wide_chest_press", name: "Hammer Strength Iso-Lateral Wide Chest Press", type: "compound", muscle: "Chest" },
+  { id: "hammer_strength_iso_chest_press", name: "Hammer Strength Iso-Lateral Chest Press", type: "compound", muscle: "Chest" },
+  { id: "hammer_strength_plate_super_fly", name: "Hammer Strength Plate-Loaded Super Fly", type: "isolation", muscle: "Chest" },
+  { id: "hammer_strength_chest_back_chest_press", name: "Hammer Strength Chest/Back Chest Press", type: "compound", muscle: "Chest" },
+  { id: "hammer_strength_select_chest_press", name: "Hammer Strength Select Chest Press", type: "compound", muscle: "Chest" },
+  { id: "hammer_strength_select_pectoral_fly", name: "Hammer Strength Select Pectoral Fly", type: "isolation", muscle: "Chest" },
+  { id: "hammer_strength_mts_chest_press", name: "Hammer Strength MTS Iso-Lateral Chest Press", type: "compound", muscle: "Chest" },
+  { id: "hammer_strength_mts_incline_press", name: "Hammer Strength MTS Iso-Lateral Incline Press", type: "compound", muscle: "Chest" },
+  { id: "hammer_strength_mts_decline_press", name: "Hammer Strength MTS Iso-Lateral Decline Press", type: "compound", muscle: "Chest" },
+
+  { id: "hammer_strength_iso_row", name: "Hammer Strength Iso-Lateral Row", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_iso_low_row", name: "Hammer Strength Iso-Lateral Low Row", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_iso_dy_row", name: "Hammer Strength Iso-Lateral D.Y. Row", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_t_bar_row", name: "Hammer Strength T-Bar Row", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_iso_wide_pulldown", name: "Hammer Strength Iso-Lateral Wide Pulldown", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_iso_front_lat_pulldown", name: "Hammer Strength Iso-Lateral Front Lat Pulldown", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_plate_pullover", name: "Hammer Strength Plate-Loaded Pullover", type: "isolation", muscle: "Back" },
+  { id: "hammer_strength_chest_back_lat_pulldown", name: "Hammer Strength Chest/Back Lat Pulldown", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_select_lat_pulldown", name: "Hammer Strength Select Lat Pulldown", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_select_fixed_pulldown", name: "Hammer Strength Select Fixed Pulldown", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_select_seated_row", name: "Hammer Strength Select Seated Row", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_mts_row", name: "Hammer Strength MTS Iso-Lateral Row", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_mts_high_row", name: "Hammer Strength MTS Iso-Lateral High Row", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_mts_front_pulldown", name: "Hammer Strength MTS Iso-Lateral Front Pulldown", type: "compound", muscle: "Back" },
+  { id: "hammer_strength_assisted_chin_up", name: "Hammer Strength Assisted Chin-Up", type: "compound", muscle: "Back" },
+
+  { id: "hammer_strength_iso_shoulder_press", name: "Hammer Strength Iso-Lateral Shoulder Press", type: "compound", muscle: "Shoulders" },
+  { id: "hammer_strength_select_shoulder_press", name: "Hammer Strength Select Shoulder Press", type: "compound", muscle: "Shoulders" },
+  { id: "hammer_strength_select_lateral_raise", name: "Hammer Strength Select Lateral Raise", type: "isolation", muscle: "Shoulders" },
+  { id: "hammer_strength_mts_shoulder_press", name: "Hammer Strength MTS Iso-Lateral Shoulder Press", type: "compound", muscle: "Shoulders" },
+  // Same physical combo unit as hammer_strength_select_pectoral_fly above, but a genuinely
+  // different movement pattern and muscle target — kept as an independent record on purpose so
+  // its progression history is never mixed with the pec-fly movement (see section header note).
+  { id: "hammer_strength_select_rear_deltoid", name: "Hammer Strength Select Rear Deltoid", type: "isolation", muscle: "Shoulders" },
+
+  { id: "hammer_strength_plate_seated_biceps", name: "Hammer Strength Plate-Loaded Seated Biceps", type: "isolation", muscle: "Arms" },
+  { id: "hammer_strength_select_biceps_curl", name: "Hammer Strength Select Biceps Curl", type: "isolation", muscle: "Arms" },
+  { id: "hammer_strength_mts_biceps_curl", name: "Hammer Strength MTS Iso-Lateral Biceps Curl", type: "isolation", muscle: "Arms" },
+  { id: "hammer_strength_plate_seated_dip", name: "Hammer Strength Plate-Loaded Seated Dip", type: "compound", muscle: "Arms" },
+  { id: "hammer_strength_select_triceps_extension", name: "Hammer Strength Select Triceps Extension", type: "isolation", muscle: "Arms" },
+  { id: "hammer_strength_mts_triceps_extension", name: "Hammer Strength MTS Iso-Lateral Triceps Extension", type: "isolation", muscle: "Arms" },
+  { id: "hammer_strength_plate_gripper", name: "Hammer Strength Plate-Loaded Gripper", type: "isolation", muscle: "Arms" },
+  { id: "hammer_strength_assisted_dip", name: "Hammer Strength Assisted Dip", type: "compound", muscle: "Arms" },
+
+  { id: "hammer_strength_linear_leg_press", name: "Hammer Strength Linear Leg Press", type: "compound", muscle: "Legs" },
+  { id: "hammer_strength_hack_squat", name: "Hammer Strength Hack Squat", type: "compound", muscle: "Legs" },
+  { id: "hammer_strength_pendulum_x_squat", name: "Hammer Strength Pendulum-X Squat", type: "compound", muscle: "Legs" },
+  { id: "hammer_strength_belt_squat", name: "Hammer Strength Belt Squat", type: "compound", muscle: "Legs" },
+  { id: "hammer_strength_ground_base_multi_squat", name: "Hammer Strength Ground Base Multi-Squat", type: "compound", muscle: "Legs" },
+  { id: "hammer_strength_iso_leg_extension", name: "Hammer Strength Iso-Lateral Leg Extension", type: "isolation", muscle: "Legs" },
+  { id: "hammer_strength_select_seated_leg_press", name: "Hammer Strength Select Seated Leg Press", type: "compound", muscle: "Legs" },
+  { id: "hammer_strength_select_leg_extension", name: "Hammer Strength Select Leg Extension", type: "isolation", muscle: "Legs" },
+  { id: "hammer_strength_mts_leg_extension", name: "Hammer Strength MTS Leg Extension", type: "isolation", muscle: "Legs" },
+  { id: "hammer_strength_iso_kneeling_leg_curl", name: "Hammer Strength Iso-Lateral Kneeling Leg Curl", type: "isolation", muscle: "Legs" },
+  { id: "hammer_strength_select_leg_curl", name: "Hammer Strength Select Leg Curl", type: "isolation", muscle: "Legs" },
+  { id: "hammer_strength_select_seated_leg_curl", name: "Hammer Strength Select Seated Leg Curl", type: "isolation", muscle: "Legs" },
+  { id: "hammer_strength_mts_kneeling_leg_curl", name: "Hammer Strength MTS Kneeling Leg Curl", type: "isolation", muscle: "Legs" },
+  { id: "hammer_strength_plate_glute_drive", name: "Hammer Strength Plate-Loaded Glute Drive", type: "compound", muscle: "Legs" },
+  { id: "hammer_strength_select_hip_and_glute", name: "Hammer Strength Select Hip and Glute", type: "compound", muscle: "Legs" },
+  { id: "hammer_strength_select_hip_abduction", name: "Hammer Strength Select Hip Abduction", type: "isolation", muscle: "Legs" },
+  { id: "hammer_strength_select_hip_adduction", name: "Hammer Strength Select Hip Adduction", type: "isolation", muscle: "Legs" },
+  { id: "hammer_strength_plate_seated_calf_raise", name: "Hammer Strength Plate-Loaded Seated Calf Raise", type: "isolation", muscle: "Legs" },
+  // Ankle dorsiflexion (tibialis anterior), not a calf (plantarflexion) movement — deliberately
+  // not classified alongside the calf raises above despite living on adjacent equipment.
+  { id: "hammer_strength_plate_tibia_dorsi_flexion", name: "Hammer Strength Plate-Loaded Tibia Dorsi Flexion", type: "isolation", muscle: "Legs" },
+  { id: "hammer_strength_select_standing_calf", name: "Hammer Strength Select Standing Calf", type: "isolation", muscle: "Legs" },
+  { id: "hammer_strength_select_horizontal_calf", name: "Hammer Strength Select Horizontal Calf", type: "isolation", muscle: "Legs" },
+
+  { id: "hammer_strength_plate_ab_oblique_crunch", name: "Hammer Strength Plate-Loaded Abdominal Oblique Crunch", type: "isolation", muscle: "Core" },
+  { id: "hammer_strength_select_abdominal_crunch", name: "Hammer Strength Select Abdominal Crunch", type: "isolation", muscle: "Core" },
+  { id: "hammer_strength_select_back_extension", name: "Hammer Strength Select Back Extension", type: "isolation", muscle: "Core" },
+  { id: "hammer_strength_mts_abdominal_crunch", name: "Hammer Strength MTS Abdominal Crunch", type: "isolation", muscle: "Core" },
 ];
 
 const EX_MAP_INIT = Object.fromEntries(EXERCISE_LIBRARY.map((e) => [e.id, e]));
