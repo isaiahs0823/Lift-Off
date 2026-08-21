@@ -22,7 +22,6 @@ import {
   Pause,
   Play,
   RotateCcw,
-  Calculator,
   Award,
   StickyNote,
   Target,
@@ -53,6 +52,8 @@ import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
 import DataWorkbookScreen from "./components/DataWorkbookScreen.jsx";
 import IntervalTimerScreen from "./components/IntervalTimerScreen.jsx";
+import { PlateCalculatorToggle } from "./components/PlateCalculatorPanel.jsx";
+import QuickLoadAdjuster from "./components/QuickLoadAdjuster.jsx";
 import { unlockAudio, playCompletionBeep, vibratePattern } from "./utils/timerAudio.js";
 import NutritionHome from "./components/NutritionHome.jsx";
 import FoodLogScreen from "./components/FoodLogScreen.jsx";
@@ -1371,22 +1372,8 @@ function detectPRs(exId, newEntry, priorLogs) {
 }
 
 // ---------- Plate calculator ----------
-const PLATE_SIZES = [45, 35, 25, 10, 5, 2.5];
-// Greedy fill — correct for a standard plate set since every denomination divides evenly
-// into the next one up. Returns the plates needed per side plus any leftover that can't be
-// made exactly (only possible with an unusual custom bar/target combo).
-function platesPerSide(targetWeight, barWeight) {
-  let remaining = (targetWeight - barWeight) / 2;
-  if (remaining <= 0) return { plates: [], remainder: 0 };
-  const plates = [];
-  for (const size of PLATE_SIZES) {
-    while (remaining >= size - 0.001) {
-      plates.push(size);
-      remaining -= size;
-    }
-  }
-  return { plates, remainder: Math.round(remaining * 100) / 100 };
-}
+// Moved to utils/plateMath.js (PLATE_SIZES, platesPerSide) and components/PlateCalculatorPanel.jsx
+// (the tap-to-build UI, PlateCalculatorToggle) — imported at the top of this file.
 
 // ---------- Post-workout summary ----------
 // Builds the record saved to state.workoutSessions when a guided run is finished. priorLogs
@@ -2574,78 +2561,9 @@ function ExerciseNotesPanel({ exId, state, updateState }) {
 }
 
 // ---------------- PLATE CALCULATOR ----------------
-function PlateCalculator({ defaultWeight, barWeight }) {
-  const [target, setTarget] = useState(defaultWeight != null ? String(defaultWeight) : "");
-  useEffect(() => {
-    if (defaultWeight != null) setTarget(String(defaultWeight));
-  }, [defaultWeight]);
-  const num = Number(target) || 0;
-  const { plates, remainder } = platesPerSide(num, barWeight);
-
-  return (
-    <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="text-[11px] uppercase tracking-widest text-neutral-500 flex items-center gap-1.5">
-          <Calculator size={12} /> Plate calculator
-        </div>
-        <span className="text-[11px] text-neutral-600">Bar: {barWeight} lb</span>
-      </div>
-      <input
-        type="number"
-        value={target}
-        onChange={(e) => setTarget(e.target.value)}
-        placeholder="Target weight"
-        className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
-      />
-      {num > barWeight ? (
-        <div>
-          <div className="text-xs text-neutral-500 mb-1.5">Per side</div>
-          {plates.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {plates.map((p, i) => (
-                <span key={i} className="px-2.5 py-1 text-sm font-bold bg-charcoal-deep border border-neutral-700 text-white">
-                  {p}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <div className="text-sm text-neutral-500">Bar only</div>
-          )}
-          {remainder > 0.01 && (
-            <div className="text-[11px] text-neutral-600 mt-1.5">
-              {remainder} lb per side can't be made exactly with standard plates.
-            </div>
-          )}
-        </div>
-      ) : num > 0 ? (
-        <div className="text-xs text-neutral-500">
-          {num} lb is at or below the bar ({barWeight} lb).
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-// Collapsed by default so it doesn't compete for space with the actual logging flow — one
-// tap reveals it prefilled with the recommended weight.
-function PlateCalculatorToggle({ defaultWeight, barWeight }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
-      >
-        <Calculator size={12} /> Plate calculator {open ? "▴" : "▾"}
-      </button>
-      {open && (
-        <div className="mt-2">
-          <PlateCalculator defaultWeight={defaultWeight} barWeight={barWeight} />
-        </div>
-      )}
-    </div>
-  );
-}
+// Rebuilt as a tap-to-build calculator in components/PlateCalculatorPanel.jsx (imported at the
+// top of this file as PlateCalculatorToggle) — the athlete builds the bar by tapping plates
+// instead of typing a target weight and being told what to load.
 
 const BLANK_SET_ROW = { weight: "", reps: "", drops: [], setType: "working", rir: "", rpe: "" };
 
@@ -2794,7 +2712,10 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         )}
       </div>
 
-      <PlateCalculatorToggle defaultWeight={suggestion.suggestion ?? undefined} barWeight={state.settings?.barWeight || 45} />
+      <PlateCalculatorToggle
+        barWeight={state.settings?.barWeight || 45}
+        onUseWeight={(w) => setSetsInput((rows) => rows.map((r, i) => (i === 0 ? { ...r, weight: String(w) } : r)))}
+      />
 
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Target reps this session</label>
@@ -3627,16 +3548,22 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
 
           <div>
             <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">Weight</div>
-            <div className="flex items-baseline justify-center gap-1.5 border border-neutral-800 bg-charcoal-deep px-3 py-3">
-              <input
-                type="number"
-                inputMode="decimal"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                placeholder="Enter weight"
-                className="min-w-0 flex-1 bg-transparent text-4xl font-bold text-white text-center focus:outline-none placeholder:text-neutral-700"
-              />
-              <span className="shrink-0 text-sm font-bold text-neutral-500">lb</span>
+            <div className="flex items-stretch gap-2">
+              <div className="flex-1 min-w-0 flex items-baseline justify-center gap-1.5 border border-neutral-800 bg-charcoal-deep px-3 py-3">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  placeholder="Enter weight"
+                  className="min-w-0 flex-1 bg-transparent text-4xl font-bold text-white text-center focus:outline-none placeholder:text-neutral-700"
+                />
+                <span className="shrink-0 text-sm font-bold text-neutral-500">lb</span>
+              </div>
+              {/* Quick load adjuster — updates only this draft weight field, the same one manual
+                  typing and "Use suggested"/"Duplicate" already write to. Never saves a set,
+                  never touches the rest timer. */}
+              <QuickLoadAdjuster weight={weight} onChange={(w) => setWeight(w)} />
             </div>
           </div>
 
@@ -3780,7 +3707,7 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
         </button>
       )}
 
-      <PlateCalculatorToggle defaultWeight={weight !== "" ? weight : suggestion.suggestion ?? undefined} barWeight={state.settings?.barWeight || 45} />
+      <PlateCalculatorToggle barWeight={state.settings?.barWeight || 45} onUseWeight={(w) => setWeight(w)} />
       <ExerciseNotesPanel exId={exId} state={state} updateState={updateState} />
     </div>
   );
