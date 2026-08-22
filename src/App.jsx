@@ -72,6 +72,8 @@ import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
 import { featuredAndOtherPRs, sessionPRCount, prDeltaLabel, prHeroLabel, prPreviousLabel, PR_TYPE_LABEL } from "./utils/prSummary.js";
+import CustomExerciseForm from "./components/CustomExerciseForm.jsx";
+import { selectableExercises, matchesExerciseSearch, formatCustomLabel, isArchived } from "./utils/customExercises.js";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained)
 const BREAK_LOGO =
@@ -1094,7 +1096,7 @@ function loadInitialState() {
     programs: HERO_PROGRAMS,
     customPlans: [],
     customPrograms: [], // { id, name, tagline, days: [{ label, exercises }] }
-    customExercises: [], // { id, name, type, muscle }
+    customExercises: [], // { id, name, type, muscle, secondaryMuscles?, equipment?, movementCategory?, brand?, notes?, custom: true, archived?, createdAt }
     logs: [], // { id, exId, date, sets: [{weight, reps, drops?, setType?, rir?, rpe?}], targetReps }
     cardioLogs: [], // { id, exId, date, distance, distanceUnit, duration, load, notes }
     currentProgram: null, // { programId, programName, source: "builtin" | "custom", dayIndex, totalDays, startDate }
@@ -2163,17 +2165,32 @@ function Header() {
 // ---------------- EXERCISE SWAP PICKER ----------------
 // Filtered to the same muscle group as the exercise being swapped, with a search bar
 // (same pattern as the catalog search elsewhere) to widen it if needed.
-function ExerciseSwapPicker({ currentExId, allExercises, exMap, onBack, onSelect }) {
+function ExerciseSwapPicker({ currentExId, allExercises, exMap, state, updateState, muscleGroups, onBack, onSelect }) {
   const [query, setQuery] = useState("");
+  const [creatingCustom, setCreatingCustom] = useState(false);
   const currentMuscle = exMap[currentExId]?.muscle;
+  const selectable = useMemo(() => selectableExercises(allExercises), [allExercises]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     const pool = q
-      ? allExercises.filter((ex) => ex.name.toLowerCase().includes(q) || ex.muscle.toLowerCase().includes(q))
-      : allExercises.filter((ex) => ex.muscle === currentMuscle);
+      ? selectable.filter((ex) => matchesExerciseSearch(ex, q))
+      : selectable.filter((ex) => ex.muscle === currentMuscle);
     return pool.filter((ex) => ex.id !== currentExId);
-  }, [query, allExercises, currentMuscle, currentExId]);
+  }, [query, selectable, currentMuscle, currentExId]);
+
+  if (creatingCustom) {
+    return (
+      <CustomExerciseForm
+        state={state}
+        updateState={updateState}
+        allExercises={allExercises}
+        muscleGroups={muscleGroups}
+        onBack={() => setCreatingCustom(false)}
+        onSaved={(exId) => onSelect(exId)}
+      />
+    );
+  }
 
   return (
     <SlideInPanel
@@ -2196,12 +2213,20 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, onBack, onSelect
             className="w-full text-left px-3 py-2 text-sm border border-neutral-900 text-neutral-300 hover:border-red-700 hover:text-white"
           >
             {ex.name}
-            <span className="text-xs text-neutral-600 ml-2">{ex.muscle}</span>
+            <span className="text-xs text-neutral-600 ml-2">
+              {ex.custom ? formatCustomLabel(ex) : ex.muscle}
+            </span>
           </button>
         ))}
         {results.length === 0 && (
           <div className="text-xs text-neutral-600 py-4 text-center">No matches. Try a different search.</div>
         )}
+        <button
+          onClick={() => setCreatingCustom(true)}
+          className="w-full text-left px-3 py-2.5 text-sm border border-dashed border-neutral-700 text-red-500 hover:border-red-700 hover:text-red-400 flex items-center gap-1.5"
+        >
+          <Plus size={14} /> Create custom exercise
+        </button>
       </div>
     </SlideInPanel>
   );
@@ -2210,16 +2235,31 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, onBack, onSelect
 // Adds an exercise to the active session that was never part of the plan — search by name, or
 // browse a muscle group when nothing's typed yet. Distinct from ExerciseSwapPicker: no "current"
 // exercise to bias toward or exclude, so nothing shows until the user searches or picks a group.
-function AddExercisePicker({ allExercises, onBack, onSelect }) {
+function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onBack, onSelect }) {
   const [query, setQuery] = useState("");
   const [muscle, setMuscle] = useState(null);
+  const [creatingCustom, setCreatingCustom] = useState(false);
+  const selectable = useMemo(() => selectableExercises(allExercises), [allExercises]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (q) return allExercises.filter((ex) => ex.name.toLowerCase().includes(q) || ex.muscle.toLowerCase().includes(q));
-    if (muscle) return allExercises.filter((ex) => ex.muscle === muscle);
+    if (q) return selectable.filter((ex) => matchesExerciseSearch(ex, q));
+    if (muscle) return selectable.filter((ex) => ex.muscle === muscle);
     return [];
-  }, [query, muscle, allExercises]);
+  }, [query, muscle, selectable]);
+
+  if (creatingCustom) {
+    return (
+      <CustomExerciseForm
+        state={state}
+        updateState={updateState}
+        allExercises={allExercises}
+        muscleGroups={muscleGroups}
+        onBack={() => setCreatingCustom(false)}
+        onSaved={(exId) => onSelect(exId)}
+      />
+    );
+  }
 
   return (
     <SlideInPanel title="Add exercise" subtitle="This session only — added to the end of your workout" onBack={onBack}>
@@ -2235,7 +2275,7 @@ function AddExercisePicker({ allExercises, onBack, onSelect }) {
       />
       {!query && (
         <div className="flex flex-wrap gap-1.5">
-          {MUSCLE_GROUPS.map((m) => (
+          {muscleGroups.map((m) => (
             <button
               key={m}
               onClick={() => setMuscle(m)}
@@ -2256,11 +2296,19 @@ function AddExercisePicker({ allExercises, onBack, onSelect }) {
             className="w-full text-left px-3 py-2 text-sm border border-neutral-900 text-neutral-300 hover:border-red-700 hover:text-white"
           >
             {ex.name}
-            <span className="text-xs text-neutral-600 ml-2">{ex.muscle}</span>
+            <span className="text-xs text-neutral-600 ml-2">
+              {ex.custom ? formatCustomLabel(ex) : ex.muscle}
+            </span>
           </button>
         ))}
         {query && results.length === 0 && <div className="text-xs text-neutral-600 py-4 text-center">No matches. Try a different search.</div>}
         {!query && !muscle && <div className="text-xs text-neutral-600 py-4 text-center">Search, or pick a muscle group above.</div>}
+        <button
+          onClick={() => setCreatingCustom(true)}
+          className="w-full text-left px-3 py-2.5 text-sm border border-dashed border-neutral-700 text-red-500 hover:border-red-700 hover:text-red-400 flex items-center gap-1.5"
+        >
+          <Plus size={14} /> Create custom exercise
+        </button>
       </div>
     </SlideInPanel>
   );
@@ -2613,6 +2661,9 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         currentExId={exId}
         allExercises={allExercises}
         exMap={exMap}
+        state={state}
+        updateState={updateState}
+        muscleGroups={MUSCLE_GROUPS}
         onBack={() => setSwapOpen(false)}
         onSelect={(newExId) => {
           setSwapOpen(false);
@@ -2895,18 +2946,38 @@ function PRCallout({ exMap, exId, prs, onDismiss }) {
   );
 }
 
+const CREATE_CUSTOM_EXERCISE_OPTION = "__create_custom_exercise__";
+
 function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedSet, onRestartProgram, onGoToTemplates }) {
   const [selectedExId, setSelectedExId] = useState(allExercises[0].id);
   const [exFilter, setExFilter] = useState("");
   const [prBanner, setPrBanner] = useState(null);
+  const [creatingCustom, setCreatingCustom] = useState(false);
 
   useEffect(() => setPrBanner(null), [selectedExId]);
 
+  const selectableAll = useMemo(() => selectableExercises(allExercises), [allExercises]);
   const filteredExercises = useMemo(() => {
     const q = exFilter.trim().toLowerCase();
-    if (!q) return allExercises;
-    return allExercises.filter((ex) => ex.name.toLowerCase().includes(q) || ex.muscle.toLowerCase().includes(q));
-  }, [exFilter, allExercises]);
+    if (!q) return selectableAll;
+    return selectableAll.filter((ex) => matchesExerciseSearch(ex, q));
+  }, [exFilter, selectableAll]);
+
+  if (creatingCustom) {
+    return (
+      <CustomExerciseForm
+        state={state}
+        updateState={updateState}
+        allExercises={allExercises}
+        muscleGroups={MUSCLE_GROUPS}
+        onBack={() => setCreatingCustom(false)}
+        onSaved={(exId) => {
+          setSelectedExId(exId);
+          setCreatingCustom(false);
+        }}
+      />
+    );
+  }
 
   const groupedByMuscle = useMemo(() => {
     const groups = {};
@@ -2980,7 +3051,13 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
         />
         <select
           value={selectedExId}
-          onChange={(e) => setSelectedExId(e.target.value)}
+          onChange={(e) => {
+            if (e.target.value === CREATE_CUSTOM_EXERCISE_OPTION) {
+              setCreatingCustom(true);
+              return;
+            }
+            setSelectedExId(e.target.value);
+          }}
           className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
         >
           {Object.entries(groupedByMuscle).map(([muscle, exs]) => (
@@ -2988,14 +3065,20 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
               {exs.map((ex) => (
                 <option key={ex.id} value={ex.id}>
                   {ex.name}
+                  {ex.custom ? " (Custom)" : ""}
                 </option>
               ))}
             </optgroup>
           ))}
+          <option value={CREATE_CUSTOM_EXERCISE_OPTION}>+ Create custom exercise</option>
         </select>
         {filteredExercises.length === 0 && (
           <div className="text-xs text-neutral-600 mt-1.5">
-            No match. Add it in the Catalog tab and it'll show up here.
+            No match —{" "}
+            <button type="button" onClick={() => setCreatingCustom(true)} className="text-red-500 hover:text-red-400 underline">
+              create a custom exercise
+            </button>
+            .
           </div>
         )}
       </div>
@@ -3450,6 +3533,9 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
         currentExId={exId}
         allExercises={allExercises}
         exMap={exMap}
+        state={state}
+        updateState={updateState}
+        muscleGroups={MUSCLE_GROUPS}
         onBack={() => setSwapOpen(false)}
         onSelect={(newExId) => {
           setSwapOpen(false);
@@ -4011,6 +4097,9 @@ function GuidedRunView({
         <div className="fixed inset-0 z-30 bg-charcoal-deep overflow-y-auto p-4 sm:p-6">
           <AddExercisePicker
             allExercises={allExercises}
+            state={state}
+            updateState={updateState}
+            muscleGroups={MUSCLE_GROUPS}
             onBack={() => setAddingExercise(false)}
             onSelect={(exId) => {
               onAddExercise(exId);
@@ -4923,12 +5012,14 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
   const [supersetMode, setSupersetMode] = useState(false);
   const [supersetPicks, setSupersetPicks] = useState([]);
   const [justSaved, setJustSaved] = useState(false);
+  const [creatingCustom, setCreatingCustom] = useState(false);
 
+  const selectableAll = useMemo(() => selectableExercises(allExercises), [allExercises]);
   const filteredExercises = useMemo(() => {
     const q = exFilter.trim().toLowerCase();
-    if (!q) return allExercises;
-    return allExercises.filter((ex) => ex.name.toLowerCase().includes(q) || ex.muscle.toLowerCase().includes(q));
-  }, [exFilter, allExercises]);
+    if (!q) return selectableAll;
+    return selectableAll.filter((ex) => matchesExerciseSearch(ex, q));
+  }, [exFilter, selectableAll]);
 
   const addExercise = (exId) => {
     if (selectedExercises.some((e) => e.exId === exId)) return;
@@ -4987,6 +5078,22 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
     setSelectedExercises([]);
     setJustSaved(true);
   };
+
+  if (creatingCustom) {
+    return (
+      <CustomExerciseForm
+        state={state}
+        updateState={updateState}
+        allExercises={allExercises}
+        muscleGroups={MUSCLE_GROUPS}
+        onBack={() => setCreatingCustom(false)}
+        onSaved={(exId) => {
+          addExercise(exId);
+          setCreatingCustom(false);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -5049,11 +5156,15 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
             </button>
           ))}
           {filteredExercises.length === 0 && (
-            <div className="col-span-2 text-xs text-neutral-600 py-2 text-center">
-              No match. Add it in the Catalog tab first.
-            </div>
+            <div className="col-span-2 text-xs text-neutral-600 py-2 text-center">No match — create it below.</div>
           )}
         </div>
+        <button
+          onClick={() => setCreatingCustom(true)}
+          className="w-full mt-2 py-2 text-xs uppercase tracking-widest font-bold border border-dashed border-neutral-700 text-red-500 hover:border-red-700 hover:text-red-400 flex items-center justify-center gap-1.5"
+        >
+          <Plus size={13} /> Create custom exercise
+        </button>
       </div>
 
       {selectedExercises.length > 0 && (
@@ -5205,19 +5316,19 @@ function TopUsedTab({ state, exMap }) {
 function CatalogTab({ state, updateState, allExercises }) {
   const [query, setQuery] = useState("");
   const [muscleFilter, setMuscleFilter] = useState("All");
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newMuscle, setNewMuscle] = useState(MUSCLE_GROUPS[0]);
-  const [newType, setNewType] = useState("isolation");
+  const [showArchived, setShowArchived] = useState(false);
+  const [creatingCustom, setCreatingCustom] = useState(false);
+  const [editingExercise, setEditingExercise] = useState(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return allExercises.filter((ex) => {
-      const matchesQuery = !q || ex.name.toLowerCase().includes(q);
+      if (isArchived(ex) && !showArchived) return false;
+      const matchesQuery = !q || matchesExerciseSearch(ex, q);
       const matchesMuscle = muscleFilter === "All" || ex.muscle === muscleFilter;
       return matchesQuery && matchesMuscle;
     });
-  }, [query, muscleFilter, allExercises]);
+  }, [query, muscleFilter, allExercises, showArchived]);
 
   const grouped = useMemo(() => {
     const groups = {};
@@ -5228,18 +5339,31 @@ function CatalogTab({ state, updateState, allExercises }) {
     return groups;
   }, [filtered]);
 
-  const addCustomExercise = () => {
-    if (!newName.trim()) return;
-    const id = `custom_${newName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_")}_${Date.now()}`;
-    const exercise = { id, name: newName.trim(), muscle: newMuscle, type: newType, custom: true };
-    updateState((prev) => ({ ...prev, customExercises: [...(prev.customExercises || []), exercise] }));
-    setNewName("");
-    setShowAddForm(false);
-  };
-
-  const removeCustomExercise = (id) => {
-    updateState((prev) => ({ ...prev, customExercises: (prev.customExercises || []).filter((e) => e.id !== id) }));
-  };
+  if (creatingCustom) {
+    return (
+      <CustomExerciseForm
+        state={state}
+        updateState={updateState}
+        allExercises={allExercises}
+        muscleGroups={MUSCLE_GROUPS}
+        onBack={() => setCreatingCustom(false)}
+        onSaved={() => setCreatingCustom(false)}
+      />
+    );
+  }
+  if (editingExercise) {
+    return (
+      <CustomExerciseForm
+        state={state}
+        updateState={updateState}
+        allExercises={allExercises}
+        muscleGroups={MUSCLE_GROUPS}
+        exercise={editingExercise}
+        onBack={() => setEditingExercise(null)}
+        onSaved={() => setEditingExercise(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -5270,68 +5394,17 @@ function CatalogTab({ state, updateState, allExercises }) {
         </select>
       </div>
 
-      {!showAddForm ? (
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30 flex items-center justify-center gap-1.5"
-        >
-          <Plus size={14} /> Add missing exercise
-        </button>
-      ) : (
-        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Add exercise</div>
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. Plate-loaded chest press machine"
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
-          />
-          <div className="flex gap-2">
-            <select
-              value={newMuscle}
-              onChange={(e) => setNewMuscle(e.target.value)}
-              className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
-            >
-              {MUSCLE_GROUPS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-            <select
-              value={newType}
-              onChange={(e) => setNewType(e.target.value)}
-              className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
-            >
-              <option value="compound">Compound</option>
-              <option value="isolation">Isolation</option>
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={addCustomExercise}
-              disabled={!newName.trim()}
-              className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border flex items-center justify-center gap-1.5 ${
-                newName.trim()
-                  ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-                  : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
-              }`}
-            >
-              <Check size={14} /> Save
-            </button>
-            <button
-              onClick={() => {
-                setShowAddForm(false);
-                setNewName("");
-              }}
-              className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-500 hover:text-neutral-300"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+        <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+        Show archived custom exercises
+      </label>
+
+      <button
+        onClick={() => setCreatingCustom(true)}
+        className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30 flex items-center justify-center gap-1.5"
+      >
+        <Plus size={14} /> Create custom exercise
+      </button>
 
       <div className="space-y-5">
         {Object.entries(grouped).map(([muscle, exs]) => (
@@ -5341,14 +5414,24 @@ function CatalogTab({ state, updateState, allExercises }) {
               {exs.map((ex) => (
                 <div
                   key={ex.id}
-                  className="flex items-center justify-between text-sm border border-neutral-900 bg-charcoal-panel px-3 py-2"
+                  className={`flex items-center justify-between text-sm border bg-charcoal-panel px-3 py-2 ${
+                    isArchived(ex) ? "border-neutral-900 opacity-50" : "border-neutral-900"
+                  }`}
                 >
-                  <span className="text-base text-neutral-200">{ex.name}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] uppercase tracking-wider text-neutral-600">{ex.type}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base text-neutral-200 truncate">{ex.name}</div>
                     {ex.custom && (
-                      <button onClick={() => removeCustomExercise(ex.id)} className="text-neutral-600 hover:text-red-600">
-                        <Trash2 size={13} />
+                      <div className="text-[10px] uppercase tracking-wider text-neutral-600 mt-0.5 truncate">
+                        {formatCustomLabel(ex)}
+                        {isArchived(ex) ? " • Archived" : ""}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {!ex.custom && <span className="text-[10px] uppercase tracking-wider text-neutral-600">{ex.type}</span>}
+                    {ex.custom && (
+                      <button onClick={() => setEditingExercise(ex)} className="text-neutral-600 hover:text-red-600">
+                        <Pencil size={13} />
                       </button>
                     )}
                   </div>
@@ -5358,7 +5441,7 @@ function CatalogTab({ state, updateState, allExercises }) {
           </div>
         ))}
         {filtered.length === 0 && (
-          <div className="text-center py-10 text-neutral-600 text-sm">No matches — add it above.</div>
+          <div className="text-center py-10 text-neutral-600 text-sm">No matches — create it above.</div>
         )}
       </div>
     </div>

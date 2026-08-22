@@ -36,7 +36,12 @@ export function suggestNext(exId, logs, exMap, context = {}) {
   const last = exLogs[0];
   const scored = countedSets(last.sets).length > 0 ? countedSets(last.sets) : last.sets;
   const topSet = scored[0];
-  const allHitTarget = scored.every((s) => s.reps >= last.targetReps);
+  // A log entry restored from an older backup (pre-dating the targetReps field) would otherwise
+  // leave this undefined, making every comparison below silently false and the displayed
+  // suggestion read "undefined reps." Falling back to the top set's own reps keeps well-formed
+  // data (which always has targetReps — both save paths set it) byte-identical.
+  const targetReps = last.targetReps ?? topSet.reps;
+  const allHitTarget = scored.every((s) => s.reps >= targetReps);
   const ex = exMap[exId];
   const inc = increment(ex ? ex.type : "isolation");
   // RIR/RPE on the top set turns a plain "hit target reps" into "with room to spare" vs.
@@ -52,7 +57,7 @@ export function suggestNext(exId, logs, exMap, context = {}) {
     reason =
       topRir != null && topRir >= 2
         ? `Hit target reps with ${topRir}+ RIR to spare — add ${inc} lb.`
-        : `Hit target reps last time (${last.targetReps}+) — add ${inc} lb.`;
+        : `Hit target reps last time (${targetReps}+) — add ${inc} lb.`;
   } else {
     // A miss on a RED-readiness day isn't automatically "regression" — don't let it trigger
     // the two-sessions-in-a-row escalation, and say so plainly instead of quietly repeating
@@ -65,7 +70,8 @@ export function suggestNext(exId, logs, exMap, context = {}) {
       exLogs[0].sets[0]?.weight === exLogs[1].sets[0]?.weight &&
       exLogs.slice(0, 2).every((l) => {
         const s = countedSets(l.sets).length > 0 ? countedSets(l.sets) : l.sets;
-        return !s.every((set) => set.reps >= l.targetReps);
+        const t = l.targetReps ?? s[0]?.reps;
+        return !s.every((set) => set.reps >= t);
       });
 
     suggestion = topSet.weight;
@@ -74,8 +80,8 @@ export function suggestNext(exId, logs, exMap, context = {}) {
     } else {
       reason = missedLastTwo
         ? `Missed target reps two sessions in a row at ${topSet.weight} lb — hold here, or drop ${inc} lb and rebuild.`
-        : `Missed target reps last time — repeat ${topSet.weight} lb and push for ${last.targetReps}.`;
+        : `Missed target reps last time — repeat ${topSet.weight} lb and push for ${targetReps}.`;
     }
   }
-  return { lastWeight: topSet.weight, lastReps: topSet.reps, suggestion, targetReps: last.targetReps, reason, date: last.date };
+  return { lastWeight: topSet.weight, lastReps: topSet.reps, suggestion, targetReps, reason, date: last.date };
 }
