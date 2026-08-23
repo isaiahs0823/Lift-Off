@@ -1560,6 +1560,44 @@ const SECTION_OF = {
   intervalTimer: "train",
 };
 
+// ---------------- ACTIVE WORKOUT DRAFT PERSISTENCE ----------------
+// The persisted shape of `liftlog-active-run`. Bumping this only matters if a future change
+// makes an old draft meaningfully incompatible — sanitizeActiveRun() below already recovers as
+// much of an old/partial object as it can rather than discarding it, so most schema growth
+// (like adding draftByIndex here) never needs a bump at all.
+const ACTIVE_RUN_VERSION = 1;
+// Defends against a corrupted/partial/pre-this-change `liftlog-active-run` value crashing the
+// workout screen: every field is defaulted individually so one missing/malformed property (an
+// old save from before draftByIndex existed, a hand-edited value, truncated storage, etc.) never
+// takes the rest of a legitimate in-progress workout down with it. Returns null only when there's
+// nothing usable at all.
+function sanitizeActiveRun(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  try {
+    return {
+      version: ACTIVE_RUN_VERSION,
+      planName: typeof raw.planName === "string" && raw.planName ? raw.planName : "Workout",
+      exercises: Array.isArray(raw.exercises) ? raw.exercises : [],
+      sessionEntries: Array.isArray(raw.sessionEntries) ? raw.sessionEntries : [],
+      swaps: raw.swaps && typeof raw.swaps === "object" ? raw.swaps : {},
+      finished: !!raw.finished,
+      returnTab: typeof raw.returnTab === "string" ? raw.returnTab : "templates",
+      programContext: raw.programContext && typeof raw.programContext === "object" ? raw.programContext : null,
+      source: typeof raw.source === "string" ? raw.source : null,
+      startedAt: typeof raw.startedAt === "string" ? raw.startedAt : new Date().toISOString(),
+      // Per-exercise-slot in-progress state (confirmed-but-exercise-not-finished sets, plus the
+      // current unsaved set draft) — see TrainingExerciseCard's draft autosave. Keyed by the
+      // exercise's index within `exercises`, cleared the moment that slot's exercise is finished.
+      draftByIndex: raw.draftByIndex && typeof raw.draftByIndex === "object" ? raw.draftByIndex : {},
+      updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : (typeof raw.startedAt === "string" ? raw.startedAt : new Date().toISOString()),
+      summaryId: raw.summaryId ?? null,
+      coachHistoryId: raw.coachHistoryId ?? null,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 export default function LiftLog() {
   const [state, setState] = useState(loadInitialState());
   const [loaded, setLoaded] = useState(false);
@@ -1570,11 +1608,24 @@ export default function LiftLog() {
   const [activeRun, setActiveRun] = useState(() => {
     try {
       const raw = window.localStorage.getItem("liftlog-active-run");
-      return raw ? JSON.parse(raw) : null;
+      return raw ? sanitizeActiveRun(JSON.parse(raw)) : null;
     } catch (e) {
       return null;
     }
   });
+  // Lets the athlete navigate to other tabs (Progress, More, Train) mid-workout without losing
+  // it — GuidedRunView stays mounted in `activeRun` the whole time, this just controls whether
+  // it's the thing currently on screen. Tapping "Exit" mid-workout sets this true instead of
+  // clearing activeRun (that used to destroy the whole in-progress session with zero
+  // confirmation); Train then surfaces a "Resume workout" card to bring it back. Always reset to
+  // false on a fresh startRun() so a brand-new workout is never born already minimized.
+  const [workoutMinimized, setWorkoutMinimized] = useState(false);
+  // Drives the small "Saved / Saving… / Not saved" indicator during an active workout — see the
+  // activeRun-persist effect below (which is the single place that actually knows whether the
+  // localStorage write succeeded) and TrainingExerciseCard's draft-dirty callback (which flips
+  // this to "saving" the instant a field changes, ahead of the debounce actually committing).
+  const [persistStatus, setPersistStatus] = useState("saved");
+  const markDraftDirty = useCallback(() => setPersistStatus("saving"), []);
   // Transient hand-off from BarcodeScannerScreen's "unknown barcode" path to
   // NutritionLabelScannerScreen — the scanned barcode gets attached to the food the user is
   // about to build from the label photo. Navigation-only state, never persisted.
@@ -1611,8 +1662,12 @@ export default function LiftLog() {
     try {
       if (activeRun) window.localStorage.setItem("liftlog-active-run", JSON.stringify(activeRun));
       else window.localStorage.removeItem("liftlog-active-run");
+      if (activeRun) setPersistStatus("saved");
     } catch (e) {
-      // storage unavailable
+      // Storage full/unavailable (private browsing, quota exceeded, etc.) — the workout keeps
+      // running normally in memory, but the athlete needs to know it won't survive a close, not
+      // see a false "Saved" while nothing was actually written.
+      if (activeRun) setPersistStatus("error");
     }
   }, [activeRun]);
   const [restBump, setRestBump] = useState({ token: 0, seconds: 90 });
@@ -1710,7 +1765,11 @@ export default function LiftLog() {
   );
 
   const startRun = (plan, fromTab, programContext) => {
+    const now = new Date().toISOString();
+    setWorkoutMinimized(false);
+    setPersistStatus("saved");
     setActiveRun({
+      version: ACTIVE_RUN_VERSION,
       planName: plan.name,
       exercises: plan.exercises,
       sessionEntries: [],
@@ -1722,7 +1781,9 @@ export default function LiftLog() {
       // plan object the Start Workout Today choice screen builds; every other caller leaves
       // plan.source unset and gets the same "program"/"custom" inference as before this existed.
       source: plan.source || null,
-      startedAt: new Date().toISOString(),
+      startedAt: now,
+      draftByIndex: {},
+      updatedAt: now,
     });
     if (programContext) {
       updateState((prev) => {
@@ -1740,8 +1801,33 @@ export default function LiftLog() {
   // Finish Workout, without ever being asked for one up front.
   const renameRun = (name) => setActiveRun((run) => (run ? { ...run, planName: name } : run));
   const recordRunEntry = (index, entry) => {
-    setActiveRun((run) => ({ ...run, sessionEntries: [...run.sessionEntries, { index, exId: entry.exId, entry }] }));
+    setActiveRun((run) => {
+      // The exercise is now durable in state.logs/sessionEntries (real completed history) — its
+      // slot's in-progress draft (confirmed sets + the current typed set) is now redundant and
+      // would otherwise resurrect stale confirmed sets if this slot were ever revisited.
+      const draftByIndex = { ...(run.draftByIndex || {}) };
+      delete draftByIndex[index];
+      return {
+        ...run,
+        sessionEntries: [...run.sessionEntries, { index, exId: entry.exId, entry }],
+        draftByIndex,
+        updatedAt: new Date().toISOString(),
+      };
+    });
   };
+  // Debounced/immediate autosave target for TrainingExerciseCard's in-progress state — confirmed
+  // sets already saved via "Save Set" but not yet exercise-finished, plus the current unsaved
+  // weight/reps/RIR/set-type/drops draft. See sanitizeActiveRun's draftByIndex comment for shape.
+  const updateRunDraft = useCallback((index, draft) => {
+    setActiveRun((run) => {
+      if (!run) return run;
+      return {
+        ...run,
+        draftByIndex: { ...(run.draftByIndex || {}), [index]: draft },
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  }, []);
   // Used when a collapsed "Logged this session" card is edited/deleted via the shared
   // EditLogEntryPanel — keeps the run's own tracking of which slot is logged in sync with
   // state.logs, since that's what determines which card collapses vs. stays active.
@@ -1755,7 +1841,13 @@ export default function LiftLog() {
     setActiveRun((run) => ({ ...run, sessionEntries: run.sessionEntries.filter((se) => se.index !== index) }));
   };
   const swapRunExercise = (index, newExId) => {
-    setActiveRun((run) => ({ ...run, swaps: { ...(run.swaps || {}), [index]: newExId } }));
+    setActiveRun((run) => {
+      // This slot's draft (if any) belonged to the exercise being swapped away from — carrying
+      // it forward would show the old exercise's typed weight/reps as the new exercise's own.
+      const draftByIndex = { ...(run.draftByIndex || {}) };
+      delete draftByIndex[index];
+      return { ...run, swaps: { ...(run.swaps || {}), [index]: newExId }, draftByIndex, updatedAt: new Date().toISOString() };
+    });
   };
   // Appends an exercise the plan never had (session-only, not saved back to the plan) — the
   // slot lands at the end of run.exercises, so it becomes the active card once everything
@@ -1782,7 +1874,10 @@ export default function LiftLog() {
           }
         : {}),
     }));
-    setActiveRun((run) => ({ ...run, finished: true, summaryId: summary.id, coachHistoryId }));
+    // Whatever was still sitting in a slot's draft (an active-but-not-yet-Finish-Exercise'd
+    // exercise, if Finish Workout was tapped directly) is unsaved by definition — buildSessionSummary
+    // above already only counted real state.logs entries, so this is just clearing now-dead state.
+    setActiveRun((run) => ({ ...run, finished: true, summaryId: summary.id, coachHistoryId, draftByIndex: {} }));
     if (activeRun?.programContext) {
       const ctx = activeRun.programContext;
       updateState((prev) => ({
@@ -1823,6 +1918,35 @@ export default function LiftLog() {
   const exitRun = () => {
     setTab(activeRun?.returnTab || "templates");
     setActiveRun(null);
+    setWorkoutMinimized(false);
+  };
+  // Mid-workout "Exit" — the athlete is stepping away to another tab, not abandoning the
+  // session. Keeps activeRun (and everything already persisted in it) fully intact; Train
+  // surfaces a "Resume workout" card to bring GuidedRunView back. This replaces what used to be
+  // a silent, unconfirmed full discard (see discardRun below for the real, explicit version).
+  const minimizeRun = () => {
+    setWorkoutMinimized(true);
+    // Land on Train specifically, not wherever `tab` happened to be left pointed before the
+    // workout took over the screen (e.g. mid-way through Start Workout Today's own sub-steps) —
+    // that's where the "Resume workout" card lives, so Exit always has somewhere useful to go.
+    setTab("train");
+  };
+  const resumeRun = () => setWorkoutMinimized(false);
+  // The one genuinely destructive action — gated behind an explicit confirmation in the UI, never
+  // called automatically. Completed sets already written to state.logs by finishExercise() (every
+  // "Finish exercise" tap commits immediately, well before Finish Workout) belong to THIS run and
+  // nowhere else, so they're removed too — otherwise a discarded exercise would keep quietly
+  // feeding progression/PRs even though the athlete explicitly threw the session away. Scoped
+  // strictly to the log ids this run itself recorded (activeRun.sessionEntries), so it can never
+  // touch a previously completed, unrelated session.
+  const discardRun = () => {
+    if (!activeRun) return;
+    const loggedIds = new Set((activeRun.sessionEntries || []).map((se) => se.entry?.id).filter(Boolean));
+    if (loggedIds.size > 0) {
+      updateState((prev) => ({ ...prev, logs: (prev.logs || []).filter((l) => !loggedIds.has(l.id)) }));
+    }
+    setActiveRun(null);
+    setWorkoutMinimized(false);
   };
   const rateSession = (sessionId, rating) => {
     updateState((prev) => ({
@@ -1902,9 +2026,13 @@ export default function LiftLog() {
     );
   }
 
+  // A run that exists but is currently minimized (athlete tapped "Exit" to browse another tab)
+  // is not "the active screen" for either the rest timer or the bottom nav — those should behave
+  // exactly as if there were no active run at all while it's backgrounded.
+  const runOnScreen = activeRun && !workoutMinimized;
   // The only two screens that call bumpRestTimer outside a guided run (LogTab, CardioTab) — see
   // the RestTimer mount comment below for why this exists instead of a blanket "always mounted."
-  const restTimerRelevantTab = !activeRun && (tab === "log" || tab === "cardio");
+  const restTimerRelevantTab = !runOnScreen && (tab === "log" || tab === "cardio");
 
   return (
     <div className="w-full bg-charcoal-deep text-neutral-200 font-sans min-h-[600px]">
@@ -1913,13 +2041,13 @@ export default function LiftLog() {
           finished) guided run, the standalone Log tab, or Cardio/conditioning, the three places
           bumpRestTimer is ever called from. Everywhere else (Train browsing, the Start Workout
           choice screen, Repeat Recent, Programs, readiness, the just-finished Session Complete
-          screen) it's unmounted outright, so a rest period that was still ticking when the
-          athlete navigated away can't follow them there — rather than relying only on
-          RestTimer's own idle-state check, which by itself can't distinguish "never started" from
-          "started earlier, now stale on a different screen." */}
-      {(restTimerRelevantTab || (activeRun && !activeRun.finished)) && <RestTimer bump={restBump} settings={state.settings} />}
-      <div className={`p-4 sm:p-6 ${!activeRun ? "pb-24" : ""}`}>
-        {activeRun ? (
+          screen, or a minimized run) it's unmounted outright, so a rest period that was still
+          ticking when the athlete navigated away can't follow them there — rather than relying
+          only on RestTimer's own idle-state check, which by itself can't distinguish "never
+          started" from "started earlier, now stale on a different screen." */}
+      {(restTimerRelevantTab || (runOnScreen && !activeRun.finished)) && <RestTimer bump={restBump} settings={state.settings} />}
+      <div className={`p-4 sm:p-6 ${!runOnScreen ? "pb-24" : ""}`}>
+        {runOnScreen ? (
           <GuidedRunView
             run={activeRun}
             state={state}
@@ -1931,6 +2059,10 @@ export default function LiftLog() {
             onDeleteEntry={deleteRunEntry}
             onFinish={finishRun}
             onExit={exitRun}
+            onMinimize={minimizeRun}
+            onDraftChange={updateRunDraft}
+            onDraftDirty={markDraftDirty}
+            persistStatus={persistStatus}
             onSwap={swapRunExercise}
             onAddExercise={addRunExercise}
             onReopen={reopenRun}
@@ -1982,7 +2114,25 @@ export default function LiftLog() {
                 }}
               />
             )}
-            {tab === "train" && <TrainTab state={state} onStartRun={(plan, programContext) => startRun(plan, "train", programContext)} onNavigate={setTab} />}
+            {tab === "train" && (
+              <TrainTab
+                state={state}
+                exMap={exMap}
+                activeRun={activeRun && workoutMinimized && !activeRun.finished ? activeRun : null}
+                onStartRun={(plan, programContext) => startRun(plan, "train", programContext)}
+                onResumeWorkout={resumeRun}
+                onDiscardWorkout={() => {
+                  if (
+                    window.confirm(
+                      "Discard workout?\n\nYour completed sets and unsaved workout draft will be removed from this active session."
+                    )
+                  ) {
+                    discardRun();
+                  }
+                }}
+                onNavigate={setTab}
+              />
+            )}
             {tab === "startWorkout" && (
               <StartWorkoutChoice
                 state={state}
@@ -2158,7 +2308,7 @@ export default function LiftLog() {
         )}
       </div>
 
-      {!activeRun && (
+      {!runOnScreen && (
         <div className="fixed bottom-0 left-0 right-0 z-20 flex border-t border-red-900/40 bg-charcoal-panel">
           {TOP_TABS.map((t) => {
             const active = (SECTION_OF[tab] || tab) === t.id;
@@ -3504,7 +3654,20 @@ function todayReadinessSummary(state) {
 const RIR_CHIPS = [3, 2, 1, 0];
 const RPE_CHIPS = [7, 8, 9, 10];
 
-function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExercises, onSaved, onSwap, onSetSaved }) {
+function TrainingExerciseCard({
+  exId,
+  exSlot,
+  state,
+  updateState,
+  exMap,
+  allExercises,
+  onSaved,
+  onSwap,
+  onSetSaved,
+  draft,
+  onDraftChange,
+  onDraftDirty,
+}) {
   const rirSystem = state.settings?.rirSystem || "rir";
   const trainingDetail = state.settings?.trainingDetail || "advanced";
   const isSimple = trainingDetail === "simple";
@@ -3519,15 +3682,20 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
   );
   const targetSetCount = exSlot?.sets || recentForEx[0]?.sets.length || 3;
 
-  const [confirmedSets, setConfirmedSets] = useState([]);
+  // Restoring an in-progress workout: `draft` is this exercise's autosaved slot from
+  // activeRun.draftByIndex (see sanitizeActiveRun/updateRunDraft in LiftLog), holding any sets
+  // already saved via "Save Set" but not yet exercise-finished, plus whatever was typed into the
+  // current set. Falls back to the normal fresh-exercise defaults when there's no draft (the
+  // common case — a brand-new exercise, or one whose draft was already cleared by finishExercise).
+  const [confirmedSets, setConfirmedSets] = useState(() => draft?.confirmedSets ?? []);
   // Defaults to 0, not "", when there's no suggestion (a brand-new exercise — exactly the
   // common case right after "Add exercise"): an empty weight field left Save Set silently
   // disabled with no obvious reason, reading as broken rather than "type a number first."
-  const [weight, setWeight] = useState(suggestion.suggestion ?? 0);
-  const [reps, setReps] = useState(suggestion.targetReps ?? 8);
-  const [rirVal, setRirVal] = useState("");
-  const [setType, setSetType] = useState("working");
-  const [drops, setDrops] = useState([]);
+  const [weight, setWeight] = useState(() => (draft && draft.weight !== undefined ? draft.weight : suggestion.suggestion ?? 0));
+  const [reps, setReps] = useState(() => (draft && draft.reps !== undefined ? draft.reps : suggestion.targetReps ?? 8));
+  const [rirVal, setRirVal] = useState(() => draft?.rir ?? "");
+  const [setType, setSetType] = useState(() => draft?.setType ?? "working");
+  const [drops, setDrops] = useState(() => draft?.drops ?? []);
   // Progressive disclosure state — every one of these defaults closed. This component gets a
   // fresh `key={currentExId}` from GuidedRunView on every exercise switch, so there's no need
   // to reset these in an effect: a new exercise is a whole new component instance.
@@ -3540,6 +3708,87 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
   const [editingSetIndex, setEditingSetIndex] = useState(null);
   const [editWeight, setEditWeight] = useState("");
   const [editReps, setEditReps] = useState("");
+
+  // ---------------- ACTIVE WORKOUT DRAFT AUTOSAVE ----------------
+  // Continuously mirrors this exercise's in-progress state (confirmed-but-not-yet-exercise-
+  // finished sets, plus the current unsaved set) up into activeRun.draftByIndex, so closing/
+  // reloading the app mid-exercise never silently drops it — the previous architecture kept all
+  // of this in this component's local React state only, with nothing durable until
+  // finishExercise() ran. A completed set (confirmedSets changing — Save Set, or editing an
+  // already-confirmed set) is written through immediately, never debounced: a "completed set" is
+  // never allowed to depend on a timer or on Finish Workout to become durable. Everything else
+  // (weight/reps/RIR/set type/drops being typed) is debounced so fast typing doesn't write on
+  // every keystroke, but still commits well inside a window an accidental close could exploit.
+  const draftTimerRef = useRef(null);
+  const pendingSnapshotRef = useRef(null);
+  const prevConfirmedRef = useRef(confirmedSets);
+  const onDraftChangeRef = useRef(onDraftChange);
+  const onDraftDirtyRef = useRef(onDraftDirty);
+  useEffect(() => {
+    onDraftChangeRef.current = onDraftChange;
+    onDraftDirtyRef.current = onDraftDirty;
+  }, [onDraftChange, onDraftDirty]);
+
+  useEffect(() => {
+    const snapshot = {
+      confirmedSets,
+      weight,
+      reps,
+      rir: rirVal,
+      setType,
+      drops,
+      updatedAt: new Date().toISOString(),
+    };
+    pendingSnapshotRef.current = snapshot;
+    onDraftDirtyRef.current?.();
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
+    }
+    const completedSetChanged = confirmedSets !== prevConfirmedRef.current;
+    prevConfirmedRef.current = confirmedSets;
+    if (completedSetChanged) {
+      onDraftChangeRef.current?.(snapshot);
+      pendingSnapshotRef.current = null;
+    } else {
+      draftTimerRef.current = setTimeout(() => {
+        draftTimerRef.current = null;
+        pendingSnapshotRef.current = null;
+        onDraftChangeRef.current?.(snapshot);
+      }, 300);
+    }
+  }, [confirmedSets, weight, reps, rirVal, setType, drops]);
+
+  // Secondary safety net only (per the reliability spec — mobile Safari/PWAs don't guarantee
+  // these fire): flushes any still-pending debounced draft immediately when the tab is hidden,
+  // the page is about to unload, or this card unmounts (switching exercises, or the workout being
+  // minimized/exited). The primary protection is the effect above already writing into
+  // continuously-persisted activeRun state — this just closes the up-to-300ms gap for a fast
+  // close that lands mid-debounce.
+  useEffect(() => {
+    const flushNow = () => {
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current);
+        draftTimerRef.current = null;
+      }
+      if (pendingSnapshotRef.current) {
+        onDraftChangeRef.current?.(pendingSnapshotRef.current);
+        pendingSnapshotRef.current = null;
+      }
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") flushNow();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", flushNow);
+    window.addEventListener("beforeunload", flushNow);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", flushNow);
+      window.removeEventListener("beforeunload", flushNow);
+      flushNow();
+    };
+  }, []);
 
   const chips = rirSystem === "rpe" ? RPE_CHIPS : RIR_CHIPS;
   const showDraft = confirmedSets.length < targetSetCount || addingExtra;
@@ -3590,6 +3839,15 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
 
   const finishExercise = () => {
     if (confirmedSets.length === 0) return;
+    // Cancel any still-pending debounced draft flush for whatever was mid-typed in an abandoned
+    // extra set — the athlete just chose to finish without it, so it must not resurrect as a
+    // stale draft the next time this exercise slot is reopened (see the unmount flush effect
+    // above; recordRunEntry already clears draftByIndex[idx] for the real completed sets).
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
+    }
+    pendingSnapshotRef.current = null;
     const entry = {
       id: `log_${Date.now()}`,
       exId,
@@ -3624,6 +3882,15 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
         muscleGroups={MUSCLE_GROUPS}
         onBack={() => setSwapOpen(false)}
         onSelect={(newExId) => {
+          // Same reasoning as finishExercise: cancel any pending debounced draft for the
+          // exercise being swapped away from, so it can't leak into draftByIndex for this slot
+          // and resurface as the new exercise's initial weight/reps once swapRunExercise (which
+          // also clears this slot's draft) commits.
+          if (draftTimerRef.current) {
+            clearTimeout(draftTimerRef.current);
+            draftTimerRef.current = null;
+          }
+          pendingSnapshotRef.current = null;
           setSwapOpen(false);
           onSwap(newExId);
         }}
@@ -3980,6 +4247,10 @@ function GuidedRunView({
   onDeleteEntry,
   onFinish,
   onExit,
+  onMinimize,
+  onDraftChange,
+  onDraftDirty,
+  persistStatus,
   onSwap,
   onAddExercise,
   onReopen,
@@ -4314,9 +4585,22 @@ function GuidedRunView({
             <div className="text-sm text-neutral-400 mt-0.5">
               {totalExercises > 0 ? `Exercise ${stepNumber} of ${totalExercises} · ${elapsedLabel}` : `No exercises yet · ${elapsedLabel}`}
             </div>
+            {/* Tiny, unobtrusive persistence indicator — never its own card, just a one-line
+                honest status. "Saved" only ever reflects a write that actually succeeded (see the
+                activeRun-persist effect in LiftLog); a genuine localStorage failure surfaces as
+                "Not saved" here instead of a false "Saved". */}
+            <div className="text-[10px] uppercase tracking-widest text-neutral-600 mt-0.5">
+              {persistStatus === "error" ? (
+                <span className="text-red-500">Not saved</span>
+              ) : persistStatus === "saving" ? (
+                "Saving…"
+              ) : (
+                "Saved ✓"
+              )}
+            </div>
           </div>
           <div className="shrink-0 flex items-center gap-3">
-            <button onClick={onExit} className="text-xs text-neutral-600 hover:text-red-600">
+            <button onClick={onMinimize} className="text-xs text-neutral-600 hover:text-red-600">
               Exit
             </button>
             <button onClick={onFinish} className="text-xs uppercase tracking-widest font-bold text-red-500 hover:text-red-400">
@@ -4324,6 +4608,11 @@ function GuidedRunView({
             </button>
           </div>
         </div>
+        {persistStatus === "error" && (
+          <div className="border border-red-900/40 bg-red-950/20 px-3 py-2 text-xs text-red-400">
+            Workout changes could not be saved locally. Keep this tab open — your progress is only safe in memory right now.
+          </div>
+        )}
         {totalExercises > 0 && (
           <div className="h-1.5 bg-neutral-900 w-full">
             <div className="h-1.5 bg-red-700 transition-all" style={{ width: `${progressPct}%` }} />
@@ -4435,6 +4724,9 @@ function GuidedRunView({
                     // exercise at once.
                     if (isLastInGroup(idx)) onLoggedSet?.(label ? "superset" : { exId: currentExId });
                   }}
+                  draft={run.draftByIndex?.[idx]}
+                  onDraftChange={(draft) => onDraftChange?.(idx, draft)}
+                  onDraftDirty={onDraftDirty}
                 />
               ) : (
                 <div className="text-base font-medium text-neutral-600">{exMap[currentExId]?.name || currentExId}</div>
