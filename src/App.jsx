@@ -2430,15 +2430,32 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, state, updateSta
 // Adds an exercise to the active session that was never part of the plan — search by name, or
 // browse a muscle group when nothing's typed yet. Distinct from ExerciseSwapPicker: no "current"
 // exercise to bias toward or exclude, so nothing shows until the user searches or picks a group.
+// "Recent" and "Custom" are both cheap to derive from state that already exists — usage
+// timestamps from state.logs, and the `custom` flag already carried on every custom exercise —
+// so surfacing them here doesn't need any new stored data.
 function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onBack, onSelect }) {
   const [query, setQuery] = useState("");
-  const [muscle, setMuscle] = useState(null);
+  const [muscle, setMuscle] = useState(null); // a muscleGroups value, or the sentinel "Custom"
   const [creatingCustom, setCreatingCustom] = useState(false);
   const selectable = useMemo(() => selectableExercises(allExercises), [allExercises]);
+
+  const recent = useMemo(() => {
+    const byExId = new Map();
+    [...(state.logs || [])]
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .forEach((l) => {
+        if (!byExId.has(l.exId)) byExId.set(l.exId, l.date);
+      });
+    return [...byExId.keys()]
+      .map((exId) => selectable.find((ex) => ex.id === exId))
+      .filter(Boolean)
+      .slice(0, 8);
+  }, [state.logs, selectable]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (q) return selectable.filter((ex) => matchesExerciseSearch(ex, q));
+    if (muscle === "Custom") return selectable.filter((ex) => ex.custom);
     if (muscle) return selectable.filter((ex) => ex.muscle === muscle);
     return [];
   }, [query, muscle, selectable]);
@@ -2456,6 +2473,18 @@ function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onB
     );
   }
 
+  const ResultRow = ({ ex }) => (
+    <button
+      onClick={() => onSelect(ex.id)}
+      className="w-full text-left px-3.5 py-3 rounded-xl bg-v5-surface hover:bg-v5-elevated flex items-center justify-between gap-3"
+    >
+      <span className="min-w-0 truncate text-sm text-v5-text">{ex.name}</span>
+      <span className="shrink-0 text-xs text-v5-subtext">{ex.custom ? formatCustomLabel(ex) : ex.muscle}</span>
+    </button>
+  );
+
+  const browsing = !query && !muscle;
+
   return (
     <SlideInPanel title="Add exercise" subtitle="This session only — added to the end of your workout" onBack={onBack}>
       <input
@@ -2466,16 +2495,16 @@ function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onB
           setMuscle(null);
         }}
         placeholder="Search the catalog..."
-        className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-xs focus:outline-none focus:border-red-700"
+        className="w-full bg-v5-surface rounded-xl text-v5-text placeholder:text-v5-subtext px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-v5-red"
       />
       {!query && (
         <div className="flex flex-wrap gap-1.5">
-          {muscleGroups.map((m) => (
+          {["Custom", ...muscleGroups].map((m) => (
             <button
               key={m}
-              onClick={() => setMuscle(m)}
-              className={`px-3 py-1.5 text-xs uppercase tracking-widest border ${
-                muscle === m ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+              onClick={() => setMuscle((cur) => (cur === m ? null : m))}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold ${
+                muscle === m ? "bg-v5-red text-white" : "bg-v5-elevated text-v5-subtext hover:text-v5-text"
               }`}
             >
               {m}
@@ -2483,24 +2512,32 @@ function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onB
           ))}
         </div>
       )}
+
+      {browsing && recent.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Recent</div>
+          {recent.map((ex) => (
+            <ResultRow key={ex.id} ex={ex} />
+          ))}
+        </div>
+      )}
+
       <div className="space-y-1.5">
         {results.map((ex) => (
-          <button
-            key={ex.id}
-            onClick={() => onSelect(ex.id)}
-            className="w-full text-left px-3 py-2 text-sm border border-neutral-900 text-neutral-300 hover:border-red-700 hover:text-white"
-          >
-            {ex.name}
-            <span className="text-xs text-neutral-600 ml-2">
-              {ex.custom ? formatCustomLabel(ex) : ex.muscle}
-            </span>
-          </button>
+          <ResultRow key={ex.id} ex={ex} />
         ))}
-        {query && results.length === 0 && <div className="text-xs text-neutral-600 py-4 text-center">No matches. Try a different search.</div>}
-        {!query && !muscle && <div className="text-xs text-neutral-600 py-4 text-center">Search, or pick a muscle group above.</div>}
+        {query && results.length === 0 && <div className="text-xs text-v5-subtext py-4 text-center">No matches. Try a different search.</div>}
+        {muscle && results.length === 0 && (
+          <div className="text-xs text-v5-subtext py-4 text-center">
+            {muscle === "Custom" ? "No custom exercises yet." : "No matches in this category."}
+          </div>
+        )}
+        {browsing && recent.length === 0 && (
+          <div className="text-xs text-v5-subtext py-4 text-center">Search, or pick a category above.</div>
+        )}
         <button
           onClick={() => setCreatingCustom(true)}
-          className="w-full text-left px-3 py-2.5 text-sm border border-dashed border-neutral-700 text-red-500 hover:border-red-700 hover:text-red-400 flex items-center gap-1.5"
+          className="w-full text-left px-3.5 py-3 rounded-xl text-sm text-v5-red hover:opacity-80 flex items-center gap-1.5"
         >
           <Plus size={14} /> Create custom exercise
         </button>
@@ -3927,20 +3964,24 @@ function TrainingExerciseCard({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <MuscleBodyOutline muscle={exMap[exId]?.muscle} size={40} />
+          <MuscleBodyOutline exercise={exMap[exId]} size={44} />
           <div className="min-w-0">
             <div className="text-xl font-bold text-v5-text truncate">{exMap[exId]?.name || exId}</div>
             <div className="text-xs text-v5-subtext mt-0.5">{exMap[exId]?.muscle}</div>
           </div>
         </div>
+        {/* Quieter than the exercise title on purpose — a small icon-only tap target rather than
+            an uppercase/wide-tracking label competing for attention next to the name. */}
         {onSwap && (
           <button
             onClick={() => setSwapOpen(true)}
-            className="shrink-0 text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red flex items-center gap-1"
+            aria-label="Swap"
+            title="Swap"
+            className="shrink-0 p-1.5 -mr-1.5 text-v5-subtext/70 hover:text-v5-red"
           >
-            <ArrowLeftRight size={12} /> Swap
+            <ArrowLeftRight size={15} />
           </button>
         )}
       </div>
@@ -4066,11 +4107,11 @@ function TrainingExerciseCard({
             {targetSetCount ? ` of ${targetSetCount}` : ""}
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2.5">
             <div className="flex-1 min-w-0">
               <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1">Weight</div>
-              <div className="flex items-stretch gap-1.5">
-                <div className="flex-1 min-w-0 flex items-baseline justify-center gap-1 bg-v5-muted rounded-lg px-2 py-3">
+              <div className="bg-v5-muted rounded-xl px-2 pt-3 pb-2">
+                <div className="flex items-baseline justify-center gap-1">
                   <input
                     type="number"
                     inputMode="decimal"
@@ -4081,15 +4122,18 @@ function TrainingExerciseCard({
                   />
                   <span className="shrink-0 text-xs font-bold text-v5-subtext">lb</span>
                 </div>
-                {/* Quick load adjuster — updates only this draft weight field, the same one
-                    manual typing and "Use"/"Duplicate" already write to. Never saves a set,
-                    never touches the rest timer. Kept compact and inline, not stacked below. */}
-                <QuickLoadAdjuster weight={weight} onChange={(w) => setWeight(w)} />
+                {/* Quick load adjuster — integrated directly under the weight value rather than
+                    a separate widget beside it. Updates only this draft weight field, the same
+                    one manual typing and "Use"/"Duplicate" already write to. Never saves a set,
+                    never touches the rest timer. */}
+                <div className="mt-2">
+                  <QuickLoadAdjuster weight={weight} onChange={(w) => setWeight(w)} />
+                </div>
               </div>
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1">Reps</div>
-              <div className="bg-v5-muted rounded-lg px-2 py-3">
+              <div className="bg-v5-muted rounded-xl px-2 pt-3 pb-2 h-full flex flex-col">
                 <input
                   type="number"
                   inputMode="numeric"
@@ -4098,6 +4142,10 @@ function TrainingExerciseCard({
                   placeholder="0"
                   className="w-full bg-transparent text-4xl font-bold text-v5-text text-center focus:outline-none placeholder:text-v5-subtext/40"
                 />
+                {/* Matches the quick-adjuster's height on the Weight side so both number
+                    fields land on the exact same baseline — same-row alignment, not just
+                    same-ish. */}
+                <div className="mt-2 h-8" aria-hidden="true" />
               </div>
             </div>
           </div>
@@ -4651,12 +4699,12 @@ function GuidedRunView({
         </div>
       )}
 
+      {/* Compact contextual insight, not a card competing with the workout itself — a thin red
+          accent bar and one line of text, gone the moment something's actually logged (see
+          preWorkout's own sessionEntries.length === 0 guard above). */}
       {preWorkout && (
-        <div className="border border-red-900/40 bg-charcoal-panel p-4">
-          <div className="text-[10px] uppercase tracking-widest text-red-600 mb-1 flex items-center gap-1.5">
-            <MessageCircle size={11} /> Coach
-          </div>
-          <div className="text-sm text-neutral-300">{preWorkout.message}</div>
+        <div className="flex items-start gap-2 pl-2.5 border-l-2 border-v5-red/60">
+          <span className="text-xs text-v5-subtext leading-snug">{preWorkout.message}</span>
         </div>
       )}
 

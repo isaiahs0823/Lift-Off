@@ -7,10 +7,12 @@ import { Plus, Minus } from "lucide-react";
 // stays genuinely compact (one row) with no modal.
 const ADJUST_AMOUNTS = Array.from({ length: 20 }, (_, i) => (i + 1) * 5);
 
-// Compact "load dial" beside the live weight field: +/- apply the selected amount to the
-// current draft weight; the amount itself is chosen from the middle selector. Purely a draft-
-// weight helper — it only ever calls onChange with a new number, exactly like typing into the
-// weight field would. It never saves a set, never touches the rest timer, and never reads or
+// Compact "load dial" — a single horizontal strip (-, amount, +) meant to sit directly under the
+// live weight value inside the same weight card, so it reads as one integrated control rather
+// than a separate bordered gadget bolted on beside the input. +/- apply the selected amount to
+// the current draft weight; the amount itself is chosen from the middle selector. Purely a
+// draft-weight helper — it only ever calls onChange with a new number, exactly like typing into
+// the weight field would. It never saves a set, never touches the rest timer, and never reads or
 // writes anything beyond the single weight value it's given.
 export default function QuickLoadAdjuster({ weight, onChange, step = 5 }) {
   const [amount, setAmount] = useState(step);
@@ -22,32 +24,32 @@ export default function QuickLoadAdjuster({ weight, onChange, step = 5 }) {
   };
 
   return (
-    <div className="flex flex-col items-stretch w-16 shrink-0 border border-neutral-800 bg-charcoal-deep">
+    <div className="flex items-stretch justify-center gap-px w-full">
       <button
-        onClick={() => apply(1)}
-        aria-label={`Add ${amount} lb`}
-        className="flex-1 flex items-center justify-center py-2 text-white hover:bg-red-950/30 active:bg-red-950/50 border-b border-neutral-800"
+        onClick={() => apply(-1)}
+        aria-label={`Subtract ${amount} lb`}
+        className="flex items-center justify-center w-9 h-8 rounded-l-md bg-v5-elevated text-v5-subtext hover:text-v5-text active:bg-v5-muted"
       >
-        <Plus size={18} />
+        <Minus size={14} />
       </button>
       <select
         value={amount}
         onChange={(e) => setAmount(Number(e.target.value))}
         aria-label="Adjustment amount"
-        className="w-full bg-transparent text-center text-sm font-bold text-neutral-300 py-1.5 focus:outline-none border-b border-neutral-800"
+        className="w-14 bg-v5-elevated text-center text-xs font-bold text-v5-subtext focus:outline-none"
       >
         {ADJUST_AMOUNTS.map((a) => (
-          <option key={a} value={a} className="bg-charcoal-panel">
-            {a}
+          <option key={a} value={a} className="bg-v5-elevated">
+            ± {a}
           </option>
         ))}
       </select>
       <button
-        onClick={() => apply(-1)}
-        aria-label={`Subtract ${amount} lb`}
-        className="flex-1 flex items-center justify-center py-2 text-white hover:bg-red-950/30 active:bg-red-950/50"
+        onClick={() => apply(1)}
+        aria-label={`Add ${amount} lb`}
+        className="flex items-center justify-center w-9 h-8 rounded-r-md bg-v5-elevated text-v5-subtext hover:text-v5-text active:bg-v5-muted"
       >
-        <Minus size={18} />
+        <Plus size={14} />
       </button>
     </div>
   );
