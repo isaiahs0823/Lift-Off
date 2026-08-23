@@ -53,6 +53,7 @@ import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
 import DataWorkbookScreen from "./components/DataWorkbookScreen.jsx";
 import IntervalTimerScreen from "./components/IntervalTimerScreen.jsx";
 import PlateCalculatorPanel, { PlateCalculatorToggle } from "./components/PlateCalculatorPanel.jsx";
+import MuscleBodyOutline from "./components/MuscleBodyOutline.jsx";
 import QuickLoadAdjuster from "./components/QuickLoadAdjuster.jsx";
 import { unlockAudio, playCompletionBeep, vibratePattern } from "./utils/timerAudio.js";
 import NutritionHome from "./components/NutritionHome.jsx";
@@ -1759,7 +1760,9 @@ export default function LiftLog() {
       if (typeof arg === "string" && defaults[arg] != null) category = arg;
       else if (arg && typeof arg === "object" && arg.exId) category = exMap[arg.exId]?.type === "isolation" ? "isolation" : "compound";
       const seconds = defaults[category] ?? defaults.compound;
-      setRestBump((prev) => ({ token: prev.token + 1, seconds }));
+      const nextWeight = arg && typeof arg === "object" ? arg.nextWeight : undefined;
+      const nextReps = arg && typeof arg === "object" ? arg.nextReps : undefined;
+      setRestBump((prev) => ({ token: prev.token + 1, seconds, nextWeight, nextReps }));
     },
     [state.settings, exMap]
   );
@@ -2309,7 +2312,7 @@ export default function LiftLog() {
       </div>
 
       {!runOnScreen && (
-        <div className="fixed bottom-0 left-0 right-0 z-20 flex border-t border-red-900/40 bg-charcoal-panel">
+        <div className="fixed bottom-0 left-0 right-0 z-20 flex bg-v5-surface">
           {TOP_TABS.map((t) => {
             const active = (SECTION_OF[tab] || tab) === t.id;
             return (
@@ -2317,7 +2320,7 @@ export default function LiftLog() {
                 key={t.id}
                 onClick={() => setTab(t.id)}
                 className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] uppercase tracking-widest transition-colors ${
-                  active ? "text-red-500" : "text-neutral-500 hover:text-neutral-300"
+                  active ? "text-v5-red" : "text-v5-subtext/70 hover:text-v5-subtext"
                 }`}
               >
                 <t.icon size={20} />
@@ -3494,6 +3497,10 @@ function RestTimer({ bump, settings }) {
   // Compares against the last-seen bump token (rather than a "have I ever run" flag) so
   // React StrictMode's double-invoke-on-commit in dev can't misfire this as a real bump.
   const lastBumpToken = useRef(bump.token);
+  // What to show as "Next: 245 x 8" — the weight/reps the athlete just logged, carried along on
+  // the bump that started this rest period. Undefined for a superset bump (no single "next" set)
+  // or when a set was logged with no numeric weight/reps, in which case the line is just omitted.
+  const [nextTarget, setNextTarget] = useState(null);
   useEffect(() => {
     if (bump.token === lastBumpToken.current) return;
     lastBumpToken.current = bump.token;
@@ -3502,6 +3509,7 @@ function RestTimer({ bump, settings }) {
     setPausedRemainingMs(null);
     alertedForRef.current = null;
     setExpanded(false);
+    setNextTarget(bump.nextWeight != null && bump.nextReps != null ? { weight: bump.nextWeight, reps: bump.nextReps } : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bump.token]);
 
@@ -3544,26 +3552,40 @@ function RestTimer({ bump, settings }) {
 
   const complete = remaining === 0;
 
+  // Thin progress indicator — fraction of the configured rest duration remaining, drained
+  // left-to-right as the countdown ticks. Purely visual; nothing here feeds the actual timer.
+  const progressFrac = duration > 0 && remaining != null ? Math.max(0, Math.min(1, remaining / duration)) : 0;
+
   if (!expanded) {
     // Default active view: a slim, tappable pill so exercise/weight/reps/sets stay the focus.
     return (
       <button
         onClick={() => setExpanded(true)}
-        className={`w-full border-b border-red-900/40 bg-charcoal-panel px-4 py-2.5 flex items-center justify-center gap-2 text-sm font-bold tracking-wide transition-colors ${
+        className={`w-full bg-v5-elevated px-4 py-2.5 flex items-center justify-center gap-2 text-sm font-bold tracking-wide transition-colors relative overflow-hidden ${
           justFinished ? "animate-rest-flash" : ""
-        } ${complete ? "text-red-500" : paused ? "text-neutral-400" : "text-white"}`}
+        } ${complete ? "text-v5-red" : paused ? "text-v5-subtext" : "text-v5-text"}`}
       >
-        <Timer size={13} className="text-red-600 shrink-0" />
-        {complete ? "Rest complete · Ready for next set" : `Rest ${formatRestTime(remaining)}${paused ? " · Paused" : ""}`}
+        {!complete && !paused && (
+          <span
+            className="absolute left-0 bottom-0 h-0.5 bg-v5-red transition-all"
+            style={{ width: `${progressFrac * 100}%` }}
+          />
+        )}
+        <Timer size={13} className="text-v5-red shrink-0" />
+        {complete
+          ? "Rest complete · Ready for next set"
+          : `Rest ${formatRestTime(remaining)}${paused ? " · Paused" : ""}${
+              !paused && nextTarget ? ` · Next ${nextTarget.weight} × ${nextTarget.reps}` : ""
+            }`}
       </button>
     );
   }
 
   return (
-    <div className={`border-b border-red-900/40 bg-charcoal-panel px-4 py-5 transition-colors ${justFinished ? "animate-rest-flash" : ""}`}>
+    <div className={`bg-v5-elevated px-4 py-5 transition-colors ${justFinished ? "animate-rest-flash" : ""}`}>
       <button
         onClick={() => setExpanded(false)}
-        className="w-full flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-red-600 mb-3 justify-center"
+        className="w-full flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-v5-red mb-3 justify-center"
       >
         <Timer size={12} /> Rest timer
       </button>
@@ -3571,44 +3593,51 @@ function RestTimer({ bump, settings }) {
       <div className="space-y-3">
         <div className="text-center">
           {remaining > 0 ? (
-            <div className={`text-7xl font-bold tabular-nums leading-none ${paused ? "text-neutral-500" : "text-white"}`}>
+            <div className={`text-7xl font-bold tabular-nums leading-none ${paused ? "text-v5-subtext" : "text-v5-text"}`}>
               {formatRestTime(remaining)}
             </div>
           ) : (
-            <div className="text-4xl font-bold text-red-500 leading-none">Rest complete</div>
+            <div className="text-4xl font-bold text-v5-red leading-none">Rest complete</div>
           )}
-          {paused && remaining > 0 && <div className="text-[11px] uppercase tracking-widest text-neutral-500 mt-1">Paused</div>}
+          {paused && remaining > 0 && <div className="text-[11px] uppercase tracking-widest text-v5-subtext mt-1">Paused</div>}
+          {!paused && remaining > 0 && nextTarget && (
+            <div className="text-xs text-v5-subtext mt-1">
+              Next: {nextTarget.weight} × {nextTarget.reps}
+            </div>
+          )}
         </div>
+        {remaining > 0 && (
+          <div className="h-1 bg-v5-muted rounded-full w-full overflow-hidden">
+            <div className="h-1 bg-v5-red transition-all" style={{ width: `${progressFrac * 100}%` }} />
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <button
             onClick={() => addSeconds(30)}
-            className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600"
+            className="flex-1 py-3 text-sm uppercase tracking-widest font-bold rounded-lg bg-v5-muted text-v5-text hover:opacity-80"
           >
             +30s
           </button>
           <button
             onClick={() => addSeconds(60)}
-            className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600"
+            className="flex-1 py-3 text-sm uppercase tracking-widest font-bold rounded-lg bg-v5-muted text-v5-text hover:opacity-80"
           >
             +60s
           </button>
-          <button
-            onClick={skip}
-            className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
-          >
+          <button onClick={skip} className="flex-1 py-3 text-sm uppercase tracking-widest font-bold rounded-lg bg-v5-red text-white hover:opacity-90">
             Skip
           </button>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={togglePause}
-            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-300 hover:border-neutral-600 flex items-center justify-center gap-1.5"
+            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold rounded-lg bg-v5-muted text-v5-text hover:opacity-80 flex items-center justify-center gap-1.5"
           >
             {paused ? <Play size={12} /> : <Pause size={12} />} {paused ? "Resume" : "Pause"}
           </button>
           <button
             onClick={reset}
-            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-300 hover:border-neutral-600 flex items-center justify-center gap-1.5"
+            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold rounded-lg bg-v5-muted text-v5-text hover:opacity-80 flex items-center justify-center gap-1.5"
           >
             <RotateCcw size={12} /> Reset
           </button>
@@ -3618,10 +3647,8 @@ function RestTimer({ bump, settings }) {
             <button
               key={secs}
               onClick={() => startPreset(secs)}
-              className={`flex-1 py-1.5 text-xs font-bold border ${
-                duration === secs
-                  ? "bg-red-700 border-red-700 text-white"
-                  : "bg-charcoal-panel border-neutral-800 text-neutral-300 hover:border-neutral-600"
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${
+                duration === secs ? "bg-v5-red text-white" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
               }`}
             >
               {formatRestTime(secs)}
@@ -3829,7 +3856,7 @@ function TrainingExerciseCard({
     };
     const cleaned = cleanSetsInput([raw])[0];
     setConfirmedSets((prev) => [...prev, cleaned]);
-    onSetSaved?.();
+    onSetSaved?.({ weight, reps });
     setRirVal("");
     setSetType("working");
     setDrops([]);
@@ -3899,16 +3926,19 @@ function TrainingExerciseCard({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-xl font-bold text-white truncate">{exMap[exId]?.name || exId}</div>
-          <div className="text-xs text-neutral-500 mt-0.5">{exMap[exId]?.muscle}</div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <MuscleBodyOutline muscle={exMap[exId]?.muscle} size={40} />
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-v5-text truncate">{exMap[exId]?.name || exId}</div>
+            <div className="text-xs text-v5-subtext mt-0.5">{exMap[exId]?.muscle}</div>
+          </div>
         </div>
         {onSwap && (
           <button
             onClick={() => setSwapOpen(true)}
-            className="shrink-0 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500 flex items-center gap-1"
+            className="shrink-0 text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red flex items-center gap-1"
           >
             <ArrowLeftRight size={12} /> Swap
           </button>
@@ -3921,20 +3951,20 @@ function TrainingExerciseCard({
           space, and the full last-session set-by-set breakdown is a separate, also-collapsed
           disclosure just below rather than being duplicated here. */}
       {(lastEntry || suggestion.suggestion != null) && (
-        <div className="border border-neutral-800 bg-charcoal-panel px-3 py-2.5">
-          <div className="flex items-center gap-5">
+        <div className="bg-v5-surface rounded-xl px-4 py-3">
+          <div className="flex items-center gap-6">
             {lastTopSet && (
               <div className="min-w-0">
-                <div className="text-[9px] uppercase tracking-widest text-neutral-600">Last</div>
-                <div className="text-base font-bold text-neutral-300 tabular-nums">
+                <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Last</div>
+                <div className="text-lg font-bold text-v5-text tabular-nums">
                   {lastTopSet.weight} × {lastTopSet.reps}
                 </div>
               </div>
             )}
             {suggestion.suggestion != null && (
               <div className="min-w-0">
-                <div className="text-[9px] uppercase tracking-widest text-red-600">Target</div>
-                <div className="text-base font-bold text-white tabular-nums">
+                <div className="text-[10px] uppercase tracking-wide text-v5-red">Target</div>
+                <div className="text-lg font-bold text-v5-text tabular-nums">
                   {suggestion.suggestion} × {suggestion.targetReps}
                 </div>
               </div>
@@ -3942,35 +3972,35 @@ function TrainingExerciseCard({
             {suggestion.suggestion != null && (
               <button
                 onClick={useSuggested}
-                className="ml-auto shrink-0 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400"
+                className="ml-auto shrink-0 text-[11px] uppercase tracking-widest text-v5-red hover:opacity-80"
               >
                 Use
               </button>
             )}
           </div>
-          <div className="flex items-center gap-3 mt-1.5">
+          <div className="flex items-center gap-4 mt-2">
             {suggestion.reason && (
               <button
                 onClick={() => setReasonOpen((o) => !o)}
-                className="text-[10px] text-neutral-600 hover:text-neutral-400 underline decoration-dotted underline-offset-2"
+                className="text-[11px] text-v5-subtext hover:text-v5-text"
               >
-                {reasonOpen ? "Hide" : "Why?"}
+                {reasonOpen ? "Hide" : "Why this target?"}
               </button>
             )}
             {lastEntry && lastEntry.sets.length > 1 && (
               <button
                 onClick={() => setLastSessionOpen((o) => !o)}
-                className="text-[10px] text-neutral-600 hover:text-neutral-400 underline decoration-dotted underline-offset-2"
+                className="text-[11px] text-v5-subtext hover:text-v5-text"
               >
                 Last session {lastSessionOpen ? "▴" : "▾"}
               </button>
             )}
           </div>
-          {reasonOpen && suggestion.reason && <div className="mt-1.5 text-xs text-neutral-500">{suggestion.reason}</div>}
+          {reasonOpen && suggestion.reason && <div className="mt-2 text-xs text-v5-subtext">{suggestion.reason}</div>}
           {lastSessionOpen && lastEntry && (
-            <div className="mt-1.5 space-y-0.5">
+            <div className="mt-2 space-y-0.5">
               {lastEntry.sets.map((s, i) => (
-                <div key={i} className="text-xs text-neutral-500">
+                <div key={i} className="text-xs text-v5-subtext">
                   {formatSetVerbose(s)}
                 </div>
               ))}
@@ -3980,31 +4010,31 @@ function TrainingExerciseCard({
       )}
 
       {confirmedSets.length > 0 && (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {confirmedSets.map((s, i) =>
             editingSetIndex === i ? (
-              <div key={i} className="flex items-center gap-2 text-sm border border-red-900/40 bg-charcoal-panel p-2">
-                <span className="text-neutral-500 shrink-0">Set {i + 1}:</span>
+              <div key={i} className="flex items-center gap-2 text-sm bg-v5-elevated rounded-lg p-2">
+                <span className="text-v5-subtext shrink-0">Set {i + 1}:</span>
                 <input
                   type="number"
                   inputMode="decimal"
                   value={editWeight}
                   onChange={(e) => setEditWeight(e.target.value)}
-                  className="w-16 bg-charcoal-deep border border-neutral-800 text-white text-center px-1 py-1 focus:outline-none focus:border-red-700"
+                  className="w-16 bg-v5-muted rounded text-v5-text text-center px-1 py-1 focus:outline-none focus:ring-1 focus:ring-v5-red"
                 />
-                <span className="text-neutral-600 text-xs">lb x</span>
+                <span className="text-v5-subtext text-xs">lb x</span>
                 <input
                   type="number"
                   inputMode="numeric"
                   value={editReps}
                   onChange={(e) => setEditReps(e.target.value)}
-                  className="w-14 bg-charcoal-deep border border-neutral-800 text-white text-center px-1 py-1 focus:outline-none focus:border-red-700"
+                  className="w-14 bg-v5-muted rounded text-v5-text text-center px-1 py-1 focus:outline-none focus:ring-1 focus:ring-v5-red"
                 />
-                <span className="text-neutral-600 text-xs">reps</span>
-                <button onClick={saveEditSet} className="ml-auto shrink-0 text-green-500 hover:text-green-400 p-1">
+                <span className="text-v5-subtext text-xs">reps</span>
+                <button onClick={saveEditSet} className="ml-auto shrink-0 text-v5-success hover:opacity-80 p-1">
                   <Check size={16} />
                 </button>
-                <button onClick={cancelEditSet} className="shrink-0 text-neutral-500 hover:text-red-500 p-1">
+                <button onClick={cancelEditSet} className="shrink-0 text-v5-subtext hover:text-v5-red p-1">
                   <X size={16} />
                 </button>
               </div>
@@ -4013,13 +4043,13 @@ function TrainingExerciseCard({
                 key={i}
                 onClick={() => startEditSet(i)}
                 aria-label={`Edit set ${i + 1}`}
-                className="w-full flex items-center gap-2 text-sm border border-neutral-900 bg-charcoal-panel px-3 py-2 hover:border-neutral-700"
+                className="w-full flex items-center gap-2 text-sm bg-v5-surface rounded-lg px-3 py-2.5 hover:bg-v5-elevated"
               >
-                <Check size={13} className="text-green-500 shrink-0" />
-                <span className="text-neutral-500 shrink-0">Set {i + 1}</span>
-                <span className="flex-1 text-left text-neutral-200 font-bold">{formatSetCompact(s)}</span>
+                <Check size={13} className="text-v5-success shrink-0" />
+                <span className="text-v5-subtext shrink-0">Set {i + 1}</span>
+                <span className="flex-1 text-left text-v5-text font-bold">{formatSetCompact(s)}</span>
                 {(s.rir != null && s.rir !== "") || (s.rpe != null && s.rpe !== "") ? (
-                  <span className="text-[10px] text-neutral-500 shrink-0">
+                  <span className="text-[10px] text-v5-subtext shrink-0">
                     {s.rir != null && s.rir !== "" ? `RIR ${s.rir}` : `RPE ${s.rpe}`}
                   </span>
                 ) : null}
@@ -4030,26 +4060,26 @@ function TrainingExerciseCard({
       )}
 
       {showDraft && (
-        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
-          <div className="text-[11px] uppercase tracking-widest text-red-600">
+        <div className="bg-v5-surface rounded-xl p-4 space-y-4">
+          <div className="text-sm font-bold text-v5-text">
             Set {confirmedSets.length + 1}
             {targetSetCount ? ` of ${targetSetCount}` : ""}
           </div>
 
           <div className="flex gap-2">
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Weight</div>
+              <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1">Weight</div>
               <div className="flex items-stretch gap-1.5">
-                <div className="flex-1 min-w-0 flex items-baseline justify-center gap-1 border border-neutral-800 bg-charcoal-deep px-2 py-2.5">
+                <div className="flex-1 min-w-0 flex items-baseline justify-center gap-1 bg-v5-muted rounded-lg px-2 py-3">
                   <input
                     type="number"
                     inputMode="decimal"
                     value={weight}
                     onChange={(e) => setWeight(e.target.value)}
                     placeholder="0"
-                    className="min-w-0 flex-1 bg-transparent text-3xl font-bold text-white text-center focus:outline-none placeholder:text-neutral-700"
+                    className="min-w-0 flex-1 bg-transparent text-4xl font-bold text-v5-text text-center focus:outline-none placeholder:text-v5-subtext/40"
                   />
-                  <span className="shrink-0 text-xs font-bold text-neutral-500">lb</span>
+                  <span className="shrink-0 text-xs font-bold text-v5-subtext">lb</span>
                 </div>
                 {/* Quick load adjuster — updates only this draft weight field, the same one
                     manual typing and "Use"/"Duplicate" already write to. Never saves a set,
@@ -4058,29 +4088,41 @@ function TrainingExerciseCard({
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Reps</div>
-              <div className="border border-neutral-800 bg-charcoal-deep px-2 py-2.5">
+              <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1">Reps</div>
+              <div className="bg-v5-muted rounded-lg px-2 py-3">
                 <input
                   type="number"
                   inputMode="numeric"
                   value={reps}
                   onChange={(e) => setReps(e.target.value)}
                   placeholder="0"
-                  className="w-full bg-transparent text-3xl font-bold text-white text-center focus:outline-none placeholder:text-neutral-700"
+                  className="w-full bg-transparent text-4xl font-bold text-v5-text text-center focus:outline-none placeholder:text-v5-subtext/40"
                 />
               </div>
             </div>
           </div>
 
-          {/* Plate calculator — a tool, not a permanent section: collapsed by default, a small
-              inline link right under the weight field, and it collapses itself again the
-              moment a weight is chosen so focus returns straight to the set. */}
-          <button
-            onClick={() => setPlateCalcOpen((o) => !o)}
-            className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
-          >
-            Plate calc {plateCalcOpen ? "▴" : "▾"}
-          </button>
+          {/* Compact advanced-tools row — RIR/Set Type/Notes bundled behind "More", Plate Calc
+              as its own quick-access toggle, matching the v5 "RIR / Set Type / Notes / Plate
+              Calc / More" row while keeping every existing control's underlying behavior (and
+              accessible name) unchanged. Collapsed by default so the current set stays the
+              visual center; a small dot marks "More" when it already holds something so nothing
+              set earlier this exercise silently goes unnoticed while hidden. */}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setPlateCalcOpen((o) => !o)}
+              className="text-[11px] uppercase tracking-wide text-v5-subtext hover:text-v5-red"
+            >
+              Plate calc {plateCalcOpen ? "▴" : "▾"}
+            </button>
+            <button
+              onClick={() => setOptionsOpen((o) => !o)}
+              className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-v5-subtext hover:text-v5-red"
+            >
+              Options {optionsOpen ? "▴" : "▾"}
+              {optionsHasContent && !optionsOpen && <span className="w-1.5 h-1.5 rounded-full bg-v5-red" />}
+            </button>
+          </div>
           {plateCalcOpen && (
             <PlateCalculatorPanel
               barWeight={state.settings?.barWeight || 45}
@@ -4090,23 +4132,11 @@ function TrainingExerciseCard({
               }}
             />
           )}
-
-          {/* One compact drawer for everything that isn't needed to log the next set — RIR/RPE,
-              set classification, drop sets, duplicating the last set, and exercise notes.
-              Collapsed by default; a small dot marks it when it already holds something so
-              nothing set earlier this exercise silently goes unnoticed while hidden. */}
-          <button
-            onClick={() => setOptionsOpen((o) => !o)}
-            className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
-          >
-            Options {optionsOpen ? "▴" : "▾"}
-            {optionsHasContent && !optionsOpen && <span className="w-1.5 h-1.5 rounded-full bg-red-600" />}
-          </button>
           {optionsOpen && (
-            <div className="space-y-3 border-t border-neutral-900 pt-3">
+            <div className="space-y-3 pt-1">
               {!isSimple && (
                 <div>
-                  <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">
+                  <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1.5">
                     {rirSystem === "rpe" ? "RPE" : "RIR"}
                   </div>
                   <div className="flex gap-1.5">
@@ -4114,10 +4144,8 @@ function TrainingExerciseCard({
                       <button
                         key={c}
                         onClick={() => setRirVal((v) => (String(v) === String(c) ? "" : c))}
-                        className={`flex-1 py-2 text-sm font-bold border ${
-                          String(rirVal) === String(c)
-                            ? "bg-red-700 border-red-700 text-white"
-                            : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                        className={`flex-1 py-2 text-sm font-bold rounded-lg ${
+                          String(rirVal) === String(c) ? "bg-v5-red text-white" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
                         }`}
                       >
                         {c}
@@ -4129,16 +4157,14 @@ function TrainingExerciseCard({
 
               {!isSimple && (
                 <div>
-                  <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">Set type</div>
+                  <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1.5">Set type</div>
                   <div className="flex items-center gap-1 overflow-x-auto">
                     {SET_TYPES.map((t) => (
                       <button
                         key={t.value}
                         onClick={() => setSetType(t.value)}
-                        className={`shrink-0 px-2 py-1 text-[10px] font-bold uppercase tracking-wide border ${
-                          setType === t.value
-                            ? "bg-red-700 border-red-700 text-white"
-                            : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+                        className={`shrink-0 px-2 py-1 text-[10px] font-bold uppercase tracking-wide rounded ${
+                          setType === t.value ? "bg-v5-red text-white" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
                         }`}
                       >
                         {t.short}
@@ -4152,36 +4178,36 @@ function TrainingExerciseCard({
                 <div className="space-y-2">
                   {drops.map((d, di) => (
                     <div key={di} className="flex items-center gap-2">
-                      <span className="text-xs text-neutral-700">↳</span>
+                      <span className="text-xs text-v5-subtext">↳</span>
                       <input
                         type="number"
                         placeholder="Drop weight"
                         value={d.weight}
                         onChange={(e) => setDrops((ds) => ds.map((x, i) => (i === di ? { ...x, weight: e.target.value } : x)))}
-                        className="flex-1 min-w-0 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                        className="flex-1 min-w-0 bg-v5-muted rounded-lg text-v5-text px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-v5-red"
                       />
                       <input
                         type="number"
                         placeholder="Drop reps"
                         value={d.reps}
                         onChange={(e) => setDrops((ds) => ds.map((x, i) => (i === di ? { ...x, reps: e.target.value } : x)))}
-                        className="flex-1 min-w-0 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                        className="flex-1 min-w-0 bg-v5-muted rounded-lg text-v5-text px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-v5-red"
                       />
-                      <button onClick={() => setDrops((ds) => ds.filter((_, i) => i !== di))} className="text-neutral-600 hover:text-red-600 p-1">
+                      <button onClick={() => setDrops((ds) => ds.filter((_, i) => i !== di))} className="text-v5-subtext hover:text-v5-red p-1">
                         <Trash2 size={14} />
                       </button>
                     </div>
                   ))}
                   <button
                     onClick={() => setDrops((ds) => [...ds, { weight: "", reps: "" }])}
-                    className="flex items-center gap-1 text-[11px] text-neutral-600 hover:text-red-500"
+                    className="flex items-center gap-1 text-[11px] text-v5-subtext hover:text-v5-red"
                   >
                     <Plus size={11} /> Add drop
                   </button>
                 </div>
               )}
 
-              <button onClick={duplicateLast} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+              <button onClick={duplicateLast} className="text-[11px] uppercase tracking-wide text-v5-subtext hover:text-v5-red">
                 Duplicate last set
               </button>
 
@@ -4192,10 +4218,8 @@ function TrainingExerciseCard({
           <button
             onClick={saveSet}
             disabled={weight === "" || reps === ""}
-            className={`w-full py-4 text-sm uppercase tracking-widest font-bold border ${
-              weight !== "" && reps !== ""
-                ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-                : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+            className={`w-full py-4 rounded-xl text-sm uppercase tracking-widest font-bold ${
+              weight !== "" && reps !== "" ? "bg-v5-red text-white hover:opacity-90" : "bg-v5-muted text-v5-subtext cursor-not-allowed"
             }`}
           >
             Save set
@@ -4207,20 +4231,20 @@ function TrainingExerciseCard({
         <div className="space-y-2">
           <button
             onClick={finishExercise}
-            className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+            className="w-full py-3 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
           >
             Finish exercise →
           </button>
           <button
             onClick={() => setAddingExtra(true)}
-            className="w-full text-center text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+            className="w-full text-center text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red"
           >
             + Add another set
           </button>
         </div>
       )}
       {showDraft && confirmedSets.length > 0 && confirmedSets.length < targetSetCount && (
-        <button onClick={finishExercise} className="w-full text-center text-[11px] uppercase tracking-widest text-neutral-600 hover:text-red-500 py-1">
+        <button onClick={finishExercise} className="w-full text-center text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red py-1">
           Finish exercise now ({confirmedSets.length} set{confirmedSets.length > 1 ? "s" : ""} logged)
         </button>
       )}
@@ -4570,7 +4594,7 @@ function GuidedRunView({
                     setEditingName(false);
                   }
                 }}
-                className="w-full bg-charcoal-panel border border-red-700 text-white text-sm font-bold px-2 py-1 focus:outline-none"
+                className="w-full bg-v5-elevated rounded-lg text-v5-text text-sm font-bold px-2 py-1 focus:outline-none focus:ring-1 focus:ring-v5-red"
               />
             ) : (
               <button
@@ -4578,20 +4602,20 @@ function GuidedRunView({
                 disabled={!canRename}
                 className="flex items-center gap-1.5 min-w-0 text-left"
               >
-                <span className="text-[11px] uppercase tracking-widest text-red-600 truncate">{run.planName}</span>
-                {canRename && <Pencil size={10} className="text-neutral-600 shrink-0" />}
+                <span className="text-lg font-bold text-v5-text truncate">{run.planName}</span>
+                {canRename && <Pencil size={10} className="text-v5-subtext shrink-0" />}
               </button>
             )}
-            <div className="text-sm text-neutral-400 mt-0.5">
+            <div className="text-sm text-v5-subtext mt-0.5">
               {totalExercises > 0 ? `Exercise ${stepNumber} of ${totalExercises} · ${elapsedLabel}` : `No exercises yet · ${elapsedLabel}`}
             </div>
             {/* Tiny, unobtrusive persistence indicator — never its own card, just a one-line
                 honest status. "Saved" only ever reflects a write that actually succeeded (see the
                 activeRun-persist effect in LiftLog); a genuine localStorage failure surfaces as
                 "Not saved" here instead of a false "Saved". */}
-            <div className="text-[10px] uppercase tracking-widest text-neutral-600 mt-0.5">
+            <div className="text-[10px] uppercase tracking-wide text-v5-subtext/70 mt-0.5">
               {persistStatus === "error" ? (
-                <span className="text-red-500">Not saved</span>
+                <span className="text-v5-red">Not saved</span>
               ) : persistStatus === "saving" ? (
                 "Saving…"
               ) : (
@@ -4600,30 +4624,30 @@ function GuidedRunView({
             </div>
           </div>
           <div className="shrink-0 flex items-center gap-3">
-            <button onClick={onMinimize} className="text-xs text-neutral-600 hover:text-red-600">
+            <button onClick={onMinimize} className="text-xs text-v5-subtext hover:text-v5-red">
               Exit
             </button>
-            <button onClick={onFinish} className="text-xs uppercase tracking-widest font-bold text-red-500 hover:text-red-400">
+            <button onClick={onFinish} className="text-xs uppercase tracking-widest font-bold text-v5-red hover:opacity-80">
               Finish
             </button>
           </div>
         </div>
         {persistStatus === "error" && (
-          <div className="border border-red-900/40 bg-red-950/20 px-3 py-2 text-xs text-red-400">
+          <div className="rounded-lg bg-v5-elevated px-3 py-2 text-xs text-v5-red">
             Workout changes could not be saved locally. Keep this tab open — your progress is only safe in memory right now.
           </div>
         )}
         {totalExercises > 0 && (
-          <div className="h-1.5 bg-neutral-900 w-full">
-            <div className="h-1.5 bg-red-700 transition-all" style={{ width: `${progressPct}%` }} />
+          <div className="h-1 bg-v5-muted rounded-full w-full overflow-hidden">
+            <div className="h-1 bg-v5-red transition-all" style={{ width: `${progressPct}%` }} />
           </div>
         )}
       </div>
 
       {totalExercises === 0 && (
-        <div className="border border-dashed border-neutral-800 py-10 text-center">
-          <div className="text-sm text-neutral-500">No exercises yet.</div>
-          <div className="text-xs text-neutral-600 mt-1">Tap + Add Exercise below to log your first movement.</div>
+        <div className="py-10 text-center">
+          <div className="text-sm text-v5-subtext">No exercises yet.</div>
+          <div className="text-xs text-v5-subtext/70 mt-1">Tap + Add Exercise below to log your first movement.</div>
         </div>
       )}
 
@@ -4685,16 +4709,16 @@ function GuidedRunView({
                     <div className="space-y-3">
                       <button onClick={() => setEditingIdx(idx)} className="w-full text-left flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 text-sm font-bold text-white mb-1">
-                            <Check size={14} className="text-green-500 shrink-0" />
+                          <div className="flex items-center gap-1.5 text-sm font-bold text-v5-text mb-1">
+                            <Check size={14} className="text-v5-success shrink-0" />
                             <span className="truncate">{exMap[currentExId]?.name || currentExId}</span>
                           </div>
-                          <div className="text-xs text-neutral-500">
+                          <div className="text-xs text-v5-subtext">
                             {workingCount} working set{workingCount === 1 ? "" : "s"} · Best {finishedTop.weight} × {finishedTop.reps} · Volume{" "}
                             {Math.round(entryVolume(entry)).toLocaleString()} lb
                           </div>
                         </div>
-                        <span className="shrink-0 text-xs uppercase tracking-widest text-red-500 hover:text-red-400">Edit</span>
+                        <span className="shrink-0 text-xs uppercase tracking-widest text-v5-red hover:opacity-80">Edit</span>
                       </button>
                       {prByIndex[idx] && <PRCallout exMap={exMap} exId={currentExId} prs={prByIndex[idx]} />}
                     </div>
@@ -4715,21 +4739,27 @@ function GuidedRunView({
                     onSaved(idx, savedEntry);
                   }}
                   onSwap={(newExId) => onSwap(idx, newExId)}
-                  onSetSaved={() => {
+                  onSetSaved={(justSaved) => {
                     // Mid-group (e.g. still on A1 of an A1/A2 pair): no rest, straight into the
                     // next movement. Rest only starts once the group's last exercise logs a set,
                     // and uses the "superset" default rather than this one exercise's own
                     // compound/isolation category. Within a solo exercise (or the group's last
                     // member), every individual saved set now bumps rest, not just the whole
-                    // exercise at once.
-                    if (isLastInGroup(idx)) onLoggedSet?.(label ? "superset" : { exId: currentExId });
+                    // exercise at once. The just-saved weight/reps ride along so the compact
+                    // rest timer can show "Next: 245 x 8" — the same numbers as the set that was
+                    // just logged, since that's what the athlete will most likely repeat.
+                    if (isLastInGroup(idx)) {
+                      onLoggedSet?.(
+                        label ? "superset" : { exId: currentExId, nextWeight: justSaved?.weight, nextReps: justSaved?.reps }
+                      );
+                    }
                   }}
                   draft={run.draftByIndex?.[idx]}
                   onDraftChange={(draft) => onDraftChange?.(idx, draft)}
                   onDraftDirty={onDraftDirty}
                 />
               ) : (
-                <div className="text-base font-medium text-neutral-600">{exMap[currentExId]?.name || currentExId}</div>
+                <div className="text-base font-medium text-v5-subtext">{exMap[currentExId]?.name || currentExId}</div>
               )}
             </div>
           );
@@ -4738,14 +4768,14 @@ function GuidedRunView({
 
       <button
         onClick={() => setAddingExercise(true)}
-        className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-red-700 hover:text-red-500 flex items-center justify-center gap-1.5"
+        className="w-full py-3 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-elevated text-v5-subtext hover:text-v5-text flex items-center justify-center gap-1.5"
       >
         <Plus size={14} /> Add exercise
       </button>
 
       <button
         onClick={onFinish}
-        className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+        className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
       >
         Finish workout
       </button>

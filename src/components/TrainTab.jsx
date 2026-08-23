@@ -56,40 +56,40 @@ export default function TrainTab({ state, exMap, activeRun, onStartRun, onResume
     return (
       <div className="space-y-4">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Train</div>
-          <div className="text-xl font-bold text-white mt-1">Resume workout</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Train</div>
+          <div className="text-xl font-bold text-v5-text mt-1">Resume workout</div>
         </div>
 
-        <div className="border-2 border-red-700 bg-charcoal-panel p-4 space-y-3">
+        <div className="bg-v5-surface rounded-2xl p-5 space-y-3">
           <div>
-            <div className="text-xl font-bold text-white">{activeRun.planName}</div>
-            <div className="text-sm text-neutral-400">Started {elapsedLabel(activeRun.startedAt)}</div>
+            <div className="text-xl font-bold text-v5-text">{activeRun.planName}</div>
+            <div className="text-sm text-v5-subtext">Started {elapsedLabel(activeRun.startedAt)}</div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Exercises</div>
-              <div className="text-lg font-bold text-white">
+              <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Exercises</div>
+              <div className="text-lg font-bold text-v5-text">
                 {completedExercises}
                 {totalExercises ? ` / ${totalExercises}` : ""}
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Completed sets</div>
-              <div className="text-lg font-bold text-white">{completedSets}</div>
+              <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Completed sets</div>
+              <div className="text-lg font-bold text-v5-text">{completedSets}</div>
             </div>
           </div>
           {hasUnsavedSet && (
-            <div className="text-xs text-red-500 font-bold">
+            <div className="text-xs text-v5-red font-bold">
               Unsaved set restored{currentExName ? ` — ${currentExName}` : ""}
             </div>
           )}
           <button
             onClick={onResumeWorkout}
-            className="w-full py-4 text-sm uppercase tracking-widest font-bold border-2 bg-red-700 border-red-700 text-white hover:bg-red-600"
+            className="w-full py-4 rounded-xl text-sm uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
           >
             Resume workout
           </button>
-          <button onClick={onDiscardWorkout} className="w-full text-center text-[11px] uppercase tracking-widest text-neutral-600 hover:text-red-500 py-1">
+          <button onClick={onDiscardWorkout} className="w-full text-center text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red py-1">
             Discard workout
           </button>
         </div>
@@ -100,21 +100,21 @@ export default function TrainTab({ state, exMap, activeRun, onStartRun, onResume
   return (
     <div className="space-y-4">
       <div>
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Train</div>
-        <div className="text-xl font-bold text-white mt-1">Choose your workout</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Train</div>
+        <div className="text-xl font-bold text-v5-text mt-1">Choose your workout</div>
       </div>
 
       {programDay && !programDay.isComplete && (
-        <div className="border-2 border-red-700 bg-charcoal-panel p-4 space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Current program</div>
-          <div className="text-xl font-bold text-white">{programDay.programName}</div>
-          <div className="text-sm text-neutral-400">
+        <div className="bg-v5-surface rounded-2xl p-5 space-y-2">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Current program</div>
+          <div className="text-xl font-bold text-v5-text">{programDay.programName}</div>
+          <div className="text-sm text-v5-subtext">
             {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
             Next: {programDay.dayLabel}
           </div>
           <button
             onClick={() => onStartRun(programDay.plan, programDay.programContext)}
-            className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+            className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
           >
             Start
           </button>
@@ -123,44 +123,44 @@ export default function TrainTab({ state, exMap, activeRun, onStartRun, onResume
 
       <button
         onClick={() => onNavigate("startWorkout")}
-        className="w-full py-5 text-base uppercase tracking-widest font-bold border-2 bg-red-700 border-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-2"
+        className="w-full py-5 rounded-2xl text-base uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90 flex items-center justify-center gap-2"
       >
         <Play size={20} fill="currentColor" /> Start workout today
       </button>
 
       <button
         onClick={() => onNavigate("templates")}
-        className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-4 hover:border-neutral-600"
+        className="w-full flex items-center justify-between bg-v5-surface rounded-2xl p-4 hover:bg-v5-elevated"
       >
         <div className="flex items-center gap-3">
-          <ClipboardList size={18} className="text-neutral-500" />
+          <ClipboardList size={18} className="text-v5-subtext" />
           <div className="text-left">
-            <div className="text-base font-bold text-white">Programs</div>
-            <div className="text-xs text-neutral-500">All plans, hero programs, single-day templates</div>
+            <div className="text-base font-bold text-v5-text">Programs</div>
+            <div className="text-xs text-v5-subtext">All plans, hero programs, single-day templates</div>
           </div>
         </div>
-        <ChevronRight size={18} className="text-neutral-600 shrink-0" />
+        <ChevronRight size={18} className="text-v5-subtext shrink-0" />
       </button>
 
       <button
         onClick={() => onNavigate("cardio")}
-        className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-4 hover:border-neutral-600"
+        className="w-full flex items-center justify-between bg-v5-surface rounded-2xl p-4 hover:bg-v5-elevated"
       >
         <div className="flex items-center gap-3">
-          <Timer size={18} className="text-neutral-500" />
+          <Timer size={18} className="text-v5-subtext" />
           <div className="text-left">
-            <div className="text-base font-bold text-white">Cardio / conditioning</div>
-            <div className="text-xs text-neutral-500">Runs, sleds, intervals</div>
+            <div className="text-base font-bold text-v5-text">Cardio / conditioning</div>
+            <div className="text-xs text-v5-subtext">Runs, sleds, intervals</div>
           </div>
         </div>
-        <ChevronRight size={18} className="text-neutral-600 shrink-0" />
+        <ChevronRight size={18} className="text-v5-subtext shrink-0" />
       </button>
 
       <div className="flex items-center gap-4 pt-2">
-        <button onClick={() => onNavigate("build")} className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-red-500 hover:text-red-400">
+        <button onClick={() => onNavigate("build")} className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-v5-red hover:opacity-80">
           <Plus size={14} /> Create plan
         </button>
-        <button onClick={() => onNavigate("log")} className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-neutral-500 hover:text-neutral-300">
+        <button onClick={() => onNavigate("log")} className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-text">
           <Dumbbell size={14} /> Log a single exercise
         </button>
       </div>

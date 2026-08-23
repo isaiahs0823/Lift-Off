@@ -13,16 +13,16 @@ export default function StartWorkoutChoice({ state, onStartRun, onRepeatRecent, 
   return (
     <SlideInPanel title="Start workout" onBack={onBack}>
       {hasProgram && (
-        <div className="border-2 border-red-700 bg-charcoal-panel p-4 space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Current program</div>
-          <div className="text-xl font-bold text-white">{programDay.programName}</div>
-          <div className="text-sm text-neutral-400">
+        <div className="bg-v5-surface rounded-2xl p-5 space-y-2">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Current program</div>
+          <div className="text-xl font-bold text-v5-text">{programDay.programName}</div>
+          <div className="text-sm text-v5-subtext">
             {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
             {programDay.dayLabel}
           </div>
           <button
             onClick={() => onStartRun(programDay.plan, programDay.programContext)}
-            className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+            className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
           >
             Start programmed workout
           </button>
@@ -31,26 +31,26 @@ export default function StartWorkoutChoice({ state, onStartRun, onRepeatRecent, 
 
       <button
         onClick={() => onStartRun({ name: "Workout Today", exercises: [], source: "blank" })}
-        className="w-full text-left border border-neutral-800 bg-charcoal-panel p-4 hover:border-red-700 flex items-center gap-3"
+        className="w-full text-left bg-v5-surface rounded-2xl p-5 hover:bg-v5-elevated flex items-center gap-3"
       >
-        <FilePlus size={20} className="text-red-500 shrink-0" />
+        <FilePlus size={20} className="text-v5-red shrink-0" />
         <div className="min-w-0 flex-1">
-          <div className="text-base font-bold text-white">Blank workout</div>
-          <div className="text-xs text-neutral-500 mt-0.5">Start with an empty workout and add exercises as you go.</div>
+          <div className="text-base font-bold text-v5-text">Blank workout</div>
+          <div className="text-xs text-v5-subtext mt-0.5">Start with an empty workout and add exercises as you go.</div>
         </div>
-        <ChevronRight size={18} className="text-neutral-600 shrink-0" />
+        <ChevronRight size={18} className="text-v5-subtext shrink-0" />
       </button>
 
       <button
         onClick={onRepeatRecent}
-        className="w-full text-left border border-neutral-800 bg-charcoal-panel p-4 hover:border-neutral-600 flex items-center gap-3"
+        className="w-full text-left bg-v5-surface rounded-2xl p-5 hover:bg-v5-elevated flex items-center gap-3"
       >
-        <History size={20} className="text-neutral-400 shrink-0" />
+        <History size={20} className="text-v5-subtext shrink-0" />
         <div className="min-w-0 flex-1">
-          <div className="text-base font-bold text-white">Repeat recent workout</div>
-          <div className="text-xs text-neutral-500 mt-0.5">Start from a workout you completed before.</div>
+          <div className="text-base font-bold text-v5-text">Repeat recent workout</div>
+          <div className="text-xs text-v5-subtext mt-0.5">Start from a workout you completed before.</div>
         </div>
-        <ChevronRight size={18} className="text-neutral-600 shrink-0" />
+        <ChevronRight size={18} className="text-v5-subtext shrink-0" />
       </button>
     </SlideInPanel>
   );
