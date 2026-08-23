@@ -14,6 +14,17 @@ function isWarmup(s) {
 function countedSets(sets) {
   return sets.filter((s) => !isWarmup(s));
 }
+// The "top set" is the heaviest counted set of the session — NOT whichever one happens to be
+// first in the array. Sets are stored in the order they were performed, and a ramp-up (light ->
+// heavy) is exactly as common as a top-set-then-back-off (heavy -> light) structure, so
+// `sets[0]` can silently be a light warm-up-shaped set whenever it isn't explicitly classified
+// `setType: "warmup"` (older history in particular often has no classification at all). Ties
+// resolve to whichever qualifying set was logged first, matching the old behavior for the
+// common case of several sets at the same flat weight.
+export function topSetOf(sets) {
+  const scored = countedSets(sets).length > 0 ? countedSets(sets) : sets;
+  return scored.reduce((best, s) => (s.weight > best.weight ? s : best), scored[0]);
+}
 function increment(exType) {
   return exType === "compound" ? 5 : 2.5;
 }
@@ -35,7 +46,7 @@ export function suggestNext(exId, logs, exMap, context = {}) {
     return { lastWeight: null, lastReps: null, suggestion: null, targetReps: null, reason: "No history yet — log a starting weight." };
   const last = exLogs[0];
   const scored = countedSets(last.sets).length > 0 ? countedSets(last.sets) : last.sets;
-  const topSet = scored[0];
+  const topSet = topSetOf(last.sets);
   // A log entry restored from an older backup (pre-dating the targetReps field) would otherwise
   // leave this undefined, making every comparison below silently false and the displayed
   // suggestion read "undefined reps." Falling back to the top set's own reps keeps well-formed
@@ -67,7 +78,7 @@ export function suggestNext(exId, logs, exMap, context = {}) {
     const missedLastTwo =
       !lastWasLowReadiness &&
       exLogs.length >= 2 &&
-      exLogs[0].sets[0]?.weight === exLogs[1].sets[0]?.weight &&
+      topSetOf(exLogs[0].sets).weight === topSetOf(exLogs[1].sets).weight &&
       exLogs.slice(0, 2).every((l) => {
         const s = countedSets(l.sets).length > 0 ? countedSets(l.sets) : l.sets;
         const t = l.targetReps ?? s[0]?.reps;

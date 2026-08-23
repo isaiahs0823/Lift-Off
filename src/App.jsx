@@ -52,7 +52,7 @@ import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
 import DataWorkbookScreen from "./components/DataWorkbookScreen.jsx";
 import IntervalTimerScreen from "./components/IntervalTimerScreen.jsx";
-import { PlateCalculatorToggle } from "./components/PlateCalculatorPanel.jsx";
+import PlateCalculatorPanel, { PlateCalculatorToggle } from "./components/PlateCalculatorPanel.jsx";
 import QuickLoadAdjuster from "./components/QuickLoadAdjuster.jsx";
 import { unlockAudio, playCompletionBeep, vibratePattern } from "./utils/timerAudio.js";
 import NutritionHome from "./components/NutritionHome.jsx";
@@ -65,11 +65,11 @@ import NutritionLabelScannerScreen from "./components/NutritionLabelScannerScree
 import AddFoodScreen from "./components/AddFoodScreen.jsx";
 import FoodDetailScreen from "./components/FoodDetailScreen.jsx";
 import { todayDateKey } from "./utils/nutrition.js";
-import { SET_TYPES, isWarmup, countedSets, formatSetCompact, rirRpeSuffix, formatSetVerbose, formatSetsVerbose, formatSessionDuration } from "./utils/workoutSets.js";
+import { SET_TYPES, isWarmup, countedSets, formatSetCompact, rirRpeSuffix, formatSetVerbose, formatSessionDuration } from "./utils/workoutSets.js";
 import WorkoutHistoryDetail from "./components/WorkoutHistoryDetail.jsx";
 import { findMostRecentSessionForPlan } from "./utils/workoutHistory.js";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
-import { suggestNext } from "./utils/progression.js";
+import { suggestNext, topSetOf } from "./utils/progression.js";
 import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
 import { featuredAndOtherPRs, sessionPRCount, prDeltaLabel, prHeroLabel, prPreviousLabel, PR_TYPE_LABEL } from "./utils/prSummary.js";
 import CustomExerciseForm from "./components/CustomExerciseForm.jsx";
@@ -3528,7 +3528,13 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
   const [rirVal, setRirVal] = useState("");
   const [setType, setSetType] = useState("working");
   const [drops, setDrops] = useState([]);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // Progressive disclosure state — every one of these defaults closed. This component gets a
+  // fresh `key={currentExId}` from GuidedRunView on every exercise switch, so there's no need
+  // to reset these in an effect: a new exercise is a whole new component instance.
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [plateCalcOpen, setPlateCalcOpen] = useState(false);
+  const [lastSessionOpen, setLastSessionOpen] = useState(false);
+  const [reasonOpen, setReasonOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [addingExtra, setAddingExtra] = useState(false);
   const [editingSetIndex, setEditingSetIndex] = useState(null);
@@ -3537,6 +3543,11 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
 
   const chips = rirSystem === "rpe" ? RPE_CHIPS : RIR_CHIPS;
   const showDraft = confirmedSets.length < targetSetCount || addingExtra;
+  const lastEntry = recentForEx[0];
+  const lastTopSet = lastEntry ? topSetOf(lastEntry.sets) : null;
+  const notesSaved = state.exerciseNotes?.[exId];
+  const hasNotes = !!(notesSaved && (notesSaved.general || notesSaved.machine || notesSaved.cue));
+  const optionsHasContent = (!isSimple && (rirVal !== "" || setType !== "working" || drops.length > 0)) || hasNotes;
 
   // Mid-exercise correction (a fat-fingered weight/reps entry shouldn't have to wait until the
   // whole workout is finished and edited from history) — edits the already-confirmed set in
@@ -3573,7 +3584,7 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
     setRirVal("");
     setSetType("working");
     setDrops([]);
-    setAdvancedOpen(false);
+    setOptionsOpen(false);
     setAddingExtra(false);
   };
 
@@ -3621,7 +3632,7 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="text-xl font-bold text-white truncate">{exMap[exId]?.name || exId}</div>
@@ -3637,23 +3648,68 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
         )}
       </div>
 
-      {recentForEx.length > 0 && (
-        <div className="text-sm text-neutral-400">
-          <span className="text-neutral-600">Last time: </span>
-          {formatSetsVerbose(recentForEx[0].sets)}
+      {/* Compact progression header — replaces the old separate "Last time" line + "Today,
+          suggested" card + always-visible reason paragraph with one small block. The reason
+          (when there is one) sits behind a "Why?" toggle instead of permanently consuming
+          space, and the full last-session set-by-set breakdown is a separate, also-collapsed
+          disclosure just below rather than being duplicated here. */}
+      {(lastEntry || suggestion.suggestion != null) && (
+        <div className="border border-neutral-800 bg-charcoal-panel px-3 py-2.5">
+          <div className="flex items-center gap-5">
+            {lastTopSet && (
+              <div className="min-w-0">
+                <div className="text-[9px] uppercase tracking-widest text-neutral-600">Last</div>
+                <div className="text-base font-bold text-neutral-300 tabular-nums">
+                  {lastTopSet.weight} × {lastTopSet.reps}
+                </div>
+              </div>
+            )}
+            {suggestion.suggestion != null && (
+              <div className="min-w-0">
+                <div className="text-[9px] uppercase tracking-widest text-red-600">Target</div>
+                <div className="text-base font-bold text-white tabular-nums">
+                  {suggestion.suggestion} × {suggestion.targetReps}
+                </div>
+              </div>
+            )}
+            {suggestion.suggestion != null && (
+              <button
+                onClick={useSuggested}
+                className="ml-auto shrink-0 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400"
+              >
+                Use
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-1.5">
+            {suggestion.reason && (
+              <button
+                onClick={() => setReasonOpen((o) => !o)}
+                className="text-[10px] text-neutral-600 hover:text-neutral-400 underline decoration-dotted underline-offset-2"
+              >
+                {reasonOpen ? "Hide" : "Why?"}
+              </button>
+            )}
+            {lastEntry && lastEntry.sets.length > 1 && (
+              <button
+                onClick={() => setLastSessionOpen((o) => !o)}
+                className="text-[10px] text-neutral-600 hover:text-neutral-400 underline decoration-dotted underline-offset-2"
+              >
+                Last session {lastSessionOpen ? "▴" : "▾"}
+              </button>
+            )}
+          </div>
+          {reasonOpen && suggestion.reason && <div className="mt-1.5 text-xs text-neutral-500">{suggestion.reason}</div>}
+          {lastSessionOpen && lastEntry && (
+            <div className="mt-1.5 space-y-0.5">
+              {lastEntry.sets.map((s, i) => (
+                <div key={i} className="text-xs text-neutral-500">
+                  {formatSetVerbose(s)}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-
-      {suggestion.suggestion != null && (
-        <div className="text-sm text-neutral-300">
-          <span className="text-neutral-600">Today, suggested: </span>
-          <span className="text-white font-bold">
-            {suggestion.suggestion} lb x {suggestion.targetReps} reps
-          </span>
-        </div>
-      )}
-      {suggestion.reason && (
-        <div className={`text-xs ${suggestion.suggestion == null ? "text-yellow-500" : "text-neutral-500"}`}>{suggestion.reason}</div>
       )}
 
       {confirmedSets.length > 0 && (
@@ -3686,104 +3742,127 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
                 </button>
               </div>
             ) : (
-              <div key={i} className="flex items-center gap-2 text-sm text-neutral-300">
+              <button
+                key={i}
+                onClick={() => startEditSet(i)}
+                aria-label={`Edit set ${i + 1}`}
+                className="w-full flex items-center gap-2 text-sm border border-neutral-900 bg-charcoal-panel px-3 py-2 hover:border-neutral-700"
+              >
                 <Check size={13} className="text-green-500 shrink-0" />
-                <span className="flex-1">
-                  Set {i + 1}: {formatSetVerbose(s)}
-                </span>
-                <button onClick={() => startEditSet(i)} className="shrink-0 text-neutral-600 hover:text-red-500 p-1" aria-label={`Edit set ${i + 1}`}>
-                  <Pencil size={13} />
-                </button>
-              </div>
+                <span className="text-neutral-500 shrink-0">Set {i + 1}</span>
+                <span className="flex-1 text-left text-neutral-200 font-bold">{formatSetCompact(s)}</span>
+                {(s.rir != null && s.rir !== "") || (s.rpe != null && s.rpe !== "") ? (
+                  <span className="text-[10px] text-neutral-500 shrink-0">
+                    {s.rir != null && s.rir !== "" ? `RIR ${s.rir}` : `RPE ${s.rpe}`}
+                  </span>
+                ) : null}
+              </button>
             )
           )}
         </div>
       )}
 
       {showDraft && (
-        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-4">
+        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
           <div className="text-[11px] uppercase tracking-widest text-red-600">
             Set {confirmedSets.length + 1}
             {targetSetCount ? ` of ${targetSetCount}` : ""}
           </div>
 
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">Weight</div>
-            <div className="flex items-stretch gap-2">
-              <div className="flex-1 min-w-0 flex items-baseline justify-center gap-1.5 border border-neutral-800 bg-charcoal-deep px-3 py-3">
+          <div className="flex gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Weight</div>
+              <div className="flex items-stretch gap-1.5">
+                <div className="flex-1 min-w-0 flex items-baseline justify-center gap-1 border border-neutral-800 bg-charcoal-deep px-2 py-2.5">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    placeholder="0"
+                    className="min-w-0 flex-1 bg-transparent text-3xl font-bold text-white text-center focus:outline-none placeholder:text-neutral-700"
+                  />
+                  <span className="shrink-0 text-xs font-bold text-neutral-500">lb</span>
+                </div>
+                {/* Quick load adjuster — updates only this draft weight field, the same one
+                    manual typing and "Use"/"Duplicate" already write to. Never saves a set,
+                    never touches the rest timer. Kept compact and inline, not stacked below. */}
+                <QuickLoadAdjuster weight={weight} onChange={(w) => setWeight(w)} />
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Reps</div>
+              <div className="border border-neutral-800 bg-charcoal-deep px-2 py-2.5">
                 <input
                   type="number"
-                  inputMode="decimal"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                  placeholder="Enter weight"
-                  className="min-w-0 flex-1 bg-transparent text-4xl font-bold text-white text-center focus:outline-none placeholder:text-neutral-700"
+                  inputMode="numeric"
+                  value={reps}
+                  onChange={(e) => setReps(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-transparent text-3xl font-bold text-white text-center focus:outline-none placeholder:text-neutral-700"
                 />
-                <span className="shrink-0 text-sm font-bold text-neutral-500">lb</span>
               </div>
-              {/* Quick load adjuster — updates only this draft weight field, the same one manual
-                  typing and "Use suggested"/"Duplicate" already write to. Never saves a set,
-                  never touches the rest timer. */}
-              <QuickLoadAdjuster weight={weight} onChange={(w) => setWeight(w)} />
             </div>
           </div>
 
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">Reps</div>
-            <div className="border border-neutral-800 bg-charcoal-deep px-3 py-3">
-              <input
-                type="number"
-                inputMode="numeric"
-                value={reps}
-                onChange={(e) => setReps(e.target.value)}
-                placeholder="Enter reps"
-                className="w-full bg-transparent text-4xl font-bold text-white text-center focus:outline-none placeholder:text-neutral-700"
-              />
-            </div>
-          </div>
-
-          {!isSimple && (
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">
-                {rirSystem === "rpe" ? "RPE" : "RIR"}
-              </div>
-              <div className="flex gap-1.5">
-                {chips.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setRirVal((v) => (String(v) === String(c) ? "" : c))}
-                    className={`flex-1 py-2 text-sm font-bold border ${
-                      String(rirVal) === String(c)
-                        ? "bg-red-700 border-red-700 text-white"
-                        : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* Plate calculator — a tool, not a permanent section: collapsed by default, a small
+              inline link right under the weight field, and it collapses itself again the
+              moment a weight is chosen so focus returns straight to the set. */}
+          <button
+            onClick={() => setPlateCalcOpen((o) => !o)}
+            className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+          >
+            Plate calc {plateCalcOpen ? "▴" : "▾"}
+          </button>
+          {plateCalcOpen && (
+            <PlateCalculatorPanel
+              barWeight={state.settings?.barWeight || 45}
+              onUseWeight={(w) => {
+                setWeight(w);
+                setPlateCalcOpen(false);
+              }}
+            />
           )}
 
-          <div className="flex items-center gap-4">
-            <button onClick={useSuggested} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
-              Use suggested
-            </button>
-            <button onClick={duplicateLast} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
-              Duplicate
-            </button>
-          </div>
+          {/* One compact drawer for everything that isn't needed to log the next set — RIR/RPE,
+              set classification, drop sets, duplicating the last set, and exercise notes.
+              Collapsed by default; a small dot marks it when it already holds something so
+              nothing set earlier this exercise silently goes unnoticed while hidden. */}
+          <button
+            onClick={() => setOptionsOpen((o) => !o)}
+            className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+          >
+            Options {optionsOpen ? "▴" : "▾"}
+            {optionsHasContent && !optionsOpen && <span className="w-1.5 h-1.5 rounded-full bg-red-600" />}
+          </button>
+          {optionsOpen && (
+            <div className="space-y-3 border-t border-neutral-900 pt-3">
+              {!isSimple && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">
+                    {rirSystem === "rpe" ? "RPE" : "RIR"}
+                  </div>
+                  <div className="flex gap-1.5">
+                    {chips.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setRirVal((v) => (String(v) === String(c) ? "" : c))}
+                        className={`flex-1 py-2 text-sm font-bold border ${
+                          String(rirVal) === String(c)
+                            ? "bg-red-700 border-red-700 text-white"
+                            : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {!isSimple && (
-            <div>
-              <button
-                onClick={() => setAdvancedOpen((o) => !o)}
-                className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
-              >
-                Working set {advancedOpen ? "▴" : "▾"}
-              </button>
-              {advancedOpen && (
-                <div className="mt-2 space-y-2">
+              {!isSimple && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">Set type</div>
                   <div className="flex items-center gap-1 overflow-x-auto">
                     {SET_TYPES.map((t) => (
                       <button
@@ -3799,6 +3878,11 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {!isSimple && (
+                <div className="space-y-2">
                   {drops.map((d, di) => (
                     <div key={di} className="flex items-center gap-2">
                       <span className="text-xs text-neutral-700">↳</span>
@@ -3829,6 +3913,12 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
                   </button>
                 </div>
               )}
+
+              <button onClick={duplicateLast} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+                Duplicate last set
+              </button>
+
+              <ExerciseNotesPanel exId={exId} state={state} updateState={updateState} />
             </div>
           )}
 
@@ -3867,9 +3957,6 @@ function TrainingExerciseCard({ exId, exSlot, state, updateState, exMap, allExer
           Finish exercise now ({confirmedSets.length} set{confirmedSets.length > 1 ? "s" : ""} logged)
         </button>
       )}
-
-      <PlateCalculatorToggle barWeight={state.settings?.barWeight || 45} onUseWeight={(w) => setWeight(w)} />
-      <ExerciseNotesPanel exId={exId} state={state} updateState={updateState} />
     </div>
   );
 }
@@ -4299,30 +4386,31 @@ function GuidedRunView({
                   }}
                 />
               ) : isLogged ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 text-xs text-green-500 mb-1">
-                        <Check size={14} /> Logged this session
-                      </div>
-                      <div className="text-xl font-bold text-white truncate">{exMap[currentExId]?.name || currentExId}</div>
-                      <div className="space-y-0.5 mt-1.5">
-                        {entry.sets.map((s, i) => (
-                          <div key={i} className="text-sm text-neutral-400">
-                            Set {i + 1}: {formatSetVerbose(s)}
+                // Collapsed to a summary, not every set re-listed — the full breakdown is one
+                // tap away (Edit, or tapping the card itself) via the same shared edit panel
+                // programmed workouts already use, so nothing about editing changed underneath.
+                (() => {
+                  const finishedTop = topSetOf(entry.sets);
+                  const workingCount = countedSets(entry.sets).length;
+                  return (
+                    <div className="space-y-3">
+                      <button onClick={() => setEditingIdx(idx)} className="w-full text-left flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-sm font-bold text-white mb-1">
+                            <Check size={14} className="text-green-500 shrink-0" />
+                            <span className="truncate">{exMap[currentExId]?.name || currentExId}</span>
                           </div>
-                        ))}
-                      </div>
+                          <div className="text-xs text-neutral-500">
+                            {workingCount} working set{workingCount === 1 ? "" : "s"} · Best {finishedTop.weight} × {finishedTop.reps} · Volume{" "}
+                            {Math.round(entryVolume(entry)).toLocaleString()} lb
+                          </div>
+                        </div>
+                        <span className="shrink-0 text-xs uppercase tracking-widest text-red-500 hover:text-red-400">Edit</span>
+                      </button>
+                      {prByIndex[idx] && <PRCallout exMap={exMap} exId={currentExId} prs={prByIndex[idx]} />}
                     </div>
-                    <button
-                      onClick={() => setEditingIdx(idx)}
-                      className="shrink-0 text-xs uppercase tracking-widest text-red-500 hover:text-red-400"
-                    >
-                      Edit
-                    </button>
-                  </div>
-                  {prByIndex[idx] && <PRCallout exMap={exMap} exId={currentExId} prs={prByIndex[idx]} />}
-                </div>
+                  );
+                })()
               ) : isActive ? (
                 <TrainingExerciseCard
                   key={currentExId}
