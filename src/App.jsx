@@ -74,6 +74,8 @@ import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
 import { featuredAndOtherPRs, sessionPRCount, prDeltaLabel, prHeroLabel, prPreviousLabel, PR_TYPE_LABEL } from "./utils/prSummary.js";
 import CustomExerciseForm from "./components/CustomExerciseForm.jsx";
 import { selectableExercises, matchesExerciseSearch, formatCustomLabel, isArchived } from "./utils/customExercises.js";
+import StartWorkoutChoice from "./components/StartWorkoutChoice.jsx";
+import RepeatRecentWorkoutPicker from "./components/RepeatRecentWorkoutPicker.jsx";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained)
 const BREAK_LOGO =
@@ -1447,6 +1449,10 @@ function buildSessionSummary(run, allLogs, priorSessions, exMap) {
   return {
     id: `session_${Date.now()}`,
     planName: run.planName,
+    // Optional metadata only — nothing existing reads this. "program" for a scheduled program
+    // day, "blank"/"repeated" for the two off-program Start Workout Today paths, "custom" as
+    // the catch-all for every pre-existing plan/template start that predates this field.
+    source: run.source || (run.programContext ? "program" : "custom"),
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     durationSec,
@@ -1712,6 +1718,10 @@ export default function LiftLog() {
       finished: false,
       returnTab: fromTab,
       programContext: programContext || null,
+      // Optional metadata only (see buildSessionSummary) — "blank"/"repeated" come from the
+      // plan object the Start Workout Today choice screen builds; every other caller leaves
+      // plan.source unset and gets the same "program"/"custom" inference as before this existed.
+      source: plan.source || null,
       startedAt: new Date().toISOString(),
     });
     if (programContext) {
@@ -1725,6 +1735,10 @@ export default function LiftLog() {
       });
     }
   };
+  // Naming is entirely optional (see StartWorkoutChoice/GuidedRunView) — this just lets an
+  // athlete who started a Blank/Repeat workout give it a real name at any point, right up to
+  // Finish Workout, without ever being asked for one up front.
+  const renameRun = (name) => setActiveRun((run) => (run ? { ...run, planName: name } : run));
   const recordRunEntry = (index, entry) => {
     setActiveRun((run) => ({ ...run, sessionEntries: [...run.sessionEntries, { index, exId: entry.exId, entry }] }));
   };
@@ -1888,10 +1902,22 @@ export default function LiftLog() {
     );
   }
 
+  // The only two screens that call bumpRestTimer outside a guided run (LogTab, CardioTab) — see
+  // the RestTimer mount comment below for why this exists instead of a blanket "always mounted."
+  const restTimerRelevantTab = !activeRun && (tab === "log" || tab === "cardio");
+
   return (
     <div className="w-full bg-charcoal-deep text-neutral-200 font-sans min-h-[600px]">
       <Header />
-      <RestTimer bump={restBump} settings={state.settings} />
+      {/* Only mounted on screens where logging a set is actually possible — an active (not yet
+          finished) guided run, the standalone Log tab, or Cardio/conditioning, the three places
+          bumpRestTimer is ever called from. Everywhere else (Train browsing, the Start Workout
+          choice screen, Repeat Recent, Programs, readiness, the just-finished Session Complete
+          screen) it's unmounted outright, so a rest period that was still ticking when the
+          athlete navigated away can't follow them there — rather than relying only on
+          RestTimer's own idle-state check, which by itself can't distinguish "never started" from
+          "started earlier, now stale on a different screen." */}
+      {(restTimerRelevantTab || (activeRun && !activeRun.finished)) && <RestTimer bump={restBump} settings={state.settings} />}
       <div className={`p-4 sm:p-6 ${!activeRun ? "pb-24" : ""}`}>
         {activeRun ? (
           <GuidedRunView
@@ -1921,6 +1947,7 @@ export default function LiftLog() {
               exitRun();
               viewWorkout(sessionId);
             }}
+            onRename={renameRun}
           />
         ) : (
           <>
@@ -1956,6 +1983,21 @@ export default function LiftLog() {
               />
             )}
             {tab === "train" && <TrainTab state={state} onStartRun={(plan, programContext) => startRun(plan, "train", programContext)} onNavigate={setTab} />}
+            {tab === "startWorkout" && (
+              <StartWorkoutChoice
+                state={state}
+                onStartRun={(plan, programContext) => startRun(plan, "train", programContext)}
+                onRepeatRecent={() => setTab("repeatRecent")}
+                onBack={() => setTab("train")}
+              />
+            )}
+            {tab === "repeatRecent" && (
+              <RepeatRecentWorkoutPicker
+                state={state}
+                onStartRun={(plan) => startRun(plan, "train")}
+                onBack={() => setTab("startWorkout")}
+              />
+            )}
             {tab === "more" && <MoreTab state={state} updateState={updateState} onNavigate={setTab} />}
             {tab === "log" && (
               <LogTab
@@ -3108,6 +3150,10 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
 // auto-start: whenever a set is logged, the caller computes the right default (compound /
 // isolation / conditioning / superset, from Settings) and bumps { token, seconds }.
 const REST_PRESETS = [60, 90, 120, 180];
+// How long "Rest complete" stays up before auto-collapsing back to nothing, for an athlete who
+// doesn't immediately log the next set — logging one before this fires clears it right away
+// anyway (a fresh bump always wins), this is only the fallback so it never lingers forever.
+const REST_COMPLETE_AUTO_COLLAPSE_MS = 8000;
 
 function formatRestTime(totalSeconds) {
   const mins = Math.floor(totalSeconds / 60);
@@ -3219,6 +3265,10 @@ function RestTimer({ bump, settings }) {
   const [endsAt, setEndsAt] = useState(initial?.endsAt ?? null); // absolute ms timestamp; null while idle
   const [pausedRemainingMs, setPausedRemainingMs] = useState(initial?.pausedRemainingMs ?? null); // set only while paused (endsAt is null then)
   const [justFinished, setJustFinished] = useState(false);
+  // Compact "REST 1:27" pill by default (spec: prioritize exercise/weight/reps/sets, not the
+  // timer) — tapping it reveals Pause/Reset/+30/+60/Skip/presets. Resets to collapsed on every
+  // new bump so an expand during one rest period doesn't carry over into the next.
+  const [expanded, setExpanded] = useState(false);
   const [, forceTick] = useState(0);
   // Dedup guard (section 13) — keyed on the endsAt value itself, so each distinct timer
   // instance (a new preset/bump always gets a new endsAt) can only ever alert once, regardless
@@ -3239,11 +3289,18 @@ function RestTimer({ bump, settings }) {
     if (endsAt == null) return;
     if (Date.now() < endsAt) return;
     if (alertedForRef.current === endsAt) return;
-    alertedForRef.current = endsAt;
-    persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor: endsAt });
+    const completedEndsAt = endsAt;
+    alertedForRef.current = completedEndsAt;
+    persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor: completedEndsAt });
     triggerRestCompleteAlert({ sound: soundEnabled, vibration: vibrationEnabled, backgroundAlerts: backgroundAlertsEnabled });
     setJustFinished(true);
     setTimeout(() => setJustFinished(false), 2000);
+    // Falls back to fully idle (nothing rendered at all — see the outer isActive/justFinished
+    // check) if the athlete never interacts. Guarded against the still-current endsAt so a set
+    // logged in the meantime (a fresh bump, a new endsAt) is never clobbered by this timeout.
+    setTimeout(() => {
+      setEndsAt((prev) => (prev === completedEndsAt ? null : prev));
+    }, REST_COMPLETE_AUTO_COLLAPSE_MS);
   }, [endsAt, duration, pausedRemainingMs, soundEnabled, vibrationEnabled, backgroundAlertsEnabled]);
 
   // Persists on every meaningful state change, and once more immediately on mount to catch
@@ -3294,6 +3351,7 @@ function RestTimer({ bump, settings }) {
     setEndsAt(Date.now() + bump.seconds * 1000);
     setPausedRemainingMs(null);
     alertedForRef.current = null;
+    setExpanded(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bump.token]);
 
@@ -3330,79 +3388,96 @@ function RestTimer({ bump, settings }) {
     }
   };
 
+  // Nothing has actually run yet this workout (no bump, and no lingering completion) — this is
+  // the "not relevant" state the redesign wants fully invisible, not just visually quiet.
+  if (!isActive && !justFinished) return null;
+
+  const complete = remaining === 0;
+
+  if (!expanded) {
+    // Default active view: a slim, tappable pill so exercise/weight/reps/sets stay the focus.
+    return (
+      <button
+        onClick={() => setExpanded(true)}
+        className={`w-full border-b border-red-900/40 bg-charcoal-panel px-4 py-2.5 flex items-center justify-center gap-2 text-sm font-bold tracking-wide transition-colors ${
+          justFinished ? "animate-rest-flash" : ""
+        } ${complete ? "text-red-500" : paused ? "text-neutral-400" : "text-white"}`}
+      >
+        <Timer size={13} className="text-red-600 shrink-0" />
+        {complete ? "Rest complete · Ready for next set" : `Rest ${formatRestTime(remaining)}${paused ? " · Paused" : ""}`}
+      </button>
+    );
+  }
+
   return (
-    <div
-      className={`border-b border-red-900/40 bg-charcoal-panel px-4 transition-colors ${
-        justFinished ? "animate-rest-flash" : ""
-      } ${isActive ? "py-5" : "py-2.5"}`}
-    >
-      <div className={`flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-red-600 ${isActive ? "mb-3 justify-center" : "mb-2"}`}>
+    <div className={`border-b border-red-900/40 bg-charcoal-panel px-4 py-5 transition-colors ${justFinished ? "animate-rest-flash" : ""}`}>
+      <button
+        onClick={() => setExpanded(false)}
+        className="w-full flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-red-600 mb-3 justify-center"
+      >
         <Timer size={12} /> Rest timer
-      </div>
+      </button>
 
-      {isActive ? (
-        <div className="space-y-3">
-          <div className="text-center">
-            {remaining > 0 ? (
-              <div className={`text-7xl font-bold tabular-nums leading-none ${paused ? "text-neutral-500" : "text-white"}`}>
-                {formatRestTime(remaining)}
-              </div>
-            ) : (
-              <div className="text-4xl font-bold text-red-500 leading-none">Rest complete</div>
-            )}
-            {paused && remaining > 0 && <div className="text-[11px] uppercase tracking-widest text-neutral-500 mt-1">Paused</div>}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => addSeconds(30)}
-              className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600"
-            >
-              +30s
-            </button>
-            <button
-              onClick={() => addSeconds(60)}
-              className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600"
-            >
-              +60s
-            </button>
-            <button
-              onClick={skip}
-              className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
-            >
-              Skip
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={togglePause}
-              className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-300 hover:border-neutral-600 flex items-center justify-center gap-1.5"
-            >
-              {paused ? <Play size={12} /> : <Pause size={12} />} {paused ? "Resume" : "Pause"}
-            </button>
-            <button
-              onClick={reset}
-              className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-300 hover:border-neutral-600 flex items-center justify-center gap-1.5"
-            >
-              <RotateCcw size={12} /> Reset
-            </button>
-          </div>
+      <div className="space-y-3">
+        <div className="text-center">
+          {remaining > 0 ? (
+            <div className={`text-7xl font-bold tabular-nums leading-none ${paused ? "text-neutral-500" : "text-white"}`}>
+              {formatRestTime(remaining)}
+            </div>
+          ) : (
+            <div className="text-4xl font-bold text-red-500 leading-none">Rest complete</div>
+          )}
+          {paused && remaining > 0 && <div className="text-[11px] uppercase tracking-widest text-neutral-500 mt-1">Paused</div>}
         </div>
-      ) : null}
-
-      <div className={`flex items-center gap-2 ${isActive ? "mt-4" : ""}`}>
-        {REST_PRESETS.map((secs) => (
+        <div className="flex items-center gap-2">
           <button
-            key={secs}
-            onClick={() => startPreset(secs)}
-            className={`flex-1 py-1.5 text-xs font-bold border ${
-              isActive && duration === secs
-                ? "bg-red-700 border-red-700 text-white"
-                : "bg-charcoal-panel border-neutral-800 text-neutral-300 hover:border-neutral-600"
-            }`}
+            onClick={() => addSeconds(30)}
+            className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600"
           >
-            {formatRestTime(secs)}
+            +30s
           </button>
-        ))}
+          <button
+            onClick={() => addSeconds(60)}
+            className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600"
+          >
+            +60s
+          </button>
+          <button
+            onClick={skip}
+            className="flex-1 py-3 text-sm uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
+          >
+            Skip
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={togglePause}
+            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-300 hover:border-neutral-600 flex items-center justify-center gap-1.5"
+          >
+            {paused ? <Play size={12} /> : <Pause size={12} />} {paused ? "Resume" : "Pause"}
+          </button>
+          <button
+            onClick={reset}
+            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-300 hover:border-neutral-600 flex items-center justify-center gap-1.5"
+          >
+            <RotateCcw size={12} /> Reset
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          {REST_PRESETS.map((secs) => (
+            <button
+              key={secs}
+              onClick={() => startPreset(secs)}
+              className={`flex-1 py-1.5 text-xs font-bold border ${
+                duration === secs
+                  ? "bg-red-700 border-red-700 text-white"
+                  : "bg-charcoal-panel border-neutral-800 text-neutral-300 hover:border-neutral-600"
+              }`}
+            >
+              {formatRestTime(secs)}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -3825,10 +3900,22 @@ function GuidedRunView({
   onRate,
   onAskCoach,
   onViewWorkout,
+  onRename,
 }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
   const [addingExercise, setAddingExercise] = useState(false);
+  // Naming is optional and never forced — a program day keeps its scheduled name (not
+  // renamable here), but a blank/repeated off-program workout can be renamed at any point,
+  // including right up to Finish Workout, without ever having been asked for a name up front.
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(run.planName);
+  const canRename = !run.programContext && !!onRename;
+  const saveNameEdit = () => {
+    const trimmed = nameDraft.trim();
+    if (trimmed && trimmed !== run.planName) onRename(trimmed);
+    setEditingName(false);
+  };
   const rirSystem = state.settings?.rirSystem || "rir";
   const isSimple = (state.settings?.trainingDetail || "advanced") === "simple";
 
@@ -4111,9 +4198,34 @@ function GuidedRunView({
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-widest text-red-600 truncate">{run.planName}</div>
+            {editingName ? (
+              <input
+                autoFocus
+                type="text"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={saveNameEdit}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveNameEdit();
+                  if (e.key === "Escape") {
+                    setNameDraft(run.planName);
+                    setEditingName(false);
+                  }
+                }}
+                className="w-full bg-charcoal-panel border border-red-700 text-white text-sm font-bold px-2 py-1 focus:outline-none"
+              />
+            ) : (
+              <button
+                onClick={() => canRename && setEditingName(true)}
+                disabled={!canRename}
+                className="flex items-center gap-1.5 min-w-0 text-left"
+              >
+                <span className="text-[11px] uppercase tracking-widest text-red-600 truncate">{run.planName}</span>
+                {canRename && <Pencil size={10} className="text-neutral-600 shrink-0" />}
+              </button>
+            )}
             <div className="text-sm text-neutral-400 mt-0.5">
-              Exercise {stepNumber} of {totalExercises} · {elapsedLabel}
+              {totalExercises > 0 ? `Exercise ${stepNumber} of ${totalExercises} · ${elapsedLabel}` : `No exercises yet · ${elapsedLabel}`}
             </div>
           </div>
           <div className="shrink-0 flex items-center gap-3">
@@ -4125,10 +4237,19 @@ function GuidedRunView({
             </button>
           </div>
         </div>
-        <div className="h-1.5 bg-neutral-900 w-full">
-          <div className="h-1.5 bg-red-700 transition-all" style={{ width: `${progressPct}%` }} />
-        </div>
+        {totalExercises > 0 && (
+          <div className="h-1.5 bg-neutral-900 w-full">
+            <div className="h-1.5 bg-red-700 transition-all" style={{ width: `${progressPct}%` }} />
+          </div>
+        )}
       </div>
+
+      {totalExercises === 0 && (
+        <div className="border border-dashed border-neutral-800 py-10 text-center">
+          <div className="text-sm text-neutral-500">No exercises yet.</div>
+          <div className="text-xs text-neutral-600 mt-1">Tap + Add Exercise below to log your first movement.</div>
+        </div>
+      )}
 
       {preWorkout && (
         <div className="border border-red-900/40 bg-charcoal-panel p-4">

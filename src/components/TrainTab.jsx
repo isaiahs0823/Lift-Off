@@ -1,14 +1,14 @@
 import React from "react";
-import { ChevronRight, ClipboardList, Timer, Dumbbell, Plus } from "lucide-react";
+import { ChevronRight, ClipboardList, Timer, Dumbbell, Plus, Play } from "lucide-react";
 import { resolveCurrentProgramDay } from "../utils/programSchedule.js";
 
-// Landing/menu for the Train section, ordered Current Program -> My Plans -> Programs so the
-// most-used paths don't require a click into a submenu first; full browsing (built-in
-// programs, single-day templates, completed programs) and plan creation still live one tap
-// deeper, reached via "See all" / "Create plan" rather than shown by default.
+// Landing/menu for the Train section. Hierarchy when no workout is active: Current Program
+// (if one exists) -> the single "Start Workout Today" CTA -> Programs -> Cardio -> secondary
+// tools. "My plans" no longer gets its own preview list here — it's one tap away via Programs,
+// and now also reachable through Start Workout Today -> Repeat Recent — so nothing about
+// starting a saved plan is lost, it's just not competing for space on the landing screen.
 export default function TrainTab({ state, onStartRun, onNavigate }) {
   const programDay = resolveCurrentProgramDay(state);
-  const myPlans = (state.customPlans || []).slice(0, 3);
 
   return (
     <div className="space-y-4">
@@ -34,25 +34,12 @@ export default function TrainTab({ state, onStartRun, onNavigate }) {
         </div>
       )}
 
-      {myPlans.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">My plans</div>
-          {myPlans.map((p) => (
-            <div key={p.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
-              <div className="min-w-0">
-                <div className="text-base text-white truncate">{p.name}</div>
-                <div className="text-xs text-neutral-600">{p.exercises.length} exercises</div>
-              </div>
-              <button
-                onClick={() => onStartRun(p)}
-                className="shrink-0 ml-3 text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
-              >
-                <ChevronRight size={12} /> Start
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <button
+        onClick={() => onNavigate("startWorkout")}
+        className="w-full py-5 text-base uppercase tracking-widest font-bold border-2 bg-red-700 border-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-2"
+      >
+        <Play size={20} fill="currentColor" /> Start workout today
+      </button>
 
       <button
         onClick={() => onNavigate("templates")}
