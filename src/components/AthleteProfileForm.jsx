@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { X } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
+import TrainingDaysSelector from "./TrainingDaysSelector.jsx";
 import {
   COACHING_STYLES,
   COACHING_STYLE_LABEL,
@@ -72,7 +73,7 @@ export default function AthleteProfileForm({ state, updateState, mode = "edit", 
   const existing = resolveProfile(state);
   const [motivation, setMotivation] = useState(existing.motivation);
   const [experience, setExperience] = useState(existing.experience);
-  const [preferredDays, setPreferredDays] = useState(existing.preferredDays != null ? String(existing.preferredDays) : "");
+  const [preferredDays, setPreferredDays] = useState(existing.preferredDays ?? null);
   const [preferredDuration, setPreferredDuration] = useState(existing.preferredDuration != null ? String(existing.preferredDuration) : "");
   const [constraints, setConstraints] = useState(existing.constraints);
   const [coachingStyle, setCoachingStyle] = useState(existing.coachingStyle);
@@ -82,23 +83,34 @@ export default function AthleteProfileForm({ state, updateState, mode = "edit", 
   const [showMore, setShowMore] = useState(mode === "edit");
 
   const save = () => {
-    updateState((prev) => ({
-      ...prev,
-      athleteProfile: {
-        ...resolveProfile(prev),
-        motivation: motivation.trim(),
-        experience,
-        preferredDays: preferredDays !== "" ? Number(preferredDays) : null,
-        preferredDuration: preferredDuration !== "" ? Number(preferredDuration) : null,
-        constraints,
-        coachingStyle,
-        responseLength,
-        trainingStyle: trainingStyle.trim(),
-        equipment,
-        onboardedAt: prev.athleteProfile?.onboardedAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    }));
+    updateState((prev) => {
+      const prevDays = resolveProfile(prev).preferredDays;
+      // Never silently touches the active program — this only ever records that a review is
+      // available. currentProgram itself is untouched here; TemplatesTab's frequency-change
+      // banner is what lets the athlete explicitly choose Review vs Keep (see programRecommendation.js).
+      const daysChangedWithActiveProgram =
+        prev.currentProgram != null && prevDays != null && preferredDays != null && prevDays !== preferredDays;
+      return {
+        ...prev,
+        athleteProfile: {
+          ...resolveProfile(prev),
+          motivation: motivation.trim(),
+          experience,
+          preferredDays,
+          preferredDuration: preferredDuration !== "" ? Number(preferredDuration) : null,
+          constraints,
+          coachingStyle,
+          responseLength,
+          trainingStyle: trainingStyle.trim(),
+          equipment,
+          onboardedAt: prev.athleteProfile?.onboardedAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        pendingFrequencyReview: daysChangedWithActiveProgram
+          ? { fromDays: prevDays, toDays: preferredDays, at: new Date().toISOString() }
+          : prev.pendingFrequencyReview,
+      };
+    });
     onDone?.();
   };
 
@@ -139,29 +151,17 @@ export default function AthleteProfileForm({ state, updateState, mode = "edit", 
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Days/week you can train</label>
-          <input
-            type="number"
-            min="1"
-            max="7"
-            value={preferredDays}
-            onChange={(e) => setPreferredDays(e.target.value)}
-            placeholder="e.g. 4"
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
-          />
-        </div>
-        <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Preferred session length (min)</label>
-          <input
-            type="number"
-            value={preferredDuration}
-            onChange={(e) => setPreferredDuration(e.target.value)}
-            placeholder="e.g. 60"
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
-          />
-        </div>
+      <TrainingDaysSelector value={preferredDays} onChange={setPreferredDays} />
+
+      <div>
+        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Preferred session length (min)</label>
+        <input
+          type="number"
+          value={preferredDuration}
+          onChange={(e) => setPreferredDuration(e.target.value)}
+          placeholder="e.g. 60"
+          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+        />
       </div>
 
       <div>

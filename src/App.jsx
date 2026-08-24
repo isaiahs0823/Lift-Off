@@ -47,6 +47,8 @@ import TrainTab from "./components/TrainTab.jsx";
 import MoreTab from "./components/MoreTab.jsx";
 import ScheduleEditor from "./components/ScheduleEditor.jsx";
 import AthleteProfileForm from "./components/AthleteProfileForm.jsx";
+import TrainingDaysSelector from "./components/TrainingDaysSelector.jsx";
+import { recommendationFor, totalWeeklySets, FREQUENCY_GUIDANCE } from "./utils/programRecommendation.js";
 import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
@@ -1086,6 +1088,144 @@ const HERO_PROGRAMS = [
       },
     ],
   },
+  // ---- 3-day starter programs ----
+  // Beginner/intermediate-friendly, frequency-driven (not identity-driven like the hero
+  // programs above): these are what programRecommendation.js recommends when an athlete says
+  // they can train 3 days/week. `repRange`/`rir` are optional display-only metadata (read by
+  // TemplatesTab's program preview) layered on top of the existing `sets`/`reps` fields every
+  // other program/template already uses — `reps` itself stays a plain representative number so
+  // every existing consumer (progression, TemplatesTab list rows, custom-plan/program copies)
+  // keeps working unmodified.
+  {
+    id: "prog_3day_full_body",
+    name: "3-Day Full Body",
+    tagline: "Train every major muscle group three times per week with balanced full-body sessions.",
+    weeks: 12,
+    days: [
+      {
+        label: "Full Body A",
+        exercises: [
+          { exId: "bench", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "chest_supported_row", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "squat", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "leg_curl_seated", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "lat_raise", sets: 2, reps: 15, repRange: [12, 20], rir: [1, 2] },
+          { exId: "barbell_curl", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "tricep_pushdown", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+        ],
+      },
+      {
+        label: "Full Body B",
+        exercises: [
+          { exId: "ohp", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "lat_pulldown", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "rdl", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "leg_press", sets: 3, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "cable_fly", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "hammer_curl", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "overhead_tricep_ext", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+        ],
+      },
+      {
+        label: "Full Body C",
+        exercises: [
+          { exId: "incline_bench", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "barbell_row", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "hack_squat", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "leg_curl_seated", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "rear_delt_fly", sets: 2, reps: 15, repRange: [12, 20], rir: [1, 2] },
+          { exId: "calf_raise_standing", sets: 3, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "cable_crunch", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+        ],
+      },
+    ],
+  },
+  {
+    id: "prog_3day_ppl",
+    name: "3-Day Push / Pull / Legs",
+    tagline: "A classic three-day bodybuilding split with dedicated push, pull, and lower-body sessions.",
+    weeks: 12,
+    days: [
+      {
+        label: "Push",
+        exercises: [
+          { exId: "bench", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "incline_bench", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "ohp", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "cable_fly", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "lat_raise", sets: 3, reps: 15, repRange: [12, 20], rir: [1, 2] },
+          { exId: "tricep_pushdown", sets: 3, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "overhead_tricep_ext", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+        ],
+      },
+      {
+        label: "Pull",
+        exercises: [
+          { exId: "lat_pulldown", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "chest_supported_row", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "barbell_row", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "rear_delt_fly", sets: 3, reps: 15, repRange: [12, 20], rir: [1, 2] },
+          { exId: "barbell_curl", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "hammer_curl", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+        ],
+      },
+      {
+        label: "Legs",
+        exercises: [
+          { exId: "squat", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "leg_press", sets: 3, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "rdl", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "leg_curl_seated", sets: 3, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "leg_extension", sets: 3, reps: 13, repRange: [12, 15], rir: [1, 2] },
+          { exId: "calf_raise_standing", sets: 4, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "cable_crunch", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+        ],
+      },
+    ],
+  },
+  {
+    id: "prog_3day_upper_lower_full",
+    name: "3-Day Upper / Lower / Full Body",
+    tagline: "A hybrid three-day split combining focused upper/lower training with a balanced full-body day.",
+    weeks: 12,
+    days: [
+      {
+        label: "Upper",
+        exercises: [
+          { exId: "bench", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "chest_supported_row", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "incline_bench", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "lat_pulldown", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "lat_raise", sets: 3, reps: 15, repRange: [12, 20], rir: [1, 2] },
+          { exId: "barbell_curl", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "tricep_pushdown", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+        ],
+      },
+      {
+        label: "Lower",
+        exercises: [
+          { exId: "squat", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "rdl", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "leg_press", sets: 3, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "leg_curl_seated", sets: 3, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "calf_raise_standing", sets: 3, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "cable_crunch", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+        ],
+      },
+      {
+        label: "Full Body",
+        exercises: [
+          { exId: "ohp", sets: 3, reps: 8, repRange: [6, 10], rir: [1, 2] },
+          { exId: "lat_pulldown", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "incline_bench", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "barbell_row", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "leg_press", sets: 3, reps: 10, repRange: [8, 12], rir: [1, 2] },
+          { exId: "rdl", sets: 2, reps: 12, repRange: [10, 15], rir: [1, 2] },
+          { exId: "lat_raise", sets: 2, reps: 15, repRange: [12, 20], rir: [1, 2] },
+        ],
+      },
+    ],
+  },
 ];
 
 // Defaults for the auto-started rest timer, keyed by movement category. Compound lifts get
@@ -1102,7 +1242,11 @@ function loadInitialState() {
     customExercises: [], // { id, name, type, muscle, secondaryMuscles?, equipment?, movementCategory?, brand?, notes?, custom: true, archived?, createdAt }
     logs: [], // { id, exId, date, sets: [{weight, reps, drops?, setType?, rir?, rpe?}], targetReps }
     cardioLogs: [], // { id, exId, date, distance, distanceUnit, duration, load, notes }
-    currentProgram: null, // { programId, programName, source: "builtin" | "custom", dayIndex, totalDays, startDate }
+    currentProgram: null, // { programId, programName, source: "builtin" | "custom", dayIndex, totalDays, startDate, selectedForDays? }
+    // Set only when the athlete changes Planned Training Days while a program is active (see
+    // AthleteProfileForm.save()) — { fromDays, toDays, at }. TemplatesTab shows a Review/Keep
+    // banner while this is set and clears it either way; it never mutates currentProgram itself.
+    pendingFrequencyReview: null,
     photos: [], // { id, date, context, dataUrl }
     completedPrograms: [], // { id, programId, programSource, programName, weeks, startDate, endDate }
     hasSeenOnboarding: false, // sticky — never re-derived from current data, only set true by a real action
@@ -1795,7 +1939,12 @@ export default function LiftLog() {
           prev.currentProgram.programId === programContext.programId &&
           prev.currentProgram.source === programContext.source;
         const startDate = isSameProgram ? prev.currentProgram.startDate : new Date().toISOString();
-        return { ...prev, currentProgram: { ...programContext, startDate }, hasSeenOnboarding: true };
+        // Records what planned-training-frequency was active when this program was picked, purely
+        // as future context (e.g. for Coach to later notice "you planned 5 days but this program
+        // assumes 3" — see programRecommendation.js). Never read to gate or block anything today,
+        // and stays null/undefined for anyone without a set preference — no behavior changes.
+        const selectedForDays = isSameProgram ? prev.currentProgram.selectedForDays ?? null : prev.athleteProfile?.preferredDays ?? null;
+        return { ...prev, currentProgram: { ...programContext, startDate, selectedForDays }, hasSeenOnboarding: true };
       });
     }
   };
@@ -5183,8 +5332,34 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
 }
 
 // ---------------- TEMPLATES TAB ----------------
+// `repRange`/`rir` are optional metadata some programs carry alongside the `sets`/`reps` every
+// plan/program/template already has (see the 3-day starter programs in HERO_PROGRAMS) — falls
+// back to the plain `sets x reps` every existing plan/program/template already renders when
+// they're absent, so this is safe to use everywhere uniformly.
+function formatSetPrescription(e) {
+  const reps = Array.isArray(e.repRange) ? `${e.repRange[0]}–${e.repRange[1]}` : e.reps;
+  const rir = Array.isArray(e.rir) ? ` · RIR ${e.rir[0]}–${e.rir[1]}` : "";
+  return `${e.sets} × ${reps}${rir}`;
+}
+
 function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartCompletedProgram, onGoToBuild, onViewWorkout }) {
   const [detail, setDetail] = useState(null); // { kind: "program" | "template" | "customPlan" | "customProgram", id }
+  // Frequency-aware program picker (Part 2) — selectedDays starts from the athlete's saved
+  // preference (or a pending review's proposed frequency) but is local UI state, never written
+  // back to the profile just by browsing. reviewCompare only exists while the athlete arrived via
+  // the "Review New Plan" banner below, driving the Current -> Proposed framing in the picker and
+  // the program detail panel; it's cleared on Keep/back-out and never mutates currentProgram.
+  const [selectedDays, setSelectedDays] = useState(() => state.pendingFrequencyReview?.toDays ?? state.athleteProfile?.preferredDays ?? null);
+  const [reviewCompare, setReviewCompare] = useState(null); // { fromDays, toDays } | null
+
+  const pendingReview = state.pendingFrequencyReview;
+  const dismissPendingReview = () => updateState((prev) => ({ ...prev, pendingFrequencyReview: null }));
+  const openReview = () => {
+    if (!pendingReview) return;
+    setSelectedDays(pendingReview.toDays);
+    setReviewCompare({ fromDays: pendingReview.fromDays, toDays: pendingReview.toDays });
+    dismissPendingReview();
+  };
 
   const deleteCustomPlan = (id) => updateState((prev) => ({ ...prev, customPlans: prev.customPlans.filter((p) => p.id !== id) }));
   const deleteCustomProgram = (id) =>
@@ -5262,7 +5437,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
             <div key={i} className="flex items-center justify-between text-xs text-neutral-400 py-1.5 border-t border-neutral-900">
               <span className="text-sm">{exMap[e.exId]?.name || e.exId}{e.group ? ` (${e.group})` : ""}</span>
               <span className="text-neutral-600">
-                {e.sets} x {e.reps}
+                {formatSetPrescription(e)}
               </span>
             </div>
           ))}
@@ -5328,7 +5503,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
                 <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
                   <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
                   <span className="text-neutral-600">
-                    {e.sets} x {e.reps}
+                    {formatSetPrescription(e)}
                   </span>
                 </div>
               ))}
@@ -5359,6 +5534,27 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
         subtitle={prog.weeks ? `${prog.tagline} · ${prog.weeks} weeks` : prog.tagline}
         onBack={() => setDetail(null)}
       >
+        {reviewCompare && (
+          <div className="border border-red-900/40 bg-charcoal-panel px-4 py-3 space-y-1.5">
+            <div className="text-[10px] uppercase tracking-widest text-neutral-600">Current → Proposed</div>
+            <div className="text-sm text-neutral-300">
+              <span className="text-neutral-400">{state.currentProgram?.programName || "No active program"}</span>
+              {` (${reviewCompare.fromDays} days) → `}
+              <span className="text-white font-bold">{prog.name}</span>
+              {` (${prog.days.length} days)`}
+            </div>
+            <div className="text-xs text-neutral-500">Approximate weekly volume: {totalWeeklySets(prog)} sets across {prog.days.length} sessions</div>
+            <button
+              onClick={() => {
+                setReviewCompare(null);
+                setDetail(null);
+              }}
+              className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-neutral-300"
+            >
+              Keep current plan instead
+            </button>
+          </div>
+        )}
         <button
           onClick={() => copyProgramToCustom(prog)}
           className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30 flex items-center justify-center gap-1.5"
@@ -5381,15 +5577,16 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
                   </button>
                 )}
                 <button
-                  onClick={() =>
+                  onClick={() => {
+                    setReviewCompare(null);
                     onStartRun(
                       { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
                       { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: di, totalDays: prog.days.length }
-                    )
-                  }
+                    );
+                  }}
                   className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
                 >
-                  <ChevronRight size={11} /> Start workout
+                  <ChevronRight size={11} /> {reviewCompare ? "Apply — Start" : "Start workout"}
                 </button>
                 <button
                   onClick={() => copyDayToCustom(prog, day)}
@@ -5404,7 +5601,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
                 <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
                   <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
                   <span className="text-neutral-600">
-                    {e.sets} x {e.reps}
+                    {formatSetPrescription(e)}
                   </span>
                 </div>
               ))}
@@ -5426,7 +5623,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
             <div key={i} className="flex items-center justify-between text-xs text-neutral-400 py-1.5 border-t border-neutral-900">
               <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
               <span className="text-neutral-600">
-                {e.sets} x {e.reps}
+                {formatSetPrescription(e)}
               </span>
             </div>
           ))}
@@ -5456,6 +5653,35 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
           </button>
         )}
       </div>
+
+      {/* Shown only while pendingFrequencyReview is set — i.e. only right after the athlete
+          changed Planned Training Days while a program was active (see AthleteProfileForm.save()).
+          Both actions dismiss it; only Review New Plan also opens the frequency-filtered picker
+          below pre-set to the new day count. currentProgram is untouched either way until the
+          athlete explicitly starts a different program day from that picker. */}
+      {pendingReview && (
+        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
+          <div className="text-sm text-neutral-200">
+            You changed your planned training frequency from <span className="font-bold text-white">{pendingReview.fromDays}</span> to{" "}
+            <span className="font-bold text-white">{pendingReview.toDays}</span> days per week.
+          </div>
+          <div className="text-xs text-neutral-500">Would you like BRK to adjust your program?</div>
+          <div className="flex gap-2">
+            <button
+              onClick={openReview}
+              className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
+            >
+              Review New Plan
+            </button>
+            <button
+              onClick={dismissPendingReview}
+              className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
+            >
+              Keep Current Plan
+            </button>
+          </div>
+        </div>
+      )}
 
       {state.customPlans.length > 0 && (
         <div className="space-y-3">
@@ -5511,8 +5737,92 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
         </div>
       )}
 
+      {/* Frequency-aware picker (Part 2) — "available days -> best-fit split," not "force the
+          same split into N days." Built-in/custom programs matching the selected day count are
+          grouped Recommended/Other Options; day counts with no concrete match yet (2/4/5/6 today)
+          fall back to structure guidance instead of fabricating a program. Nothing here is
+          hidden — the full "All Programs" list below is unaffected and still shows everything
+          regardless of day count. */}
       <div className="space-y-3">
-        <div className="text-[11px] uppercase tracking-widest text-neutral-500">Programs</div>
+        <div className="text-[11px] uppercase tracking-widest text-red-600">Find a program for your schedule</div>
+        {reviewCompare && (
+          <div className="text-xs text-neutral-400 border-l-2 border-red-700 pl-2.5">
+            Current: <span className="text-neutral-200">{state.currentProgram?.programName || "No active program"}</span> (
+            {reviewCompare.fromDays} days) → Proposed: {reviewCompare.toDays} days
+          </div>
+        )}
+        <TrainingDaysSelector
+          label="How many days can you train?"
+          value={selectedDays}
+          onChange={(d) => {
+            setSelectedDays(d);
+            if (reviewCompare) setReviewCompare((r) => ({ ...r, toDays: d }));
+          }}
+        />
+        {selectedDays != null &&
+          (() => {
+            const rec = recommendationFor(selectedDays, { programs: state.programs, customPrograms: state.customPrograms });
+            const guidance = FREQUENCY_GUIDANCE[selectedDays];
+            const programRow = (p, isRecommended) => (
+              <button
+                key={p.id}
+                onClick={() => setDetail({ kind: p.source === "custom" ? "customProgram" : "program", id: p.id })}
+                className={`w-full flex items-center justify-between px-4 py-3 border text-left ${
+                  isRecommended ? "border-red-700 bg-red-950/10" : "border-neutral-800 bg-charcoal-panel"
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-medium text-white truncate">{p.name}</span>
+                    {isRecommended && (
+                      <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Recommended</span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-neutral-500 mt-0.5 truncate">
+                    {p.tagline}
+                    {p.weeks ? ` · ${p.weeks} weeks` : ""}
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-neutral-600 shrink-0 ml-2" />
+              </button>
+            );
+            return (
+              <div className="space-y-3">
+                {guidance?.warning && (
+                  <div className="border border-amber-900/40 bg-amber-950/10 px-3 py-2.5 text-xs text-amber-500/90">{guidance.note}</div>
+                )}
+                {rec.recommended && (
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] uppercase tracking-widest text-neutral-600">Recommended</div>
+                    {programRow(rec.recommended, true)}
+                  </div>
+                )}
+                {rec.others.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] uppercase tracking-widest text-neutral-600">Other Options</div>
+                    {rec.others.map((p) => programRow(p, false))}
+                  </div>
+                )}
+                {rec.matches.length === 0 && guidance && !guidance.warning && (
+                  <div className="text-xs text-neutral-500 border border-neutral-800 bg-charcoal-panel px-3 py-3 space-y-2">
+                    <div>
+                      No built-in program at {selectedDays} days yet. Recommended structure: {guidance.structure.join(" / ")}.
+                    </div>
+                    <div className="text-neutral-600">{guidance.note}</div>
+                    {onGoToBuild && (
+                      <button onClick={onGoToBuild} className="text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400">
+                        Build one from scratch →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+      </div>
+
+      <div className="space-y-3">
+        <div className="text-[11px] uppercase tracking-widest text-neutral-500">All Programs</div>
         <p className="text-xs text-neutral-500">
           Full multi-day splits built around a specific look and training identity. Copy any single day into your
           own plans.
