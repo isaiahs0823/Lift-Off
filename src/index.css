@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* BRK brand typography roles. The current values are a placeholder — BRK's existing default
+   stack — not a final brand choice. When the official brand font is supplied, swap it in HERE
+   (and only here): every screen that uses the font-brk-display/heading/body Tailwind utilities
+   (wired to these vars in tailwind.config.js) picks up the change automatically, with no
+   component-level edits required. --font-brk-display is for large hero/display moments,
+   --font-brk-heading for section headings/labels, --font-brk-body for running copy. */
+:root {
+  --font-brk-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-brk-heading: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-brk-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
 html, body, #root {
   height: 100%;
   background: #151515;

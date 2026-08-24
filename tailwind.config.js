@@ -26,6 +26,15 @@ export default {
           success: "#29C17E",
         },
       },
+      // Brand typography roles — point at the CSS custom properties defined in index.css so the
+      // display/heading/body fonts can be swapped centrally in one place (index.css) once BRK's
+      // final brand font is supplied, without touching any component that uses these utilities
+      // (font-brk-display / font-brk-heading / font-brk-body).
+      fontFamily: {
+        "brk-display": ["var(--font-brk-display)"],
+        "brk-heading": ["var(--font-brk-heading)"],
+        "brk-body": ["var(--font-brk-body)"],
+      },
       keyframes: {
         restFlash: {
           "0%, 100%": { backgroundColor: "#202020" },
