@@ -25,3 +25,16 @@ html, body, #root {
     font-size: 16px !important;
   }
 }
+
+/* Chromium (desktop Chrome/Edge and Android Chrome) draws native up/down spin buttons on every
+   type="number" input — visible on BRK's weight/reps/RIR/drop-set fields, and especially
+   cramped-looking on the compact Reps box where it overlaps the digit. Safari never shows these,
+   so this is purely a Chromium quirk to suppress, not a cross-browser feature to preserve. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}

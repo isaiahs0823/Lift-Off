@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff, ListChecks } from "lucide-react";
+import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff, ListChecks, Sparkles, AlertCircle } from "lucide-react";
 import { syncCoachMemory } from "../utils/coachMemory.js";
 import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC, PHYSIQUE_PHASE_LABEL } from "../utils/athleteProfile.js";
 import { resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
@@ -47,6 +47,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState(null);
   const [errorRequestId, setErrorRequestId] = useState(null);
+  const [errorStatus, setErrorStatus] = useState(null);
   const [isOnline, setIsOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   const abortRef = useRef(null);
   const bottomRef = useRef(null);
@@ -103,6 +104,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
     setStreamingText("");
     setError(null);
     setErrorRequestId(null);
+    setErrorStatus(null);
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -134,6 +136,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
       if (e?.name !== "AbortError") {
         setError(e?.message || "Coach couldn't respond right now.");
         setErrorRequestId(e?.requestId || null);
+        setErrorStatus(e?.status ?? null);
       }
     } finally {
       setSending(false);
@@ -300,18 +303,43 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
               <div className="max-w-[85%] px-3.5 py-2.5 text-sm bg-charcoal-deep border border-neutral-800 text-neutral-200 whitespace-pre-line">{streamingText}</div>
             </div>
           )}
-          {error && (
-            <div className="flex justify-start">
-              <div className="max-w-[85%] px-3.5 py-2.5 text-sm bg-charcoal-panel border border-red-900/40 text-neutral-300 space-y-2">
-                {/* Shows the actual server-classified message (auth/quota/model/invalid-request/
-                    generic) — this used to be a single hardcoded string regardless of what the
-                    server actually said, which meant a correct, specific classification server-side
-                    never reached anyone looking at the app. */}
-                <div>{error}</div>
-                {errorRequestId && <div className="text-[10px] text-neutral-600">Error ID: {errorRequestId}</div>}
-                <button onClick={retry} className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-red-500 hover:text-red-400">
-                  <RotateCcw size={12} /> Try Again
+          {/* Two distinct fallback states, not a raw provider error dropped into the chat log.
+              503 ("AI Coach is not configured yet.") means there is currently no provider to
+              retry against at all — a permanent-feeling "Coming Soon" panel with no Retry button,
+              since retrying can't help. Everything else (quota/billing, upstream failure, model
+              issue, timeout, network) is a working-but-currently-failing provider, so it gets a
+              visually distinct "temporarily unavailable" panel with Retry — the case the spec
+              calls out as needing an actual retry path rather than a dead end. Neither panel ever
+              shows the raw provider name, status code, or error body to the athlete; that detail
+              still reaches Coach Settings' diagnostics via errorRequestId, matched to the exact
+              server log line, for admin/dev use only. */}
+          {error && errorStatus === 503 && (
+            <div className="flex justify-start w-full">
+              <div className="w-full border border-neutral-800 bg-charcoal-panel p-5 text-center space-y-2">
+                <Sparkles size={18} className="mx-auto text-red-600" />
+                <div className="text-[11px] uppercase tracking-widest text-red-600 font-bold">BRK AI Coach</div>
+                <div className="text-base font-bold text-white">Coming Soon</div>
+                <div className="text-sm text-neutral-400 max-w-xs mx-auto">
+                  Personalized coaching built around your training, readiness, nutrition, and progress is being prepared for beta.
+                </div>
+                {errorRequestId && <div className="text-[10px] text-neutral-700 pt-1">Ref: {errorRequestId}</div>}
+              </div>
+            </div>
+          )}
+          {error && errorStatus !== 503 && (
+            <div className="flex justify-start w-full">
+              <div className="w-full border border-red-900/40 bg-charcoal-panel p-5 text-center space-y-2">
+                <AlertCircle size={18} className="mx-auto text-red-600" />
+                <div className="text-[11px] uppercase tracking-widest text-red-600 font-bold">BRK AI Coach</div>
+                <div className="text-base font-bold text-white">Temporarily unavailable</div>
+                <div className="text-sm text-neutral-400">Your training data is safe. Try again shortly.</div>
+                <button
+                  onClick={retry}
+                  className="mx-auto flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-red-500 hover:text-red-400 pt-1"
+                >
+                  <RotateCcw size={12} /> Retry
                 </button>
+                {errorRequestId && <div className="text-[10px] text-neutral-700">Ref: {errorRequestId}</div>}
               </div>
             </div>
           )}
@@ -321,7 +349,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
         {bubbles.length === 0 && (
           <div className="flex flex-wrap gap-1.5 px-3 pb-2">
             {QUICK_QUESTIONS.map((q) => (
-              <button key={q} onClick={() => send(q)} disabled={sending || !isOnline} className="px-2.5 py-1.5 text-[11px] border border-neutral-800 text-neutral-400 hover:border-red-700 hover:text-red-500 disabled:opacity-40">
+              <button key={q} onClick={() => send(q)} disabled={sending || !isOnline || errorStatus === 503} className="px-2.5 py-1.5 text-[11px] border border-neutral-800 text-neutral-400 hover:border-red-700 hover:text-red-500 disabled:opacity-40">
                 {q}
               </button>
             ))}
@@ -335,12 +363,12 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send(input)}
             placeholder="Ask your coach..."
-            disabled={sending || !isOnline}
+            disabled={sending || !isOnline || errorStatus === 503}
             className="flex-1 min-w-0 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2.5 text-base focus:outline-none focus:border-red-700 disabled:opacity-60"
           />
           <button
             onClick={() => send(input)}
-            disabled={sending || !isOnline || !input.trim()}
+            disabled={sending || !isOnline || errorStatus === 503 || !input.trim()}
             className="shrink-0 px-4 py-2.5 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600 disabled:opacity-40 flex items-center gap-1.5"
           >
             <Send size={14} /> Send

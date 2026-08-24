@@ -10,14 +10,23 @@
 //
 // Order matters: more specific patterns are checked first so e.g. "Leg curl" (hamstrings) is
 // matched before the generic "curl" -> biceps rule, and "Wrist curl" (forearms) before that too.
+// The first rule below exists purely to protect two known collisions further down this list:
+// "Tricep kickback" would otherwise hit the glutes rule's bare "kickback" keyword, and "Bench
+// dip" would otherwise hit the final rule's bare "bench" keyword and jump from Arms all the way
+// to a Chest highlight — both real exercise names in BRK's catalog, not hypotheticals.
 const NAME_RULES = [
+  [/tricep.*kickback|triceps.*kickback|bench dip/i, "back", "triceps"],
   [/hamstring|leg curl|good morning|glute-?ham/i, "back", "hamstrings"],
   [/glute|hip thrust|glute bridge|kickback/i, "back", "glutes"],
   [/calf|calve/i, "back", "calves"],
   [/squat|leg press|leg extension|lunge|step-?up|quad/i, "front", "quads"],
   [/\brow\b|pulldown|pull-?up|chin-?up|\blat\b|deadlift|shrug|face pull|rear delt|reverse fly/i, "back", "back"],
   [/tricep|pushdown|pressdown|skull-?crusher|jm press/i, "back", "triceps"],
-  [/forearm|wrist curl|wrist extension|\bgrip\b/i, "front", "forearms"],
+  // Negative lookbehind on "grip" excludes grip-*width* qualifiers hyphenated onto an unrelated
+  // exercise ("Close-grip bench press", "Wide-Grip Push-Up") so those fall through to their real
+  // movement pattern instead of a false forearms hit; "gripper" is listed separately since a
+  // grip-strength device is a genuine forearm exercise "grip" alone wouldn't catch.
+  [/forearm|wrist curl|wrist extension|gripper|(?<!-)\bgrip\b/i, "front", "forearms"],
   [/bicep|curl/i, "front", "biceps"],
   [/lateral raise|front raise|overhead press|shoulder press|arnold|military press/i, "front", "shoulders"],
   [/\bab\b|abs|crunch|\bcore\b|plank|russian twist|leg raise|sit-?up/i, "front", "abs"],
