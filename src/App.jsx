@@ -3963,7 +3963,7 @@ function TrainingExerciseCard({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <MuscleBodyOutline exercise={exMap[exId]} size={52} />
@@ -4101,42 +4101,38 @@ function TrainingExerciseCard({
       )}
 
       {showDraft && (
-        <div className="bg-v5-surface rounded-xl p-4 space-y-3">
+        <div className="bg-v5-surface rounded-xl p-2.5 space-y-1.5">
           <div className="text-sm font-bold text-v5-text">
             Set {confirmedSets.length + 1}
             {targetSetCount ? ` of ${targetSetCount}` : ""}
           </div>
 
-          <div className="flex items-start gap-2.5">
-            <div className="flex-[3] min-w-0">
-              <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1">Weight</div>
-              <div className="bg-v5-muted rounded-xl px-2 pt-3 pb-2">
-                <div className="flex items-baseline justify-center gap-1">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={weight}
-                    onChange={(e) => setWeight(e.target.value)}
-                    placeholder="0"
-                    className="min-w-0 flex-1 bg-transparent text-4xl font-bold text-v5-text text-center focus:outline-none placeholder:text-v5-subtext/40"
-                  />
-                  <span className="shrink-0 text-xs font-bold text-v5-subtext">lb</span>
-                </div>
-                {/* Quick load adjuster — integrated directly under the weight value rather than
-                    a separate widget beside it. Updates only this draft weight field, the same
-                    one manual typing and "Use"/"Duplicate" already write to. Never saves a set,
-                    never touches the rest timer. */}
-                <div className="mt-2">
-                  <QuickLoadAdjuster weight={weight} onChange={(w) => setWeight(w)} />
-                </div>
+          {/* Weight and Reps are two short, independent boxes (not one tall Weight card with the
+              adjuster nested inside it) — the quick-load strip is its own compact row scoped to
+              Weight's column below, so Weight reads as wider (60%) rather than taller, and Reps
+              stays genuinely short instead of stretching to match a taller neighbor. */}
+          <div className="flex items-start gap-2">
+            <div className="flex-[3] min-w-0 space-y-1">
+              <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Weight</div>
+              <div className="bg-v5-muted rounded-lg px-3 py-1.5 flex items-baseline justify-center gap-1">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  placeholder="0"
+                  className="min-w-0 flex-1 bg-transparent text-3xl font-bold text-v5-text text-center focus:outline-none placeholder:text-v5-subtext/40"
+                />
+                <span className="shrink-0 text-xs font-bold text-v5-subtext">lb</span>
               </div>
+              {/* Updates only this draft weight field, the same one manual typing and
+                  "Use"/"Duplicate" already write to. Never saves a set, never touches the rest
+                  timer. */}
+              <QuickLoadAdjuster weight={weight} onChange={(w) => setWeight(w)} />
             </div>
-            {/* Reps only ever needs the number itself, so it stays a short, tap-friendly box
-                rather than stretching to match Weight's taller (value + quick-load) card — that
-                stretch used to be forced with a bare spacer div purely for baseline alignment. */}
-            <div className="flex-[2] min-w-0">
-              <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1">Reps</div>
-              <div className="bg-v5-muted rounded-xl px-2 py-3">
+            <div className="flex-[2] min-w-0 space-y-1">
+              <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Reps</div>
+              <div className="bg-v5-muted rounded-lg px-3 py-1.5">
                 <input
                   type="number"
                   inputMode="numeric"
@@ -4154,22 +4150,22 @@ function TrainingExerciseCard({
               Calc / More" row while keeping every existing control's underlying behavior (and
               accessible name) unchanged. Collapsed by default so the current set stays the
               visual center; a small dot marks "More" when it already holds something so nothing
-              set earlier this exercise silently goes unnoticed while hidden. Styled as a pair of
-              same-height utility chips rather than loose inline text, so they read as one row of
-              secondary tools instead of stray links floating under the inputs. */}
-          <div className="flex items-center gap-2">
+              set earlier this exercise silently goes unnoticed while hidden. Small, low-emphasis
+              utility chips — deliberately lighter than the Weight/Reps boxes above them so they
+              read as secondary tools, not another major section. */}
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setPlateCalcOpen((o) => !o)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] uppercase tracking-wide font-bold ${
-                plateCalcOpen ? "bg-v5-red/15 text-v5-red" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
+              className={`px-2.5 py-1 rounded-md text-[10px] uppercase tracking-wide font-bold ${
+                plateCalcOpen ? "bg-v5-red/15 text-v5-red" : "text-v5-subtext hover:text-v5-text"
               }`}
             >
               Plate calc {plateCalcOpen ? "▴" : "▾"}
             </button>
             <button
               onClick={() => setOptionsOpen((o) => !o)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] uppercase tracking-wide font-bold ${
-                optionsOpen ? "bg-v5-red/15 text-v5-red" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] uppercase tracking-wide font-bold ${
+                optionsOpen ? "bg-v5-red/15 text-v5-red" : "text-v5-subtext hover:text-v5-text"
               }`}
             >
               Options {optionsOpen ? "▴" : "▾"}
@@ -4271,8 +4267,8 @@ function TrainingExerciseCard({
           <button
             onClick={saveSet}
             disabled={weight === "" || reps === ""}
-            className={`w-full py-4 rounded-xl text-sm uppercase tracking-widest font-bold ${
-              weight !== "" && reps !== "" ? "bg-v5-red text-white hover:opacity-90" : "bg-v5-muted text-v5-subtext cursor-not-allowed"
+            className={`w-full py-2.5 rounded-xl text-sm uppercase tracking-widest font-bold ${
+              weight !== "" && reps !== "" ? "bg-v5-red text-white hover:opacity-90" : "bg-v5-muted/50 text-v5-subtext/60 cursor-not-allowed"
             }`}
           >
             Save set
@@ -4819,10 +4815,12 @@ function GuidedRunView({
         })}
       </div>
 
-      <div className="space-y-2.5 pt-2">
+      <div className="space-y-2 pt-1">
+        {/* Ghost/outlined, not a solid filled block — ranks below Save Set at a glance, exactly
+            like Finish Workout below it, rather than reading as another primary button. */}
         <button
           onClick={() => setAddingExercise(true)}
-          className="w-full py-3 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-elevated text-v5-subtext hover:text-v5-text flex items-center justify-center gap-1.5"
+          className="w-full py-2.5 rounded-lg text-xs uppercase tracking-widest font-bold border border-v5-muted text-v5-subtext hover:text-v5-text hover:border-v5-subtext/50 flex items-center justify-center gap-1.5"
         >
           <Plus size={14} /> Add exercise
         </button>
@@ -4832,7 +4830,7 @@ function GuidedRunView({
             strong, unmistakably red action without visually tying with it for attention. */}
         <button
           onClick={onFinish}
-          className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold border-2 border-v5-red text-v5-red hover:bg-v5-red hover:text-white"
+          className="w-full py-3 rounded-lg text-xs uppercase tracking-widest font-bold border border-v5-red/70 text-v5-red hover:bg-v5-red hover:text-white mt-1"
         >
           Finish workout
         </button>

@@ -24,32 +24,32 @@ export default function QuickLoadAdjuster({ weight, onChange, step = 5 }) {
   };
 
   return (
-    <div className="flex items-stretch justify-center w-full rounded-lg bg-v5-elevated divide-x divide-v5-muted overflow-hidden">
+    <div className="flex items-stretch justify-center w-full rounded-md bg-v5-elevated divide-x divide-v5-muted overflow-hidden">
       <button
         onClick={() => apply(-1)}
         aria-label={`Subtract ${amount} lb`}
-        className="flex items-center justify-center w-9 h-8 text-v5-subtext hover:text-v5-text active:bg-v5-muted"
+        className="flex items-center justify-center w-8 h-7 text-v5-subtext hover:text-v5-text active:bg-v5-muted"
       >
-        <Minus size={14} />
+        <Minus size={13} />
       </button>
       <select
         value={amount}
         onChange={(e) => setAmount(Number(e.target.value))}
         aria-label="Adjustment amount"
-        className="flex-1 min-w-0 bg-transparent text-center text-xs font-bold text-v5-subtext focus:outline-none"
+        className="flex-1 min-w-0 bg-transparent text-center text-[11px] font-bold text-v5-subtext focus:outline-none"
       >
         {ADJUST_AMOUNTS.map((a) => (
           <option key={a} value={a} className="bg-v5-elevated">
-            ± {a}
+            {a}
           </option>
         ))}
       </select>
       <button
         onClick={() => apply(1)}
         aria-label={`Add ${amount} lb`}
-        className="flex items-center justify-center w-9 h-8 text-v5-subtext hover:text-v5-text active:bg-v5-muted"
+        className="flex items-center justify-center w-8 h-7 text-v5-subtext hover:text-v5-text active:bg-v5-muted"
       >
-        <Plus size={14} />
+        <Plus size={13} />
       </button>
     </div>
   );
