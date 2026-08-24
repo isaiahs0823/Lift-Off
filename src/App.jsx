@@ -3966,7 +3966,7 @@ function TrainingExerciseCard({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <MuscleBodyOutline exercise={exMap[exId]} size={44} />
+          <MuscleBodyOutline exercise={exMap[exId]} size={52} />
           <div className="min-w-0">
             <div className="text-xl font-bold text-v5-text truncate">{exMap[exId]?.name || exId}</div>
             <div className="text-xs text-v5-subtext mt-0.5">{exMap[exId]?.muscle}</div>
@@ -4107,8 +4107,8 @@ function TrainingExerciseCard({
             {targetSetCount ? ` of ${targetSetCount}` : ""}
           </div>
 
-          <div className="flex gap-2.5">
-            <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-2.5">
+            <div className="flex-[3] min-w-0">
               <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1">Weight</div>
               <div className="bg-v5-muted rounded-xl px-2 pt-3 pb-2">
                 <div className="flex items-baseline justify-center gap-1">
@@ -4131,21 +4131,20 @@ function TrainingExerciseCard({
                 </div>
               </div>
             </div>
-            <div className="flex-1 min-w-0">
+            {/* Reps only ever needs the number itself, so it stays a short, tap-friendly box
+                rather than stretching to match Weight's taller (value + quick-load) card — that
+                stretch used to be forced with a bare spacer div purely for baseline alignment. */}
+            <div className="flex-[2] min-w-0">
               <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1">Reps</div>
-              <div className="bg-v5-muted rounded-xl px-2 pt-3 pb-2 h-full flex flex-col">
+              <div className="bg-v5-muted rounded-xl px-2 py-3">
                 <input
                   type="number"
                   inputMode="numeric"
                   value={reps}
                   onChange={(e) => setReps(e.target.value)}
                   placeholder="0"
-                  className="w-full bg-transparent text-4xl font-bold text-v5-text text-center focus:outline-none placeholder:text-v5-subtext/40"
+                  className="w-full bg-transparent text-3xl font-bold text-v5-text text-center focus:outline-none placeholder:text-v5-subtext/40"
                 />
-                {/* Matches the quick-adjuster's height on the Weight side so both number
-                    fields land on the exact same baseline — same-row alignment, not just
-                    same-ish. */}
-                <div className="mt-2 h-8" aria-hidden="true" />
               </div>
             </div>
           </div>

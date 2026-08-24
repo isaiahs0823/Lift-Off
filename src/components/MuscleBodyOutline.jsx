@@ -18,15 +18,15 @@ import {
 // than a hand-drawn icon: every muscle group is its own illustrated boundary, not a primitive
 // shape. The base body renders in muted charcoal; the exercise's target region lights up in BRK
 // red. getMuscleDisplay (unchanged) still decides which view and zone apply for a given exercise.
-const OUTLINE_FILL = "#1a1c1f";
+const OUTLINE_FILL = "#212327";
 const OUTLINE_STROKE = "#0d0e10";
-const BODY_TOP = "#565a61";
-const BODY_BOTTOM = "#3a3d43";
+const BODY_TOP = "#6d7178";
+const BODY_BOTTOM = "#4a4e55";
 const RED_TOP = "#e6474e";
 const RED_BOTTOM = "#9e141b";
 const SEAM = "#101113";
-const HEAD_FILL = "#4d5158";
-const HAIR_FILL = "#25272b";
+const HEAD_FILL = "#5e6269";
+const HAIR_FILL = "#2b2d31";
 
 // Which illustrated muscle-group slugs light up for a given {view, zone}. Several zones only ever
 // occur with one view under getMuscleDisplay's current rules (e.g. "chest" is always front), but
