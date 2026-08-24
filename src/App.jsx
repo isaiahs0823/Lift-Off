@@ -3964,7 +3964,7 @@ function TrainingExerciseCard({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <MuscleBodyOutline exercise={exMap[exId]} size={52} />
           <div className="min-w-0">
@@ -4101,7 +4101,7 @@ function TrainingExerciseCard({
       )}
 
       {showDraft && (
-        <div className="bg-v5-surface rounded-xl p-4 space-y-4">
+        <div className="bg-v5-surface rounded-xl p-4 space-y-3">
           <div className="text-sm font-bold text-v5-text">
             Set {confirmedSets.length + 1}
             {targetSetCount ? ` of ${targetSetCount}` : ""}
@@ -4154,17 +4154,23 @@ function TrainingExerciseCard({
               Calc / More" row while keeping every existing control's underlying behavior (and
               accessible name) unchanged. Collapsed by default so the current set stays the
               visual center; a small dot marks "More" when it already holds something so nothing
-              set earlier this exercise silently goes unnoticed while hidden. */}
-          <div className="flex items-center gap-4">
+              set earlier this exercise silently goes unnoticed while hidden. Styled as a pair of
+              same-height utility chips rather than loose inline text, so they read as one row of
+              secondary tools instead of stray links floating under the inputs. */}
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setPlateCalcOpen((o) => !o)}
-              className="text-[11px] uppercase tracking-wide text-v5-subtext hover:text-v5-red"
+              className={`px-3 py-1.5 rounded-lg text-[11px] uppercase tracking-wide font-bold ${
+                plateCalcOpen ? "bg-v5-red/15 text-v5-red" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
+              }`}
             >
               Plate calc {plateCalcOpen ? "▴" : "▾"}
             </button>
             <button
               onClick={() => setOptionsOpen((o) => !o)}
-              className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-v5-subtext hover:text-v5-red"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] uppercase tracking-wide font-bold ${
+                optionsOpen ? "bg-v5-red/15 text-v5-red" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
+              }`}
             >
               Options {optionsOpen ? "▴" : "▾"}
               {optionsHasContent && !optionsOpen && <span className="w-1.5 h-1.5 rounded-full bg-v5-red" />}
@@ -4813,19 +4819,24 @@ function GuidedRunView({
         })}
       </div>
 
-      <button
-        onClick={() => setAddingExercise(true)}
-        className="w-full py-3 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-elevated text-v5-subtext hover:text-v5-text flex items-center justify-center gap-1.5"
-      >
-        <Plus size={14} /> Add exercise
-      </button>
+      <div className="space-y-2.5 pt-2">
+        <button
+          onClick={() => setAddingExercise(true)}
+          className="w-full py-3 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-elevated text-v5-subtext hover:text-v5-text flex items-center justify-center gap-1.5"
+        >
+          <Plus size={14} /> Add exercise
+        </button>
 
-      <button
-        onClick={onFinish}
-        className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
-      >
-        Finish workout
-      </button>
+        {/* Outlined rather than solid-fill red — Save Set (inside the active set card above) is
+            the one dominant CTA on screen while a set is being logged; Finish Workout stays a
+            strong, unmistakably red action without visually tying with it for attention. */}
+        <button
+          onClick={onFinish}
+          className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold border-2 border-v5-red text-v5-red hover:bg-v5-red hover:text-white"
+        >
+          Finish workout
+        </button>
+      </div>
     </div>
   );
 }
