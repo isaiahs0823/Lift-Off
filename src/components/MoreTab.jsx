@@ -1,13 +1,16 @@
 import React from "react";
-import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays, Shield } from "lucide-react";
-import { MORE_CARD_CONTENT, MORE_ROW_CONTENT } from "../utils/breakBrandContent.js";
+import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays } from "lucide-react";
+import { MORE_CARD_CONTENT } from "../utils/breakBrandContent.js";
 
+// B.R.E.A.K. Meaning used to also have its own row here, duplicating the brand card below —
+// the card (with its "LEARN WHAT B.R.E.A.K. MEANS" CTA) is now the single entry point to that
+// page from More. See breakBrandContent.js — MORE_ROW_CONTENT is no longer read anywhere, kept
+// there only in case a second nav entry point is wanted again later.
 const ITEMS = [
   { id: "schedule", label: "Weekly schedule", desc: "Which days are training, conditioning, recovery, or rest", icon: CalendarDays },
   { id: "catalog", label: "Exercise catalog", desc: "Every movement in the library, plus your own", icon: Search },
   { id: "top", label: "Top used", desc: "Your most-logged exercises", icon: Flame },
   { id: "settings", label: "Settings", desc: "Training defaults, backup & restore", icon: SettingsIcon },
-  { id: "breakMeaning", label: MORE_ROW_CONTENT.label, desc: MORE_ROW_CONTENT.desc, icon: Shield },
 ];
 
 // Restrained brand card below the normal navigation rows — a deliberate brand touch, not an

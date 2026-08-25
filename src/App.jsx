@@ -48,7 +48,8 @@ import MoreTab from "./components/MoreTab.jsx";
 import ScheduleEditor from "./components/ScheduleEditor.jsx";
 import AthleteProfileForm from "./components/AthleteProfileForm.jsx";
 import TrainingDaysSelector from "./components/TrainingDaysSelector.jsx";
-import { recommendationFor, totalWeeklySets, FREQUENCY_GUIDANCE } from "./utils/programRecommendation.js";
+import { recommendationFor, totalWeeklySets, FREQUENCY_GUIDANCE, familyVariants } from "./utils/programRecommendation.js";
+import { FAMILY_PROGRAMS } from "./data/programFamilies.js";
 import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
@@ -567,65 +568,12 @@ const DEFAULT_TEMPLATES = [
 ];
 
 // ---------- Hero programs (multi-day, goal-specific splits) ----------
+// Titan used to be a single hard-coded 5-day object here. It's now authored as a program FAMILY
+// (src/data/programFamilies.js) with a 2/3/4/5/6-day variant, expanded into the same flat
+// { id, name, tagline, weeks, days } shape every program in this array already has — the 5-day
+// variant keeps Titan's original id (`prog_superman`) and exact original day content, so nothing
+// changes for anyone already on Titan. See programFamilies.js for the adaptation rationale.
 const HERO_PROGRAMS = [
-  {
-    id: "prog_superman",
-    name: "Titan",
-    tagline: "Classic hero V-taper — chest and back lead, legs never skipped",
-    weeks: 12,
-    days: [
-      {
-        label: "Day 1: Chest",
-        exercises: [
-          { exId: "bench", sets: 4, reps: 8 },
-          { exId: "incline_db_press", sets: 3, reps: 10 },
-          { exId: "arsenal_wide_chest_press_1", sets: 3, reps: 10 },
-          { exId: "cable_fly", sets: 3, reps: 12 },
-          { exId: "dips_chest", sets: 3, reps: 10 },
-        ],
-      },
-      {
-        label: "Day 2: Back",
-        exercises: [
-          { exId: "deadlift", sets: 3, reps: 6 },
-          { exId: "barbell_row", sets: 4, reps: 8 },
-          { exId: "lat_pulldown", sets: 3, reps: 10 },
-          { exId: "arsenal_seated_row", sets: 3, reps: 12 },
-          { exId: "straight_arm_pulldown", sets: 3, reps: 15 },
-        ],
-      },
-      {
-        label: "Day 3: Legs",
-        exercises: [
-          { exId: "squat", sets: 4, reps: 8 },
-          { exId: "leg_press", sets: 3, reps: 12 },
-          { exId: "rdl", sets: 3, reps: 10 },
-          { exId: "leg_curl_seated", sets: 3, reps: 12 },
-          { exId: "calf_raise_standing", sets: 4, reps: 15 },
-        ],
-      },
-      {
-        label: "Day 4: Shoulders & arms",
-        exercises: [
-          { exId: "ohp", sets: 3, reps: 10 },
-          { exId: "lat_raise", sets: 3, reps: 15 },
-          { exId: "barbell_curl", sets: 3, reps: 10 },
-          { exId: "skullcrusher", sets: 3, reps: 10 },
-          { exId: "rear_delt_fly", sets: 3, reps: 15 },
-        ],
-      },
-      {
-        label: "Day 5: Chest & back pump",
-        exercises: [
-          { exId: "incline_bench", sets: 3, reps: 10 },
-          { exId: "t_bar_row", sets: 3, reps: 10 },
-          { exId: "pec_deck", sets: 3, reps: 15 },
-          { exId: "lat_pulldown", sets: 3, reps: 12 },
-          { exId: "cable_fly", sets: 3, reps: 15 },
-        ],
-      },
-    ],
-  },
   {
     id: "prog_batman",
     name: "Reaper",
@@ -1231,6 +1179,8 @@ const HERO_PROGRAMS = [
       },
     ],
   },
+  // Titan (all 5 frequency variants), Athena, and Shape — see src/data/programFamilies.js.
+  ...FAMILY_PROGRAMS,
 ];
 
 // Defaults for the auto-started rest timer, keyed by movement category. Compound lifts get
@@ -5352,6 +5302,12 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
   // the program detail panel; it's cleared on Keep/back-out and never mutates currentProgram.
   const [selectedDays, setSelectedDays] = useState(() => state.pendingFrequencyReview?.toDays ?? state.athleteProfile?.preferredDays ?? null);
   const [reviewCompare, setReviewCompare] = useState(null); // { fromDays, toDays } | null
+  // Program-detail frequency switcher (Part 1) — lets an athlete preview a sibling weekly
+  // variant of the SAME program family (e.g. Titan at 4 days instead of 3) inline, without
+  // navigating away or touching currentProgram. Keyed by the originally-opened program's id so
+  // opening a different program always starts from that program's own content, not a stale
+  // preview. Never applied until the athlete explicitly taps Start on the previewed day.
+  const [familyPreview, setFamilyPreview] = useState(null); // { baseId, days } | null
 
   const pendingReview = state.pendingFrequencyReview;
   const dismissPendingReview = () => updateState((prev) => ({ ...prev, pendingFrequencyReview: null }));
@@ -5517,14 +5473,53 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
   }
 
   if (detail?.kind === "program") {
-    const prog = (state.programs || []).find((p) => p.id === detail.id);
-    if (!prog) return null;
+    const baseProg = (state.programs || []).find((p) => p.id === detail.id);
+    if (!baseProg) return null;
+    // Sibling frequency variants of the same program family (Titan/Athena/Shape today — see
+    // programFamilies.js), keyed by day count. Switching the chip below only changes what `prog`
+    // resolves to for THIS render — a local preview, never applied until Start is tapped.
+    const siblings = baseProg.familyId ? familyVariants(baseProg.familyId, state.programs) : {};
+    const previewDays = familyPreview?.baseId === detail.id ? familyPreview.days : null;
+    const prog = (previewDays && siblings[previewDays]) || baseProg;
+    const switchPreview = (n) => {
+      setFamilyPreview({ baseId: detail.id, days: n });
+      if (reviewCompare) setReviewCompare((r) => ({ ...r, toDays: n }));
+    };
     return (
       <SlideInPanel
-        title={prog.name}
+        title={baseProg.name}
         subtitle={prog.weeks ? `${prog.tagline} · ${prog.weeks} weeks` : prog.tagline}
         onBack={() => setDetail(null)}
       >
+        {Object.keys(siblings).length > 1 && (
+          <div className="border border-neutral-800 bg-charcoal-panel px-4 py-3 space-y-2">
+            <div className="text-[10px] uppercase tracking-widest text-neutral-500">
+              {prog.trainingDays} {prog.trainingDays === 1 ? "Day" : "Days"} / Week
+            </div>
+            <div className="flex gap-1.5">
+              {[2, 3, 4, 5, 6].map((n) => {
+                const variant = siblings[n];
+                if (!variant) return null;
+                const active = variant.id === prog.id;
+                return (
+                  <button
+                    key={n}
+                    onClick={() => switchPreview(n)}
+                    aria-pressed={active}
+                    className={`flex-1 py-2 text-xs font-bold border ${
+                      active ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-neutral-600">
+              Previewing {baseProg.name} at {prog.trainingDays} days/week — tap Start on a day below to actually switch to it.
+            </p>
+          </div>
+        )}
         {reviewCompare && (
           <div className="border border-red-900/40 bg-charcoal-panel px-4 py-3 space-y-1.5">
             <div className="text-[10px] uppercase tracking-widest text-neutral-600">Current → Proposed</div>
@@ -5646,19 +5641,19 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
             You changed your planned training frequency from <span className="font-bold text-white">{pendingReview.fromDays}</span> to{" "}
             <span className="font-bold text-white">{pendingReview.toDays}</span> days per week.
           </div>
-          <div className="text-xs text-neutral-500">Would you like BRK to adjust your program?</div>
+          <div className="text-xs text-neutral-500">Would you like BRK to adapt your current program?</div>
           <div className="flex gap-2">
             <button
               onClick={openReview}
               className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
             >
-              Review New Plan
+              Review {pendingReview.toDays}-Day Version
             </button>
             <button
               onClick={dismissPendingReview}
               className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
             >
-              Keep Current Plan
+              Keep Current Program
             </button>
           </div>
         </div>
@@ -5742,7 +5737,19 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
         />
         {selectedDays != null &&
           (() => {
-            const rec = recommendationFor(selectedDays, { programs: state.programs, customPrograms: state.customPrograms });
+            // While reviewing a frequency change (or just browsing with an active builtin
+            // program), bias "Recommended" toward the athlete's OWN program family — e.g.
+            // someone on 5-day Titan who drops to 3 days sees "Titan — 3-Day Version"
+            // recommended first, not an unrelated program.
+            const activeFamilyId =
+              state.currentProgram?.source === "builtin"
+                ? (state.programs || []).find((p) => p.id === state.currentProgram.programId)?.familyId
+                : null;
+            const rec = recommendationFor(selectedDays, {
+              programs: state.programs,
+              customPrograms: state.customPrograms,
+              preferFamilyId: activeFamilyId,
+            });
             const guidance = FREQUENCY_GUIDANCE[selectedDays];
             const programRow = (p, isRecommended) => (
               <button

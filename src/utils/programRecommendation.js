@@ -64,11 +64,17 @@ export function matchingPrograms(days, { programs = [], customPrograms = [] } = 
 }
 
 // For 3 days specifically, "3-Day Full Body" is BRK's default recommendation (matches the task's
-// stated default: "Full Body or Upper/Lower/Full Body"). Otherwise the first built-in match wins
-// over a custom one (a user's own program is still shown, just not auto-labeled "Recommended"
-// ahead of a vetted built-in), falling back to the first match of any kind.
-export function recommendedProgramId(days, matches) {
+// stated default: "Full Body or Upper/Lower/Full Body"). If `preferFamilyId` is given (the family
+// of whatever program is currently active — see TemplatesTab's frequency-change review flow) and
+// a same-family variant exists at this exact day count, that wins first: switching your planned
+// days should offer to adapt YOUR program, not swap you onto an unrelated one. Otherwise the first
+// built-in match wins over a custom one, falling back to the first match of any kind.
+export function recommendedProgramId(days, matches, preferFamilyId = null) {
   if (matches.length === 0) return null;
+  if (preferFamilyId) {
+    const sameFamily = matches.find((p) => p.familyId === preferFamilyId);
+    if (sameFamily) return sameFamily.id;
+  }
   if (days === 3) {
     const fullBody = matches.find((p) => p.id === "prog_3day_full_body");
     if (fullBody) return fullBody.id;
@@ -79,10 +85,10 @@ export function recommendedProgramId(days, matches) {
 
 // Single entry point the UI calls: given a day count and the available programs, returns
 // everything needed to render "Recommended" + "Other Options" plus fallback guidance text.
-export function recommendationFor(days, { programs, customPrograms } = {}) {
+export function recommendationFor(days, { programs, customPrograms, preferFamilyId } = {}) {
   const guidance = FREQUENCY_GUIDANCE[days] || null;
   const matches = matchingPrograms(days, { programs, customPrograms });
-  const recommendedId = recommendedProgramId(days, matches);
+  const recommendedId = recommendedProgramId(days, matches, preferFamilyId);
   return {
     days,
     guidance,
@@ -91,6 +97,18 @@ export function recommendationFor(days, { programs, customPrograms } = {}) {
     recommended: matches.find((p) => p.id === recommendedId) || null,
     others: matches.filter((p) => p.id !== recommendedId),
   };
+}
+
+// A program family's sibling variants, keyed by day count — e.g. { 2: {...}, 3: {...}, 5: {...} }
+// — used by TemplatesTab's program-detail frequency switcher to preview a different weekly
+// version of the same program identity without navigating away or applying anything.
+export function familyVariants(familyId, programs = []) {
+  if (!familyId) return {};
+  const out = {};
+  for (const p of programs) {
+    if (p.familyId === familyId && Array.isArray(p.days)) out[p.trainingDays ?? p.days.length] = p;
+  }
+  return out;
 }
 
 // Approximate weekly volume for a preview screen — total working sets across every day in the
