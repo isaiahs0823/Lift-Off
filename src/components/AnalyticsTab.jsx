@@ -1,62 +1,81 @@
 import React, { useState, useMemo } from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { computeExerciseAnalytics, computeOverallAnalytics } from "../utils/analytics.js";
+import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
 
 const TREND_ICON = { up: TrendingUp, down: TrendingDown, flat: Minus, insufficient_data: null };
 const TREND_COLOR = { up: "text-green-500", down: "text-red-500", flat: "text-neutral-400", insufficient_data: "text-neutral-600" };
 const TREND_LABEL = { up: "Trending up", down: "Trending down", flat: "Flat", insufficient_data: "Not enough data" };
 
+// Exercise detail/history — the one place in BRK where a larger "detail"-size anatomy figure is
+// appropriate (see MuscleBodyOutline's size hierarchy), sitting next to the exercise name and
+// muscle label above its performance summary, per BRK's anatomy-as-signature-feature direction.
 function ExerciseAnalyticsCard({ exId, exMap, state }) {
+  const exercise = exMap[exId];
   const stats = useMemo(() => computeExerciseAnalytics(exId, state.logs || []), [exId, state.logs]);
-  if (!stats) return <div className="text-sm text-neutral-500">No logs yet for this exercise.</div>;
-  const TrendIcon = TREND_ICON[stats.volumeTrend];
+  const TrendIcon = stats ? TREND_ICON[stats.volumeTrend] : null;
 
   return (
-    <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-neutral-500">Best set</div>
-          <div className="text-white font-bold">{stats.bestSet ? `${stats.bestSet.weight} × ${stats.bestSet.reps}` : "—"}</div>
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-neutral-500">Est. 1RM</div>
-          <div className="text-white font-bold">{stats.estimatedOneRM} lb</div>
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-neutral-500">Recent working weight</div>
-          <div className="text-white font-bold">{stats.recentWorkingWeight ?? "—"} lb</div>
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-neutral-500">Volume trend</div>
-          <div className={`font-bold flex items-center gap-1 ${TREND_COLOR[stats.volumeTrend]}`}>
-            {TrendIcon && <TrendIcon size={14} />} {TREND_LABEL[stats.volumeTrend]}
+    <div className="space-y-3">
+      {exercise && (
+        <div className="flex items-center gap-3">
+          <MuscleBodyOutline exercise={exercise} size="detail" />
+          <div className="min-w-0">
+            <div className="text-lg font-bold text-white truncate">{exercise.name}</div>
+            {exercise.muscle && <div className="text-xs text-neutral-500 mt-0.5">{exercise.muscle}</div>}
           </div>
         </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-neutral-500">Avg RIR</div>
-          <div className="text-white font-bold">{stats.avgRir ?? "—"}</div>
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-neutral-500">Frequency</div>
-          <div className="text-white font-bold">{stats.frequencyPerWeek}/week</div>
-        </div>
-      </div>
-      <div className="text-xs text-neutral-500 border-t border-neutral-900 pt-3">
-        Last trained {new Date(stats.lastTrained).toLocaleDateString()} · {stats.totalSessions} sessions logged
-      </div>
-      {stats.prHistory.length > 0 && (
-        <div className="border-t border-neutral-900 pt-3">
-          <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1.5">PR history</div>
-          <div className="space-y-1">
-            {stats.prHistory.map((pr, i) => (
-              <div key={i} className="flex items-center justify-between text-xs">
-                <span className="text-neutral-500">{new Date(pr.date).toLocaleDateString()}</span>
-                <span className="text-neutral-300">
-                  {pr.type === "weight" ? `${pr.value} lb` : `${pr.value} lb e1RM`}
-                </span>
+      )}
+      {!stats ? (
+        <div className="text-sm text-neutral-500">No logs yet for this exercise.</div>
+      ) : (
+        <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Best set</div>
+              <div className="text-white font-bold">{stats.bestSet ? `${stats.bestSet.weight} × ${stats.bestSet.reps}` : "—"}</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Est. 1RM</div>
+              <div className="text-white font-bold">{stats.estimatedOneRM} lb</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Recent working weight</div>
+              <div className="text-white font-bold">{stats.recentWorkingWeight ?? "—"} lb</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Volume trend</div>
+              <div className={`font-bold flex items-center gap-1 ${TREND_COLOR[stats.volumeTrend]}`}>
+                {TrendIcon && <TrendIcon size={14} />} {TREND_LABEL[stats.volumeTrend]}
               </div>
-            ))}
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Avg RIR</div>
+              <div className="text-white font-bold">{stats.avgRir ?? "—"}</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Frequency</div>
+              <div className="text-white font-bold">{stats.frequencyPerWeek}/week</div>
+            </div>
           </div>
+          <div className="text-xs text-neutral-500 border-t border-neutral-900 pt-3">
+            Last trained {new Date(stats.lastTrained).toLocaleDateString()} · {stats.totalSessions} sessions logged
+          </div>
+          {stats.prHistory.length > 0 && (
+            <div className="border-t border-neutral-900 pt-3">
+              <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1.5">PR history</div>
+              <div className="space-y-1">
+                {stats.prHistory.map((pr, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="text-neutral-500">{new Date(pr.date).toLocaleDateString()}</span>
+                    <span className="text-neutral-300">
+                      {pr.type === "weight" ? `${pr.value} lb` : `${pr.value} lb e1RM`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

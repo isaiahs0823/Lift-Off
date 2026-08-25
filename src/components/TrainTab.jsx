@@ -1,6 +1,8 @@
 import React from "react";
 import { ChevronRight, ClipboardList, Timer, Dumbbell, Plus, Play } from "lucide-react";
 import { resolveCurrentProgramDay } from "../utils/programSchedule.js";
+import { formatSetPrescription } from "../utils/exercisePrescription.js";
+import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 
 // Never auto-discards on age — a workout logged right up to midnight, or one left open for
 // days, is still fully recoverable, just described differently: minutes/hours for something
@@ -112,6 +114,15 @@ export default function TrainTab({ state, exMap, activeRun, onStartRun, onResume
             {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
             Next: {programDay.dayLabel}
           </div>
+          {/* Day preview — same compact anatomy row used in My Plan/program detail, so the
+              athlete can see today's muscle emphasis before committing to Start. */}
+          {programDay.plan?.exercises?.length > 0 && (
+            <div className="pt-1">
+              {programDay.plan.exercises.map((e, i) => (
+                <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
+              ))}
+            </div>
+          )}
           <button
             onClick={() => onStartRun(programDay.plan, programDay.programContext)}
             className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"

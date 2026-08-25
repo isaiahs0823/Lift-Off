@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { memo, useId, useMemo } from "react";
 import { getMuscleDisplay } from "../utils/muscleDisplay.js";
 import {
   VIEW_BOX_FRONT,
@@ -58,12 +58,23 @@ const BACK_ZONE_SLUGS = {
   calves: ["calves"],
 };
 
-export default function MuscleBodyOutline({ exercise, size = 44 }) {
+// Explicit size hierarchy (task: "avoid hard-coding random pixel values across many files") —
+// every call site should pass one of these names rather than inventing its own number.
+// compact: program/plan rows, workout/day preview. standard: active-workout header (unchanged
+// from before this variant system existed — the same 52 that screen has always used). detail:
+// exercise detail/history, where a larger visual is appropriate.
+const SIZE_PRESETS = { compact: 44, standard: 52, detail: 84 };
+
+function MuscleBodyOutline({ exercise, size = "compact" }) {
   const uid = useId();
   const bodyGradId = `mbo-body-${uid}`;
   const redGradId = `mbo-red-${uid}`;
+  const px = typeof size === "number" ? size : SIZE_PRESETS[size] || SIZE_PRESETS.compact;
 
-  const { view, zone } = getMuscleDisplay(exercise);
+  // getMuscleDisplay is cheap (a handful of regex tests), but with anatomy now appearing in
+  // every row of potentially long program/plan lists, memoizing still avoids re-running it in a
+  // scroll/typing re-render where `exercise` itself hasn't changed.
+  const { view, zone } = useMemo(() => getMuscleDisplay(exercise), [exercise]);
   const isBack = view === "back";
   const parts = isBack ? BACK_PARTS : FRONT_PARTS;
   const zoneSlugs = isBack ? BACK_ZONE_SLUGS : FRONT_ZONE_SLUGS;
@@ -75,8 +86,8 @@ export default function MuscleBodyOutline({ exercise, size = 44 }) {
 
   return (
     <svg
-      width={size}
-      height={size * 2}
+      width={px}
+      height={px * 2}
       viewBox={isBack ? VIEW_BOX_BACK : VIEW_BOX_FRONT}
       fill="none"
       aria-hidden="true"
@@ -122,3 +133,8 @@ export default function MuscleBodyOutline({ exercise, size = 44 }) {
     </svg>
   );
 }
+
+// Anatomy now renders in every row of potentially long program/plan/workout-preview lists, so
+// memo avoids re-rendering (and re-diffing the full path list) rows whose exercise/size didn't
+// change when an unrelated part of the list re-renders (e.g. one row's set being saved).
+export default memo(MuscleBodyOutline);

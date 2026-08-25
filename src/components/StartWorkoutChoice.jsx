@@ -2,11 +2,13 @@ import React from "react";
 import { ChevronRight, FilePlus, History } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
 import { resolveCurrentProgramDay } from "../utils/programSchedule.js";
+import { formatSetPrescription } from "../utils/exercisePrescription.js";
+import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 
 // The one screen "Start Workout Today" opens — kept to exactly the three paths the redesign
 // calls for, in priority order. Never forces the athlete through history/program/exercise
 // browsing before they can begin: each option is a single tap away from actually training.
-export default function StartWorkoutChoice({ state, onStartRun, onRepeatRecent, onBack }) {
+export default function StartWorkoutChoice({ state, exMap, onStartRun, onRepeatRecent, onBack }) {
   const programDay = resolveCurrentProgramDay(state);
   const hasProgram = programDay && !programDay.isComplete;
 
@@ -20,6 +22,13 @@ export default function StartWorkoutChoice({ state, onStartRun, onRepeatRecent, 
             {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
             {programDay.dayLabel}
           </div>
+          {exMap && programDay.plan?.exercises?.length > 0 && (
+            <div className="pt-1">
+              {programDay.plan.exercises.map((e, i) => (
+                <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
+              ))}
+            </div>
+          )}
           <button
             onClick={() => onStartRun(programDay.plan, programDay.programContext)}
             className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"

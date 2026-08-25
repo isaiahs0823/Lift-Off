@@ -56,6 +56,8 @@ import DataWorkbookScreen from "./components/DataWorkbookScreen.jsx";
 import IntervalTimerScreen from "./components/IntervalTimerScreen.jsx";
 import PlateCalculatorPanel, { PlateCalculatorToggle } from "./components/PlateCalculatorPanel.jsx";
 import MuscleBodyOutline from "./components/MuscleBodyOutline.jsx";
+import ExerciseAnatomyRow from "./components/ExerciseAnatomyRow.jsx";
+import { formatSetPrescription } from "./utils/exercisePrescription.js";
 import QuickLoadAdjuster from "./components/QuickLoadAdjuster.jsx";
 import { unlockAudio, playCompletionBeep, vibratePattern } from "./utils/timerAudio.js";
 import NutritionHome from "./components/NutritionHome.jsx";
@@ -2292,6 +2294,7 @@ export default function LiftLog() {
             {tab === "startWorkout" && (
               <StartWorkoutChoice
                 state={state}
+                exMap={exMap}
                 onStartRun={(plan, programContext) => startRun(plan, "train", programContext)}
                 onRepeatRecent={() => setTab("repeatRecent")}
                 onBack={() => setTab("train")}
@@ -4120,7 +4123,7 @@ function TrainingExerciseCard({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <MuscleBodyOutline exercise={exMap[exId]} size={52} />
+          <MuscleBodyOutline exercise={exMap[exId]} size="standard" />
           <div className="min-w-0">
             <div className="text-xl font-bold text-v5-text truncate">{exMap[exId]?.name || exId}</div>
             <div className="text-xs text-v5-subtext mt-0.5">{exMap[exId]?.muscle}</div>
@@ -5337,15 +5340,8 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
 }
 
 // ---------------- TEMPLATES TAB ----------------
-// `repRange`/`rir` are optional metadata some programs carry alongside the `sets`/`reps` every
-// plan/program/template already has (see the 3-day starter programs in HERO_PROGRAMS) — falls
-// back to the plain `sets x reps` every existing plan/program/template already renders when
-// they're absent, so this is safe to use everywhere uniformly.
-function formatSetPrescription(e) {
-  const reps = Array.isArray(e.repRange) ? `${e.repRange[0]}–${e.repRange[1]}` : e.reps;
-  const rir = Array.isArray(e.rir) ? ` · RIR ${e.rir[0]}–${e.rir[1]}` : "";
-  return `${e.sets} × ${reps}${rir}`;
-}
+// formatSetPrescription now lives in utils/exercisePrescription.js so TrainTab.jsx (the
+// workout/day preview) can share the exact same formatting instead of reimplementing it.
 
 function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartCompletedProgram, onGoToBuild, onViewWorkout }) {
   const [detail, setDetail] = useState(null); // { kind: "program" | "template" | "customPlan" | "customProgram", id }
@@ -5437,14 +5433,9 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
     if (!p) return null;
     return (
       <SlideInPanel title={p.name} subtitle={`${p.exercises.length} exercises`} onBack={() => setDetail(null)}>
-        <div className="space-y-1.5">
+        <div>
           {p.exercises.map((e, i) => (
-            <div key={i} className="flex items-center justify-between text-xs text-neutral-400 py-1.5 border-t border-neutral-900">
-              <span className="text-sm">{exMap[e.exId]?.name || e.exId}{e.group ? ` (${e.group})` : ""}</span>
-              <span className="text-neutral-600">
-                {formatSetPrescription(e)}
-              </span>
-            </div>
+            <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} group={e.group} prescription={formatSetPrescription(e)} />
           ))}
         </div>
         <div className="flex items-center gap-3">
@@ -5503,14 +5494,9 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
                 </button>
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div>
               {day.exercises.map((e, i) => (
-                <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
-                  <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
-                  <span className="text-neutral-600">
-                    {formatSetPrescription(e)}
-                  </span>
-                </div>
+                <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
               ))}
             </div>
             {dayCompletionRow(`${prog.name} — ${day.label}`)}
@@ -5601,14 +5587,9 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
                 </button>
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div>
               {day.exercises.map((e, i) => (
-                <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
-                  <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
-                  <span className="text-neutral-600">
-                    {formatSetPrescription(e)}
-                  </span>
-                </div>
+                <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
               ))}
             </div>
             {dayCompletionRow(`${prog.name} — ${day.label}`)}
@@ -5623,14 +5604,9 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
     if (!tpl) return null;
     return (
       <SlideInPanel title={tpl.name} onBack={() => setDetail(null)}>
-        <div className="space-y-2">
+        <div>
           {tpl.exercises.map((e, i) => (
-            <div key={i} className="flex items-center justify-between text-xs text-neutral-400 py-1.5 border-t border-neutral-900">
-              <span className="text-sm">{exMap[e.exId]?.name || e.exId}</span>
-              <span className="text-neutral-600">
-                {formatSetPrescription(e)}
-              </span>
-            </div>
+            <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
           ))}
         </div>
         <div className="flex items-center gap-3">
