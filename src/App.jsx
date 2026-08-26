@@ -55,6 +55,8 @@ import { buildRecoverySessionSummary } from "./utils/mobilitySession.js";
 import MobilityLibraryScreen from "./components/MobilityLibraryScreen.jsx";
 import MobilityDetailScreen from "./components/MobilityDetailScreen.jsx";
 import MobilitySessionRunner from "./components/MobilitySessionRunner.jsx";
+import ProgramTimelineScreen from "./components/ProgramTimelineScreen.jsx";
+import DevelopmentPrioritiesScreen from "./components/DevelopmentPrioritiesScreen.jsx";
 import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
@@ -650,6 +652,9 @@ const HERO_PROGRAMS = [
     id: "prog_punisher",
     name: "Berserker",
     tagline: "Raw brute strength — heavy compounds, low reps, no wasted volume",
+    // Declared intended emphasis (task section 19) — informational display only, shown
+    // alongside but never merged with an athlete's own Development Priorities.
+    programFocus: ["Chest", "Back", "Quads"],
     weeks: 8,
     days: [
       {
@@ -701,6 +706,10 @@ const HERO_PROGRAMS = [
     id: "prog_thor",
     name: "Ragnar",
     tagline: "God-tier mass and power — huge shoulders, back, and grip",
+    // Declared intended emphasis (task section 19's own literal example) — informational
+    // display only, shown alongside but never merged with an athlete's own Development
+    // Priorities (setting Calves as a personal #1 priority must never rewrite this array).
+    programFocus: ["Shoulders", "Back", "Traps", "Grip"],
     weeks: 10,
     days: [
       {
@@ -754,6 +763,9 @@ const HERO_PROGRAMS = [
     id: "prog_firefighter",
     name: "Firefighter",
     tagline: "Job-ready functional strength — work capacity under load",
+    // Declared intended emphasis (task section 19) — informational display only, shown
+    // alongside but never merged with an athlete's own Development Priorities.
+    programFocus: ["Back", "Quads", "Shoulders"],
     weeks: 12,
     days: [
       {
@@ -1263,6 +1275,18 @@ function loadInitialState() {
     nutritionMealPlan: null, // generated FULL MEAL PLAN — { meals: [{ id, label, time, items, totals }], generatedAt }
     nutritionCheckIns: [], // { id, date, hunger, energy, trainingPerformance, difficulty (1-5), events, canRepeat }
     nutritionCoachAdjustments: [], // { id, date, fromCalories, toCalories, fromMacros, toMacros, reason, status }
+    // Which muscle groups the athlete says matter most — informational + Coach context only,
+    // never used to auto-rewrite curated programs. null until the athlete visits the screen;
+    // sanitizeDevelopmentPriorities(null) already returns a full "everything at Develop" default,
+    // so nothing else needs a null-check. See src/utils/developmentPriorities.js.
+    developmentPriorities: null,
+    // Append-only record of "a swap displaced the active program's own planned day for today" —
+    // written only by SwapWorkoutSheet's commitRow, read only by resolveProgramTimeline (see
+    // programSchedule.js) so a deliberately-rescheduled day reads as SWAPPED there rather than
+    // MISSED once its week concludes. Never read by anything else, never mutates dayIndex/
+    // history/completion — purely an additive annotation layer. { date, programId, source,
+    // dayIndex, dayLabel }
+    programSwapLog: [],
   };
 }
 
@@ -1351,6 +1375,8 @@ const BACKUP_DATA_KEYS = [
   "nutritionMealPlan",
   "nutritionCheckIns",
   "nutritionCoachAdjustments",
+  "developmentPriorities",
+  "programSwapLog",
 ];
 
 // Per-key fallback when a key is missing from state entirely (older saves) — objects default
@@ -1365,7 +1391,8 @@ function backupKeyDefault(key) {
     key === "coachOnboarding" ||
     key === "nutritionProfile" ||
     key === "nutritionTargets" ||
-    key === "nutritionMealPlan"
+    key === "nutritionMealPlan" ||
+    key === "developmentPriorities"
   )
     return null;
   if (key === "settings" || key === "exerciseNotes" || key === "specialtyInterest") return {};
@@ -1693,6 +1720,8 @@ const SECTION_OF = {
   mobility: "more",
   mobilityDetail: "more",
   mobilitySession: "more",
+  developmentPriorities: "coach",
+  programTimeline: "train",
 };
 
 // ---------------- ACTIVE WORKOUT DRAFT PERSISTENCE ----------------
@@ -2530,6 +2559,12 @@ export default function LiftLog() {
                   setMobilityRunContext(null);
                 }}
               />
+            )}
+            {tab === "programTimeline" && (
+              <ProgramTimelineScreen state={state} exMap={exMap} onBack={() => setTab("train")} onViewWorkout={viewWorkout} />
+            )}
+            {tab === "developmentPriorities" && (
+              <DevelopmentPrioritiesScreen state={state} updateState={updateState} onBack={() => setTab("coach")} />
             )}
             {tab === "schedule" && <ScheduleEditor state={state} updateState={updateState} onBack={() => setTab("more")} />}
             {tab === "catalog" && <CatalogTab state={state} updateState={updateState} allExercises={allExercises} />}

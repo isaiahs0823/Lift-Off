@@ -431,3 +431,148 @@ export function programWeekAdherence(state, windowDays = 7) {
     totalCompleted: lifting.completed + recovery.completed,
   };
 }
+
+// Program-total adherence — "PROGRAM 21/28 planned sessions completed" (Program Timeline task,
+// section 7). Same session-matching rule as programWeekAdherence, just counted across the whole
+// program run (cp.startDate onward) instead of a trailing window, and only meaningful when the
+// program declares a fixed length (prog.weeks) — an open-ended custom program has no fixed
+// denominator to complete against, so this returns totals of null in that case rather than a
+// misleading fraction.
+export function programTotalAdherence(state) {
+  const active = activeProgramAndCP(state);
+  if (!active) return null;
+  const { cp, prog } = active;
+  const startMs = cp.startDate ? new Date(cp.startDate).getTime() : Date.now();
+  const totalWeeks = prog.weeks || null;
+  const lifting = { scheduled: null, completed: 0 };
+  const recovery = { scheduled: null, completed: 0 };
+  let liftingPerCycle = 0;
+  let recoveryPerCycle = 0;
+  prog.days.forEach((day) => {
+    const isRecovery = isRecoveryProgramDay(day);
+    if (isRecovery) recoveryPerCycle += 1;
+    else liftingPerCycle += 1;
+    const planName = `${prog.name} — ${day.label}`;
+    const bucket = isRecovery ? recovery : lifting;
+    const sessions = isRecovery ? state.recoverySessions : state.workoutSessions;
+    bucket.completed += (sessions || []).filter((s) => s.planName === planName && new Date(s.finishedAt).getTime() >= startMs).length;
+  });
+  if (totalWeeks) {
+    lifting.scheduled = liftingPerCycle * totalWeeks;
+    recovery.scheduled = recoveryPerCycle * totalWeeks;
+    // A within-program day-swap can in principle complete the same day-label more than once in a
+    // week — cap the displayed fraction at its own denominator so it never reads as "30 / 28".
+    lifting.completed = Math.min(lifting.completed, lifting.scheduled);
+    recovery.completed = Math.min(recovery.completed, recovery.scheduled);
+  }
+  const totalScheduled = totalWeeks ? lifting.scheduled + recovery.scheduled : null;
+  const totalCompleted = lifting.completed + recovery.completed;
+  return { programName: prog.name, totalWeeks, lifting, recovery, totalScheduled, totalCompleted: totalWeeks ? Math.min(totalCompleted, totalScheduled) : totalCompleted };
+}
+
+// ---------------- PROGRAM TIMELINE ----------------
+// A read-only "program map," fully derived from data that already exists — never a new source of
+// truth, never mutated, never able to overwrite a historical session (task: "Do not allow
+// historical program structure to overwrite historical workout logs"). Weeks here are calendar
+// weeks since cp.startDate — the exact same math resolveCurrentProgramDay's weekNumber already
+// uses — so the timeline's "Week 3 of 10" always agrees with what Today/Train/program-detail
+// already show, rather than inventing a second, competing notion of "week." Completion per
+// day-slot is read directly from real session history (matched by exact plan name, the same
+// convention used everywhere else in the app) within that calendar week's date range — so a day
+// completed via an own-program swap still shows correctly wherever it actually happened, and an
+// outside-program swap (programContext: null, see resolveTodayWorkout) never marks anything here
+// complete, since it never wrote a session under one of this program's own plan names. Status is
+// one of completed/current/swapped/missed/upcoming — "swapped" (backed by the additive
+// programSwapLog, written only by SwapWorkoutSheet's commitRow) keeps a deliberately-rescheduled
+// day from reading as neglect once its week concludes; see the per-day wasSwapped comment below.
+export function resolveProgramTimeline(state) {
+  const active = activeProgramAndCP(state);
+  if (!active) return null;
+  const { cp, prog } = active;
+  const cycleLen = prog.days.length;
+  if (cycleLen === 0) return null;
+
+  const totalWeeks = prog.weeks || null;
+  const startMs = cp.startDate ? new Date(cp.startDate).getTime() : Date.now();
+  const elapsedWeeks = Math.floor(Math.max(0, Date.now() - startMs) / (MS_PER_DAY * 7)) + 1;
+  const nowWeekNumber = totalWeeks ? Math.min(elapsedWeeks, totalWeeks) : elapsedWeeks;
+
+  const liveDay = resolveCurrentProgramDay(state);
+  const currentDayIndex = liveDay && !liveDay.isComplete ? liveDay.dayIndex : cp.dayIndex;
+  const isProgramComplete = !!(liveDay && liveDay.isComplete);
+
+  const weekCount = totalWeeks || nowWeekNumber;
+  const weeks = [];
+  for (let w = 1; w <= weekCount; w++) {
+    const weekStartMs = startMs + (w - 1) * 7 * MS_PER_DAY;
+    const weekEndMs = weekStartMs + 7 * MS_PER_DAY;
+    const isCurrentWeek = w === nowWeekNumber && !isProgramComplete;
+    const isPastWeek = w < nowWeekNumber || (isProgramComplete && w <= nowWeekNumber);
+    const isDeloadWeek = !!prog.deloadWeeks?.includes(w);
+
+    const days = prog.days.map((day, di) => {
+      const isRecovery = isRecoveryProgramDay(day);
+      const planName = `${prog.name} — ${day.label}`;
+      const sessions = isRecovery ? state.recoverySessions : state.workoutSessions;
+      const completedSession =
+        (sessions || [])
+          .filter((s) => s.planName === planName && new Date(s.finishedAt).getTime() >= weekStartMs && new Date(s.finishedAt).getTime() < weekEndMs)
+          .sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt))[0] || null;
+
+      // A deliberate swap (see programSwapLog, written only by SwapWorkoutSheet's commitRow)
+      // displaced this exact day-slot within this exact week — so once its week concludes
+      // without a completedSession, it should read as SWAPPED, not MISSED. Never claimed for the
+      // still-open current week/day (that's "current," matching the live Today/Train "Swapped
+      // for today" framing instead).
+      const wasSwapped = (state.programSwapLog || []).some(
+        (e) =>
+          e.programId === prog.id &&
+          e.source === cp.source &&
+          e.dayIndex === di &&
+          new Date(e.date).getTime() >= weekStartMs &&
+          new Date(e.date).getTime() < weekEndMs
+      );
+
+      // "Missed" is only ever claimed for a week that's already concluded — a still-open current
+      // week never gets told it "missed" something it may still get to (see the module comment).
+      let status;
+      if (completedSession) status = "completed";
+      else if (isCurrentWeek && di === currentDayIndex) status = "current";
+      else if (isPastWeek) status = wasSwapped ? "swapped" : "missed";
+      else status = "upcoming";
+
+      const routine = isRecovery ? recoveryRoutineById(day.routineId) : null;
+      return {
+        dayIndex: di,
+        label: day.label,
+        isRecovery,
+        isDeload: isDeloadWeek,
+        isSwapped: wasSwapped,
+        exercises: isRecovery ? null : day.exercises,
+        routineId: isRecovery ? day.routineId : null,
+        routine,
+        estMinutes: isRecovery ? estimateRoutineMinutes(routine) : estimateWorkoutMinutes(day.exercises),
+        status,
+        completedSession,
+        planName,
+      };
+    });
+
+    weeks.push({ weekNumber: w, isCurrentWeek, isPastWeek, isFutureWeek: w > nowWeekNumber, isDeloadWeek, days });
+  }
+
+  return {
+    programId: prog.id,
+    programName: prog.name,
+    programFocus: prog.programFocus || null,
+    source: cp.source,
+    startDate: cp.startDate || null,
+    projectedCompletionDate: totalWeeks ? new Date(startMs + totalWeeks * 7 * MS_PER_DAY).toISOString() : null,
+    totalWeeks,
+    currentWeekNumber: nowWeekNumber,
+    currentDayIndex,
+    totalDaysPerCycle: cycleLen,
+    isComplete: isProgramComplete,
+    weeks,
+  };
+}

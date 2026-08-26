@@ -80,6 +80,9 @@ export const PROGRAM_FAMILIES = [
     familyId: "titan",
     name: "Titan",
     tagline: "Classic hero V-taper — chest and back lead, legs never skipped",
+    // Declared intended emphasis (task section 19) — informational display only, shown
+    // alongside but never merged with an athlete's own Development Priorities.
+    programFocus: ["Chest", "Back", "Shoulders"],
     weeks: 12,
     // The 5-day variant is BRK's original, already-shipped Titan program, byte-identical in
     // content and id (`prog_superman`) — existing active-Titan users see zero change.
@@ -247,6 +250,7 @@ export const PROGRAM_FAMILIES = [
     familyId: "athena",
     name: "Athena",
     tagline: "Balanced hypertrophy — glutes, quads, hamstrings, shoulders, and back, with real upper-body work",
+    programFocus: ["Glutes", "Quads", "Hamstrings", "Shoulders"],
     weeks: 10,
     variants: {
       2: [
@@ -470,6 +474,7 @@ export const PROGRAM_FAMILIES = [
     familyId: "shape",
     name: "Shape",
     tagline: "General physique hypertrophy — lower body, glutes, shoulders, and back, built with machines, cables, and dumbbells",
+    programFocus: ["Glutes", "Quads", "Shoulders", "Back"],
     weeks: 10,
     variants: {
       2: [
@@ -630,6 +635,7 @@ export function expandProgramFamilies(families) {
         name: fam.name,
         tagline: `${n}-Day Version — ${fam.tagline}`,
         weeks: fam.weeks,
+        programFocus: fam.programFocus || null,
         familyId: fam.familyId,
         familyName: fam.name,
         trainingDays: n,

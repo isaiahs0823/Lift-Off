@@ -195,7 +195,22 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
       // storing a redundant one that points at the same place.
       const isPlannedNoOp = cp && row.sourceType === "program" && row.programId === cp.programId && row.source === cp.source && row.dayIndex === cp.dayIndex;
       if (isPlannedNoOp) return { ...prev, programDayOverride: null };
-      return { ...prev, programDayOverride: buildOverrideFromRow(row) };
+      // Record that the active program's own planned day for today was deliberately displaced —
+      // an additive, append-only annotation (see programSwapLog's own comment in
+      // loadInitialState) read only by resolveProgramTimeline so that day's slot reads as
+      // SWAPPED rather than MISSED once its week concludes, instead of silently looking like it
+      // was skipped. currentRows/overview reflect the active program at open time, so
+      // `plannedRow` here is always the day actually being displaced by this commit.
+      const plannedRow = overview ? currentRows.find((r) => r.isPlanned) : null;
+      const swapLogEntry =
+        cp && plannedRow
+          ? { date: new Date().toISOString().slice(0, 10), programId: cp.programId, source: cp.source, dayIndex: plannedRow.dayIndex, dayLabel: plannedRow.dayLabel }
+          : null;
+      return {
+        ...prev,
+        programDayOverride: buildOverrideFromRow(row),
+        programSwapLog: swapLogEntry ? [swapLogEntry, ...(prev.programSwapLog || [])].slice(0, 200) : prev.programSwapLog,
+      };
     });
     onClose();
   };

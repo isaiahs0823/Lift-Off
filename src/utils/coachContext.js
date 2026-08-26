@@ -15,6 +15,7 @@ import { hasSchedule, getTodaySchedule, getMissedEntry, computeScheduleAdherence
 import { resolveProfile } from "./athleteProfile.js";
 import { retrieveRelevantMemories } from "./coachMemoryStore.js";
 import { weeklyMuscleVolume, muscleVolumeTrend } from "./muscleVolume.js";
+import { sanitizeDevelopmentPriorities, priorityCoachSummary } from "./developmentPriorities.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -139,5 +140,12 @@ export function buildCoachContext(state, exMap = {}, queryText = null) {
     // Bodybuilding-specific *interpretation* of these numbers lives in coachService.js, not here.
     muscleVolume: weeklyMuscleVolume(state, exMap, 7),
     muscleVolumeTrend: muscleVolumeTrend(state, exMap),
+    // Only populated once the athlete has actually stated an opinion (see
+    // priorityCoachSummary — an untouched, all-Develop default contributes nothing here) so
+    // Coach never treats silence as a real signal. Informational only: Coach may reference these
+    // when explaining a recommendation, but nothing reads this to auto-generate program changes
+    // — see coachTools.js/the AI Program Builder's existing proposal/approval flow for the only
+    // path that can ever actually change a program.
+    developmentPriorities: priorityCoachSummary(sanitizeDevelopmentPriorities(state.developmentPriorities)),
   };
 }

@@ -1,0 +1,197 @@
+import { useState } from "react";
+import { ChevronDown, ChevronUp, Check } from "lucide-react";
+import {
+  MUSCLE_GROUPS,
+  PRIORITY_LEVELS,
+  PRIORITY_LEVEL_LABEL,
+  PRIORITY_LEVEL_EXPLANATION,
+  groupedPriorities,
+  moveMuscleToLevel,
+  reorderMuscleBefore,
+  sanitizeDevelopmentPriorities,
+} from "../utils/developmentPriorities.js";
+
+const LEVEL_ACCENT = {
+  prioritize: "border-red-700 bg-red-950/10",
+  develop: "border-neutral-800 bg-charcoal-panel",
+  maintain: "border-neutral-800 bg-charcoal-panel",
+};
+
+function HowPrioritiesWork() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-neutral-800 bg-charcoal-panel">
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-4 py-3 text-left">
+        <span className="text-xs uppercase tracking-widest text-neutral-400 font-bold">How priorities work</span>
+        {open ? <ChevronUp size={16} className="text-neutral-500" /> : <ChevronDown size={16} className="text-neutral-500" />}
+      </button>
+      {open && (
+        <div className="px-4 pb-4 space-y-3 border-t border-neutral-900 pt-3">
+          {PRIORITY_LEVELS.map((level) => (
+            <div key={level}>
+              <div className="text-[11px] uppercase tracking-widest text-red-600 font-bold">{PRIORITY_LEVEL_LABEL[level]}</div>
+              <p className="text-sm text-neutral-400 mt-0.5">{PRIORITY_LEVEL_EXPLANATION[level]}</p>
+            </div>
+          ))}
+          <p className="text-xs text-neutral-600 pt-1 border-t border-neutral-900">
+            Priorities inform Coach and future adaptive suggestions — your readiness and recovery still come first. Curated BRK programs are never rewritten
+            automatically because of a priority.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One muscle row: a tap-to-select "moving" state (highlighted) implements reordering within a
+// section — tap another row in the same section to drop the moving muscle there, or tap the
+// section's "place at end" strip. A separate small tier chip moves the muscle between sections.
+// Deliberately not drag-and-drop and not up/down arrows — an original, touch-safe BRK gesture.
+function MuscleRow({ muscleId, label, isMoving, onTapRow, onPickLevel, showLevelPicker, onToggleLevelPicker, currentLevel }) {
+  return (
+    <div className={`border ${isMoving ? "border-red-700 bg-red-950/20" : "border-neutral-800 bg-charcoal-deep"}`}>
+      <button onClick={() => onTapRow(muscleId)} className="w-full flex items-center justify-between px-3 py-3 text-left">
+        <span className="text-sm text-neutral-100 flex items-center gap-2">
+          {isMoving && <Check size={14} className="text-red-500 shrink-0" />}
+          {label}
+        </span>
+        {isMoving && <span className="text-[10px] uppercase tracking-widest text-red-500">Tap a spot to place</span>}
+      </button>
+      <div className="px-3 pb-2.5 flex items-center gap-1.5 flex-wrap">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleLevelPicker(muscleId);
+          }}
+          className="px-2 py-1 text-[10px] uppercase tracking-widest font-bold border border-neutral-700 text-neutral-400 hover:border-neutral-500"
+        >
+          {PRIORITY_LEVEL_LABEL[currentLevel]} ▾
+        </button>
+        {showLevelPicker &&
+          PRIORITY_LEVELS.filter((l) => l !== currentLevel).map((l) => (
+            <button
+              key={l}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPickLevel(muscleId, l);
+              }}
+              className="px-2 py-1 text-[10px] uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
+            >
+              Move to {PRIORITY_LEVEL_LABEL[l]}
+            </button>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+function Section({ level, muscleIds, movingId, movingLevel, levelPickerFor, onTapRow, onPickLevel, onToggleLevelPicker, onPlaceAtEnd }) {
+  return (
+    <div className={`border p-3 space-y-2 ${LEVEL_ACCENT[level]}`}>
+      <div className="text-[11px] uppercase tracking-widest text-neutral-500 font-bold">{PRIORITY_LEVEL_LABEL[level]}</div>
+      {muscleIds.length === 0 ? (
+        <div className="text-xs text-neutral-600 py-2">No muscles here yet.</div>
+      ) : (
+        <div className="space-y-1.5">
+          {muscleIds.map((id) => (
+            <MuscleRow
+              key={id}
+              muscleId={id}
+              label={MUSCLE_GROUPS.find((m) => m.id === id)?.label || id}
+              currentLevel={level}
+              isMoving={movingId === id}
+              showLevelPicker={levelPickerFor === id}
+              onTapRow={onTapRow}
+              onPickLevel={onPickLevel}
+              onToggleLevelPicker={onToggleLevelPicker}
+            />
+          ))}
+        </div>
+      )}
+      {movingId && movingLevel === level && (
+        <button
+          onClick={() => onPlaceAtEnd(level)}
+          className="w-full py-2 text-[10px] uppercase tracking-widest text-neutral-600 border border-dashed border-neutral-800 hover:border-neutral-600 hover:text-neutral-400"
+        >
+          Place at end of {PRIORITY_LEVEL_LABEL[level]}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default function DevelopmentPrioritiesScreen({ state, updateState, onBack }) {
+  const priorities = sanitizeDevelopmentPriorities(state.developmentPriorities);
+  const grouped = groupedPriorities(priorities);
+  const [movingId, setMovingId] = useState(null);
+  const [levelPickerFor, setLevelPickerFor] = useState(null);
+
+  const save = (next) => updateState((prev) => ({ ...prev, developmentPriorities: next }));
+
+  const tapRow = (muscleId) => {
+    setLevelPickerFor(null);
+    if (movingId === muscleId) {
+      setMovingId(null);
+      return;
+    }
+    if (movingId) {
+      // A second tap while a row is already selected: place the moving muscle immediately
+      // before the tapped one, but only if they're in the same section (dropping across
+      // sections is the tier chip's job, not this gesture's).
+      if (priorities[movingId].level === priorities[muscleId].level) {
+        save(reorderMuscleBefore(priorities, movingId, muscleId));
+      }
+      setMovingId(null);
+      return;
+    }
+    setMovingId(muscleId);
+  };
+
+  const placeAtEnd = (level) => {
+    if (!movingId) return;
+    if (priorities[movingId].level === level) {
+      save(reorderMuscleBefore(priorities, movingId, null));
+    }
+    setMovingId(null);
+  };
+
+  const pickLevel = (muscleId, level) => {
+    save(moveMuscleToLevel(priorities, muscleId, level));
+    setLevelPickerFor(null);
+    setMovingId(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[11px] uppercase tracking-widest text-red-600">Coach</div>
+          <div className="text-xl font-bold text-white mt-1">Development Priorities</div>
+        </div>
+        {onBack && (
+          <button onClick={onBack} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+            ← Back
+          </button>
+        )}
+      </div>
+      <p className="text-sm text-neutral-400">Tell BRK which muscle groups matter most to you. Coach factors this in — your programs are never rewritten automatically.</p>
+
+      <HowPrioritiesWork />
+
+      {PRIORITY_LEVELS.map((level) => (
+        <Section
+          key={level}
+          level={level}
+          muscleIds={grouped[level]}
+          movingId={movingId}
+          movingLevel={movingId ? priorities[movingId]?.level : null}
+          levelPickerFor={levelPickerFor}
+          onTapRow={tapRow}
+          onPickLevel={pickLevel}
+          onToggleLevelPicker={(id) => setLevelPickerFor((cur) => (cur === id ? null : id))}
+          onPlaceAtEnd={placeAtEnd}
+        />
+      ))}
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ChevronRight, ClipboardList, Timer, Dumbbell, Plus, Play, RefreshCw } from "lucide-react";
+import { ChevronRight, ClipboardList, Timer, Dumbbell, Plus, Play, RefreshCw, Map } from "lucide-react";
 import { resolveTodayWorkout } from "../utils/programSchedule.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
@@ -201,6 +201,12 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
               </button>
             </>
           )}
+          <button
+            onClick={() => onNavigate("programTimeline")}
+            className="w-full flex items-center justify-center gap-1 pt-1 text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-text"
+          >
+            <Map size={12} /> Program Timeline
+          </button>
         </div>
       )}
 

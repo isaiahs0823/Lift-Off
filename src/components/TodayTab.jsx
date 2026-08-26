@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw } from "lucide-react";
+import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map } from "lucide-react";
 import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
 import NutritionCard from "./NutritionCard.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
@@ -670,6 +670,16 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
                 Choose a workout
               </button>
             </>
+          )}
+          {/* Compact Program Timeline entry point (task Part 1, section 1) — only when there's an
+              actual active program behind today's card, never for the "nothing queued up" state. */}
+          {programDay && (
+            <button
+              onClick={() => onNavigate("programTimeline")}
+              className="w-full flex items-center justify-center gap-1 pt-1 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+            >
+              <Map size={11} /> View Program
+            </button>
           )}
         </div>
       )}

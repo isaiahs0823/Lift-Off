@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff, ListChecks, Sparkles, AlertCircle } from "lucide-react";
+import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff, ListChecks, Sparkles, AlertCircle, Target } from "lucide-react";
 import { syncCoachMemory } from "../utils/coachMemory.js";
 import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC, PHYSIQUE_PHASE_LABEL } from "../utils/athleteProfile.js";
 import { resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
@@ -220,6 +220,12 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
         <button onClick={() => onNavigate?.("coachKnowledge")} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-charcoal-panel">
           <span className="flex items-center gap-2 text-sm text-neutral-200">
             <BookOpen size={16} className="text-neutral-500" /> What Coach Knows About You
+          </span>
+          <ChevronRight size={16} className="text-neutral-600" />
+        </button>
+        <button onClick={() => onNavigate?.("developmentPriorities")} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-charcoal-panel">
+          <span className="flex items-center gap-2 text-sm text-neutral-200">
+            <Target size={16} className="text-neutral-500" /> Development Priorities
           </span>
           <ChevronRight size={16} className="text-neutral-600" />
         </button>

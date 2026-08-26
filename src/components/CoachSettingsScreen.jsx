@@ -112,6 +112,17 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
         </button>
       </div>
 
+      <button
+        onClick={() => onNavigate?.("developmentPriorities")}
+        className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-4 hover:border-red-700"
+      >
+        <div className="text-left">
+          <div className="text-sm font-bold text-white">Development Priorities</div>
+          <div className="text-xs text-neutral-500 mt-0.5">Which muscle groups matter most to you</div>
+        </div>
+        <ChevronRight size={18} className="text-neutral-600 shrink-0" />
+      </button>
+
       {profile.coachSpecialty === "bodybuilding" && (
         <>
           <div>
