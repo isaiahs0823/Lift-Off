@@ -20,6 +20,60 @@
 // skips legs, at every frequency; Athena always keeps lower-body/glute volume as the largest single
 // block, at every frequency.
 
+// ---- TITAN'S APPROVED CANONICAL SESSIONS ----
+// Locked programming spec — exercise selection, order, and prescriptions below are explicitly
+// approved and must not be altered/reinterpreted (see the task's "do not add extra presses,
+// squats, rows, or junk volume" / "do not rewrite based on generic programming preferences").
+// Referenced by the 4-day variant directly and reused for the 5-day variant's first four days
+// (see PROGRAM_FAMILIES below) so Titan is the same four sessions at both frequencies.
+const TITAN_CHEST = {
+  label: "Chest",
+  exercises: [
+    { exId: "incline_smith_press", sets: 3, reps: 8, repRange: [6, 10] },
+    { exId: "chest_press_machine", sets: 3, reps: 10, repRange: [8, 12] },
+    { exId: "dips_chest", sets: 2, reps: 12, repRange: [8, 15] },
+    { exId: "cable_fly_high_low", sets: 3, reps: 12, repRange: [10, 15] },
+    { exId: "tricep_pushdown", sets: 3, reps: 12, repRange: [10, 15] },
+  ],
+};
+const TITAN_BACK = {
+  label: "Back",
+  exercises: [
+    { exId: "cable_pullover", sets: 3, reps: 12, repRange: [10, 15] },
+    { exId: "lat_pulldown", sets: 3, reps: 10, repRange: [8, 12] },
+    { exId: "chest_supported_db_row", sets: 3, reps: 10, repRange: [8, 12] },
+    { exId: "face_pull", sets: 2, reps: 16, repRange: [12, 20] },
+    { exId: "rear_delt_machine", sets: 3, reps: 16, repRange: [12, 20] },
+    { exId: "shrug_db", sets: 3, reps: 12, repRange: [8, 15] },
+  ],
+};
+const TITAN_SHOULDERS_ARMS = {
+  label: "Shoulders & Arms",
+  exercises: [
+    { exId: "ohp", sets: 3, reps: 8, repRange: [6, 10] },
+    { exId: "lat_raise_machine", sets: 3, reps: 12, repRange: [10, 15] },
+    { exId: "cable_lat_raise", sets: 2, reps: 16, repRange: [12, 20] },
+    { exId: "overhead_tricep_ext", sets: 3, reps: 12, repRange: [10, 15] },
+    { exId: "cable_curl", sets: 3, reps: 12, repRange: [10, 15] },
+    { exId: "tricep_pushdown", sets: 3, reps: 12, repRange: [10, 15] },
+    { exId: "hammer_curl", sets: 3, reps: 12, repRange: [8, 15] },
+  ],
+};
+// The hinge slot is authored as RDL by default — BRK's existing in-workout exercise-swap feature
+// (ExerciseSwapPicker) already lets an athlete substitute an "athlete-appropriate hip hinge"
+// without any new program-infrastructure needed (see the task's own "if the program
+// infrastructure already supports substitutions" allowance).
+const TITAN_LEGS = {
+  label: "Legs",
+  exercises: [
+    { exId: "leg_curl_seated", sets: 3, reps: 12, repRange: [10, 15] },
+    { exId: "leg_press", sets: 3, reps: 12, repRange: [8, 15] },
+    { exId: "rdl", sets: 3, reps: 8, repRange: [6, 12] },
+    { exId: "leg_extension", sets: 3, reps: 12, repRange: [10, 15] },
+    { exId: "calf_raise_standing", sets: 4, reps: 12, repRange: [8, 15] },
+  ],
+};
+
 export const PROGRAM_FAMILIES = [
   // ---- TITAN — classic hero V-taper: chest and back lead, legs never skipped ----
   {
@@ -90,102 +144,34 @@ export const PROGRAM_FAMILIES = [
           ],
         },
       ],
-      4: [
-        {
-          label: "Day 1 — Upper A (Chest)",
-          exercises: [
-            { exId: "bench", sets: 4, reps: 8 },
-            { exId: "barbell_row", sets: 3, reps: 10 },
-            { exId: "incline_db_press", sets: 3, reps: 10 },
-            { exId: "lat_pulldown", sets: 3, reps: 10 },
-            { exId: "lat_raise", sets: 2, reps: 15 },
-            { exId: "tricep_pushdown", sets: 2, reps: 12 },
-          ],
-        },
-        {
-          label: "Day 2 — Lower A",
-          exercises: [
-            { exId: "squat", sets: 4, reps: 8 },
-            { exId: "rdl", sets: 3, reps: 10 },
-            { exId: "leg_press", sets: 3, reps: 12 },
-            { exId: "leg_curl_seated", sets: 3, reps: 12 },
-            { exId: "calf_raise_standing", sets: 4, reps: 15 },
-          ],
-        },
-        {
-          label: "Day 3 — Upper B (Back / V-Taper)",
-          exercises: [
-            { exId: "t_bar_row", sets: 4, reps: 8 },
-            { exId: "incline_bench", sets: 3, reps: 10 },
-            { exId: "lat_pulldown", sets: 3, reps: 12 },
-            { exId: "cable_fly", sets: 3, reps: 12 },
-            { exId: "rear_delt_fly", sets: 2, reps: 15 },
-            { exId: "barbell_curl", sets: 2, reps: 12 },
-          ],
-        },
-        {
-          label: "Day 4 — Lower B",
-          exercises: [
-            { exId: "deadlift", sets: 3, reps: 6 },
-            { exId: "leg_press", sets: 3, reps: 12 },
-            { exId: "leg_extension", sets: 3, reps: 15 },
-            { exId: "leg_curl_seated", sets: 3, reps: 12 },
-            { exId: "calf_raise_standing", sets: 4, reps: 15 },
-          ],
-        },
-      ],
-      // 5-day variant: BRK's original, already-shipped Titan content, verbatim (see idOverrides
-      // above — this variant is emitted with id `prog_superman`, not a new `prog_titan_5day` id,
-      // so any already-active Titan program keeps pointing at valid, unchanged data).
+      // Titan's canonical movement pool (approved programming spec) — Chest / Back / Shoulders &
+      // Arms / Legs, in this exact order and exercise selection. TITAN_CHEST/BACK/SHOULDERS_ARMS/
+      // LEGS below are the single source of truth for that pool; the 4-day variant uses them
+      // directly and the 5-day variant reuses them for Days 1-4, per the task's explicit
+      // instruction not to invent new Titan programming beyond this approved pool.
+      4: [TITAN_CHEST, TITAN_BACK, TITAN_SHOULDERS_ARMS, TITAN_LEGS],
+      // 5-day variant: BRK's original, already-shipped Titan content (see idOverrides above —
+      // this variant is emitted with id `prog_superman`, not a new `prog_titan_5day` id, so any
+      // already-active Titan program keeps pointing at valid data). Days 1-4 now match the
+      // approved canonical pool exactly; the old "Chest & back pump" Day 5 conflicted with that
+      // identity (extra chest/back volume beyond the approved sessions) and is replaced with a
+      // conservative, lower-fatigue accessory day built ONLY from movements that already appear
+      // in the approved pool above (High-to-Low Cable Fly and Triceps Pushdown from Chest,
+      // Reverse Pec-Deck from Back, Cable Lateral Raise and Cable Curl from Shoulders & Arms) —
+      // no new/unapproved movements introduced.
       5: [
+        TITAN_CHEST,
+        TITAN_BACK,
+        TITAN_LEGS,
+        TITAN_SHOULDERS_ARMS,
         {
-          label: "Day 1: Chest",
+          label: "Day 5 — Upper Pump (Accessory)",
           exercises: [
-            { exId: "bench", sets: 4, reps: 8 },
-            { exId: "incline_db_press", sets: 3, reps: 10 },
-            { exId: "arsenal_wide_chest_press_1", sets: 3, reps: 10 },
-            { exId: "cable_fly", sets: 3, reps: 12 },
-            { exId: "dips_chest", sets: 3, reps: 10 },
-          ],
-        },
-        {
-          label: "Day 2: Back",
-          exercises: [
-            { exId: "deadlift", sets: 3, reps: 6 },
-            { exId: "barbell_row", sets: 4, reps: 8 },
-            { exId: "lat_pulldown", sets: 3, reps: 10 },
-            { exId: "arsenal_seated_row", sets: 3, reps: 12 },
-            { exId: "straight_arm_pulldown", sets: 3, reps: 15 },
-          ],
-        },
-        {
-          label: "Day 3: Legs",
-          exercises: [
-            { exId: "squat", sets: 4, reps: 8 },
-            { exId: "leg_press", sets: 3, reps: 12 },
-            { exId: "rdl", sets: 3, reps: 10 },
-            { exId: "leg_curl_seated", sets: 3, reps: 12 },
-            { exId: "calf_raise_standing", sets: 4, reps: 15 },
-          ],
-        },
-        {
-          label: "Day 4: Shoulders & arms",
-          exercises: [
-            { exId: "ohp", sets: 3, reps: 10 },
-            { exId: "lat_raise", sets: 3, reps: 15 },
-            { exId: "barbell_curl", sets: 3, reps: 10 },
-            { exId: "skullcrusher", sets: 3, reps: 10 },
-            { exId: "rear_delt_fly", sets: 3, reps: 15 },
-          ],
-        },
-        {
-          label: "Day 5: Chest & back pump",
-          exercises: [
-            { exId: "incline_bench", sets: 3, reps: 10 },
-            { exId: "t_bar_row", sets: 3, reps: 10 },
-            { exId: "pec_deck", sets: 3, reps: 15 },
-            { exId: "lat_pulldown", sets: 3, reps: 12 },
-            { exId: "cable_fly", sets: 3, reps: 15 },
+            { exId: "cable_fly_high_low", sets: 2, reps: 12, repRange: [10, 15] },
+            { exId: "rear_delt_machine", sets: 2, reps: 16, repRange: [12, 20] },
+            { exId: "cable_lat_raise", sets: 2, reps: 16, repRange: [12, 20] },
+            { exId: "cable_curl", sets: 2, reps: 12, repRange: [10, 15] },
+            { exId: "tricep_pushdown", sets: 2, reps: 12, repRange: [10, 15] },
           ],
         },
       ],

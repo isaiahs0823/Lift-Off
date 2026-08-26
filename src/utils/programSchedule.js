@@ -13,8 +13,17 @@
 // reports for the active program itself.
 
 import { findMostRecentSessionForPlan, findTodaysSessionForPlan } from "./workoutHistory.js";
+import { recoveryRoutineById } from "../data/mobilityLibrary.js";
+import { estimateRoutineMinutes } from "./mobilitySession.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+// A program day is a recovery day when it carries `type: "recovery"` (see Berserker in App.jsx)
+// instead of a lifting `exercises` array — every existing program day simply has no `type` field
+// at all, so `isRecoveryProgramDay` is false for all of them and every function below behaves
+// exactly as it did before recovery days existed.
+function isRecoveryProgramDay(day) {
+  return !!day && day.type === "recovery";
+}
 
 function todayDateStr() {
   return new Date().toISOString().slice(0, 10);
@@ -125,8 +134,7 @@ export function resolveCurrentProgramDay(state) {
   // completedToday already takes priority above) — used by Today/Train to show "Swapped for
   // today" instead of the normal "Next: <day>" framing, alongside what was originally planned.
   const isSwapped = !completedToday && !!override && override.dayIndex !== cp.dayIndex;
-  return {
-    isComplete: false,
+  const shared = {
     completedToday,
     nextDayLabel,
     programName: prog.name,
@@ -135,11 +143,34 @@ export function resolveCurrentProgramDay(state) {
     totalDays: prog.days.length,
     weekNumber,
     totalWeeks,
-    plan: { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
     programContext,
     isSwapped,
     plannedDayIndex: cp.dayIndex,
     plannedDayLabel: isSwapped ? prog.days[cp.dayIndex]?.label ?? null : null,
+  };
+
+  // A recovery-type program day (see Berserker in App.jsx) never had a lifting `exercises` list
+  // to begin with — forcing one into `plan: { exercises }` would be lying about what the day
+  // actually is (the task's explicit "do not force recovery movements into the lifting exercise
+  // schema" rule). `programContext` is still populated above so completing it still advances
+  // dayIndex exactly like a lifting day does — only what gets rendered/started differs.
+  if (isRecoveryProgramDay(day)) {
+    const routine = recoveryRoutineById(day.routineId);
+    return {
+      isComplete: false,
+      ...shared,
+      isRecoveryDay: true,
+      routineId: day.routineId,
+      routine,
+      estMinutes: estimateRoutineMinutes(routine),
+    };
+  }
+
+  return {
+    isComplete: false,
+    ...shared,
+    isRecoveryDay: false,
+    plan: { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
   };
 }
 
@@ -194,11 +225,17 @@ export function resolveTodayWorkout(state) {
 // "planned" (the normal next-up pointer) vs "today" (planned, or an active override) right now.
 // Returns null when there's no active program, or it only has one day (nothing meaningful to
 // swap between).
+// Lifting-only day list — a "swap workout" is fundamentally "choose a different LIFTING
+// workout"; recovery-type days (see Berserker) are filtered out here rather than rendered with
+// exercises they don't have. This never affects dayIndex/completion sequencing (that still
+// advances through every day, lifting or recovery, via cp.dayIndex/finishRun) — it only trims
+// what this one browse list shows.
 export function programDaysOverview(state) {
   const active = activeProgramAndCP(state);
   if (!active) return null;
   const { cp, prog } = active;
-  if (prog.days.length < 2) return null;
+  const liftingDays = prog.days.map((day, index) => ({ day, index })).filter(({ day }) => !isRecoveryProgramDay(day));
+  if (liftingDays.length < 2) return null;
 
   const programDay = resolveCurrentProgramDay(state);
   const plannedDayIndex = cp.dayIndex;
@@ -211,7 +248,7 @@ export function programDaysOverview(state) {
     weekNumber: programDay?.weekNumber ?? null,
     plannedDayIndex,
     todayDayIndex,
-    days: prog.days.map((day, index) => {
+    days: liftingDays.map(({ day, index }) => {
       const planName = `${prog.name} — ${day.label}`;
       return {
         index,
@@ -262,6 +299,7 @@ export function allProgramWorkouts(state) {
     (list || []).forEach((prog) => {
       if (!Array.isArray(prog.days)) return;
       prog.days.forEach((day, index) => {
+        if (isRecoveryProgramDay(day)) return; // browse/swap lists are lifting workouts only
         rows.push({
           sourceType: "program",
           programId: prog.id,
@@ -318,6 +356,7 @@ export function myWorkouts(state) {
   const programDays = [];
   (state.customPrograms || []).forEach((prog) => {
     (prog.days || []).forEach((day, index) => {
+      if (isRecoveryProgramDay(day)) return;
       programDays.push({
         sourceType: "program",
         programId: prog.id,
@@ -357,4 +396,38 @@ export function buildOverrideFromRow(row) {
 export function overrideCompletedTodaySession(state, ov) {
   if (!ov) return null;
   return findTodaysSessionForPlan(state.workoutSessions, overridePlanName(ov));
+}
+
+// Program-level adherence, split lifting vs. recovery — e.g. Berserker's "Strength Sessions 3/4,
+// Recovery Sessions 2/3" (task section 31). Deliberately NOT the same thing as weeklySchedule.js's
+// computeScheduleAdherence (that's calendar/weekday-based and independent of any one program) —
+// this instead walks the active program's own day list once and asks, for each day's plan name,
+// "was it completed within the trailing window" — since a program's days are a repeating
+// sequence rather than pinned to specific weekdays, that is the honest reading of "this week" for
+// this style of program. Recovery completions are read from state.recoverySessions, lifting from
+// state.workoutSessions — the two counts are never combined into one number here, so the caller
+// can show "Strength X/Y" and "Recovery X/Y" as the separate figures the task's example wants.
+export function programWeekAdherence(state, windowDays = 7) {
+  const active = activeProgramAndCP(state);
+  if (!active) return null;
+  const { prog } = active;
+  const cutoffMs = Date.now() - windowDays * MS_PER_DAY;
+  const lifting = { scheduled: 0, completed: 0 };
+  const recovery = { scheduled: 0, completed: 0 };
+  prog.days.forEach((day) => {
+    const planName = `${prog.name} — ${day.label}`;
+    const bucket = isRecoveryProgramDay(day) ? recovery : lifting;
+    const sessions = isRecoveryProgramDay(day) ? state.recoverySessions : state.workoutSessions;
+    bucket.scheduled += 1;
+    const done = (sessions || []).some((s) => s.planName === planName && new Date(s.finishedAt).getTime() >= cutoffMs);
+    if (done) bucket.completed += 1;
+  });
+  return {
+    programName: prog.name,
+    windowDays,
+    lifting,
+    recovery,
+    totalScheduled: lifting.scheduled + recovery.scheduled,
+    totalCompleted: lifting.completed + recovery.completed,
+  };
 }

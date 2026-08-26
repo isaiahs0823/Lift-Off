@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays } from "lucide-react";
+import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays, HeartPulse } from "lucide-react";
 import { MORE_CARD_CONTENT } from "../utils/breakBrandContent.js";
 
 // B.R.E.A.K. Meaning used to also have its own row here, duplicating the brand card below —
@@ -9,6 +9,7 @@ import { MORE_CARD_CONTENT } from "../utils/breakBrandContent.js";
 const ITEMS = [
   { id: "schedule", label: "Weekly schedule", desc: "Which days are training, conditioning, recovery, or rest", icon: CalendarDays },
   { id: "catalog", label: "Exercise catalog", desc: "Every movement in the library, plus your own", icon: Search },
+  { id: "mobility", label: "Mobility & Stretching", desc: "Stretch/mobility library, recovery routines, and guided sessions", icon: HeartPulse },
   { id: "top", label: "Top used", desc: "Your most-logged exercises", icon: Flame },
   { id: "settings", label: "Settings", desc: "Training defaults, backup & restore", icon: SettingsIcon },
 ];

@@ -50,6 +50,11 @@ import AthleteProfileForm from "./components/AthleteProfileForm.jsx";
 import TrainingDaysSelector from "./components/TrainingDaysSelector.jsx";
 import { recommendationFor, totalWeeklySets, FREQUENCY_GUIDANCE, familyVariants } from "./utils/programRecommendation.js";
 import { FAMILY_PROGRAMS } from "./data/programFamilies.js";
+import { recoveryRoutineById } from "./data/mobilityLibrary.js";
+import { buildRecoverySessionSummary } from "./utils/mobilitySession.js";
+import MobilityLibraryScreen from "./components/MobilityLibraryScreen.jsx";
+import MobilityDetailScreen from "./components/MobilityDetailScreen.jsx";
+import MobilitySessionRunner from "./components/MobilitySessionRunner.jsx";
 import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
@@ -76,7 +81,7 @@ import WorkoutHistoryDetail from "./components/WorkoutHistoryDetail.jsx";
 import { findMostRecentSessionForPlan } from "./utils/workoutHistory.js";
 import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
 import { suggestNext, topSetOf } from "./utils/progression.js";
-import { resolveCurrentProgramDay } from "./utils/programSchedule.js";
+import { resolveCurrentProgramDay, programWeekAdherence } from "./utils/programSchedule.js";
 import { featuredAndOtherPRs, sessionPRCount, prDeltaLabel, prHeroLabel, prPreviousLabel, PR_TYPE_LABEL } from "./utils/prSummary.js";
 import CustomExerciseForm from "./components/CustomExerciseForm.jsx";
 import { selectableExercises, matchesExerciseSearch, formatCustomLabel, isArchived } from "./utils/customExercises.js";
@@ -100,6 +105,11 @@ const EXERCISE_LIBRARY = [
   { id: "incline_db_press", name: "Incline dumbbell press", type: "compound", muscle: "Chest" },
   { id: "decline_db_press", name: "Decline dumbbell press", type: "compound", muscle: "Chest" },
   { id: "smith_bench", name: "Smith machine bench press", type: "compound", muscle: "Chest" },
+  // Titan's approved Chest day (see HERO_PROGRAMS / programFamilies.js) leads with this
+  // specifically — no existing incline Smith-machine entry to point at, so it's added rather than
+  // substituting a different movement (per the task's "add the safest semantic exercise entry
+  // without breaking existing exercise IDs").
+  { id: "incline_smith_press", name: "Incline Smith machine press", type: "compound", muscle: "Chest" },
   { id: "chest_press_machine", name: "Chest press machine", type: "compound", muscle: "Chest" },
   { id: "incline_chest_press_machine", name: "Incline chest press machine", type: "compound", muscle: "Chest" },
   { id: "pec_deck", name: "Pec deck / chest fly machine", type: "isolation", muscle: "Chest" },
@@ -108,6 +118,10 @@ const EXERCISE_LIBRARY = [
   { id: "cable_fly_high_low", name: "High-to-low cable fly", type: "isolation", muscle: "Chest" },
   { id: "db_fly", name: "Dumbbell fly", type: "isolation", muscle: "Chest" },
   { id: "dips_chest", name: "Chest dip", type: "compound", muscle: "Chest" },
+  // Berserker's Bench day (see below) prescribes an externally-loaded dip as its own accessory,
+  // distinct from the bodyweight "Chest dip" above — added rather than reusing that id so the
+  // program's loading intent (added weight, not bodyweight-to-failure) stays honest.
+  { id: "weighted_dip", name: "Weighted dip", type: "compound", muscle: "Chest" },
   { id: "pushup", name: "Push-up", type: "compound", muscle: "Chest" },
   { id: "svend_press", name: "Svend press", type: "isolation", muscle: "Chest" },
 
@@ -123,6 +137,11 @@ const EXERCISE_LIBRARY = [
   { id: "pendlay_row", name: "Pendlay row", type: "compound", muscle: "Back" },
   { id: "t_bar_row", name: "T-bar row", type: "compound", muscle: "Back" },
   { id: "chest_supported_row", name: "Chest-supported row machine", type: "compound", muscle: "Back" },
+  // Titan's approved Back day (see HERO_PROGRAMS) calls for a two-arm chest-supported DUMBBELL
+  // row specifically — distinct from the machine version above and from the single-arm dumbbell
+  // row below. No existing entry covers it, so it's added per the task's "add the safest semantic
+  // exercise entry without breaking existing exercise IDs."
+  { id: "chest_supported_db_row", name: "Chest-supported dumbbell row", type: "compound", muscle: "Back" },
   { id: "single_arm_db_row", name: "Single-arm dumbbell row", type: "compound", muscle: "Back" },
   { id: "seal_row", name: "Seal row", type: "compound", muscle: "Back" },
   { id: "lat_pulldown", name: "Lat pulldown (wide grip)", type: "compound", muscle: "Back" },
@@ -622,69 +641,60 @@ const HERO_PROGRAMS = [
     ],
   },
   {
+    // Approved programming spec: 4 hard lifting days + 3 tracked recovery/mobility days — see
+    // src/data/mobilityLibrary.js for the recovery routines referenced below and
+    // programSchedule.js for how a `type: "recovery"` day resolves/advances. id kept unchanged
+    // (prog_punisher, from the pre-rename "Punisher" era) so already-active Berserker athletes
+    // keep pointing at valid data — only the day CONTENT changes, per the task's explicit
+    // instruction to rebuild this program.
     id: "prog_punisher",
     name: "Berserker",
     tagline: "Raw brute strength — heavy compounds, low reps, no wasted volume",
     weeks: 8,
     days: [
       {
-        label: "Day 1: Squat",
+        label: "Day 1: Squat Strength",
         exercises: [
           { exId: "squat", sets: 5, reps: 5 },
-          { exId: "front_squat", sets: 3, reps: 5 },
-          { exId: "leg_press", sets: 3, reps: 8 },
-          { exId: "back_extension", sets: 3, reps: 10 },
+          { exId: "rdl", sets: 3, reps: 7, repRange: [6, 8] },
+          { exId: "bulgarian_split_squat", sets: 3, reps: 9, repRange: [8, 10] },
+          { exId: "leg_curl_seated", sets: 3, reps: 10, repRange: [8, 12] },
+          { exId: "calf_raise_standing", sets: 3, reps: 12, repRange: [10, 15] },
         ],
       },
+      { label: "Day 2: Lower Recovery + Mobility", type: "recovery", routineId: "lower_body_recovery" },
       {
-        label: "Day 2: Bench",
+        label: "Day 3: Bench Strength",
         exercises: [
           { exId: "bench", sets: 5, reps: 5 },
-          { exId: "close_grip_bench", sets: 3, reps: 6 },
-          { exId: "db_bench", sets: 3, reps: 8 },
-          { exId: "tricep_pushdown", sets: 3, reps: 10 },
+          { exId: "chest_supported_row", sets: 4, reps: 7, repRange: [6, 8] },
+          { exId: "ohp", sets: 3, reps: 6, repRange: [5, 8] },
+          { exId: "weighted_dip", sets: 3, reps: 8, repRange: [6, 10] },
+          { exId: "tricep_pushdown", sets: 3, reps: 11, repRange: [10, 12] },
         ],
       },
+      { label: "Day 4: Upper Recovery + Mobility", type: "recovery", routineId: "upper_body_recovery" },
       {
-        label: "Day 3: Deadlift",
+        label: "Day 5: Deadlift Strength",
         exercises: [
-          { exId: "deadlift", sets: 5, reps: 3 },
-          { exId: "rack_pull", sets: 3, reps: 5 },
-          { exId: "barbell_row", sets: 4, reps: 6 },
+          { exId: "deadlift", sets: 5, reps: 4, repRange: [3, 5] },
+          { exId: "pullup", sets: 4, reps: 6, repRange: [5, 8] },
+          { exId: "barbell_row", sets: 3, reps: 7, repRange: [6, 8] },
           { exId: "farmers_carry", sets: 3, reps: 1 },
+          { exId: "back_extension", sets: 3, reps: 10, repRange: [8, 12] },
         ],
       },
       {
-        label: "Day 4: Overhead & accessory",
+        label: "Day 6: Overhead / Upper Strength",
         exercises: [
           { exId: "ohp", sets: 5, reps: 5 },
-          { exId: "pullup", sets: 4, reps: 6 },
-          { exId: "barbell_curl", sets: 3, reps: 8 },
-          { exId: "skullcrusher", sets: 3, reps: 8 },
+          { exId: "close_grip_bench", sets: 3, reps: 7, repRange: [6, 8] },
+          { exId: "chinup", sets: 3, reps: 7, repRange: [6, 8] },
+          { exId: "barbell_curl", sets: 3, reps: 9, repRange: [8, 10] },
+          { exId: "skullcrusher", sets: 3, reps: 9, repRange: [8, 10] },
         ],
       },
-      {
-        label: "Day 5: Recovery run",
-        exercises: [
-          { exId: "run_easy", sets: 1, reps: 30 },
-          { exId: "plank", sets: 3, reps: 1 },
-        ],
-      },
-      {
-        label: "Day 6: Tempo run + sled drag",
-        exercises: [
-          { exId: "run_tempo", sets: 1, reps: 20 },
-          { exId: "sled_drag_forward", sets: 4, reps: 1 },
-          { exId: "sled_drag_backward", sets: 4, reps: 1 },
-        ],
-      },
-      {
-        label: "Day 7: Interval sprints",
-        exercises: [
-          { exId: "run_intervals", sets: 8, reps: 1 },
-          { exId: "ab_wheel", sets: 3, reps: 12 },
-        ],
-      },
+      { label: "Day 7: Full Recovery + Mobility", type: "recovery", routineId: "full_body_recovery" },
     ],
   },
   {
@@ -1219,6 +1229,10 @@ function loadInitialState() {
     },
     exerciseNotes: {}, // { [exId]: { general, machine, cue } }
     workoutSessions: [], // finished guided-run summaries — see buildSessionSummary()
+    // Finished mobility/recovery sessions — deliberately a SEPARATE collection from
+    // workoutSessions (never mixed in) so lifting analytics/PRs/volume can never be corrupted by
+    // stretching. See src/utils/mobilitySession.js buildRecoverySessionSummary().
+    recoverySessions: [],
     goals: [], // { id, title, type, startValue, currentValue, targetValue, targetDate, units,
     // priority: "primary"|"secondary", notes, status: "active"|"paused"|"completed",
     // linkedExId?, metric?, history?, createdAt } — see src/utils/goalMath.js, goalData.js
@@ -1313,6 +1327,7 @@ const BACKUP_DATA_KEYS = [
   "settings",
   "exerciseNotes",
   "workoutSessions",
+  "recoverySessions",
   "goals",
   "bodyweightLogs",
   "readinessLogs",
@@ -1675,6 +1690,9 @@ const SECTION_OF = {
   dataWorkbook: "more",
   breakMeaning: "more",
   intervalTimer: "train",
+  mobility: "more",
+  mobilityDetail: "more",
+  mobilitySession: "more",
 };
 
 // ---------------- ACTIVE WORKOUT DRAFT PERSISTENCE ----------------
@@ -1737,6 +1755,12 @@ export default function LiftLog() {
   // confirmation); Train then surfaces a "Resume workout" card to bring it back. Always reset to
   // false on a fresh startRun() so a brand-new workout is never born already minimized.
   const [workoutMinimized, setWorkoutMinimized] = useState(false);
+  // Mobility/recovery navigation — deliberately plain component state, not persisted: a
+  // recovery session is an intentionally lightweight, ephemeral flow (see MobilitySessionRunner
+  // and finishRecoverySession), so an in-progress one simply doesn't survive a refresh; "Log
+  // Recovery Session" from the library remains the always-available fallback either way.
+  const [mobilitySelectedId, setMobilitySelectedId] = useState(null);
+  const [mobilityRunContext, setMobilityRunContext] = useState(null); // { routine, programContext, returnTab }
   // Drives the small "Saved / Saving… / Not saved" indicator during an active workout — see the
   // activeRun-persist effect below (which is the single place that actually knows whether the
   // localStorage write succeeded) and TrainingExerciseCard's draft-dirty callback (which flips
@@ -1992,6 +2016,34 @@ export default function LiftLog() {
   const addRunExercise = (exId) => {
     setActiveRun((run) => ({ ...run, exercises: [...run.exercises, { exId, sets: 3 }] }));
   };
+  // Shared by finishRun (lifting) and finishRecoverySession (mobility/recovery) — a program day
+  // is a program day regardless of whether it was a lifting workout or a recovery day, so
+  // "advance to the next day, clear a same-day override, record when/what was completed" is one
+  // rule, not two. Pure function of (prev, ctx); the caller wraps it in updateState.
+  const applyProgramDayAdvance = (prev, ctx) => {
+    // A swap-workout override (see programSchedule.js) is a one-day substitution — the instant
+    // its workout is actually completed, the override has done its job and is resolved/cleared,
+    // exactly like the task's "completing the swapped workout clears the override" requirement.
+    // Only clear it if it belongs to THIS program (a stale override from some other program
+    // should already be inert, but this keeps state tidy too).
+    const ov = prev.programDayOverride;
+    const clearOverride = ov && ov.programId === ctx.programId && ov.source === ctx.source;
+    return {
+      ...prev,
+      programDayOverride: clearOverride ? null : prev.programDayOverride,
+      currentProgram: {
+        ...ctx,
+        dayIndex: (ctx.dayIndex + 1) % ctx.totalDays,
+        startDate: prev.currentProgram?.startDate || new Date().toISOString(),
+        // dayIndex above already points at the *next* day — these two record what was actually
+        // just finished and when, so the Today card keeps showing today's day (see
+        // resolveCurrentProgramDay) instead of jumping to tomorrow's within the same calendar day.
+        lastCompletedAt: new Date().toISOString(),
+        lastCompletedDayIndex: ctx.dayIndex,
+      },
+    };
+  };
+
   const finishRun = () => {
     const summary = buildSessionSummary(activeRun, state.logs, state.workoutSessions || [], exMap);
     // Only worth a coach review when something was actually logged — an empty session has
@@ -2017,32 +2069,36 @@ export default function LiftLog() {
     setActiveRun((run) => ({ ...run, finished: true, summaryId: summary.id, coachHistoryId, draftByIndex: {} }));
     if (activeRun?.programContext) {
       const ctx = activeRun.programContext;
-      updateState((prev) => {
-        // A swap-workout override (see programSchedule.js) is a one-day substitution — the
-        // instant its workout is actually completed, the override has done its job and is
-        // resolved/cleared, exactly like the task's "completing the swapped workout clears the
-        // override" requirement. Only clear it if it belongs to THIS program (a stale override
-        // from some other program should already be inert, but this keeps state tidy too).
-        const ov = prev.programDayOverride;
-        const clearOverride = ov && ov.programId === ctx.programId && ov.source === ctx.source;
-        return {
-          ...prev,
-          programDayOverride: clearOverride ? null : prev.programDayOverride,
-          currentProgram: {
-            ...ctx,
-            dayIndex: (ctx.dayIndex + 1) % ctx.totalDays,
-            startDate: prev.currentProgram?.startDate || new Date().toISOString(),
-            // dayIndex above already points at the *next* day — these two record what was
-            // actually just finished and when, so the Today card keeps showing today's day
-            // (see resolveCurrentProgramDay) instead of jumping to tomorrow's within the same
-            // calendar day.
-            lastCompletedAt: new Date().toISOString(),
-            lastCompletedDayIndex: ctx.dayIndex,
-          },
-        };
-      });
+      updateState((prev) => applyProgramDayAdvance(prev, ctx));
     }
   };
+
+  // Recovery-session counterpart to finishRun — deliberately does NOT touch state.workoutSessions,
+  // state.logs, PRs, or lifting volume (task: "do not mix these records into lifting
+  // workoutSessions," "do not count mobility volume as lifting volume," "do not generate PRs from
+  // recovery work"). No activeRun/GuidedRunView involved either — the mobility session runner is
+  // its own lightweight, ephemeral flow (see MobilitySessionRunner.jsx); this is the one place its
+  // result gets committed to persisted state. `programContext` is only present when the routine
+  // was started FROM the active program's own recovery day (see resolveTodayWorkout/TrainTab) —
+  // starting a routine from the Mobility & Stretching library directly never touches currentProgram.
+  const finishRecoverySession = (routine, programContext, result, manual = false) => {
+    const summary = buildRecoverySessionSummary({ routine, programContext, result, manual });
+    updateState((prev) => ({ ...prev, recoverySessions: [summary, ...(prev.recoverySessions || [])] }));
+    if (programContext) {
+      updateState((prev) => applyProgramDayAdvance(prev, programContext));
+    }
+    return summary;
+  };
+  // Navigates into the mobility session runner — `fromTab` is remembered so Exit/Complete lands
+  // back where the athlete actually started from (Today, Train, the library itself, or a
+  // program's detail screen), same "returnTab" convention startRun already uses for lifting runs.
+  const startRecoverySession = (routine, programContext, fromTab) => {
+    setMobilityRunContext({ routine, programContext, returnTab: fromTab });
+    setTab("mobilitySession");
+  };
+  // The lightweight "LOG RECOVERY SESSION" path (task section 15) — marks a routine done without
+  // running the timer at all, straight from wherever it's offered (library, Today, program detail).
+  const logManualRecovery = (routine, programContext) => finishRecoverySession(routine, programContext, null, true);
   // Undoes exactly what finishRun() committed (the session summary, its coach note, the
   // program-day advance, and the today-completed marker) so tapping "Add exercise" from the
   // Session Complete screen can safely go back to logging — finishing again afterward
@@ -2245,6 +2301,7 @@ export default function LiftLog() {
                   allExercises={allExercises}
                   activeRun={activeRun}
                   onStartRun={(plan, programContext) => startRun(plan, "today", programContext)}
+                  onStartRecovery={(routine, programContext) => startRecoverySession(routine, programContext, "today")}
                   onNavigate={setTab}
                   onViewWorkout={viewWorkout}
                 />
@@ -2268,6 +2325,7 @@ export default function LiftLog() {
                 exMap={exMap}
                 activeRun={activeRun && workoutMinimized && !activeRun.finished ? activeRun : null}
                 onStartRun={(plan, programContext) => startRun(plan, "train", programContext)}
+                onStartRecovery={(routine, programContext) => startRecoverySession(routine, programContext, "train")}
                 onResumeWorkout={resumeRun}
                 onDiscardWorkout={() => {
                   if (
@@ -2430,6 +2488,8 @@ export default function LiftLog() {
                 updateState={updateState}
                 exMap={exMap}
                 onStartRun={(plan, programContext) => startRun(plan, "templates", programContext)}
+                onStartRecovery={(routine, programContext) => startRecoverySession(routine, programContext, "templates")}
+                onLogManualRecovery={logManualRecovery}
                 onRestartCompletedProgram={restartProgramById}
                 onGoToBuild={() => setTab("build")}
                 onViewWorkout={viewWorkout}
@@ -2443,6 +2503,32 @@ export default function LiftLog() {
                 exMap={exMap}
                 onStartRun={(plan, programContext) => startRun(plan, "build", programContext)}
                 onGoToPlans={() => setTab("templates")}
+              />
+            )}
+            {tab === "mobility" && (
+              <MobilityLibraryScreen
+                state={state}
+                onSelectMovement={(id) => {
+                  setMobilitySelectedId(id);
+                  setTab("mobilityDetail");
+                }}
+                onStartRoutine={(routine, programContext) => startRecoverySession(routine, programContext, "mobility")}
+                onLogManualRoutine={(routine, programContext) => logManualRecovery(routine, programContext)}
+              />
+            )}
+            {tab === "mobilityDetail" && <MobilityDetailScreen movementId={mobilitySelectedId} onBack={() => setTab("mobility")} />}
+            {tab === "mobilitySession" && mobilityRunContext && (
+              <MobilitySessionRunner
+                routine={mobilityRunContext.routine}
+                onComplete={(result) => {
+                  finishRecoverySession(mobilityRunContext.routine, mobilityRunContext.programContext, result, false);
+                  setTab(mobilityRunContext.returnTab || "mobility");
+                  setMobilityRunContext(null);
+                }}
+                onExit={() => {
+                  setTab(mobilityRunContext.returnTab || "mobility");
+                  setMobilityRunContext(null);
+                }}
               />
             )}
             {tab === "schedule" && <ScheduleEditor state={state} updateState={updateState} onBack={() => setTab("more")} />}
@@ -5356,7 +5442,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
 // formatSetPrescription now lives in utils/exercisePrescription.js so TrainTab.jsx (the
 // workout/day preview) can share the exact same formatting instead of reimplementing it.
 
-function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartCompletedProgram, onGoToBuild, onViewWorkout }) {
+function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, onLogManualRecovery, onRestartCompletedProgram, onGoToBuild, onViewWorkout }) {
   const [detail, setDetail] = useState(null); // { kind: "program" | "template" | "customPlan" | "customProgram", id }
   // Frequency-aware program picker (Part 2) — selectedDays starts from the athlete's saved
   // preference (or a pending review's proposed frequency) but is local UI state, never written
@@ -5447,6 +5533,55 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
             View Workout <ChevronRight size={11} />
           </button>
         )}
+      </div>
+    );
+  };
+  // Same idea as dayCompletionRow above but for a recovery-type program day — reads
+  // state.recoverySessions instead of state.workoutSessions (never the same collection).
+  const recoveryCompletionRow = (planName) => {
+    const session = findMostRecentSessionForPlan(state.recoverySessions, planName);
+    if (!session) return null;
+    return (
+      <div className="text-xs text-neutral-500 pt-1.5 mt-1.5 border-t border-neutral-900">
+        Completed {new Date(session.finishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+      </div>
+    );
+  };
+  // Renders one recovery-type program day's row — label/badges identical to a lifting day's, but
+  // the body is a routine summary + Start Recovery Session / Log Recovery Session instead of an
+  // exercise list (recovery movements are never forced into ExerciseAnatomyRow's lifting-set
+  // prescription format). Shared by the built-in and custom program detail screens below.
+  const recoveryDayRow = (prog, day, di, programContext) => {
+    const routine = recoveryRoutineById(day.routineId);
+    const minutes = routine ? Math.round(routine.movements.reduce((s, m) => s + (m.durationSeconds || (m.reps || 0) * 3) * (m.sets || 1), 0) / 60) : 0;
+    return (
+      <div key={di} className="border-t border-neutral-900 pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-medium text-red-500 flex items-center gap-1.5">
+            {day.label}
+            {isCurrent(prog.id) && state.currentProgram.dayIndex === di && (
+              <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Next up</span>
+            )}
+          </span>
+          {isCurrent(prog.id) && state.currentProgram.dayIndex !== di && (
+            <button onClick={() => setCurrentProgramDay(di)} className="text-[11px] text-neutral-500 hover:text-neutral-300">
+              Set as today
+            </button>
+          )}
+        </div>
+        <div className="text-xs text-neutral-500 mb-2">{routine ? `${routine.movements.length} movements · Est. ${minutes} min` : "Recovery routine"}</div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => onStartRecovery(routine, programContext)}
+            className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+          >
+            <ChevronRight size={11} /> Start Recovery Session
+          </button>
+          <button onClick={() => onLogManualRecovery(routine, programContext)} className="text-[11px] text-neutral-500 hover:text-neutral-300">
+            Log Recovery Session
+          </button>
+        </div>
+        {recoveryCompletionRow(`${prog.name} — ${day.label}`)}
       </div>
     );
   };
@@ -5558,6 +5693,30 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
         subtitle={prog.weeks ? `${prog.tagline} · ${prog.weeks} weeks` : prog.tagline}
         onBack={() => setDetail(null)}
       >
+        {isCurrent(prog.id) &&
+          (() => {
+            const adherence = programWeekAdherence(state);
+            if (!adherence || adherence.recovery.scheduled === 0) return null;
+            return (
+              <div className="border border-neutral-800 bg-charcoal-panel px-4 py-3 space-y-1.5">
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500">
+                  {prog.name.toUpperCase()} — TRAILING {adherence.windowDays} DAYS
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-400">Strength sessions</span>
+                  <span className="text-white font-bold">
+                    {adherence.lifting.completed} / {adherence.lifting.scheduled}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-400">Recovery sessions</span>
+                  <span className="text-white font-bold">
+                    {adherence.recovery.completed} / {adherence.recovery.scheduled}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
         {Object.keys(siblings).length > 1 && (
           <div className="border border-neutral-800 bg-charcoal-panel px-4 py-3 space-y-2">
             <div className="text-[10px] uppercase tracking-widest text-neutral-500">
@@ -5614,49 +5773,53 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
         >
           <Plus size={12} /> Add to my program
         </button>
-        {prog.days.map((day, di) => (
-          <div key={di} className="border-t border-neutral-900 pt-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-red-500 flex items-center gap-1.5">
-                {day.label}
-                {isCurrent(prog.id) && state.currentProgram.dayIndex === di && (
-                  <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Next up</span>
-                )}
-              </span>
-              <div className="flex items-center gap-3">
-                {isCurrent(prog.id) && state.currentProgram.dayIndex !== di && (
-                  <button onClick={() => setCurrentProgramDay(di)} className="text-[11px] text-neutral-500 hover:text-neutral-300">
-                    Set as today
+        {prog.days.map((day, di) =>
+          day.type === "recovery" ? (
+            recoveryDayRow(prog, day, di, { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: di, totalDays: prog.days.length })
+          ) : (
+            <div key={di} className="border-t border-neutral-900 pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-red-500 flex items-center gap-1.5">
+                  {day.label}
+                  {isCurrent(prog.id) && state.currentProgram.dayIndex === di && (
+                    <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Next up</span>
+                  )}
+                </span>
+                <div className="flex items-center gap-3">
+                  {isCurrent(prog.id) && state.currentProgram.dayIndex !== di && (
+                    <button onClick={() => setCurrentProgramDay(di)} className="text-[11px] text-neutral-500 hover:text-neutral-300">
+                      Set as today
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setReviewCompare(null);
+                      onStartRun(
+                        { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
+                        { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: di, totalDays: prog.days.length }
+                      );
+                    }}
+                    className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+                  >
+                    <ChevronRight size={11} /> {reviewCompare ? "Apply — Start" : "Start workout"}
                   </button>
-                )}
-                <button
-                  onClick={() => {
-                    setReviewCompare(null);
-                    onStartRun(
-                      { name: `${prog.name} — ${day.label}`, exercises: day.exercises },
-                      { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: di, totalDays: prog.days.length }
-                    );
-                  }}
-                  className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
-                >
-                  <ChevronRight size={11} /> {reviewCompare ? "Apply — Start" : "Start workout"}
-                </button>
-                <button
-                  onClick={() => copyDayToCustom(prog, day)}
-                  className="text-[11px] text-neutral-500 hover:text-red-500 flex items-center gap-1"
-                >
-                  <Plus size={11} /> Copy to my plans
-                </button>
+                  <button
+                    onClick={() => copyDayToCustom(prog, day)}
+                    className="text-[11px] text-neutral-500 hover:text-red-500 flex items-center gap-1"
+                  >
+                    <Plus size={11} /> Copy to my plans
+                  </button>
+                </div>
               </div>
+              <div>
+                {day.exercises.map((e, i) => (
+                  <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
+                ))}
+              </div>
+              {dayCompletionRow(`${prog.name} — ${day.label}`)}
             </div>
-            <div>
-              {day.exercises.map((e, i) => (
-                <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
-              ))}
-            </div>
-            {dayCompletionRow(`${prog.name} — ${day.label}`)}
-          </div>
-        ))}
+          )
+        )}
       </SlideInPanel>
     );
   }

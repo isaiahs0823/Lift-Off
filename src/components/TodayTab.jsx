@@ -268,7 +268,7 @@ function SetupSchedulePrompt({ onSetup, onLater }) {
   );
 }
 
-export default function TodayTab({ state, updateState, exMap, allExercises, activeRun, onStartRun, onNavigate, onViewWorkout }) {
+export default function TodayTab({ state, updateState, exMap, allExercises, activeRun, onStartRun, onStartRecovery, onNavigate, onViewWorkout }) {
   const entries = state.bodyweightLogs || [];
   const currentWeight = latestValue(entries, "weight");
   const avg7 = rollingAverage(entries, "weight", 7);
@@ -418,7 +418,11 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         <RecoveryLogCard label={todaySchedule.label || "Active Recovery"} state={state} updateState={updateState} />
       ) : scheduleOn && todaySchedule?.type === "conditioning" ? (
         (() => {
-          const run = buildRunFromSource(state, todaySchedule.source);
+          // A "conditioning" slot pointing at currentProgram is not a supported combination with
+          // a recovery-type program day — fall back to "no plan attached" rather than crash on a
+          // lifting-shaped .plan that doesn't exist for a recovery day.
+          const rawRun = buildRunFromSource(state, todaySchedule.source);
+          const run = rawRun?.isRecoveryDay ? null : rawRun;
           const completedSession = todaySchedule.status === "completed" && run ? findTodaysSessionForPlan(state.workoutSessions, run.plan.name) : null;
           return (
             <div className="border-2 border-red-700 bg-charcoal-panel p-5 space-y-3">
@@ -457,6 +461,35 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
       ) : scheduleOn && todaySchedule?.type === "workout" ? (
         (() => {
           const run = buildRunFromSource(state, todaySchedule.source);
+          // A weekly-schedule "workout" slot pointing at the current program can still resolve to
+          // one of the program's own recovery-type days (see Berserker) — never treat that as a
+          // lifting workout (task: no "START WORKOUT" on a recovery-only day).
+          if (run?.isRecoveryDay) {
+            const recoveryDone = findTodaysSessionForPlan(state.recoverySessions, `${run.programName} — ${run.dayLabel}`);
+            return (
+              <div className="border-2 border-red-700 bg-charcoal-panel p-5 space-y-3">
+                <div className="text-[11px] uppercase tracking-widest text-red-600">{run.programName}</div>
+                <div className="text-2xl font-bold text-white">{run.dayLabel}</div>
+                {recoveryDone ? (
+                  <div className="flex items-center gap-2 text-green-500 font-bold text-lg">
+                    <Check size={18} /> Recovery complete
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-sm text-neutral-400">
+                      {run.routine?.movements?.length ?? 0} movements · Est. {run.estMinutes} min
+                    </div>
+                    <button
+                      onClick={() => onStartRecovery(run.routine, run.programContext)}
+                      className="w-full py-4 text-sm uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+                    >
+                      Start Recovery Session
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          }
           const completedSession = todaySchedule.status === "completed" && run ? findTodaysSessionForPlan(state.workoutSessions, run.plan.name) : null;
           return (
             <div className="border-2 border-red-700 bg-charcoal-panel p-5 space-y-3">
@@ -505,7 +538,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         <div className="border-2 border-red-700 bg-charcoal-panel p-5 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[11px] uppercase tracking-widest text-red-600">Today</div>
-            {todayPlan && !programDay.completedToday && !activeRun && (
+            {(todayPlan || programDay?.isRecoveryDay) && !programDay.completedToday && !activeRun && (
               <button
                 onClick={() => setSwapOpen(true)}
                 aria-label="Swap workout"
@@ -515,7 +548,37 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
               </button>
             )}
           </div>
-          {todayPlan && programDay.completedToday ? (
+          {programDay?.isRecoveryDay ? (
+            // Recovery days are never treated as a lifting workout in disguise (task: "Do not
+            // display START WORKOUT for a recovery-only day") — a dedicated card with recovery-
+            // appropriate language and its own CTA into the mobility session runner.
+            (() => {
+              const recoveryDone = findTodaysSessionForPlan(state.recoverySessions, `${programDay.programName} — ${programDay.dayLabel}`);
+              return (
+                <>
+                  <div className="text-xs uppercase tracking-widest text-neutral-500">{programDay.programName}</div>
+                  <div className="text-2xl font-bold text-white">{programDay.dayLabel}</div>
+                  {recoveryDone ? (
+                    <div className="flex items-center gap-2 text-green-500 font-bold text-lg">
+                      <Check size={18} /> Recovery complete
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-sm text-neutral-400">
+                        {programDay.routine?.movements?.length ?? 0} movements · Est. {programDay.estMinutes} min
+                      </div>
+                      <button
+                        onClick={() => onStartRecovery(programDay.routine, programDay.programContext)}
+                        className="w-full py-4 text-sm uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+                      >
+                        Start Recovery Session
+                      </button>
+                    </>
+                  )}
+                </>
+              );
+            })()
+          ) : todayPlan && programDay.completedToday ? (
             // Today's own workout is the whole story once it's done — no invitation to start
             // tomorrow's, and no dominant CTA at all (that's what read as "started the next
             // workout"). A small "Next lift" link is the only nod to what's coming up.

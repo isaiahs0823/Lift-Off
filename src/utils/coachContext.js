@@ -63,7 +63,7 @@ export function buildCoachContext(state, exMap = {}, queryText = null) {
     : null;
 
   const todayWorkout =
-    programDay && !programDay.isComplete
+    programDay && !programDay.isComplete && !programDay.isRecoveryDay
       ? {
           planName: programDay.plan.name,
           exercises: programDay.plan.exercises.map((e) => ({ name: exMap[e.exId]?.name || e.exId, sets: e.sets, reps: e.reps })),

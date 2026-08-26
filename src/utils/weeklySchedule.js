@@ -136,6 +136,12 @@ export function buildRunFromSource(state, source) {
   if (source.kind === "currentProgram") {
     const day = resolveCurrentProgramDay(state);
     if (!day || day.isComplete) return null;
+    // A recovery-type program day (see Berserker in App.jsx) has no lifting plan to start — the
+    // caller (TodayTab) checks isRecoveryDay and renders the recovery card/CTA instead of
+    // treating this like a normal scheduled workout.
+    if (day.isRecoveryDay) {
+      return { isRecoveryDay: true, routineId: day.routineId, routine: day.routine, programName: day.programName, dayLabel: day.dayLabel, estMinutes: day.estMinutes, programContext: day.programContext };
+    }
     return { plan: day.plan, programContext: day.programContext };
   }
   if (source.kind === "plan") {

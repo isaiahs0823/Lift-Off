@@ -35,7 +35,7 @@ function elapsedLabel(startedAt) {
 // entire screen: "Resume workout" becomes the one thing to do here, matching the reliability
 // spec's "primary CTA should be RESUME WORKOUT, not Start Workout — do not make them navigate
 // through workout-selection flows again."
-export default function TrainTab({ state, updateState, exMap, activeRun, onStartRun, onResumeWorkout, onDiscardWorkout, onNavigate }) {
+export default function TrainTab({ state, updateState, exMap, activeRun, onStartRun, onStartRecovery, onResumeWorkout, onDiscardWorkout, onNavigate }) {
   const programDay = resolveTodayWorkout(state);
   const [swapOpen, setSwapOpen] = useState(false);
 
@@ -128,7 +128,12 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
               not today's resolved workout) — an outside-program override must never make this
               card read as if the active program changed; see resolveTodayWorkout's isOutsideProgram. */}
           <div className="text-xl font-bold text-v5-text">{state.currentProgram?.programName}</div>
-          {programDay.isOutsideProgram ? (
+          {programDay.isRecoveryDay ? (
+            <div className="text-sm text-v5-subtext">
+              {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
+              {programDay.dayLabel}
+            </div>
+          ) : programDay.isOutsideProgram ? (
             <div className="space-y-0.5">
               <div className="flex items-center gap-1.5">
                 <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">
@@ -165,21 +170,37 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
               Next: {programDay.dayLabel}
             </div>
           )}
-          {/* Day preview — same compact anatomy row used in My Plan/program detail, so the
-              athlete can see today's muscle emphasis before committing to Start. */}
-          {programDay.plan?.exercises?.length > 0 && (
-            <div className="pt-1">
-              {programDay.plan.exercises.map((e, i) => (
-                <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
-              ))}
-            </div>
+          {programDay.isRecoveryDay ? (
+            <>
+              <div className="text-xs text-v5-subtext">
+                {programDay.routine?.movements?.length ?? 0} movements · Est. {programDay.estMinutes} min
+              </div>
+              <button
+                onClick={() => onStartRecovery(programDay.routine, programDay.programContext)}
+                className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
+              >
+                Start Recovery Session
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Day preview — same compact anatomy row used in My Plan/program detail, so the
+                  athlete can see today's muscle emphasis before committing to Start. */}
+              {programDay.plan?.exercises?.length > 0 && (
+                <div className="pt-1">
+                  {programDay.plan.exercises.map((e, i) => (
+                    <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => onStartRun(programDay.plan, programDay.programContext)}
+                className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
+              >
+                Start
+              </button>
+            </>
           )}
-          <button
-            onClick={() => onStartRun(programDay.plan, programDay.programContext)}
-            className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
-          >
-            Start
-          </button>
         </div>
       )}
 
