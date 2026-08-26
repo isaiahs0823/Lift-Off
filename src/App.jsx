@@ -1560,6 +1560,15 @@ function buildSessionSummary(run, allLogs, priorSessions, exMap) {
     // day, "blank"/"repeated" for the two off-program Start Workout Today paths, "custom" as
     // the catch-all for every pre-existing plan/template start that predates this field.
     source: run.source || (run.programContext ? "program" : "custom"),
+    // Where the workout actually came from — set even when it's NOT the active program (an
+    // outside-program/standalone swap-workout override; see programSchedule.js's
+    // resolveTodayWorkout). Lets history show provenance without ever mislabeling a workout as
+    // whatever program happens to be active. Falls back to the run's own programContext (the
+    // normal, own-program case) so every existing program-day session already has this filled
+    // in identically to before this field existed. Optional/additive — nothing existing reads it.
+    sourceProgramId: run.sourceProgramId ?? run.programContext?.programId ?? null,
+    sourceProgramName: run.sourceProgramName ?? run.programContext?.programName ?? null,
+    sourceDayLabel: run.sourceDayLabel ?? null,
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     durationSec,
@@ -1891,6 +1900,14 @@ export default function LiftLog() {
       // plan object the Start Workout Today choice screen builds; every other caller leaves
       // plan.source unset and gets the same "program"/"custom" inference as before this existed.
       source: plan.source || null,
+      // Provenance metadata (see buildSessionSummary / resolveTodayWorkout) — set whenever the
+      // workout came from an outside-program swap-workout override or a standalone plan/custom
+      // build, so history can record what was ACTUALLY performed without depending on whatever
+      // program happens to be active later. Falls back to programContext for the normal
+      // own-program case, and to null for every pre-existing caller that supplies neither.
+      sourceProgramId: plan.sourceProgramId ?? programContext?.programId ?? null,
+      sourceProgramName: plan.sourceProgramName ?? programContext?.programName ?? null,
+      sourceDayLabel: plan.sourceDayLabel ?? null,
       startedAt: now,
       draftByIndex: {},
       updatedAt: now,
@@ -4471,6 +4488,15 @@ function GuidedRunView({
   // including right up to Finish Workout, without ever having been asked for a name up front.
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(run.planName);
+  // "Save as Workout Template" — offered only for a fresh custom build (run.source === "blank",
+  // the "+ Create Workout for Today" path), never forced. Reuses the exact same state.customPlans
+  // architecture BuildPlanTab's "Save plan" already writes to — no new save/template system.
+  const [templateSaved, setTemplateSaved] = useState(false);
+  const saveAsTemplate = () => {
+    const plan = { id: `plan_${Date.now()}`, name: run.planName, exercises: run.exercises, isCustom: true };
+    updateState((prev) => ({ ...prev, customPlans: [...(prev.customPlans || []), plan] }));
+    setTemplateSaved(true);
+  };
   const canRename = !run.programContext && !!onRename;
   const saveNameEdit = () => {
     const trimmed = nameDraft.trim();
@@ -4624,6 +4650,20 @@ function GuidedRunView({
             className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
           >
             View Workout
+          </button>
+        )}
+
+        {run.source === "blank" && !run.programContext && (
+          <button
+            onClick={saveAsTemplate}
+            disabled={templateSaved}
+            className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
+              templateSaved
+                ? "border-green-800 text-green-500 cursor-default"
+                : "border-neutral-700 text-neutral-300 hover:border-red-700 hover:text-red-500"
+            }`}
+          >
+            {templateSaved ? "Saved to My Plans ✓" : "Save as Workout Template"}
           </button>
         )}
 
@@ -6170,17 +6210,38 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
         </div>
       )}
 
-      <button
-        onClick={savePlan}
-        disabled={!planName.trim() || selectedExercises.length === 0}
-        className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
-          planName.trim() && selectedExercises.length > 0
-            ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-            : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
-        }`}
-      >
-        Save plan
-      </button>
+      <div className="space-y-2">
+        {onStartRun && (
+          <button
+            onClick={() =>
+              onStartRun({
+                name: planName.trim() || "Workout Today",
+                exercises: selectedExercises,
+                source: "blank",
+              })
+            }
+            disabled={selectedExercises.length === 0}
+            className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
+              selectedExercises.length > 0
+                ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
+                : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+            }`}
+          >
+            Start workout
+          </button>
+        )}
+        <button
+          onClick={savePlan}
+          disabled={!planName.trim() || selectedExercises.length === 0}
+          className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
+            planName.trim() && selectedExercises.length > 0
+              ? "bg-charcoal-panel border-red-700 text-red-500 hover:bg-red-950/30"
+              : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+          }`}
+        >
+          Save plan
+        </button>
+      </div>
     </div>
   );
 }

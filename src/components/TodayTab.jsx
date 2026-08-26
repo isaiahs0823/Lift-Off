@@ -6,7 +6,7 @@ import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue, goalHistory } from "../utils/goalData.js";
 import { goalProgressPct, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
-import { resolveCurrentProgramDay } from "../utils/programSchedule.js";
+import { resolveTodayWorkout } from "../utils/programSchedule.js";
 import { findTodaysSessionForPlan } from "../utils/workoutHistory.js";
 import { formatSessionDuration } from "../utils/workoutSets.js";
 import { buildCoachContext } from "../utils/coachContext.js";
@@ -287,7 +287,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
     };
   }
 
-  const programDay = resolveCurrentProgramDay(state);
+  const programDay = resolveTodayWorkout(state);
   const todayPlan = programDay && !programDay.isComplete ? programDay.plan : null;
   let lastCompletedDaysAgo = null;
   if (todayPlan) {
@@ -347,7 +347,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
   };
 
   if (swapOpen && !activeRun) {
-    return <SwapWorkoutSheet state={state} updateState={updateState} exMap={exMap} onClose={() => setSwapOpen(false)} />;
+    return <SwapWorkoutSheet state={state} updateState={updateState} exMap={exMap} onClose={() => setSwapOpen(false)} onNavigate={onNavigate} />;
   }
 
   return (
@@ -505,7 +505,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         <div className="border-2 border-red-700 bg-charcoal-panel p-5 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[11px] uppercase tracking-widest text-red-600">Today</div>
-            {todayPlan && !programDay.completedToday && !activeRun && programDay.totalDays > 1 && (
+            {todayPlan && !programDay.completedToday && !activeRun && (
               <button
                 onClick={() => setSwapOpen(true)}
                 aria-label="Swap workout"
@@ -553,12 +553,26 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
             })()
           ) : todayPlan ? (
             <>
-              {programDay.isSwapped && (
-                <span className="inline-block text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Swapped for today</span>
+              {programDay.isOutsideProgram ? (
+                <span className="inline-block text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">
+                  {programDay.sourceType === "program" ? "From another program" : "Custom workout today"}
+                </span>
+              ) : (
+                programDay.isSwapped && (
+                  <span className="inline-block text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Swapped for today</span>
+                )
               )}
               <div className="text-2xl font-bold text-white">{todayPlan.name}</div>
-              {programDay.isSwapped && programDay.plannedDayLabel && (
-                <div className="text-xs text-neutral-600">Originally planned: {programDay.plannedDayLabel}</div>
+              {programDay.isOutsideProgram ? (
+                programDay.plannedProgramName && (
+                  <div className="text-xs text-neutral-600">
+                    {programDay.plannedProgramName}
+                    {programDay.plannedDayLabel ? ` — ${programDay.plannedDayLabel}` : ""} still pending, unaffected
+                  </div>
+                )
+              ) : (
+                programDay.isSwapped &&
+                programDay.plannedDayLabel && <div className="text-xs text-neutral-600">Originally planned: {programDay.plannedDayLabel}</div>
               )}
               <div className="text-sm text-neutral-400">
                 {todayPlan.exercises.length} exercises · Est. {estimateMinutes(todayPlan)} min

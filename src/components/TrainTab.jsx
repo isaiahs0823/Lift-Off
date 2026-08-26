@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { ChevronRight, ClipboardList, Timer, Dumbbell, Plus, Play, RefreshCw } from "lucide-react";
-import { resolveCurrentProgramDay } from "../utils/programSchedule.js";
+import { resolveTodayWorkout } from "../utils/programSchedule.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
@@ -36,11 +36,11 @@ function elapsedLabel(startedAt) {
 // spec's "primary CTA should be RESUME WORKOUT, not Start Workout — do not make them navigate
 // through workout-selection flows again."
 export default function TrainTab({ state, updateState, exMap, activeRun, onStartRun, onResumeWorkout, onDiscardWorkout, onNavigate }) {
-  const programDay = resolveCurrentProgramDay(state);
+  const programDay = resolveTodayWorkout(state);
   const [swapOpen, setSwapOpen] = useState(false);
 
   if (swapOpen && !activeRun) {
-    return <SwapWorkoutSheet state={state} updateState={updateState} exMap={exMap} onClose={() => setSwapOpen(false)} />;
+    return <SwapWorkoutSheet state={state} updateState={updateState} exMap={exMap} onClose={() => setSwapOpen(false)} onNavigate={onNavigate} />;
   }
 
   if (activeRun) {
@@ -116,18 +116,37 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
         <div className="bg-v5-surface rounded-2xl p-5 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[11px] uppercase tracking-widest text-v5-red">Current program</div>
-            {programDay.totalDays > 1 && (
-              <button
-                onClick={() => setSwapOpen(true)}
-                aria-label="Swap workout"
-                className="shrink-0 flex items-center gap-1 text-[10px] uppercase tracking-widest text-v5-subtext hover:text-v5-text"
-              >
-                <RefreshCw size={11} /> Swap workout
-              </button>
-            )}
+            <button
+              onClick={() => setSwapOpen(true)}
+              aria-label="Swap workout"
+              className="shrink-0 flex items-center gap-1 text-[10px] uppercase tracking-widest text-v5-subtext hover:text-v5-text"
+            >
+              <RefreshCw size={11} /> Swap workout
+            </button>
           </div>
-          <div className="text-xl font-bold text-v5-text">{programDay.programName}</div>
-          {programDay.isSwapped ? (
+          {/* The headline always names the ACTUAL active program (from currentProgram itself,
+              not today's resolved workout) — an outside-program override must never make this
+              card read as if the active program changed; see resolveTodayWorkout's isOutsideProgram. */}
+          <div className="text-xl font-bold text-v5-text">{state.currentProgram?.programName}</div>
+          {programDay.isOutsideProgram ? (
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">
+                  {programDay.sourceType === "program" ? "Today: from another program" : "Today: custom workout"}
+                </span>
+              </div>
+              <div className="text-sm text-v5-subtext">
+                {programDay.programName}
+                {programDay.dayLabel ? ` — ${programDay.dayLabel}` : ""}
+              </div>
+              {programDay.plannedProgramName && (
+                <div className="text-xs text-v5-subtext/70">
+                  {programDay.plannedProgramName}
+                  {programDay.plannedDayLabel ? ` — ${programDay.plannedDayLabel}` : ""} still pending, unaffected
+                </div>
+              )}
+            </div>
+          ) : programDay.isSwapped ? (
             <div className="space-y-0.5">
               <div className="flex items-center gap-1.5">
                 <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Swapped for today</span>
