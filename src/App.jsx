@@ -1202,6 +1202,13 @@ function loadInitialState() {
     // AthleteProfileForm.save()) — { fromDays, toDays, at }. TemplatesTab shows a Review/Keep
     // banner while this is set and clears it either way; it never mutates currentProgram itself.
     pendingFrequencyReview: null,
+    // A one-day "swap workout" override — { programId, source, dayIndex, date } — set by
+    // SwapWorkoutSheet when the athlete picks a different day of their CURRENT program to run
+    // today. Never mutates currentProgram.dayIndex or the program's own day data (see
+    // programSchedule.js's activeOverrideFor/resolveCurrentProgramDay). Cleared once its workout
+    // is completed (finishRun), once a genuinely different program is started (startRun), or
+    // simply stops applying once the calendar date moves past it.
+    programDayOverride: null,
     photos: [], // { id, date, context, dataUrl }
     completedPrograms: [], // { id, programId, programSource, programName, weeks, startDate, endDate }
     hasSeenOnboarding: false, // sticky — never re-derived from current data, only set true by a real action
@@ -1900,7 +1907,12 @@ export default function LiftLog() {
         // assumes 3" — see programRecommendation.js). Never read to gate or block anything today,
         // and stays null/undefined for anyone without a set preference — no behavior changes.
         const selectedForDays = isSameProgram ? prev.currentProgram.selectedForDays ?? null : prev.athleteProfile?.preferredDays ?? null;
-        return { ...prev, currentProgram: { ...programContext, startDate, selectedForDays }, hasSeenOnboarding: true };
+        // Starting a genuinely different program (not just a different day of the same one)
+        // makes any existing swap-workout override stale — clear it proactively so it can never
+        // leak into the new program (activeOverrideFor's programId/source check already prevents
+        // it from being misread, but there's no reason to let dead state linger).
+        const programDayOverride = isSameProgram ? prev.programDayOverride : null;
+        return { ...prev, currentProgram: { ...programContext, startDate, selectedForDays }, programDayOverride, hasSeenOnboarding: true };
       });
     }
   };
@@ -1988,20 +2000,30 @@ export default function LiftLog() {
     setActiveRun((run) => ({ ...run, finished: true, summaryId: summary.id, coachHistoryId, draftByIndex: {} }));
     if (activeRun?.programContext) {
       const ctx = activeRun.programContext;
-      updateState((prev) => ({
-        ...prev,
-        currentProgram: {
-          ...ctx,
-          dayIndex: (ctx.dayIndex + 1) % ctx.totalDays,
-          startDate: prev.currentProgram?.startDate || new Date().toISOString(),
-          // dayIndex above already points at the *next* day — these two record what was
-          // actually just finished and when, so the Today card keeps showing today's day
-          // (see resolveCurrentProgramDay) instead of jumping to tomorrow's within the same
-          // calendar day.
-          lastCompletedAt: new Date().toISOString(),
-          lastCompletedDayIndex: ctx.dayIndex,
-        },
-      }));
+      updateState((prev) => {
+        // A swap-workout override (see programSchedule.js) is a one-day substitution — the
+        // instant its workout is actually completed, the override has done its job and is
+        // resolved/cleared, exactly like the task's "completing the swapped workout clears the
+        // override" requirement. Only clear it if it belongs to THIS program (a stale override
+        // from some other program should already be inert, but this keeps state tidy too).
+        const ov = prev.programDayOverride;
+        const clearOverride = ov && ov.programId === ctx.programId && ov.source === ctx.source;
+        return {
+          ...prev,
+          programDayOverride: clearOverride ? null : prev.programDayOverride,
+          currentProgram: {
+            ...ctx,
+            dayIndex: (ctx.dayIndex + 1) % ctx.totalDays,
+            startDate: prev.currentProgram?.startDate || new Date().toISOString(),
+            // dayIndex above already points at the *next* day — these two record what was
+            // actually just finished and when, so the Today card keeps showing today's day
+            // (see resolveCurrentProgramDay) instead of jumping to tomorrow's within the same
+            // calendar day.
+            lastCompletedAt: new Date().toISOString(),
+            lastCompletedDayIndex: ctx.dayIndex,
+          },
+        };
+      });
     }
   };
   // Undoes exactly what finishRun() committed (the session summary, its coach note, the
@@ -2225,6 +2247,7 @@ export default function LiftLog() {
             {tab === "train" && (
               <TrainTab
                 state={state}
+                updateState={updateState}
                 exMap={exMap}
                 activeRun={activeRun && workoutMinimized && !activeRun.finished ? activeRun : null}
                 onStartRun={(plan, programContext) => startRun(plan, "train", programContext)}
@@ -5362,6 +5385,10 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onRestartComplete
   const setCurrentProgramDay = (di) => {
     updateState((prev) => ({
       ...prev,
+      // A manual permanent repoint supersedes any one-day swap override that might still be
+      // sitting around — otherwise the override could point somewhere stale relative to the
+      // newly repointed day.
+      programDayOverride: null,
       currentProgram: { ...prev.currentProgram, dayIndex: di, lastCompletedAt: null, lastCompletedDayIndex: null },
     }));
   };

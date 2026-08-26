@@ -1,8 +1,9 @@
-import React from "react";
-import { ChevronRight, ClipboardList, Timer, Dumbbell, Plus, Play } from "lucide-react";
+import React, { useState } from "react";
+import { ChevronRight, ClipboardList, Timer, Dumbbell, Plus, Play, RefreshCw } from "lucide-react";
 import { resolveCurrentProgramDay } from "../utils/programSchedule.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
+import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
 
 // Never auto-discards on age — a workout logged right up to midnight, or one left open for
 // days, is still fully recoverable, just described differently: minutes/hours for something
@@ -34,8 +35,13 @@ function elapsedLabel(startedAt) {
 // entire screen: "Resume workout" becomes the one thing to do here, matching the reliability
 // spec's "primary CTA should be RESUME WORKOUT, not Start Workout — do not make them navigate
 // through workout-selection flows again."
-export default function TrainTab({ state, exMap, activeRun, onStartRun, onResumeWorkout, onDiscardWorkout, onNavigate }) {
+export default function TrainTab({ state, updateState, exMap, activeRun, onStartRun, onResumeWorkout, onDiscardWorkout, onNavigate }) {
   const programDay = resolveCurrentProgramDay(state);
+  const [swapOpen, setSwapOpen] = useState(false);
+
+  if (swapOpen && !activeRun) {
+    return <SwapWorkoutSheet state={state} updateState={updateState} exMap={exMap} onClose={() => setSwapOpen(false)} />;
+  }
 
   if (activeRun) {
     const totalExercises = activeRun.exercises.length;
@@ -108,12 +114,38 @@ export default function TrainTab({ state, exMap, activeRun, onStartRun, onResume
 
       {programDay && !programDay.isComplete && (
         <div className="bg-v5-surface rounded-2xl p-5 space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-v5-red">Current program</div>
-          <div className="text-xl font-bold text-v5-text">{programDay.programName}</div>
-          <div className="text-sm text-v5-subtext">
-            {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
-            Next: {programDay.dayLabel}
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[11px] uppercase tracking-widest text-v5-red">Current program</div>
+            {programDay.totalDays > 1 && (
+              <button
+                onClick={() => setSwapOpen(true)}
+                aria-label="Swap workout"
+                className="shrink-0 flex items-center gap-1 text-[10px] uppercase tracking-widest text-v5-subtext hover:text-v5-text"
+              >
+                <RefreshCw size={11} /> Swap workout
+              </button>
+            )}
           </div>
+          <div className="text-xl font-bold text-v5-text">{programDay.programName}</div>
+          {programDay.isSwapped ? (
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Swapped for today</span>
+              </div>
+              <div className="text-sm text-v5-subtext">
+                {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
+                {programDay.dayLabel}
+              </div>
+              {programDay.plannedDayLabel && (
+                <div className="text-xs text-v5-subtext/70">Originally planned: {programDay.plannedDayLabel}</div>
+              )}
+            </div>
+          ) : (
+            <div className="text-sm text-v5-subtext">
+              {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
+              Next: {programDay.dayLabel}
+            </div>
+          )}
           {/* Day preview — same compact anatomy row used in My Plan/program detail, so the
               athlete can see today's muscle emphasis before committing to Start. */}
           {programDay.plan?.exercises?.length > 0 && (

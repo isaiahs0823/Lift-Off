@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { ChevronRight, MessageCircle, Award, Scale, Timer, Check } from "lucide-react";
+import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw } from "lucide-react";
 import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
 import NutritionCard from "./NutritionCard.jsx";
+import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue, goalHistory } from "../utils/goalData.js";
 import { goalProgressPct, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
@@ -298,6 +299,8 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
     }
   }
 
+  const [swapOpen, setSwapOpen] = useState(false);
+
   const coachContext = buildCoachContext(state, exMap);
   const coachMessage = generateTodaySnapshot(coachContext).message;
 
@@ -342,6 +345,10 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
     const run = buildRunFromSource(state, source);
     if (run) onStartRun(run.plan, run.programContext);
   };
+
+  if (swapOpen && !activeRun) {
+    return <SwapWorkoutSheet state={state} updateState={updateState} exMap={exMap} onClose={() => setSwapOpen(false)} />;
+  }
 
   return (
     <div className="space-y-4">
@@ -496,7 +503,18 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         })()
       ) : (
         <div className="border-2 border-red-700 bg-charcoal-panel p-5 space-y-3">
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Today</div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[11px] uppercase tracking-widest text-red-600">Today</div>
+            {todayPlan && !programDay.completedToday && !activeRun && programDay.totalDays > 1 && (
+              <button
+                onClick={() => setSwapOpen(true)}
+                aria-label="Swap workout"
+                className="shrink-0 flex items-center gap-1 text-[10px] uppercase tracking-widest text-neutral-500 hover:text-neutral-300"
+              >
+                <RefreshCw size={11} /> Swap workout
+              </button>
+            )}
+          </div>
           {todayPlan && programDay.completedToday ? (
             // Today's own workout is the whole story once it's done — no invitation to start
             // tomorrow's, and no dominant CTA at all (that's what read as "started the next
@@ -535,19 +553,35 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
             })()
           ) : todayPlan ? (
             <>
+              {programDay.isSwapped && (
+                <span className="inline-block text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Swapped for today</span>
+              )}
               <div className="text-2xl font-bold text-white">{todayPlan.name}</div>
+              {programDay.isSwapped && programDay.plannedDayLabel && (
+                <div className="text-xs text-neutral-600">Originally planned: {programDay.plannedDayLabel}</div>
+              )}
               <div className="text-sm text-neutral-400">
                 {todayPlan.exercises.length} exercises · Est. {estimateMinutes(todayPlan)} min
               </div>
               {lastCompletedDaysAgo != null && (
                 <div className="text-xs text-neutral-600">Last completed {lastCompletedDaysAgo === 0 ? "today" : `${lastCompletedDaysAgo} day${lastCompletedDaysAgo === 1 ? "" : "s"} ago`}</div>
               )}
-              <button
-                onClick={() => onStartRun(todayPlan, programDay.programContext)}
-                className="w-full py-4 text-sm uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
-              >
-                Start workout
-              </button>
+              <div className="flex gap-2">
+                {programDay.isSwapped && (
+                  <button
+                    onClick={() => setSwapOpen(true)}
+                    className="shrink-0 px-4 py-4 text-sm uppercase tracking-widest font-bold border border-neutral-700 text-neutral-300 hover:border-neutral-500"
+                  >
+                    Change
+                  </button>
+                )}
+                <button
+                  onClick={() => onStartRun(todayPlan, programDay.programContext)}
+                  className="flex-1 py-4 text-sm uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+                >
+                  Start workout
+                </button>
+              </div>
             </>
           ) : (
             <>
