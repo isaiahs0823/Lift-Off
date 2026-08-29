@@ -5,6 +5,7 @@
 // enough on its own to suggest a load drop; two in a row (with normal readiness) is.
 
 import { computeReadinessScore, readinessBand } from "./readiness.js";
+import { sameEquipmentBucket, TEMPORARY_EQUIPMENT_CONTEXT } from "./equipmentProfiles.js";
 
 function isWarmup(s) {
   return s.setType === "warmup";
@@ -37,13 +38,34 @@ function readinessBandOnDate(readinessLogs, dateISO) {
   return readinessBand(computeReadinessScore(entry));
 }
 
-// context: { readinessLogs? } — optional; omit entirely and this behaves exactly as before
-// readiness existed. Only ever reads the top (non-warm-up) working set — s.drops, when
-// present, is never touched, so a dropset's reduced-weight drops can't skew the suggestion.
+// context: { readinessLogs?, equipmentProfileId?, equipmentContext? } — readiness is optional;
+// omit entirely and this behaves exactly as before readiness existed. equipmentProfileId/
+// equipmentContext are also optional and, when both are omitted (every caller that predates
+// Equipment Profiles, and any machine-based-exercise call where the athlete never opened the
+// selector), the bucket filter below is a no-op — every logged entry shares the same "no
+// profile" bucket, so this is byte-identical to pre-equipment-profile behavior. Only once the
+// athlete actually selects a saved profile or "different machine today" does history get scoped
+// to that same machine (task: "SAME EXERCISE + SAME EQUIPMENT PROFILE"). Only ever reads the top
+// (non-warm-up) working set — s.drops, when present, is never touched, so a dropset's
+// reduced-weight drops can't skew the suggestion.
 export function suggestNext(exId, logs, exMap, context = {}) {
-  const exLogs = logs.filter((l) => l.exId === exId).sort((a, b) => new Date(b.date) - new Date(a.date));
-  if (exLogs.length === 0)
-    return { lastWeight: null, lastReps: null, suggestion: null, targetReps: null, reason: "No history yet — log a starting weight." };
+  const equipmentProfileId = context.equipmentProfileId ?? null;
+  const equipmentContext = context.equipmentContext ?? null;
+  const exLogs = logs
+    .filter((l) => l.exId === exId && sameEquipmentBucket(l, equipmentProfileId, equipmentContext))
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  if (exLogs.length === 0) {
+    const isBucketed = !!equipmentProfileId || equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT;
+    return {
+      lastWeight: null,
+      lastReps: null,
+      suggestion: null,
+      targetReps: null,
+      reason: isBucketed
+        ? "No history on this machine yet — start with a load that matches today's effort target."
+        : "No history yet — log a starting weight.",
+    };
+  }
   const last = exLogs[0];
   const scored = countedSets(last.sets).length > 0 ? countedSets(last.sets) : last.sets;
   const topSet = topSetOf(last.sets);

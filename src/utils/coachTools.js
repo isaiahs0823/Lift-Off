@@ -22,6 +22,7 @@ import { suggestNext } from "./progression.js";
 import { PR_TYPE_LABEL, prDeltaLabel, prHeroLabel } from "./prSummary.js";
 import { resolveCurrentProgramDay } from "./programSchedule.js";
 import { diagnoseNutrition, generateAdjustmentProposal } from "../services/nutritionCoachService.js";
+import { equipmentDisplayLabel, TEMPORARY_EQUIPMENT_CONTEXT } from "./equipmentProfiles.js";
 
 function findExercise(allExercises, nameQuery) {
   if (!nameQuery) return null;
@@ -143,14 +144,43 @@ export const COACH_TOOL_EXECUTORS = {
     const ex = findExercise(allExercises, exerciseName);
     if (!ex) return { found: false, reason: `No exercise matching "${exerciseName}" found in BRK's catalog.` };
     const logs = (state.logs || []).filter((l) => l.exId === ex.id).sort((a, b) => new Date(b.date) - new Date(a.date));
-    const suggestion = suggestNext(ex.id, state.logs || [], exMap, { readinessLogs: state.readinessLogs });
+    // Equipment-profile aware (task section 21): the progression suggestion is scoped to
+    // whichever machine the athlete most recently used, matching what they'd actually see on
+    // that exercise's card — never blending a heavier "Default Machine" number with a lighter
+    // "Iron Temple" one into one misleading suggestion.
+    const mostRecent = logs[0];
+    const suggestion = suggestNext(ex.id, state.logs || [], exMap, {
+      readinessLogs: state.readinessLogs,
+      equipmentProfileId: mostRecent?.equipmentProfileId ?? null,
+      equipmentContext: mostRecent?.equipmentContext ?? null,
+    });
+    // Only worth mentioning once the exercise actually spans more than one machine — most
+    // exercises never do, and for those this is simply absent (no behavior/prompt change).
+    const distinctEquipment = new Set(
+      logs.map((l) => (l.equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT ? TEMPORARY_EQUIPMENT_CONTEXT : l.equipmentProfileId || "default"))
+    );
     return {
       found: true,
       exercise: ex.name,
       muscle: ex.muscle,
       entryCount: logs.length,
-      history: logs.slice(0, 10).map((l) => ({ date: l.date, sets: l.sets.map((s) => formatSetVerbose(s)) })),
-      progressionSuggestion: suggestion.suggestion ? { suggestedNext: suggestion.suggestion, reason: suggestion.reason, lastWeight: suggestion.lastWeight, lastReps: suggestion.lastReps } : { reason: suggestion.reason },
+      history: logs.slice(0, 10).map((l) => ({
+        date: l.date,
+        sets: l.sets.map((s) => formatSetVerbose(s)),
+        equipment: equipmentDisplayLabel(state, l.equipmentProfileId, l.equipmentContext),
+      })),
+      progressionSuggestion: suggestion.suggestion
+        ? { suggestedNext: suggestion.suggestion, reason: suggestion.reason, lastWeight: suggestion.lastWeight, lastReps: suggestion.lastReps }
+        : { reason: suggestion.reason },
+      // Present only when the exercise has been logged on more than one machine/equipment
+      // context — tells the model these loads are not directly comparable, so it never reads a
+      // lighter number on a different machine as strength loss (task section 21).
+      ...(distinctEquipment.size > 1
+        ? {
+            equipmentNote:
+              "This exercise has been logged under multiple equipment profiles/machines. Loads are not directly comparable across different equipment — do not interpret a lighter number on a different machine as a strength decline.",
+          }
+        : {}),
     };
   },
 

@@ -4,6 +4,7 @@ import { formatSetVerbose, formatSessionDuration, SET_TYPE_LABEL } from "../util
 import { featuredAndOtherPRs, sessionPRCount, PR_TYPE_LABEL, prDeltaLabel, prHeroLabel } from "../utils/prSummary.js";
 import { buildWorkoutShareCard } from "../utils/shareCard.js";
 import ShareCardButton from "./ShareCardButton.jsx";
+import { equipmentDisplayLabel } from "../utils/equipmentProfiles.js";
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
@@ -114,6 +115,9 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-base font-bold text-white truncate">{exMap[entry.exId]?.name || entry.exId}</span>
                     {exPRs.length > 0 && <span className="shrink-0 text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">PR</span>}
+                    {(entry.equipmentProfileId || entry.equipmentContext) && (
+                      <span className="shrink-0 text-[10px] text-neutral-500 truncate">{equipmentDisplayLabel(state, entry.equipmentProfileId, entry.equipmentContext)}</span>
+                    )}
                   </div>
                   {isCollapsed ? <ChevronDown size={16} className="text-neutral-600 shrink-0" /> : <ChevronUp size={16} className="text-neutral-600 shrink-0" />}
                 </button>

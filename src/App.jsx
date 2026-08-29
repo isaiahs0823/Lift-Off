@@ -57,6 +57,17 @@ import MobilityDetailScreen from "./components/MobilityDetailScreen.jsx";
 import MobilitySessionRunner from "./components/MobilitySessionRunner.jsx";
 import ProgramTimelineScreen from "./components/ProgramTimelineScreen.jsx";
 import DevelopmentPrioritiesScreen from "./components/DevelopmentPrioritiesScreen.jsx";
+import EquipmentProfileSheet, { AddEquipmentProfileForm } from "./components/EquipmentProfileSheet.jsx";
+import {
+  isMachineBasedExercise,
+  profilesForExercise,
+  defaultProfileFor,
+  equipmentDisplayLabel,
+  addEquipmentProfile,
+  convertTemporaryLogToProfile,
+  sameEquipmentBucket,
+  TEMPORARY_EQUIPMENT_CONTEXT,
+} from "./utils/equipmentProfiles.js";
 import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
@@ -1287,6 +1298,11 @@ function loadInitialState() {
     // history/completion — purely an additive annotation layer. { date, programId, source,
     // dayIndex, dayLabel }
     programSwapLog: [],
+    // Optional saved "which physical machine did you use" profiles — see
+    // src/utils/equipmentProfiles.js. Additive/backward-compatible: an exercise with no
+    // profiles here, or a log entry with no equipmentProfileId, behaves exactly as BRK always
+    // has (bucket "Default Machine"). { id, exerciseId, label, gymLabel, isDefault, createdAt }
+    equipmentProfiles: [],
   };
 }
 
@@ -1377,6 +1393,7 @@ const BACKUP_DATA_KEYS = [
   "nutritionCoachAdjustments",
   "developmentPriorities",
   "programSwapLog",
+  "equipmentProfiles",
 ];
 
 // Per-key fallback when a key is missing from state entirely (older saves) — objects default
@@ -1480,28 +1497,73 @@ function entryVolume(entry) {
 // Compares a freshly-saved entry against every prior log for the same exercise (priorLogs
 // must NOT include the new entry itself) and reports which PR categories it broke. Returns
 // [] for an exercise's very first-ever log — there's no baseline yet to call a "record."
+//
+// Equipment-profile aware (see utils/equipmentProfiles.js): the PR check itself is always
+// scoped to newEntry's own equipment bucket (same saved profile, or both "Default Machine") —
+// never comparing a heavier easy-machine number against a lighter hard-machine one, and never
+// letting a "different machine today" temporary entry claim or contribute to a record at all.
+// For an athlete who's never touched equipment profiles, every entry shares the same null
+// bucket, so this is byte-identical to the exercise's full history — nothing changes. Each PR
+// also carries a `scope`: "all-time" when the bucketed number is also the best across every
+// other bucket ever logged for this exercise (the only case possible before this feature
+// existed, and the common case even after — most machine exercises never get more than one
+// profile), or "profile" when some OTHER bucket already has a heavier/better number, so the UI
+// never announces an "ALL-TIME PR" that's really just this one machine's best.
 function detectPRs(exId, newEntry, priorLogs) {
-  const priorForEx = priorLogs.filter((l) => l.exId === exId);
+  const targetProfileId = newEntry.equipmentProfileId ?? null;
+  const targetContext = newEntry.equipmentContext ?? null;
+  const bucketPriorForEx = priorLogs.filter((l) => l.exId === exId && sameEquipmentBucket(l, targetProfileId, targetContext));
   const newCounted = countedSets(newEntry.sets);
-  if (priorForEx.length === 0 || newCounted.length === 0) return [];
+  if (bucketPriorForEx.length === 0 || newCounted.length === 0) return [];
 
-  const priorCountedSets = priorForEx.flatMap((l) => countedSets(l.sets));
-  const prevMaxWeight = Math.max(0, ...priorCountedSets.map((s) => s.weight));
-  const prevMaxE1RM = Math.max(0, ...priorCountedSets.map((s) => estimateOneRM(s.weight, s.reps)));
-  const prevMaxVolume = Math.max(0, ...priorForEx.map(entryVolume));
+  // Temporary-variant entries are excluded from the all-time pool too (they're never a fair
+  // baseline for anyone), but otherwise this is every bucket combined — used only to decide PR
+  // *labeling*, never whether a PR fired (that's always the bucket-scoped numbers above).
+  const allTimePriorForEx = priorLogs.filter((l) => l.exId === exId && l.equipmentContext !== TEMPORARY_EQUIPMENT_CONTEXT);
+  const usesMultipleBuckets = bucketPriorForEx.length !== allTimePriorForEx.length;
+
+  const bucketCountedSets = bucketPriorForEx.flatMap((l) => countedSets(l.sets));
+  const prevMaxWeight = Math.max(0, ...bucketCountedSets.map((s) => s.weight));
+  const prevMaxE1RM = Math.max(0, ...bucketCountedSets.map((s) => estimateOneRM(s.weight, s.reps)));
+  const prevMaxVolume = Math.max(0, ...bucketPriorForEx.map(entryVolume));
   // Best reps ever previously done at a weight >= this one, so a rep PR only counts against
   // an equal-or-harder load, never an easier one.
   const prevBestRepsAtWeight = (weight) =>
-    Math.max(0, ...priorCountedSets.filter((s) => s.weight >= weight).map((s) => s.reps));
+    Math.max(0, ...bucketCountedSets.filter((s) => s.weight >= weight).map((s) => s.reps));
+
+  // Identical to the bucketed numbers above whenever no other bucket has any history (the
+  // default, pre-feature case) — deliberately not recomputed in that case, so scope is always
+  // "all-time" then, matching current behavior exactly.
+  const allTimeCountedSets = usesMultipleBuckets ? allTimePriorForEx.flatMap((l) => countedSets(l.sets)) : bucketCountedSets;
+  const allTimeMaxWeight = usesMultipleBuckets ? Math.max(0, ...allTimeCountedSets.map((s) => s.weight)) : prevMaxWeight;
+  const allTimeMaxE1RM = usesMultipleBuckets ? Math.max(0, ...allTimeCountedSets.map((s) => estimateOneRM(s.weight, s.reps))) : prevMaxE1RM;
+  const allTimeMaxVolume = usesMultipleBuckets ? Math.max(0, ...allTimePriorForEx.map(entryVolume)) : prevMaxVolume;
+  const scopeFor = (achieved, allTimeMax) => (achieved > allTimeMax ? "all-time" : "profile");
 
   const prs = [];
   const heaviestSet = newCounted.reduce((best, s) => (s.weight > best.weight ? s : best), newCounted[0]);
   if (heaviestSet.weight > prevMaxWeight) {
-    prs.push({ type: "weight", weight: heaviestSet.weight, reps: heaviestSet.reps, prev: prevMaxWeight });
+    prs.push({
+      type: "weight",
+      weight: heaviestSet.weight,
+      reps: heaviestSet.reps,
+      prev: prevMaxWeight,
+      scope: scopeFor(heaviestSet.weight, allTimeMaxWeight),
+      equipmentProfileId: targetProfileId,
+    });
   }
   const repPrSet = newCounted.find((s) => s.reps > prevBestRepsAtWeight(s.weight));
   if (repPrSet) {
-    prs.push({ type: "reps", weight: repPrSet.weight, reps: repPrSet.reps, prev: prevBestRepsAtWeight(repPrSet.weight) });
+    prs.push({
+      type: "reps",
+      weight: repPrSet.weight,
+      reps: repPrSet.reps,
+      prev: prevBestRepsAtWeight(repPrSet.weight),
+      // A true weight-conditional all-time check is fuzzier across buckets — conservatively
+      // downgrades to "profile" whenever another bucket exists rather than risk overclaiming.
+      scope: usesMultipleBuckets ? "profile" : "all-time",
+      equipmentProfileId: targetProfileId,
+    });
   }
   const bestE1RMSet = newCounted.reduce(
     (best, s) => (estimateOneRM(s.weight, s.reps) > estimateOneRM(best.weight, best.reps) ? s : best),
@@ -1515,11 +1577,19 @@ function detectPRs(exId, newEntry, priorLogs) {
       reps: bestE1RMSet.reps,
       value: Math.round(newE1RM),
       prev: Math.round(prevMaxE1RM),
+      scope: scopeFor(newE1RM, allTimeMaxE1RM),
+      equipmentProfileId: targetProfileId,
     });
   }
   const newVolume = entryVolume(newEntry);
   if (newVolume > prevMaxVolume) {
-    prs.push({ type: "exerciseVolume", value: Math.round(newVolume), prev: Math.round(prevMaxVolume) });
+    prs.push({
+      type: "exerciseVolume",
+      value: Math.round(newVolume),
+      prev: Math.round(prevMaxVolume),
+      scope: scopeFor(newVolume, allTimeMaxVolume),
+      equipmentProfileId: targetProfileId,
+    });
   }
   return prs;
 }
@@ -1630,7 +1700,13 @@ function buildSessionSummary(run, allLogs, priorSessions, exMap) {
     // a historical Workout History Detail view shows for this session (see
     // components/WorkoutHistoryDetail.jsx). Sessions finished before this field existed simply
     // won't have it; the detail screen degrades gracefully rather than reconstructing a guess.
-    entries: entries.map((e) => ({ exId: e.exId, sets: e.sets, targetReps: e.targetReps })),
+    entries: entries.map((e) => ({
+      exId: e.exId,
+      sets: e.sets,
+      targetReps: e.targetReps,
+      ...(e.equipmentProfileId ? { equipmentProfileId: e.equipmentProfileId } : {}),
+      ...(e.equipmentContext ? { equipmentContext: e.equipmentContext } : {}),
+    })),
   };
 }
 
@@ -2005,6 +2081,28 @@ export default function LiftLog() {
       };
     });
   };
+  // "Save this machine profile" (task section 17) — converts a just-logged temporary-variant
+  // exercise into real, comparable history under a newly-saved profile. Touches both durable
+  // state (the new profile + the retagged state.logs entry) and the in-memory activeRun's own
+  // copy of that entry (run.sessionEntries), so the collapsed summary immediately stops
+  // offering to save again and reflects the new profile without needing a refresh.
+  const saveTemporaryAsProfile = (idx, entry, label, gymLabel) => {
+    const id = `equipment_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    updateState((prev) => ({
+      ...prev,
+      equipmentProfiles: addEquipmentProfile(prev, entry.exId, label, gymLabel, id),
+      logs: convertTemporaryLogToProfile(prev.logs, entry.id, id),
+    }));
+    setActiveRun((run) => {
+      if (!run) return run;
+      return {
+        ...run,
+        sessionEntries: run.sessionEntries.map((se) =>
+          se.index === idx ? { ...se, entry: { ...se.entry, equipmentProfileId: id, equipmentContext: null } } : se
+        ),
+      };
+    });
+  };
   // Debounced/immediate autosave target for TrainingExerciseCard's in-progress state — confirmed
   // sets already saved via "Save Set" but not yet exercise-finished, plus the current unsaved
   // weight/reps/RIR/set-type/drops draft. See sanitizeActiveRun's draftByIndex comment for shape.
@@ -2312,6 +2410,7 @@ export default function LiftLog() {
               viewWorkout(sessionId);
             }}
             onRename={renameRun}
+            onSaveTemporaryProfile={saveTemporaryAsProfile}
           />
         ) : (
           <>
@@ -3155,6 +3254,26 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 5);
 
+  // Equipment-profile filter chips for the History list below — "All" plus one chip per
+  // machine actually present in this exercise's own (already-capped) recent history, so the
+  // list never advertises a filter option with nothing behind it.
+  const [historyEquipFilter, setHistoryEquipFilter] = useState(undefined); // undefined = "All"
+  const historyEquipOptions = useMemo(() => {
+    const seen = new Map();
+    recentForEx.forEach((l) => {
+      const key = l.equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT ? TEMPORARY_EQUIPMENT_CONTEXT : l.equipmentProfileId || null;
+      if (!seen.has(key)) seen.set(key, equipmentDisplayLabel(state, l.equipmentProfileId, l.equipmentContext));
+    });
+    if (seen.size <= 1) return [];
+    return [{ key: undefined, label: "All" }, ...[...seen.entries()].map(([key, label]) => ({ key, label }))];
+  }, [recentForEx, state]);
+  const filteredHistoryForEx =
+    historyEquipFilter === undefined
+      ? recentForEx
+      : recentForEx.filter(
+          (l) => (l.equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT ? TEMPORARY_EQUIPMENT_CONTEXT : l.equipmentProfileId || null) === historyEquipFilter
+        );
+
   if (swapOpen) {
     return (
       <ExerciseSwapPicker
@@ -3233,7 +3352,12 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
               </div>
             ))}
           </div>
-          <div className="text-xs text-neutral-600 mt-2">{new Date(recentForEx[0].date).toLocaleDateString()}</div>
+          <div className="text-xs text-neutral-600 mt-2 flex items-center gap-1.5">
+            {new Date(recentForEx[0].date).toLocaleDateString()}
+            {(recentForEx[0].equipmentProfileId || recentForEx[0].equipmentContext) && (
+              <span className="text-neutral-500">· {equipmentDisplayLabel(state, recentForEx[0].equipmentProfileId, recentForEx[0].equipmentContext)}</span>
+            )}
+          </div>
         </div>
       )}
 
@@ -3319,15 +3443,38 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
       {showHistory && recentForEx.length > 0 && (
         <div>
           <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">History</div>
+          {/* Optional equipment-profile filter (task section 13) — shown only once the athlete
+              actually has more than one machine's worth of history for this exercise; defaults
+              to "All" so nothing is ever hidden without the athlete choosing to narrow it down. */}
+          {historyEquipOptions.length > 1 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "none" }}>
+              {historyEquipOptions.map((opt) => (
+                <button
+                  key={opt.key ?? "all"}
+                  onClick={() => setHistoryEquipFilter(opt.key)}
+                  className={`shrink-0 px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border rounded-full ${
+                    historyEquipFilter === opt.key ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="space-y-1.5">
-            {recentForEx.map((l) => (
+            {filteredHistoryForEx.map((l) => (
               <button
                 key={l.id}
                 onClick={() => setEditingEntryId(l.id)}
-                className="w-full flex items-center justify-between text-xs border-b border-neutral-900 py-2 text-left hover:border-neutral-700"
+                className="w-full flex items-center justify-between gap-2 text-xs border-b border-neutral-900 py-2 text-left hover:border-neutral-700"
               >
-                <span className="text-neutral-500">{new Date(l.date).toLocaleDateString()}</span>
-                <span className="text-sm text-neutral-300">{l.sets.map(formatSetCompact).join(", ")}</span>
+                <span className="text-neutral-500 shrink-0">
+                  {new Date(l.date).toLocaleDateString()}
+                  {(l.equipmentProfileId || l.equipmentContext) && (
+                    <span className="block text-neutral-600">{equipmentDisplayLabel(state, l.equipmentProfileId, l.equipmentContext)}</span>
+                  )}
+                </span>
+                <span className="text-sm text-neutral-300 text-right">{l.sets.map(formatSetCompact).join(", ")}</span>
               </button>
             ))}
           </div>
@@ -3415,9 +3562,15 @@ function prLine(pr) {
 // Log tab (dismissible) and pinned to a collapsed "logged" card in the guided run (permanent
 // for the session, since that card is the one thing that survives after the exercise input
 // collapses away).
-function PRCallout({ exMap, exId, prs, onDismiss }) {
+function PRCallout({ exMap, exId, prs, state, onDismiss }) {
   if (!prs || prs.length === 0) return null;
   const headline = prHeadline(prs);
+  // "New Profile PR" instead of "New PR" whenever the record only holds on this specific
+  // machine, not across every machine ever logged for this exercise (task section 12) — for
+  // every exercise nobody has ever set up equipment profiles for (the common case), scope is
+  // always "all-time" and this reads exactly as it always has.
+  const isProfileScoped = headline?.scope === "profile";
+  const profileLabel = isProfileScoped && state ? equipmentDisplayLabel(state, headline.equipmentProfileId, null) : null;
   return (
     <div className="border border-red-700 bg-red-950/30 p-4 space-y-2 relative">
       {onDismiss && (
@@ -3426,9 +3579,10 @@ function PRCallout({ exMap, exId, prs, onDismiss }) {
         </button>
       )}
       <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-red-500">
-        <Award size={14} /> New PR
+        <Award size={14} /> New {isProfileScoped ? "Profile " : ""}PR
       </div>
       <div className="text-lg font-bold text-white truncate pr-6">{exMap[exId]?.name || exId}</div>
+      {profileLabel && <div className="text-xs text-neutral-500 -mt-1">{profileLabel}</div>}
       {headline && headline.weight != null && (
         <div className="text-2xl font-bold text-white">
           {headline.weight} × {headline.reps}
@@ -3583,7 +3737,7 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
         )}
       </div>
 
-      {prBanner && <PRCallout exMap={exMap} exId={prBanner.exId} prs={prBanner.prs} onDismiss={() => setPrBanner(null)} />}
+      {prBanner && <PRCallout exMap={exMap} exId={prBanner.exId} prs={prBanner.prs} state={state} onDismiss={() => setPrBanner(null)} />}
 
       <ExerciseLogger
         exId={selectedExId}
@@ -4004,15 +4158,44 @@ function TrainingExerciseCard({
   const trainingDetail = state.settings?.trainingDetail || "advanced";
   const isSimple = trainingDetail === "simple";
 
-  const suggestion = useMemo(
-    () => suggestNext(exId, state.logs, exMap, { readinessLogs: state.readinessLogs }),
-    [exId, state.logs, exMap, state.readinessLogs]
+  // ---------------- EQUIPMENT PROFILE (machine-based exercises only) ----------------
+  // Restored from the autosaved draft first (crash/refresh must not lose which machine was
+  // selected — task section 25); otherwise starts on this exercise's marked-default profile if
+  // the athlete has set one, else "Default Machine" (null/null) — never auto-selected any other
+  // way (task: "keep it manual and reliable," no GPS/location switching).
+  const [equipmentProfileId, setEquipmentProfileId] = useState(() =>
+    draft && draft.equipmentProfileId !== undefined ? draft.equipmentProfileId : defaultProfileFor(state, exId)?.id ?? null
   );
-  const recentForEx = useMemo(
+  const [equipmentContext, setEquipmentContext] = useState(() => (draft && draft.equipmentContext !== undefined ? draft.equipmentContext : null));
+  const [equipmentSheetOpen, setEquipmentSheetOpen] = useState(false);
+  const isBucketedEquipment = !!equipmentProfileId || equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT;
+
+  const suggestion = useMemo(
+    () => suggestNext(exId, state.logs, exMap, { readinessLogs: state.readinessLogs, equipmentProfileId, equipmentContext }),
+    [exId, state.logs, exMap, state.readinessLogs, equipmentProfileId, equipmentContext]
+  );
+  // Overall history for this exercise regardless of machine — kept for the "no history on this
+  // machine, but here's when it was last performed overall" fallback (task section 11) and for
+  // targetSetCount, which is a reasonable default no matter which machine was used.
+  const overallRecentForEx = useMemo(
     () => state.logs.filter((l) => l.exId === exId).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3),
     [state.logs, exId]
   );
-  const targetSetCount = exSlot?.sets || recentForEx[0]?.sets.length || 3;
+  // The same exercise's history, but only entries that share this exercise instance's current
+  // equipment bucket — this is what "Last"/"Last session" below actually show once a specific
+  // profile or temporary machine is selected (task section 9/14: "SAME EXERCISE + SAME EQUIPMENT
+  // PROFILE"). Identical to overallRecentForEx whenever nothing else has ever been logged under
+  // a different bucket for this exercise, which is why an athlete who never touches this feature
+  // sees no change at all.
+  const recentForEx = useMemo(
+    () =>
+      state.logs
+        .filter((l) => l.exId === exId && sameEquipmentBucket(l, equipmentProfileId, equipmentContext))
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 3),
+    [state.logs, exId, equipmentProfileId, equipmentContext]
+  );
+  const targetSetCount = exSlot?.sets || overallRecentForEx[0]?.sets.length || 3;
 
   // Restoring an in-progress workout: `draft` is this exercise's autosaved slot from
   // activeRun.draftByIndex (see sanitizeActiveRun/updateRunDraft in LiftLog), holding any sets
@@ -4054,6 +4237,7 @@ function TrainingExerciseCard({
   const draftTimerRef = useRef(null);
   const pendingSnapshotRef = useRef(null);
   const prevConfirmedRef = useRef(confirmedSets);
+  const prevEquipmentRef = useRef({ id: equipmentProfileId, ctx: equipmentContext });
   const onDraftChangeRef = useRef(onDraftChange);
   const onDraftDirtyRef = useRef(onDraftDirty);
   useEffect(() => {
@@ -4069,6 +4253,8 @@ function TrainingExerciseCard({
       rir: rirVal,
       setType,
       drops,
+      equipmentProfileId,
+      equipmentContext,
       updatedAt: new Date().toISOString(),
     };
     pendingSnapshotRef.current = snapshot;
@@ -4078,8 +4264,14 @@ function TrainingExerciseCard({
       draftTimerRef.current = null;
     }
     const completedSetChanged = confirmedSets !== prevConfirmedRef.current;
+    // Task section 25: an equipment-profile change must persist immediately, not on the usual
+    // debounce — same "never allowed to depend on a timer" rule Save Set already gets, since
+    // losing which machine was selected on a crash/refresh would silently corrupt the athlete's
+    // progression comparisons for the rest of this exercise.
+    const equipmentChanged = equipmentProfileId !== prevEquipmentRef.current.id || equipmentContext !== prevEquipmentRef.current.ctx;
     prevConfirmedRef.current = confirmedSets;
-    if (completedSetChanged) {
+    prevEquipmentRef.current = { id: equipmentProfileId, ctx: equipmentContext };
+    if (completedSetChanged || equipmentChanged) {
       onDraftChangeRef.current?.(snapshot);
       pendingSnapshotRef.current = null;
     } else {
@@ -4089,7 +4281,7 @@ function TrainingExerciseCard({
         onDraftChangeRef.current?.(snapshot);
       }, 300);
     }
-  }, [confirmedSets, weight, reps, rirVal, setType, drops]);
+  }, [confirmedSets, weight, reps, rirVal, setType, drops, equipmentProfileId, equipmentContext]);
 
   // Secondary safety net only (per the reliability spec — mobile Safari/PWAs don't guarantee
   // these fire): flushes any still-pending debounced draft immediately when the tab is hidden,
@@ -4186,6 +4378,11 @@ function TrainingExerciseCard({
       date: new Date().toISOString(),
       sets: confirmedSets,
       targetReps: Number(reps) || confirmedSets[0].reps,
+      // Whatever equipment context was selected when this exercise was finished (task section
+      // 8) — omitted entirely for "Default Machine" so an entry logged with no equipment
+      // engagement at all is byte-identical to every entry BRK has ever saved.
+      ...(equipmentProfileId ? { equipmentProfileId } : {}),
+      ...(equipmentContext ? { equipmentContext } : {}),
     };
     updateState((prev) => ({ ...prev, logs: [entry, ...prev.logs], hasSeenOnboarding: true }));
     onSaved?.(entry);
@@ -4202,6 +4399,37 @@ function TrainingExerciseCard({
     setWeight(last.weight);
     setReps(last.reps);
   };
+
+  if (equipmentSheetOpen) {
+    return (
+      <EquipmentProfileSheet
+        exId={exId}
+        exName={exMap[exId]?.name || exId}
+        state={state}
+        updateState={updateState}
+        equipmentProfileId={equipmentProfileId}
+        equipmentContext={equipmentContext}
+        onSelect={({ equipmentProfileId: pid, equipmentContext: ctx }) => {
+          setEquipmentProfileId(pid);
+          setEquipmentContext(ctx);
+          // Refreshes the still-blank weight/reps draft to the newly-selected bucket's own
+          // suggestion — critical, not cosmetic: leaving a different machine's number sitting in
+          // the input after switching would be exactly the misleading cross-machine carryover
+          // this whole feature exists to prevent (task section 11). Only when nothing has been
+          // logged yet this exercise — a mid-exercise switch after already confirming sets under
+          // the old context leaves whatever's currently typed alone, since Finish Exercise
+          // decides the entry's equipment tag from whatever's selected at that moment anyway.
+          if (confirmedSets.length === 0) {
+            const next = suggestNext(exId, state.logs, exMap, { readinessLogs: state.readinessLogs, equipmentProfileId: pid, equipmentContext: ctx });
+            setWeight(next.suggestion ?? 0);
+            setReps(next.targetReps ?? 8);
+          }
+          setEquipmentSheetOpen(false);
+        }}
+        onBack={() => setEquipmentSheetOpen(false)}
+      />
+    );
+  }
 
   if (swapOpen) {
     return (
@@ -4254,22 +4482,46 @@ function TrainingExerciseCard({
         )}
       </div>
 
+      {/* Equipment Profile control (task section 3) — only for exercises where two physical
+          units can plausibly load very differently, quiet/small so it never competes with the
+          actual set-logging controls, and completely absent for free-weight movements. */}
+      {isMachineBasedExercise(exMap[exId]) && (
+        <button
+          onClick={() => setEquipmentSheetOpen(true)}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-v5-surface text-left"
+        >
+          <span className="text-[10px] uppercase tracking-wide text-v5-subtext shrink-0">Equipment</span>
+          <span className="text-xs font-bold text-v5-text truncate ml-2">{equipmentDisplayLabel(state, equipmentProfileId, equipmentContext)} ▾</span>
+        </button>
+      )}
+
       {/* Compact progression header — replaces the old separate "Last time" line + "Today,
           suggested" card + always-visible reason paragraph with one small block. The reason
           (when there is one) sits behind a "Why?" toggle instead of permanently consuming
           space, and the full last-session set-by-set breakdown is a separate, also-collapsed
-          disclosure just below rather than being duplicated here. */}
-      {(lastEntry || suggestion.suggestion != null) && (
+          disclosure just below rather than being duplicated here. When a specific equipment
+          profile/temporary machine is active, "Last" becomes same-machine history only (task
+          section 9/14) — with a "No history here" fallback pointing at the exercise's overall
+          last-performed date (section 11) rather than silently showing nothing, or worse,
+          another machine's numbers. */}
+      {(lastEntry || suggestion.suggestion != null || (isBucketedEquipment && overallRecentForEx.length > 0)) && (
         <div className="bg-v5-surface rounded-xl px-4 py-3">
           <div className="flex items-center gap-6">
-            {lastTopSet && (
+            {lastTopSet ? (
               <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Last</div>
+                <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Last{isBucketedEquipment ? " · this machine" : ""}</div>
                 <div className="text-lg font-bold text-v5-text tabular-nums">
                   {lastTopSet.weight} × {lastTopSet.reps}
                 </div>
               </div>
-            )}
+            ) : isBucketedEquipment && overallRecentForEx.length > 0 ? (
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-wide text-v5-red">No history here</div>
+                <div className="text-xs text-v5-subtext mt-0.5">
+                  Last overall: {new Date(overallRecentForEx[0].date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </div>
+              </div>
+            ) : null}
             {suggestion.suggestion != null && (
               <div className="min-w-0">
                 <div className="text-[10px] uppercase tracking-wide text-v5-red">Target</div>
@@ -4600,10 +4852,16 @@ function GuidedRunView({
   onAskCoach,
   onViewWorkout,
   onRename,
+  onSaveTemporaryProfile,
 }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
   const [addingExercise, setAddingExercise] = useState(false);
+  // "Save this machine profile" (task section 17) — a non-blocking, optional prompt shown right
+  // on a just-finished exercise's collapsed summary when it was logged as a temporary/different
+  // machine. Only one at a time and never forced; saving or dismissing never interrupts the rest
+  // of the workout.
+  const [savingProfileForIdx, setSavingProfileForIdx] = useState(null);
   // Naming is optional and never forced — a program day keeps its scheduled name (not
   // renamable here), but a blank/repeated off-program workout can be renamed at any point,
   // including right up to Finish Workout, without ever having been asked for a name up front.
@@ -4651,17 +4909,23 @@ function GuidedRunView({
               const { featured, others } = featuredAndOtherPRs(summary);
               if (featured) {
                 const pr = featured.pr;
+                // "New Profile PR" whenever this record only holds on the specific machine it
+                // was logged on, not across every machine ever used for this exercise — see
+                // PRCallout's identical scope check (task section 12).
+                const isProfileScoped = pr.scope === "profile";
+                const profileLabel = isProfileScoped ? equipmentDisplayLabel(state, pr.equipmentProfileId, null) : null;
                 return (
                   <div className="space-y-1.5 pb-3 border-b border-neutral-900">
                     <div className="flex items-center justify-between">
                       <div className="text-[11px] uppercase tracking-widest text-red-600 font-bold flex items-center gap-1.5">
-                        <Award size={12} /> New PR
+                        <Award size={12} /> New {isProfileScoped ? "Profile " : ""}PR
                       </div>
                       {others.length > 0 && (
                         <div className="text-[10px] uppercase tracking-widest text-neutral-500">{others.length + 1} PRs</div>
                       )}
                     </div>
                     <div className="text-lg font-bold text-white leading-tight">{exMap[featured.exId]?.name || featured.exId}</div>
+                    {profileLabel && <div className="text-xs text-neutral-500">{profileLabel}</div>}
                     <div className="text-3xl font-bold text-white leading-tight">{prHeroLabel(pr)}</div>
                     <div className="text-[11px] uppercase tracking-widest text-red-500 font-bold">{PR_TYPE_LABEL[pr.type]}</div>
                     <div className="text-xs text-neutral-500">
@@ -5060,7 +5324,29 @@ function GuidedRunView({
                         </div>
                         <span className="shrink-0 text-xs uppercase tracking-widest text-v5-red hover:opacity-80">Edit</span>
                       </button>
-                      {prByIndex[idx] && <PRCallout exMap={exMap} exId={currentExId} prs={prByIndex[idx]} />}
+                      {prByIndex[idx] && <PRCallout exMap={exMap} exId={currentExId} prs={prByIndex[idx]} state={state} />}
+                      {/* Optional, non-blocking — task section 17: a temporary/different-machine
+                          entry can become real, comparable history without ever having required
+                          a saved profile up front. */}
+                      {entry.equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT && onSaveTemporaryProfile && (
+                        savingProfileForIdx === idx ? (
+                          <AddEquipmentProfileForm
+                            saveLabel="Save profile"
+                            onSave={(label, gymLabel) => {
+                              onSaveTemporaryProfile(idx, entry, label, gymLabel);
+                              setSavingProfileForIdx(null);
+                            }}
+                            onCancel={() => setSavingProfileForIdx(null)}
+                          />
+                        ) : (
+                          <button
+                            onClick={() => setSavingProfileForIdx(idx)}
+                            className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red"
+                          >
+                            Save this machine profile
+                          </button>
+                        )
+                      )}
                     </div>
                   );
                 })()
