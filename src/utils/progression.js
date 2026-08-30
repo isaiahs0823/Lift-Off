@@ -6,13 +6,14 @@
 
 import { computeReadinessScore, readinessBand } from "./readiness.js";
 import { sameEquipmentBucket, TEMPORARY_EQUIPMENT_CONTEXT } from "./equipmentProfiles.js";
+import { isConcerningQuality } from "./workoutQuality.js";
 
 function isWarmup(s) {
   return s.setType === "warmup";
 }
 // Warm-ups never distort progression math — the one filter every branch below runs sets
 // through first.
-function countedSets(sets) {
+export function countedSets(sets) {
   return sets.filter((s) => !isWarmup(s));
 }
 // The "top set" is the heaviest counted set of the session — NOT whichever one happens to be
@@ -81,14 +82,29 @@ export function suggestNext(exId, logs, exMap, context = {}) {
   // "barely ground it out" — reps alone can't tell those apart.
   const topRir = topSet.rir != null ? topSet.rir : topSet.rpe != null ? 10 - topSet.rpe : null;
 
+  // Set-quality flags (task section 14): a top set marked Form Breakdown or Pain is never
+  // treated as clean evidence of readiness for more load, even if the reps technically hit
+  // target — the same "don't escalate off a bad rep" principle the RIR<=1 branch already
+  // applies, just triggered by a different signal. A Grind flag is a softer signal folded into
+  // the reason text below rather than blocking the increase outright.
+  const topConcerning = isConcerningQuality(topSet.quality);
+
   let suggestion, reason;
-  if (allHitTarget && topRir != null && topRir <= 1) {
+  if (allHitTarget && topConcerning) {
+    suggestion = topSet.weight;
+    reason =
+      topSet.quality === "pain"
+        ? `Hit target reps, but the top set was flagged Pain — repeat ${topSet.weight} lb and reassess comfort before adding load.`
+        : `Hit target reps, but the top set was flagged Form Breakdown — repeat ${topSet.weight} lb and prioritize clean execution before adding load.`;
+  } else if (allHitTarget && topRir != null && topRir <= 1) {
     suggestion = topSet.weight;
     reason = `Hit target reps but at ${topRir} RIR — repeat ${topSet.weight} lb before adding load.`;
   } else if (allHitTarget) {
     suggestion = topSet.weight + inc;
     reason =
-      topRir != null && topRir >= 2
+      topSet.quality === "grind"
+        ? `Hit target reps, though the top set was a grind — add ${inc} lb, or hold here if it felt maximal.`
+        : topRir != null && topRir >= 2
         ? `Hit target reps with ${topRir}+ RIR to spare — add ${inc} lb.`
         : `Hit target reps last time (${targetReps}+) — add ${inc} lb.`;
   } else {
@@ -108,7 +124,9 @@ export function suggestNext(exId, logs, exMap, context = {}) {
       });
 
     suggestion = topSet.weight;
-    if (lastWasLowReadiness) {
+    if (topSet.quality === "pain") {
+      reason = `Missed target reps last time, and the top set was flagged Pain — repeat ${topSet.weight} lb and reassess comfort before pushing further.`;
+    } else if (lastWasLowReadiness) {
       reason = `Missed target reps last time, but readiness was RED that day — not necessarily regression. Repeat ${topSet.weight} lb and reassess.`;
     } else {
       reason = missedLastTwo

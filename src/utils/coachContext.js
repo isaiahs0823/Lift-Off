@@ -16,6 +16,7 @@ import { resolveProfile } from "./athleteProfile.js";
 import { retrieveRelevantMemories } from "./coachMemoryStore.js";
 import { weeklyMuscleVolume, muscleVolumeTrend } from "./muscleVolume.js";
 import { sanitizeDevelopmentPriorities, priorityCoachSummary } from "./developmentPriorities.js";
+import { recentTrainingFlags } from "./workoutQuality.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -147,5 +148,10 @@ export function buildCoachContext(state, exMap = {}, queryText = null) {
     // — see coachTools.js/the AI Program Builder's existing proposal/approval flow for the only
     // path that can ever actually change a program.
     developmentPriorities: priorityCoachSummary(sanitizeDevelopmentPriorities(state.developmentPriorities)),
+    // Recent pain/joint and set-quality patterns (task Part 2, section 16) — training context
+    // only, never a diagnosis (see coachService.js's system framing). Absent entries mean
+    // nothing worth flagging; Coach should never treat missing data here as "no discomfort
+    // ever," only "nothing recent enough to mention."
+    recentTrainingFlags: recentTrainingFlags(state.logs || [], exMap),
   };
 }

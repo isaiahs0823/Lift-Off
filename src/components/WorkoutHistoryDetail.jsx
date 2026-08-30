@@ -5,6 +5,8 @@ import { featuredAndOtherPRs, sessionPRCount, PR_TYPE_LABEL, prDeltaLabel, prHer
 import { buildWorkoutShareCard } from "../utils/shareCard.js";
 import ShareCardButton from "./ShareCardButton.jsx";
 import { equipmentDisplayLabel } from "../utils/equipmentProfiles.js";
+import { SET_QUALITY_GLYPH, SET_QUALITY_LABEL } from "../utils/workoutQuality.js";
+import { FileText } from "lucide-react";
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
@@ -17,7 +19,7 @@ function fmtTime(iso) {
 // supposed to be — what actually happened"). Every entry point (Today, Program day list,
 // Training Calendar, Session Complete) opens this exact component with a session object looked
 // up by its stable id — there is deliberately only one implementation of this screen.
-export default function WorkoutHistoryDetail({ session, state, exMap, onBack, onAskCoach }) {
+export default function WorkoutHistoryDetail({ session, state, exMap, onBack, onAskCoach, onViewRecap }) {
   const [collapsed, setCollapsed] = useState({});
 
   if (!session) {
@@ -81,7 +83,21 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
         </div>
         <div className="text-sm text-neutral-300">Exercises completed: {session.exerciseCount}</div>
         {session.mainMuscles?.length > 0 && <div className="text-sm text-neutral-300">Muscles trained: {session.mainMuscles.join(", ")}</div>}
+        {session.sessionContext?.locationMode === "alternate_gym" && (
+          <div className="text-[10px] uppercase tracking-widest text-red-600 font-bold border-t border-neutral-900 pt-2">
+            Alternate gym{session.sessionContext.locationLabel ? ` — ${session.sessionContext.locationLabel}` : ""}
+          </div>
+        )}
       </div>
+
+      {onViewRecap && (
+        <button
+          onClick={() => onViewRecap(session.id)}
+          className="w-full flex items-center justify-center gap-1.5 py-3 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
+        >
+          <FileText size={13} /> View Recap
+        </button>
+      )}
 
       {prCount > 0 && (
         <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-2.5">
@@ -128,13 +144,28 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
                         <div key={si} className="flex items-center gap-2 text-sm">
                           <span className="text-neutral-500 shrink-0 w-14">Set {si + 1}</span>
                           <span className="text-white flex-1">{formatSetVerbose(s)}</span>
+                          {s.quality && s.quality !== "clean" && (
+                            <span
+                              className="text-[10px] uppercase tracking-widest text-red-500 shrink-0"
+                              title={s.quality === "pain" && s.pain?.bodyArea ? `${s.pain.bodyArea} — ${s.pain.severity ?? "?"}/10` : undefined}
+                            >
+                              {SET_QUALITY_GLYPH[s.quality]} {SET_QUALITY_LABEL[s.quality]}
+                            </span>
+                          )}
                           <span className="text-[10px] uppercase tracking-widest text-neutral-600 shrink-0">{SET_TYPE_LABEL[s.setType || "working"]}</span>
                         </div>
                       ))}
                     </div>
+                    {entry.jointNote && (
+                      <div className="text-xs text-red-500 border-t border-neutral-900 pt-2">
+                        {entry.jointNote.bodyArea ? `${entry.jointNote.bodyArea} discomfort` : "Discomfort noted"}
+                        {entry.jointNote.severity != null ? `: ${entry.jointNote.severity}/10` : ""}
+                        {entry.jointNote.note ? ` — ${entry.jointNote.note}` : ""}
+                      </div>
+                    )}
                     {exPRs.length > 0 && (
                       <div className="text-xs text-red-500 font-bold border-t border-neutral-900 pt-2">
-                        {exPRs.map((pr) => `${PR_TYPE_LABEL[pr.type]} — ${prDeltaLabel(pr)}`).join(" · ")}
+                        {exPRs.map((pr) => `${PR_TYPE_LABEL[pr.type]} — ${prDeltaLabel(pr)}${pr.qualityFlag ? ` (${SET_QUALITY_LABEL[pr.qualityFlag]} flagged)` : ""}`).join(" · ")}
                       </div>
                     )}
                     {note && (

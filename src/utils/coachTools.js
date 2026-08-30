@@ -23,6 +23,7 @@ import { PR_TYPE_LABEL, prDeltaLabel, prHeroLabel } from "./prSummary.js";
 import { resolveCurrentProgramDay } from "./programSchedule.js";
 import { diagnoseNutrition, generateAdjustmentProposal } from "../services/nutritionCoachService.js";
 import { equipmentDisplayLabel, TEMPORARY_EQUIPMENT_CONTEXT } from "./equipmentProfiles.js";
+import { painTrendForExercise } from "./workoutQuality.js";
 
 function findExercise(allExercises, nameQuery) {
   if (!nameQuery) return null;
@@ -159,6 +160,7 @@ export const COACH_TOOL_EXECUTORS = {
     const distinctEquipment = new Set(
       logs.map((l) => (l.equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT ? TEMPORARY_EQUIPMENT_CONTEXT : l.equipmentProfileId || "default"))
     );
+    const painTrend = painTrendForExercise(logs);
     return {
       found: true,
       exercise: ex.name,
@@ -168,6 +170,8 @@ export const COACH_TOOL_EXECUTORS = {
         date: l.date,
         sets: l.sets.map((s) => formatSetVerbose(s)),
         equipment: equipmentDisplayLabel(state, l.equipmentProfileId, l.equipmentContext),
+        // Present only when a set was actually flagged — most sets have nothing here.
+        ...(l.sets.some((s) => s.quality && s.quality !== "clean") ? { qualityFlags: l.sets.map((s) => s.quality || "clean") } : {}),
       })),
       progressionSuggestion: suggestion.suggestion
         ? { suggestedNext: suggestion.suggestion, reason: suggestion.reason, lastWeight: suggestion.lastWeight, lastReps: suggestion.lastReps }
@@ -181,6 +185,9 @@ export const COACH_TOOL_EXECUTORS = {
               "This exercise has been logged under multiple equipment profiles/machines. Loads are not directly comparable across different equipment — do not interpret a lighter number on a different machine as a strength decline.",
           }
         : {}),
+      // Training context only (task section 13/29) — never a diagnosis. Absent when nothing's
+      // been reported recently.
+      ...(painTrend.length > 0 ? { painTrend, painNote: "This is athlete-reported training context, not a medical diagnosis." } : {}),
     };
   },
 

@@ -68,6 +68,20 @@ import {
   sameEquipmentBucket,
   TEMPORARY_EQUIPMENT_CONTEXT,
 } from "./utils/equipmentProfiles.js";
+import {
+  SET_QUALITY_LEVELS,
+  SET_QUALITY_LABEL,
+  SET_QUALITY_GLYPH,
+  PAIN_BODY_AREAS,
+  isConcerningQuality,
+  sanitizeQuality,
+  sanitizePainInfo,
+  qualityAttentionLabel,
+  painTrendForExercise,
+} from "./utils/workoutQuality.js";
+import { buildWorkoutRecap } from "./utils/workoutRecap.js";
+import SessionRecapView from "./components/SessionRecapView.jsx";
+import SessionOptionsSheet from "./components/SessionOptionsSheet.jsx";
 import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
@@ -1473,6 +1487,13 @@ function cleanSetsInput(sets) {
         ...(s.setType && s.setType !== "working" ? { setType: s.setType } : {}),
         ...(s.rir !== "" && s.rir != null ? { rir: Number(s.rir) } : {}),
         ...(s.rpe !== "" && s.rpe != null ? { rpe: Number(s.rpe) } : {}),
+        // Passthrough only — no UI here builds these from scratch (see TrainingExerciseCard's
+        // quality/pain quick-flag), but preserving whatever's already on the row keeps an
+        // existing flag intact if this set is later re-saved through the shared set editor
+        // (EditLogEntryPanel), instead of silently discarding it because the editor doesn't
+        // itself offer a way to change it.
+        ...(s.quality ? { quality: s.quality } : {}),
+        ...(s.pain ? { pain: s.pain } : {}),
       };
     });
 }
@@ -1540,6 +1561,13 @@ function detectPRs(exId, newEntry, priorLogs) {
   const allTimeMaxVolume = usesMultipleBuckets ? Math.max(0, ...allTimePriorForEx.map(entryVolume)) : prevMaxVolume;
   const scopeFor = (achieved, allTimeMax) => (achieved > allTimeMax ? "all-time" : "profile");
 
+  // Task section 15: a difficult set still counts as a real PR (never silently deleted) but is
+  // labeled distinctly — "FLAGGED PR" rather than presented as clean, unqualified evidence.
+  // Only Form Breakdown / Pain flag a PR (same threshold as the progression-suppression logic
+  // in progression.js) — a Grind PR is still a genuinely strong, well-executed effort.
+  const flagOf = (set) => (set && isConcerningQuality(set.quality) ? set.quality : null);
+  const entryHasConcerningSet = newCounted.some((s) => isConcerningQuality(s.quality));
+
   const prs = [];
   const heaviestSet = newCounted.reduce((best, s) => (s.weight > best.weight ? s : best), newCounted[0]);
   if (heaviestSet.weight > prevMaxWeight) {
@@ -1550,6 +1578,7 @@ function detectPRs(exId, newEntry, priorLogs) {
       prev: prevMaxWeight,
       scope: scopeFor(heaviestSet.weight, allTimeMaxWeight),
       equipmentProfileId: targetProfileId,
+      qualityFlag: flagOf(heaviestSet),
     });
   }
   const repPrSet = newCounted.find((s) => s.reps > prevBestRepsAtWeight(s.weight));
@@ -1563,6 +1592,7 @@ function detectPRs(exId, newEntry, priorLogs) {
       // downgrades to "profile" whenever another bucket exists rather than risk overclaiming.
       scope: usesMultipleBuckets ? "profile" : "all-time",
       equipmentProfileId: targetProfileId,
+      qualityFlag: flagOf(repPrSet),
     });
   }
   const bestE1RMSet = newCounted.reduce(
@@ -1579,6 +1609,7 @@ function detectPRs(exId, newEntry, priorLogs) {
       prev: Math.round(prevMaxE1RM),
       scope: scopeFor(newE1RM, allTimeMaxE1RM),
       equipmentProfileId: targetProfileId,
+      qualityFlag: flagOf(bestE1RMSet),
     });
   }
   const newVolume = entryVolume(newEntry);
@@ -1589,6 +1620,7 @@ function detectPRs(exId, newEntry, priorLogs) {
       prev: Math.round(prevMaxVolume),
       scope: scopeFor(newVolume, allTimeMaxVolume),
       equipmentProfileId: targetProfileId,
+      qualityFlag: entryHasConcerningSet ? "form_breakdown" : null,
     });
   }
   return prs;
@@ -1706,7 +1738,13 @@ function buildSessionSummary(run, allLogs, priorSessions, exMap) {
       targetReps: e.targetReps,
       ...(e.equipmentProfileId ? { equipmentProfileId: e.equipmentProfileId } : {}),
       ...(e.equipmentContext ? { equipmentContext: e.equipmentContext } : {}),
+      // Exercise-level joint/pain note (task section 12) — separate from any per-set `pain`
+      // flag already carried on e.sets itself.
+      ...(e.jointNote ? { jointNote: e.jointNote } : {}),
     })),
+    // Travel/Alternate Gym mode (task Part 3) — whole-session, defaults to "normal" for every
+    // run that predates this. Read by workoutRecap.js's "ALTERNATE GYM SESSION" note.
+    sessionContext: sanitizeSessionContext(run.sessionContext),
   };
 }
 
@@ -1778,6 +1816,7 @@ const SECTION_OF = {
   foodSearch: "coach",
   foodDetail: "coach",
   workoutDetail: "today",
+  sessionRecap: "today",
   train: "train",
   log: "train",
   cardio: "train",
@@ -1799,6 +1838,15 @@ const SECTION_OF = {
   developmentPriorities: "coach",
   programTimeline: "train",
 };
+
+// Travel/Alternate Gym mode (task Part 3) — a whole-session flag, not per-exercise. Defaults to
+// "normal" so every existing/older run (and every run started without ever touching Session
+// Options) behaves exactly as before this existed.
+function sanitizeSessionContext(raw) {
+  const locationMode = raw?.locationMode === "alternate_gym" ? "alternate_gym" : "normal";
+  const locationLabel = typeof raw?.locationLabel === "string" && raw.locationLabel.trim() ? raw.locationLabel.trim().slice(0, 80) : null;
+  return { locationMode, locationLabel };
+}
 
 // ---------------- ACTIVE WORKOUT DRAFT PERSISTENCE ----------------
 // The persisted shape of `liftlog-active-run`. Bumping this only matters if a future change
@@ -1832,6 +1880,10 @@ function sanitizeActiveRun(raw) {
       updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : (typeof raw.startedAt === "string" ? raw.startedAt : new Date().toISOString()),
       summaryId: raw.summaryId ?? null,
       coachHistoryId: raw.coachHistoryId ?? null,
+      // Travel/Alternate Gym mode (see SessionOptionsSheet) — a whole-session flag, defaulting
+      // to "normal" for every run started before this existed. Persists immediately on change
+      // (task section 28), same treatment as an equipment-profile selection.
+      sessionContext: sanitizeSessionContext(raw.sessionContext),
     };
   } catch (e) {
     return null;
@@ -1899,6 +1951,13 @@ export default function LiftLog() {
   const viewWorkout = (sessionId) => {
     setSelectedSessionId(sessionId);
     setTab("workoutDetail");
+  };
+  // Auto Post-Workout Recap (task Part 1) — reopenable from Workout History → Session → Recap
+  // (task section 1), reusing the same selectedSessionId plumbing as viewWorkout so there's one
+  // way sessions get looked up, not two.
+  const viewRecap = (sessionId) => {
+    setSelectedSessionId(sessionId);
+    setTab("sessionRecap");
   };
   // Keeps the in-progress (or just-finished-but-not-yet-exited) run surviving a closed tab,
   // backgrounded phone, or crash — otherwise closing mid-workout silently drops everything
@@ -2040,6 +2099,7 @@ export default function LiftLog() {
       startedAt: now,
       draftByIndex: {},
       updatedAt: now,
+      sessionContext: { locationMode: "normal", locationLabel: null },
     });
     if (programContext) {
       updateState((prev) => {
@@ -2066,6 +2126,9 @@ export default function LiftLog() {
   // athlete who started a Blank/Repeat workout give it a real name at any point, right up to
   // Finish Workout, without ever being asked for one up front.
   const renameRun = (name) => setActiveRun((run) => (run ? { ...run, planName: name } : run));
+  // Travel/Alternate Gym mode (task Part 3) — writes straight to activeRun so it persists
+  // immediately, the same treatment every other in-workout selection gets (task section 28).
+  const updateSessionContext = (next) => setActiveRun((run) => (run ? { ...run, sessionContext: sanitizeSessionContext(next) } : run));
   const recordRunEntry = (index, entry) => {
     setActiveRun((run) => {
       // The exercise is now durable in state.logs/sessionEntries (real completed history) — its
@@ -2411,6 +2474,7 @@ export default function LiftLog() {
             }}
             onRename={renameRun}
             onSaveTemporaryProfile={saveTemporaryAsProfile}
+            onUpdateSessionContext={updateSessionContext}
           />
         ) : (
           <>
@@ -2440,10 +2504,20 @@ export default function LiftLog() {
                 state={state}
                 exMap={exMap}
                 onBack={() => setTab("today")}
+                onViewRecap={viewRecap}
                 onAskCoach={(session) => {
                   setPendingCoachContext({ type: "workout", sessionId: session.id, label: session.planName });
                   setTab("coach");
                 }}
+              />
+            )}
+            {tab === "sessionRecap" && (
+              <SessionRecapView
+                session={(state.workoutSessions || []).find((s) => s.id === selectedSessionId) || null}
+                state={state}
+                exMap={exMap}
+                onBack={() => setTab("workoutDetail")}
+                onViewFullSession={() => setTab("workoutDetail")}
               />
             )}
             {tab === "train" && (
@@ -3046,6 +3120,11 @@ function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete, rirSystem =
       setType: s.setType || "working",
       rir: s.rir != null ? String(s.rir) : "",
       rpe: s.rpe != null ? String(s.rpe) : "",
+      // Not editable from this panel (see TrainingExerciseCard for where quality/pain are set)
+      // — carried through unchanged so editing weight/reps here can never silently wipe an
+      // existing quality/pain flag off a set.
+      quality: s.quality ?? null,
+      pain: s.pain ?? null,
     }))
   );
   const [targetReps, setTargetReps] = useState(String(entry.targetReps));
@@ -4153,6 +4232,7 @@ function TrainingExerciseCard({
   draft,
   onDraftChange,
   onDraftDirty,
+  sessionContext,
 }) {
   const rirSystem = state.settings?.rirSystem || "rir";
   const trainingDetail = state.settings?.trainingDetail || "advanced";
@@ -4169,6 +4249,28 @@ function TrainingExerciseCard({
   const [equipmentContext, setEquipmentContext] = useState(() => (draft && draft.equipmentContext !== undefined ? draft.equipmentContext : null));
   const [equipmentSheetOpen, setEquipmentSheetOpen] = useState(false);
   const isBucketedEquipment = !!equipmentProfileId || equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT;
+  // In Alternate Gym mode, a machine exercise still sitting on "Default Machine" with nothing
+  // ever chosen gets a one-time nudge (task section 20) rather than silently assuming the home
+  // gym's numbers apply — dismissible per exercise-instance so it never nags on every set.
+  const [altGymNudgeDismissed, setAltGymNudgeDismissed] = useState(false);
+  const isAlternateGym = sessionContext?.locationMode === "alternate_gym";
+  const showAltGymNudge =
+    isAlternateGym && isMachineBasedExercise(exMap[exId]) && !isBucketedEquipment && !altGymNudgeDismissed;
+
+  // ---------------- SET QUALITY & PAIN/JOINT FLAGS (optional, task Part 2) ----------------
+  // Draft-restored exactly like equipment — a crash/refresh must not lose an in-progress
+  // quality/pain selection (task section 28). Defaults to no flag ("clean enough," never
+  // forced) so an athlete who never touches this feature never sees it change anything.
+  const [quality, setQuality] = useState(() => draft?.quality ?? null);
+  const [painBodyArea, setPainBodyArea] = useState(() => draft?.pain?.bodyArea ?? null);
+  const [painSeverity, setPainSeverity] = useState(() => draft?.pain?.severity ?? null);
+  const [painNote, setPainNote] = useState(() => draft?.pain?.note ?? "");
+  // Exercise-level joint note (task section 12) — discomfort attached to the whole movement
+  // rather than one specific set. Separate control, separate field on the finished entry.
+  const [jointNoteOpen, setJointNoteOpen] = useState(false);
+  const [jointNoteArea, setJointNoteArea] = useState(() => draft?.jointNote?.bodyArea ?? null);
+  const [jointNoteSeverity, setJointNoteSeverity] = useState(() => draft?.jointNote?.severity ?? null);
+  const [jointNoteText, setJointNoteText] = useState(() => draft?.jointNote?.note ?? "");
 
   const suggestion = useMemo(
     () => suggestNext(exId, state.logs, exMap, { readinessLogs: state.readinessLogs, equipmentProfileId, equipmentContext }),
@@ -4238,6 +4340,7 @@ function TrainingExerciseCard({
   const pendingSnapshotRef = useRef(null);
   const prevConfirmedRef = useRef(confirmedSets);
   const prevEquipmentRef = useRef({ id: equipmentProfileId, ctx: equipmentContext });
+  const prevQualityRef = useRef({ quality, painBodyArea, painSeverity, painNote, jointNoteArea, jointNoteSeverity, jointNoteText });
   const onDraftChangeRef = useRef(onDraftChange);
   const onDraftDirtyRef = useRef(onDraftDirty);
   useEffect(() => {
@@ -4255,6 +4358,9 @@ function TrainingExerciseCard({
       drops,
       equipmentProfileId,
       equipmentContext,
+      quality,
+      pain: quality === "pain" ? { bodyArea: painBodyArea, severity: painSeverity, note: painNote } : null,
+      jointNote: jointNoteArea || jointNoteSeverity || jointNoteText ? { bodyArea: jointNoteArea, severity: jointNoteSeverity, note: jointNoteText } : null,
       updatedAt: new Date().toISOString(),
     };
     pendingSnapshotRef.current = snapshot;
@@ -4264,14 +4370,23 @@ function TrainingExerciseCard({
       draftTimerRef.current = null;
     }
     const completedSetChanged = confirmedSets !== prevConfirmedRef.current;
-    // Task section 25: an equipment-profile change must persist immediately, not on the usual
-    // debounce — same "never allowed to depend on a timer" rule Save Set already gets, since
-    // losing which machine was selected on a crash/refresh would silently corrupt the athlete's
-    // progression comparisons for the rest of this exercise.
+    // Task section 25/28: an equipment-profile change, or a quality/pain flag, must persist
+    // immediately, not on the usual debounce — same "never allowed to depend on a timer" rule
+    // Save Set already gets. Losing which machine was selected, or a just-reported pain flag,
+    // on a crash/refresh would silently corrupt the athlete's training context.
     const equipmentChanged = equipmentProfileId !== prevEquipmentRef.current.id || equipmentContext !== prevEquipmentRef.current.ctx;
+    const qualityChanged =
+      quality !== prevQualityRef.current.quality ||
+      painBodyArea !== prevQualityRef.current.painBodyArea ||
+      painSeverity !== prevQualityRef.current.painSeverity ||
+      painNote !== prevQualityRef.current.painNote ||
+      jointNoteArea !== prevQualityRef.current.jointNoteArea ||
+      jointNoteSeverity !== prevQualityRef.current.jointNoteSeverity ||
+      jointNoteText !== prevQualityRef.current.jointNoteText;
     prevConfirmedRef.current = confirmedSets;
     prevEquipmentRef.current = { id: equipmentProfileId, ctx: equipmentContext };
-    if (completedSetChanged || equipmentChanged) {
+    prevQualityRef.current = { quality, painBodyArea, painSeverity, painNote, jointNoteArea, jointNoteSeverity, jointNoteText };
+    if (completedSetChanged || equipmentChanged || qualityChanged) {
       onDraftChangeRef.current?.(snapshot);
       pendingSnapshotRef.current = null;
     } else {
@@ -4281,7 +4396,23 @@ function TrainingExerciseCard({
         onDraftChangeRef.current?.(snapshot);
       }, 300);
     }
-  }, [confirmedSets, weight, reps, rirVal, setType, drops, equipmentProfileId, equipmentContext]);
+  }, [
+    confirmedSets,
+    weight,
+    reps,
+    rirVal,
+    setType,
+    drops,
+    equipmentProfileId,
+    equipmentContext,
+    quality,
+    painBodyArea,
+    painSeverity,
+    painNote,
+    jointNoteArea,
+    jointNoteSeverity,
+    jointNoteText,
+  ]);
 
   // Secondary safety net only (per the reliability spec — mobile Safari/PWAs don't guarantee
   // these fire): flushes any still-pending debounced draft immediately when the tab is hidden,
@@ -4320,7 +4451,7 @@ function TrainingExerciseCard({
   const lastTopSet = lastEntry ? topSetOf(lastEntry.sets) : null;
   const notesSaved = state.exerciseNotes?.[exId];
   const hasNotes = !!(notesSaved && (notesSaved.general || notesSaved.machine || notesSaved.cue));
-  const optionsHasContent = (!isSimple && (rirVal !== "" || setType !== "working" || drops.length > 0)) || hasNotes;
+  const optionsHasContent = (!isSimple && (rirVal !== "" || setType !== "working" || drops.length > 0)) || hasNotes || !!quality || !!jointNoteArea;
 
   // Mid-exercise correction (a fat-fingered weight/reps entry shouldn't have to wait until the
   // whole workout is finished and edited from history) — edits the already-confirmed set in
@@ -4350,6 +4481,8 @@ function TrainingExerciseCard({
       setType,
       rir: rirSystem === "rir" ? rirVal : "",
       rpe: rirSystem === "rpe" ? rirVal : "",
+      quality,
+      pain: quality === "pain" ? sanitizePainInfo({ bodyArea: painBodyArea, severity: painSeverity, note: painNote }) : null,
     };
     const cleaned = cleanSetsInput([raw])[0];
     setConfirmedSets((prev) => [...prev, cleaned]);
@@ -4357,6 +4490,12 @@ function TrainingExerciseCard({
     setRirVal("");
     setSetType("working");
     setDrops([]);
+    // Quality/pain is per-set, not sticky across sets — each one starts clean again, matching
+    // the task's "no flag / clean enough" default (never carried forward as an assumption).
+    setQuality(null);
+    setPainBodyArea(null);
+    setPainSeverity(null);
+    setPainNote("");
     setOptionsOpen(false);
     setAddingExtra(false);
   };
@@ -4383,6 +4522,11 @@ function TrainingExerciseCard({
       // engagement at all is byte-identical to every entry BRK has ever saved.
       ...(equipmentProfileId ? { equipmentProfileId } : {}),
       ...(equipmentContext ? { equipmentContext } : {}),
+      // Exercise-level joint note (task section 12) — discomfort attached to the whole
+      // movement, separate from any per-set pain flag already on confirmedSets.
+      ...(sanitizePainInfo({ bodyArea: jointNoteArea, severity: jointNoteSeverity, note: jointNoteText })
+        ? { jointNote: sanitizePainInfo({ bodyArea: jointNoteArea, severity: jointNoteSeverity, note: jointNoteText }) }
+        : {}),
     };
     updateState((prev) => ({ ...prev, logs: [entry, ...prev.logs], hasSeenOnboarding: true }));
     onSaved?.(entry);
@@ -4492,6 +4636,60 @@ function TrainingExerciseCard({
         >
           <span className="text-[10px] uppercase tracking-wide text-v5-subtext shrink-0">Equipment</span>
           <span className="text-xs font-bold text-v5-text truncate ml-2">{equipmentDisplayLabel(state, equipmentProfileId, equipmentContext)} ▾</span>
+        </button>
+      )}
+
+      {/* Alternate Gym mode (task section 20) — a machine exercise still on "Default Machine"
+          gets one dismissible nudge rather than silently assuming home-gym numbers apply here
+          too. Never shown for free-weight exercises (no isMachineBasedExercise match) and never
+          shown once a profile/temporary machine has actually been chosen. */}
+      {showAltGymNudge && (
+        <div className="border border-v5-red/40 bg-v5-red/5 rounded-lg p-3 space-y-2">
+          <div className="text-xs font-bold text-v5-text">Different machine?</div>
+          <div className="text-[11px] text-v5-subtext">You're training somewhere else today — this machine may not match your usual one.</div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setEquipmentContext(TEMPORARY_EQUIPMENT_CONTEXT);
+                setEquipmentProfileId(null);
+                const next = suggestNext(exId, state.logs, exMap, {
+                  readinessLogs: state.readinessLogs,
+                  equipmentProfileId: null,
+                  equipmentContext: TEMPORARY_EQUIPMENT_CONTEXT,
+                });
+                if (confirmedSets.length === 0) {
+                  setWeight(next.suggestion ?? 0);
+                  setReps(next.targetReps ?? 8);
+                }
+                setAltGymNudgeDismissed(true);
+              }}
+              className="flex-1 py-2 text-[10px] uppercase tracking-widest font-bold bg-v5-red text-white rounded-md hover:opacity-90"
+            >
+              Use temporary machine
+            </button>
+            <button
+              onClick={() => setEquipmentSheetOpen(true)}
+              className="flex-1 py-2 text-[10px] uppercase tracking-widest font-bold border border-v5-subtext/40 text-v5-subtext rounded-md hover:text-v5-text"
+            >
+              Select saved profile
+            </button>
+          </div>
+          <button onClick={() => setAltGymNudgeDismissed(true)} className="text-[10px] text-v5-subtext/70 hover:text-v5-subtext">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Substitution flow (task section 22) — Alternate Gym only, reuses the exact same Swap
+          picker the regular Swap icon already opens (no separate substitution system). Never
+          silently swaps — this only ever opens the picker for the athlete to choose from. */}
+      {isAlternateGym && onSwap && (
+        <button
+          onClick={() => setSwapOpen(true)}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-v5-surface text-left"
+        >
+          <span className="text-[11px] text-v5-subtext">Equipment not available?</span>
+          <span className="text-[11px] font-bold text-v5-red">Find substitute</span>
         </button>
       )}
 
@@ -4743,6 +4941,63 @@ function TrainingExerciseCard({
                 </div>
               )}
 
+              {/* Set quality (task Part 2) — one tap, no flag by default. Pain reveals a small
+                  body-area/severity/note sub-form inline, never a separate modal (task section
+                  9: "do not create a full modal requiring multiple steps"). */}
+              {!isSimple && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1.5">Set quality</div>
+                  <div className="flex items-center gap-1.5">
+                    {SET_QUALITY_LEVELS.map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => setQuality((v) => (v === q ? null : q))}
+                        className={`flex-1 flex items-center justify-center gap-1 px-1.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded ${
+                          quality === q ? "bg-v5-red text-white" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
+                        }`}
+                      >
+                        <span aria-hidden="true">{SET_QUALITY_GLYPH[q]}</span> {SET_QUALITY_LABEL[q]}
+                      </button>
+                    ))}
+                  </div>
+                  {quality === "pain" && (
+                    <div className="mt-2 space-y-2 bg-v5-muted/40 rounded-lg p-2.5">
+                      <div className="flex items-center gap-1 overflow-x-auto">
+                        {PAIN_BODY_AREAS.map((area) => (
+                          <button
+                            key={area}
+                            onClick={() => setPainBodyArea((v) => (v === area ? null : area))}
+                            className={`shrink-0 px-2 py-1 text-[10px] font-bold rounded ${
+                              painBodyArea === area ? "bg-v5-red text-white" : "bg-v5-elevated text-v5-subtext hover:text-v5-text"
+                            }`}
+                          >
+                            {area}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] uppercase tracking-wide text-v5-subtext shrink-0">Severity</span>
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          value={painSeverity ?? 3}
+                          onChange={(e) => setPainSeverity(Number(e.target.value))}
+                          className="flex-1"
+                        />
+                        <span className="text-xs font-bold text-v5-text w-6 text-right">{painSeverity ?? 3}</span>
+                      </div>
+                      <input
+                        value={painNote}
+                        onChange={(e) => setPainNote(e.target.value.slice(0, 200))}
+                        placeholder="Optional note — e.g. outer elbow"
+                        className="w-full bg-v5-elevated rounded-lg text-v5-text px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-v5-red"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {!isSimple && (
                 <div className="space-y-2">
                   {drops.map((d, di) => (
@@ -4779,6 +5034,53 @@ function TrainingExerciseCard({
               <button onClick={duplicateLast} className="text-[11px] uppercase tracking-wide text-v5-subtext hover:text-v5-red">
                 Duplicate last set
               </button>
+
+              {/* Exercise-level joint note (task section 12) — discomfort consistent across the
+                  whole movement rather than one specific set. Separate, optional, off by
+                  default. */}
+              <div>
+                <button
+                  onClick={() => setJointNoteOpen((o) => !o)}
+                  className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-v5-subtext hover:text-v5-red"
+                >
+                  Joint note{jointNoteArea ? ` — ${jointNoteArea}` : ""} {jointNoteOpen ? "▴" : "▾"}
+                </button>
+                {jointNoteOpen && (
+                  <div className="mt-2 space-y-2 bg-v5-muted/40 rounded-lg p-2.5">
+                    <div className="flex items-center gap-1 overflow-x-auto">
+                      {PAIN_BODY_AREAS.map((area) => (
+                        <button
+                          key={area}
+                          onClick={() => setJointNoteArea((v) => (v === area ? null : area))}
+                          className={`shrink-0 px-2 py-1 text-[10px] font-bold rounded ${
+                            jointNoteArea === area ? "bg-v5-red text-white" : "bg-v5-elevated text-v5-subtext hover:text-v5-text"
+                          }`}
+                        >
+                          {area}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase tracking-wide text-v5-subtext shrink-0">Severity</span>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={jointNoteSeverity ?? 3}
+                        onChange={(e) => setJointNoteSeverity(Number(e.target.value))}
+                        className="flex-1"
+                      />
+                      <span className="text-xs font-bold text-v5-text w-6 text-right">{jointNoteSeverity ?? 3}</span>
+                    </div>
+                    <input
+                      value={jointNoteText}
+                      onChange={(e) => setJointNoteText(e.target.value.slice(0, 200))}
+                      placeholder="Optional note — e.g. elbow discomfort"
+                      className="w-full bg-v5-elevated rounded-lg text-v5-text px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-v5-red"
+                    />
+                  </div>
+                )}
+              </div>
 
               <ExerciseNotesPanel exId={exId} state={state} updateState={updateState} />
             </div>
@@ -4853,10 +5155,13 @@ function GuidedRunView({
   onViewWorkout,
   onRename,
   onSaveTemporaryProfile,
+  onUpdateSessionContext,
 }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
   const [addingExercise, setAddingExercise] = useState(false);
+  // Travel/Alternate Gym mode (task Part 3, section 17) — "Active Workout → Session Options."
+  const [sessionOptionsOpen, setSessionOptionsOpen] = useState(false);
   // "Save this machine profile" (task section 17) — a non-blocking, optional prompt shown right
   // on a just-finished exercise's collapsed summary when it was logged as a temporary/different
   // machine. Only one at a time and never forced; saving or dismissing never interrupts the rest
@@ -4896,6 +5201,13 @@ function GuidedRunView({
 
   if (run.finished) {
     const summary = (state.workoutSessions || []).find((s) => s.id === run.summaryId) || null;
+    // Auto Post-Workout Recap (task Part 1) — same buildWorkoutRecap engine the standalone
+    // Workout History → Session → Recap screen uses (SessionRecapView), so the two surfaces
+    // never disagree. Only the NEW pieces (progression wins/declines, quality/pain attention,
+    // next-time targets, alternate-gym note) are appended here — the PR/best-lift/duration/
+    // volume/rating/share content just below is this screen's own long-standing, already-
+    // tested "Session complete" summary and is left as-is rather than risking a full rewrite.
+    const recap = summary ? buildWorkoutRecap({ session: summary, logs: state.logs || [], exMap, state }) : null;
     return (
       <div className="space-y-6">
         <div>
@@ -4996,6 +5308,80 @@ function GuidedRunView({
             )}
             {summary.mainMuscles.length > 0 && (
               <div className="text-sm text-neutral-300">Main muscles trained: {summary.mainMuscles.join(", ")}</div>
+            )}
+
+            {/* Auto Post-Workout Recap additions (task Part 1) — progression per exercise,
+                joint/pain + set-quality attention, and next-time targets, all computed by the
+                same buildWorkoutRecap() the reopenable Workout History → Session → Recap screen
+                uses. Tone matches the rest of this card: factual, no cheering. */}
+            {recap?.alternateGym && (
+              <div className="border-t border-neutral-900 pt-3 space-y-1">
+                <div className="text-[10px] uppercase tracking-widest text-red-600 font-bold">Alternate gym session</div>
+                {recap.alternateGym.locationLabel && <div className="text-sm text-neutral-200">{recap.alternateGym.locationLabel}</div>}
+                <div className="text-xs text-neutral-500">
+                  {recap.alternateGym.differentEquipmentCount > 0
+                    ? `${recap.alternateGym.differentEquipmentCount} exercise${
+                        recap.alternateGym.differentEquipmentCount === 1 ? "" : "s"
+                      } used different equipment. Direct load comparisons excluded where appropriate.`
+                    : "No equipment differences flagged this session."}
+                </div>
+              </div>
+            )}
+
+            {recap?.wins.length > 0 && (
+              <div className="border-t border-neutral-900 pt-3 space-y-2">
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Progression</div>
+                {recap.wins.map((w) => (
+                  <div key={w.exId} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="text-neutral-300 truncate">{w.name}</span>
+                    <span className="text-green-500 font-bold text-xs shrink-0">{w.progression.message}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {recap?.attention.length > 0 && (
+              <div className="border-t border-neutral-900 pt-3 space-y-2.5">
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Attention</div>
+                {recap.attention.map((e) => (
+                  <div key={e.exId} className="space-y-0.5">
+                    <div className="text-sm font-bold text-white">{e.name}</div>
+                    <div className="text-xs text-neutral-400">
+                      {[
+                        e.qualityCounts.grind > 0 ? `${e.qualityCounts.grind} set${e.qualityCounts.grind === 1 ? "" : "s"} marked Grind` : null,
+                        e.qualityCounts.form_breakdown > 0
+                          ? `${e.qualityCounts.form_breakdown} set${e.qualityCounts.form_breakdown === 1 ? "" : "s"} marked Form Breakdown`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                    {e.painFlags.map((p, i) => (
+                      <div key={i} className="text-xs text-red-500">
+                        {p.bodyArea ? `${p.bodyArea} discomfort` : "Discomfort noted"}
+                        {p.severity != null ? `: ${p.severity}/10` : ""}
+                        {p.note ? ` — ${p.note}` : ""}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {recap?.perExercise.some((e) => e.nextTime) && (
+              <div className="border-t border-neutral-900 pt-3 space-y-2.5">
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Next time</div>
+                {recap.perExercise
+                  .filter((e) => e.nextTime)
+                  .map((e) => (
+                    <div key={e.exId}>
+                      <div className="text-sm font-bold text-white">{e.name}</div>
+                      <div className="text-sm text-neutral-300">
+                        {e.nextTime.weight != null ? `Try ${e.nextTime.weight} × ${e.nextTime.repsLabel}` : e.nextTime.reason}
+                      </div>
+                    </div>
+                  ))}
+              </div>
             )}
 
             {summary.coachMessage && (
@@ -5181,6 +5567,15 @@ function GuidedRunView({
           />
         </div>
       )}
+      {sessionOptionsOpen && onUpdateSessionContext && (
+        <div className="fixed inset-0 z-30 bg-charcoal-deep overflow-y-auto p-4 sm:p-6">
+          <SessionOptionsSheet
+            sessionContext={run.sessionContext}
+            onChange={onUpdateSessionContext}
+            onBack={() => setSessionOptionsOpen(false)}
+          />
+        </div>
+      )}
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -5217,13 +5612,20 @@ function GuidedRunView({
                 honest status. "Saved" only ever reflects a write that actually succeeded (see the
                 activeRun-persist effect in LiftLog); a genuine localStorage failure surfaces as
                 "Not saved" here instead of a false "Saved". */}
-            <div className="text-[10px] uppercase tracking-wide text-v5-subtext/70 mt-0.5">
+            <div className="text-[10px] uppercase tracking-wide text-v5-subtext/70 mt-0.5 flex items-center gap-2">
               {persistStatus === "error" ? (
                 <span className="text-v5-red">Not saved</span>
               ) : persistStatus === "saving" ? (
                 "Saving…"
               ) : (
                 "Saved ✓"
+              )}
+              {/* Travel/Alternate Gym mode entry point (task section 17) — "Active Workout →
+                  Session Options." Quiet, secondary — never competes with Finish/Exit. */}
+              {onUpdateSessionContext && (
+                <button onClick={() => setSessionOptionsOpen(true)} className="text-v5-subtext/70 hover:text-v5-red normal-case tracking-normal">
+                  · {run.sessionContext?.locationMode === "alternate_gym" ? run.sessionContext.locationLabel || "Alternate gym" : "Session options"}
+                </button>
               )}
             </div>
           </div>
@@ -5365,6 +5767,7 @@ function GuidedRunView({
                     onSaved(idx, savedEntry);
                   }}
                   onSwap={(newExId) => onSwap(idx, newExId)}
+                  sessionContext={run.sessionContext}
                   onSetSaved={(justSaved) => {
                     // Mid-group (e.g. still on A1 of an A1/A2 pair): no rest, straight into the
                     // next movement. Rest only starts once the group's last exercise logs a set,
