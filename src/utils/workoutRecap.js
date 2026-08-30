@@ -11,7 +11,7 @@
 
 import { topSetOf, countedSets, suggestNext } from "./progression.js";
 import { sameEquipmentBucket, equipmentDisplayLabel, TEMPORARY_EQUIPMENT_CONTEXT } from "./equipmentProfiles.js";
-import { isConcerningQuality, qualityAttentionLabel } from "./workoutQuality.js";
+import { isConcerningQuality, qualityAttentionLabel, summarizePainFlags } from "./workoutQuality.js";
 
 function increment(exType) {
   return exType === "compound" ? 5 : 2.5;
@@ -34,7 +34,11 @@ function nextTimeTargetFromEntry(entry, exMap) {
   const concerning = isConcerningQuality(top.quality);
 
   if (isTemp) {
-    return { weight: null, repsLabel: null, reason: "Different equipment used — repeat and reassess once back on a familiar machine." };
+    // Task section 11: don't imply the athlete must repeat THIS temporary machine's load —
+    // BRK simply has no comparable target for it. Returning to a familiar saved profile later
+    // resumes that profile's own history automatically (nextTimeTargetFromEntry/suggestNext both
+    // key off equipmentProfileId, never off "what happened on the temporary machine").
+    return { weight: null, repsLabel: null, reason: "Different machine used. No direct load target assigned." };
   }
   if (concerning) {
     // Deliberately weight: null — task's own example renders this as "Repeat load and reassess
@@ -76,6 +80,12 @@ function progressionStatusFor(entry, priorEntry) {
       ? { status: "new_profile_no_history", message: "New equipment profile — no prior comparison yet." }
       : { status: "first_time", message: "First time logged." };
   }
+  // Task section 10: a prior entry with zero counted (non-warmup) working sets is not usable
+  // comparison data — comparing against it can only ever produce a misleading "0 × 0 → X × Y"
+  // line. Treat it exactly like having no prior entry at all rather than as evidence of decline.
+  if (countedSets(priorEntry.sets).length === 0) {
+    return { status: "no_comparable_prior", message: "No comparable prior performance." };
+  }
   const newTop = topSetOf(entry.sets);
   const priorTop = topSetOf(priorEntry.sets);
   if (newTop.weight > priorTop.weight) {
@@ -106,19 +116,21 @@ export function buildWorkoutRecap({ session, logs, exMap, state }) {
       .filter((l) => l.exId === entry.exId && sameEquipmentBucket(l, entry.equipmentProfileId ?? null, entry.equipmentContext ?? null))
       .sort((a, b) => new Date(b.date) - new Date(a.date));
     const priorEntry = priorForEx[0] || null;
+    // Task section 2 (CRITICAL): comparability is decided ABOVE, by sameEquipmentBucket alone —
+    // never by session.sessionContext.locationMode. Alternate Gym is where the athlete trained,
+    // not whether today's numbers are comparable to a saved profile's own history; a saved
+    // profile used before at that same gym compares normally here.
     const progression = progressionStatusFor(entry, priorEntry);
     const counted = countedSets(entry.sets);
     const qualityCounts = { grind: 0, form_breakdown: 0, pain: 0 };
-    const painFlags = [];
     entry.sets.forEach((s) => {
       if (s.quality === "grind") qualityCounts.grind++;
       if (s.quality === "form_breakdown") qualityCounts.form_breakdown++;
-      if (s.quality === "pain") {
-        qualityCounts.pain++;
-        if (s.pain) painFlags.push(s.pain);
-      }
+      if (s.quality === "pain") qualityCounts.pain++;
     });
-    if (entry.jointNote) painFlags.push(entry.jointNote);
+    // One condensed pain line per exercise (task section 13/14) instead of one per set/jointNote
+    // — see summarizePainFlags for why a detail-free pain-flagged set still produces a summary.
+    const painSummary = summarizePainFlags(entry);
 
     return {
       exId: entry.exId,
@@ -129,8 +141,8 @@ export function buildWorkoutRecap({ session, logs, exMap, state }) {
       topSet: counted.length > 0 ? topSetOf(entry.sets) : null,
       progression,
       qualityCounts,
-      painFlags,
-      hasAttention: qualityCounts.grind > 0 || qualityCounts.form_breakdown > 0 || qualityCounts.pain > 0 || painFlags.length > 0,
+      painSummary,
+      hasAttention: qualityCounts.grind > 0 || qualityCounts.form_breakdown > 0 || qualityCounts.pain > 0 || !!painSummary,
       nextTime: nextTimeTargetFromEntry(entry, exMap || {}),
     };
   });
@@ -139,9 +151,13 @@ export function buildWorkoutRecap({ session, logs, exMap, state }) {
   const declines = perExercise.filter((e) => e.progression.status === "declined");
   const attention = perExercise.filter((e) => e.hasAttention);
 
-  const differentEquipmentCount = entries.filter(
-    (e) => e.equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT || (e.equipmentProfileId && session.sessionContext?.locationMode === "alternate_gym")
-  ).length;
+  // Task section 3 (CRITICAL): counts ONLY exercises where a direct load comparison was actually
+  // excluded — i.e. a genuinely unfamiliar/temporary machine was used this session
+  // (progression.status === "equipment_different"). A saved profile with its own prior history,
+  // or a brand-new saved profile with none yet, is never "different equipment" just because
+  // Alternate Gym happens to be on — those get their own honest statuses (normal comparison, or
+  // "new_profile_no_history") rather than inflating this count.
+  const differentEquipmentCount = perExercise.filter((e) => e.progression.status === "equipment_different").length;
 
   return {
     planName: session.planName,

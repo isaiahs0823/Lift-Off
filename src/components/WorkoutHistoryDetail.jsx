@@ -165,7 +165,14 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
                     )}
                     {exPRs.length > 0 && (
                       <div className="text-xs text-red-500 font-bold border-t border-neutral-900 pt-2">
-                        {exPRs.map((pr) => `${PR_TYPE_LABEL[pr.type]} — ${prDeltaLabel(pr)}${pr.qualityFlag ? ` (${SET_QUALITY_LABEL[pr.qualityFlag]} flagged)` : ""}`).join(" · ")}
+                        {exPRs
+                          .map(
+                            (pr) =>
+                              `${PR_TYPE_LABEL[pr.type]} — ${prDeltaLabel(pr)}${
+                                pr.qualityFlag ? ` (${pr.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[pr.qualityFlag]} flagged`})` : ""
+                              }`
+                          )
+                          .join(" · ")}
                       </div>
                     )}
                     {note && (

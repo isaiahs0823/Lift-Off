@@ -32,7 +32,7 @@ export default function SessionOptionsSheet({ sessionContext, onChange, onBack }
           <span className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${!isAlternate ? "border-red-600" : "border-neutral-700"}`}>
             {!isAlternate && <span className="w-2 h-2 rounded-full bg-red-600" />}
           </span>
-          <span className="text-sm text-neutral-100 flex-1 truncate">Home Gym</span>
+          <span className="text-sm text-neutral-100 flex-1 truncate">Usual Location</span>
         </button>
 
         <div className={`border ${isAlternate ? "border-red-700 bg-red-950/10" : "border-neutral-800 bg-charcoal-panel"}`}>
@@ -40,7 +40,7 @@ export default function SessionOptionsSheet({ sessionContext, onChange, onBack }
             <span className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${isAlternate ? "border-red-600" : "border-neutral-700"}`}>
               {isAlternate && <span className="w-2 h-2 rounded-full bg-red-600" />}
             </span>
-            <span className="text-sm font-bold text-neutral-100 flex-1 truncate">Training somewhere else</span>
+            <span className="text-sm font-bold text-neutral-100 flex-1 truncate">Training Somewhere Else</span>
             {isAlternate && <Check size={16} className="text-red-500 shrink-0" />}
           </button>
           {isAlternate && (

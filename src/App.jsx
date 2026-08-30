@@ -73,11 +73,12 @@ import {
   SET_QUALITY_LABEL,
   SET_QUALITY_GLYPH,
   PAIN_BODY_AREAS,
-  isConcerningQuality,
   sanitizeQuality,
   sanitizePainInfo,
   qualityAttentionLabel,
   painTrendForExercise,
+  painTrendLabel,
+  painSummaryLabel,
 } from "./utils/workoutQuality.js";
 import { buildWorkoutRecap } from "./utils/workoutRecap.js";
 import SessionRecapView from "./components/SessionRecapView.jsx";
@@ -1561,12 +1562,23 @@ function detectPRs(exId, newEntry, priorLogs) {
   const allTimeMaxVolume = usesMultipleBuckets ? Math.max(0, ...allTimePriorForEx.map(entryVolume)) : prevMaxVolume;
   const scopeFor = (achieved, allTimeMax) => (achieved > allTimeMax ? "all-time" : "profile");
 
-  // Task section 15: a difficult set still counts as a real PR (never silently deleted) but is
-  // labeled distinctly — "FLAGGED PR" rather than presented as clean, unqualified evidence.
-  // Only Form Breakdown / Pain flag a PR (same threshold as the progression-suppression logic
-  // in progression.js) — a Grind PR is still a genuinely strong, well-executed effort.
-  const flagOf = (set) => (set && isConcerningQuality(set.quality) ? set.quality : null);
-  const entryHasConcerningSet = newCounted.some((s) => isConcerningQuality(s.quality));
+  // Task section 7/15: a difficult set still counts as a real PR (never silently deleted) but is
+  // labeled distinctly rather than presented as identical, unqualified evidence to a clean PR —
+  // CLEAN / GRIND / FLAGGED (Form Breakdown) / FLAGGED (Pain). Grind carries through here too
+  // (unlike isConcerningQuality's suppression check in progression.js, which deliberately treats
+  // only Form Breakdown/Pain as strong enough to hold back a load increase) — a PR still fires
+  // and is still a real record on a Grind set, just softly labeled instead of shown as clean.
+  const flagOf = (set) => (set && set.quality && set.quality !== "clean" ? set.quality : null);
+  // Multiple sets can carry different quality flags in one entry (e.g. a Pain-flagged top set
+  // plus a Clean back-off set) — the exerciseVolume PR spans the WHOLE entry, so it must surface
+  // whichever flag is most concerning rather than defaulting to "Form Breakdown" regardless of
+  // what actually happened (task section 6: never mislabel a Pain set as Form Breakdown).
+  const QUALITY_FLAG_PRIORITY = { pain: 3, form_breakdown: 2, grind: 1 };
+  const worstQualityOf = (sets) =>
+    sets.reduce((worst, s) => {
+      const rank = QUALITY_FLAG_PRIORITY[s.quality] || 0;
+      return rank > (QUALITY_FLAG_PRIORITY[worst] || 0) ? s.quality : worst;
+    }, null);
 
   const prs = [];
   const heaviestSet = newCounted.reduce((best, s) => (s.weight > best.weight ? s : best), newCounted[0]);
@@ -1620,7 +1632,7 @@ function detectPRs(exId, newEntry, priorLogs) {
       prev: Math.round(prevMaxVolume),
       scope: scopeFor(newVolume, allTimeMaxVolume),
       equipmentProfileId: targetProfileId,
-      qualityFlag: entryHasConcerningSet ? "form_breakdown" : null,
+      qualityFlag: worstQualityOf(newCounted),
     });
   }
   return prs;
@@ -4298,6 +4310,16 @@ function TrainingExerciseCard({
     [state.logs, exId, equipmentProfileId, equipmentContext]
   );
   const targetSetCount = exSlot?.sets || overallRecentForEx[0]?.sets.length || 3;
+  // Recent pain pattern for this exercise (task section 5) — deliberately keyed off the
+  // exercise's FULL history, not the current equipment bucket, since joint discomfort is about
+  // the movement/body, not which machine performed it. Only surfaces once a body area (or
+  // "unspecified") has repeated across 2+ of the last 4 sessions — a single occurrence is
+  // already visible from that session's own pain flag, so repeating it here would just be noise
+  // (task section 16: never add friction/clutter to the default logging flow).
+  const painTrendCaution = useMemo(() => {
+    const sorted = state.logs.filter((l) => l.exId === exId).sort((a, b) => new Date(b.date) - new Date(a.date));
+    return painTrendForExercise(sorted).find((t) => t.sessionsWithPain >= 2) || null;
+  }, [state.logs, exId]);
 
   // Restoring an in-progress workout: `draft` is this exercise's autosaved slot from
   // activeRun.draftByIndex (see sanitizeActiveRun/updateRunDraft in LiftLog), holding any sets
@@ -4765,6 +4787,12 @@ function TrainingExerciseCard({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {painTrendCaution && (
+        <div className="text-[11px] text-v5-red bg-v5-red/5 border border-v5-red/30 rounded-lg px-3 py-2">
+          {painTrendLabel(painTrendCaution)} — training context only, not a diagnosis.
         </div>
       )}
 
@@ -5239,7 +5267,18 @@ function GuidedRunView({
                     <div className="text-lg font-bold text-white leading-tight">{exMap[featured.exId]?.name || featured.exId}</div>
                     {profileLabel && <div className="text-xs text-neutral-500">{profileLabel}</div>}
                     <div className="text-3xl font-bold text-white leading-tight">{prHeroLabel(pr)}</div>
-                    <div className="text-[11px] uppercase tracking-widest text-red-500 font-bold">{PR_TYPE_LABEL[pr.type]}</div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="text-[11px] uppercase tracking-widest text-red-500 font-bold">{PR_TYPE_LABEL[pr.type]}</div>
+                      {/* Task section 7: the most prominent PR surface in the app must not present
+                          a Pain/Form Breakdown-flagged PR as identical, unqualified evidence to a
+                          clean one — Grind gets a softer "Grind" tag, Form Breakdown/Pain get an
+                          explicit "flagged" tag. */}
+                      {pr.qualityFlag && (
+                        <span className="text-[9px] uppercase tracking-widest bg-neutral-800 text-neutral-300 px-1.5 py-0.5">
+                          {pr.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[pr.qualityFlag]} flagged`}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-neutral-500">
                       Previous: {prPreviousLabel(pr)} <span className="text-green-500 font-bold">{prDeltaLabel(pr)}</span>
                     </div>
@@ -5247,8 +5286,15 @@ function GuidedRunView({
                       <div className="pt-2 mt-1 border-t border-neutral-900 space-y-1">
                         <div className="text-[10px] uppercase tracking-widest text-neutral-600">Other PRs</div>
                         {others.map(({ exId, pr: op }) => (
-                          <div key={exId} className="flex items-center justify-between text-xs text-neutral-400">
-                            <span className="truncate">{exMap[exId]?.name || exId}</span>
+                          <div key={exId} className="flex items-center justify-between text-xs text-neutral-400 gap-2">
+                            <span className="truncate">
+                              {exMap[exId]?.name || exId}
+                              {op.qualityFlag && (
+                                <span className="ml-1.5 text-[9px] uppercase tracking-widest text-neutral-500">
+                                  ({op.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[op.qualityFlag]} flagged`})
+                                </span>
+                              )}
+                            </span>
                             <span className="text-red-500 font-bold shrink-0 ml-2">{prDeltaLabel(op)}</span>
                           </div>
                         ))}
@@ -5346,6 +5392,7 @@ function GuidedRunView({
                 {recap.attention.map((e) => (
                   <div key={e.exId} className="space-y-0.5">
                     <div className="text-sm font-bold text-white">{e.name}</div>
+                    {e.painSummary && <div className="text-xs text-red-500">{painSummaryLabel(e.painSummary)}</div>}
                     <div className="text-xs text-neutral-400">
                       {[
                         e.qualityCounts.grind > 0 ? `${e.qualityCounts.grind} set${e.qualityCounts.grind === 1 ? "" : "s"} marked Grind` : null,
@@ -5356,13 +5403,6 @@ function GuidedRunView({
                         .filter(Boolean)
                         .join(" · ")}
                     </div>
-                    {e.painFlags.map((p, i) => (
-                      <div key={i} className="text-xs text-red-500">
-                        {p.bodyArea ? `${p.bodyArea} discomfort` : "Discomfort noted"}
-                        {p.severity != null ? `: ${p.severity}/10` : ""}
-                        {p.note ? ` — ${p.note}` : ""}
-                      </div>
-                    ))}
                   </div>
                 ))}
               </div>

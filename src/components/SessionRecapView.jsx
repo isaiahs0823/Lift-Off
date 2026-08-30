@@ -1,7 +1,7 @@
 import { formatSessionDuration } from "../utils/workoutSets.js";
 import { PR_TYPE_LABEL, prHeroLabel, prDeltaLabel } from "../utils/prSummary.js";
 import { buildWorkoutRecap } from "../utils/workoutRecap.js";
-import { SET_QUALITY_LABEL } from "../utils/workoutQuality.js";
+import { SET_QUALITY_LABEL, painSummaryLabel } from "../utils/workoutQuality.js";
 import { Award } from "lucide-react";
 
 // Auto Post-Workout Recap (task Part 1) — a short, factual coaching recap, not an analytics
@@ -110,7 +110,9 @@ export default function SessionRecapView({ session, state, exMap, onBack, onView
                 </span>
                 {pr.qualityFlag && (
                   <span className="text-[9px] uppercase tracking-widest bg-neutral-800 text-neutral-300 px-1.5 py-0.5">
-                    {SET_QUALITY_LABEL[pr.qualityFlag]} flagged
+                    {/* Task section 7: Grind is a softer PR label ("Grind") — not presented as
+                        identical evidence to a Form Breakdown/Pain PR, which reads "X flagged." */}
+                    {pr.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[pr.qualityFlag]} flagged`}
                   </span>
                 )}
               </div>
@@ -125,6 +127,7 @@ export default function SessionRecapView({ session, state, exMap, onBack, onView
           {recap.attention.map((e) => (
             <div key={e.exId} className="space-y-0.5">
               <div className="text-sm font-bold text-white">{e.name}</div>
+              {e.painSummary && <div className="text-xs text-red-500">{painSummaryLabel(e.painSummary)}</div>}
               <div className="text-xs text-neutral-400">
                 {[
                   e.qualityCounts.grind > 0 ? `${e.qualityCounts.grind} set${e.qualityCounts.grind === 1 ? "" : "s"} marked Grind` : null,
@@ -135,13 +138,6 @@ export default function SessionRecapView({ session, state, exMap, onBack, onView
                   .filter(Boolean)
                   .join(" · ")}
               </div>
-              {e.painFlags.map((p, i) => (
-                <div key={i} className="text-xs text-red-500">
-                  {p.bodyArea ? `${p.bodyArea} discomfort` : "Discomfort noted"}
-                  {p.severity != null ? `: ${p.severity}/10` : ""}
-                  {p.note ? ` — ${p.note}` : ""}
-                </div>
-              ))}
             </div>
           ))}
           {recap.declines

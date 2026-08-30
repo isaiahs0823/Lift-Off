@@ -115,6 +115,13 @@ export const COACH_TOOL_EXECUTORS = {
       totalReps: s.totalReps,
       prCount: (s.prs || []).length,
       rating: s.rating,
+      // Task section 15: purely informational — WHERE the athlete trained, never evidence of a
+      // performance change on its own. Whether any of this session's numbers are directly
+      // comparable to prior history is decided entirely by equipment profile/context (see
+      // equipmentNote in getExerciseHistory below) — location is never part of that decision.
+      ...(s.sessionContext?.locationMode === "alternate_gym"
+        ? { location: s.sessionContext.locationLabel || "Alternate gym", locationNote: "Training location only — not itself evidence of a performance change." }
+        : {}),
     }));
   },
 

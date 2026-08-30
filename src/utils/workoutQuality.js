@@ -64,22 +64,34 @@ export function qualityAttentionLabel(quality) {
 // ENTRY (one per exercise per session), not by individual set, since "N of last M sessions" is
 // the unit the task's own copy uses. Looks at both a set-level `pain` flag and the entry-level
 // `jointNote` (task section 12) — either counts as "this session reported discomfort here."
+// A pain-flagged set counts toward the trend on `quality === "pain"` alone — a set with no body
+// area/severity/note (task section 4: never force the athlete to fill extra fields) must still
+// register, not silently vanish because `s.pain` came back null. Sets/joint-notes with no body
+// area count under the `null` key ("unspecified area") alongside named-area keys, so an athlete
+// who never names a location still sees an accurate "N of last M sessions" count — see
+// painTrendLabel below for how that key renders.
 export function painTrendForExercise(logsForExercise, { windowSessions = 4 } = {}) {
   const recent = logsForExercise.slice(0, windowSessions);
   if (recent.length === 0) return [];
-  const byArea = new Map(); // bodyArea -> count of sessions reporting it
+  const byArea = new Map(); // bodyArea (or null = unspecified) -> count of sessions reporting it
   recent.forEach((entry) => {
     const areasThisSession = new Set();
     (entry.sets || []).forEach((s) => {
-      const area = s.pain?.bodyArea;
-      if (area) areasThisSession.add(area);
+      if (s.quality === "pain") areasThisSession.add(s.pain?.bodyArea || null);
     });
-    if (entry.jointNote?.bodyArea) areasThisSession.add(entry.jointNote.bodyArea);
+    if (entry.jointNote) areasThisSession.add(entry.jointNote.bodyArea || null);
     areasThisSession.forEach((area) => byArea.set(area, (byArea.get(area) || 0) + 1));
   });
   return [...byArea.entries()]
     .map(([bodyArea, sessionsWithPain]) => ({ bodyArea, sessionsWithPain, sessionsWindow: recent.length }))
     .sort((a, b) => b.sessionsWithPain - a.sessionsWithPain);
+}
+
+// Renders one painTrendForExercise() entry as training-context copy (task section 5) — never a
+// diagnosis, and never fabricates a body area that was never reported.
+export function painTrendLabel({ bodyArea, sessionsWithPain, sessionsWindow }) {
+  const subject = bodyArea ? `${bodyArea} discomfort` : "Pain/discomfort";
+  return `${subject} reported in ${sessionsWithPain} of last ${sessionsWindow} sessions`;
 }
 
 // Recent-flags summary across every exercise — feeds Coach context (task section 16) and stays
@@ -110,4 +122,44 @@ export function recentTrainingFlags(logs, exMap, { windowSessions = 4, exerciseL
     });
   });
   return results.slice(0, exerciseLimit);
+}
+
+// Condenses one exercise's pain-related data (any number of set-level `pain` flags, some
+// possibly null/detail-free, plus an optional entry-level `jointNote`) into ONE presentation
+// line rather than one line per source (task section 13/14: recap must not show "Pain,"
+// "Elbow discomfort 3/10," and "Pain flagged" as three separate warnings for what is really one
+// event). This only affects how the recap RENDERS the data — it never reads or writes
+// `sets[].pain`/`jointNote` themselves, so both underlying data pieces are always preserved
+// exactly as logged.
+//
+// `painSetCount` is the number of sets flagged pain regardless of whether any of them carried
+// detail (task section 4: a detail-free pain flag is still a real, countable occurrence). Detail
+// (body area/severity/note) is pulled from whichever source has it first — a set's own pain
+// info, falling back to the jointNote — and only ONE such detail line is ever shown, even when
+// both a set and the joint note report the same area (task section 14's literal "don't display
+// fully redundant duplicate warnings" case).
+export function summarizePainFlags(entry) {
+  const painSets = (entry.sets || []).filter((s) => s.quality === "pain");
+  const jointNote = entry.jointNote || null;
+  if (painSets.length === 0 && !jointNote) return null;
+  const detailSource = painSets.find((s) => s.pain)?.pain || jointNote || null;
+  return {
+    painSetCount: painSets.length,
+    hasJointNote: !!jointNote,
+    bodyArea: detailSource?.bodyArea || null,
+    severity: detailSource?.severity ?? null,
+    note: detailSource?.note || null,
+  };
+}
+
+// Renders summarizePainFlags()'s result as one compact line, e.g. "Pain — Elbow, 6/10" or, with
+// no detail at all, the generic fallback the task requires rather than fabricating a location:
+// "Pain/discomfort reported." Never mentions a set count — "how many sets" is already covered by
+// the separate Grind/Form Breakdown tally alongside it.
+export function painSummaryLabel(summary) {
+  if (!summary) return null;
+  if (!summary.bodyArea && summary.severity == null && !summary.note) return "Pain/discomfort reported";
+  const parts = [summary.bodyArea, summary.severity != null ? `${summary.severity}/10` : null].filter(Boolean);
+  const head = parts.length > 0 ? `Pain — ${parts.join(", ")}` : "Pain";
+  return summary.note ? `${head} — ${summary.note}` : head;
 }

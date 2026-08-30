@@ -99,11 +99,19 @@ export function suggestNext(exId, logs, exMap, context = {}) {
   } else if (allHitTarget && topRir != null && topRir <= 1) {
     suggestion = topSet.weight;
     reason = `Hit target reps but at ${topRir} RIR — repeat ${topSet.weight} lb before adding load.`;
+  } else if (allHitTarget && topSet.quality === "grind" && topSet.reps <= targetReps) {
+    // Task section 9: Grind stays a SOFT signal — one grind set never blocks progression outright
+    // — but a top set that was both a grind AND only just cleared the bar (no rep margin) gets
+    // more conservative wording than a routine "add weight" call. Reps that beat target by a
+    // margin fall through to the branch below instead, which still flags the grind but keeps the
+    // normal increase.
+    suggestion = topSet.weight;
+    reason = "Target reached, but top set was a grind. Consider repeating the load or progress only if recovery is good.";
   } else if (allHitTarget) {
     suggestion = topSet.weight + inc;
     reason =
       topSet.quality === "grind"
-        ? `Hit target reps, though the top set was a grind — add ${inc} lb, or hold here if it felt maximal.`
+        ? `Hit target reps with a bit of room, though the top set was a grind — add ${inc} lb, or hold here if it felt maximal.`
         : topRir != null && topRir >= 2
         ? `Hit target reps with ${topRir}+ RIR to spare — add ${inc} lb.`
         : `Hit target reps last time (${targetReps}+) — add ${inc} lb.`;
