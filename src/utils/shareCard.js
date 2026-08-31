@@ -3,8 +3,6 @@
 // shapes in the app's own dark/red identity. Sized for Instagram Stories (1080x1920, 9:16)
 // but reads fine as a square-ish crop too since the content is centered with generous margin.
 
-import { sessionPRCount } from "./prSummary.js";
-
 const WIDTH = 1080;
 const HEIGHT = 1920;
 const COLOR = {
@@ -125,19 +123,6 @@ export function buildPRShareCard(exName, prs, entry) {
     return "";
   });
   return renderToDataUrl({ eyebrow: "New PR", title: exName, bigStat, lines });
-}
-
-export function buildWorkoutShareCard(summary) {
-  const lines = [`${summary.workingSets} working sets`, `${summary.totalVolume.toLocaleString()} lb volume`];
-  const prCount = sessionPRCount(summary);
-  if (prCount > 0) lines.push(`${prCount} PR${prCount > 1 ? "s" : ""}`);
-  return renderToDataUrl({
-    eyebrow: summary.planName,
-    title: "Session complete",
-    bigStat: `${Math.round(summary.durationSec / 60)} min`,
-    bigStatLabel: "duration",
-    lines,
-  });
 }
 
 export function buildWeeklyReviewShareCard(review) {

@@ -107,7 +107,8 @@ import { todayDateKey } from "./utils/nutrition.js";
 import { SET_TYPES, isWarmup, countedSets, formatSetCompact, rirRpeSuffix, formatSetVerbose, formatSessionDuration } from "./utils/workoutSets.js";
 import WorkoutHistoryDetail from "./components/WorkoutHistoryDetail.jsx";
 import { findMostRecentSessionForPlan } from "./utils/workoutHistory.js";
-import { buildPRShareCard, buildWorkoutShareCard } from "./utils/shareCard.js";
+import { buildPRShareCard } from "./utils/shareCard.js";
+import WorkoutSharePreview from "./components/WorkoutSharePreview.jsx";
 import { suggestNext, topSetOf } from "./utils/progression.js";
 import { resolveCurrentProgramDay, programWeekAdherence } from "./utils/programSchedule.js";
 import { featuredAndOtherPRs, sessionPRCount, prDeltaLabel, prHeroLabel, prPreviousLabel, PR_TYPE_LABEL } from "./utils/prSummary.js";
@@ -5188,6 +5189,10 @@ function GuidedRunView({
   const [editingIdx, setEditingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
   const [addingExercise, setAddingExercise] = useState(false);
+  // Redesigned workout share flow (task: "Redesign the workout share/export feature") — a full
+  // preview modal with template/size/featured-lift choice, opened from the same "Share" action
+  // this screen has always had. See components/WorkoutSharePreview.jsx.
+  const [sharePreviewOpen, setSharePreviewOpen] = useState(false);
   // Travel/Alternate Gym mode (task Part 3, section 17) — "Active Workout → Session Options."
   const [sessionOptionsOpen, setSessionOptionsOpen] = useState(false);
   // "Save this machine profile" (task section 17) — a non-blocking, optional prompt shown right
@@ -5450,9 +5455,18 @@ function GuidedRunView({
             </div>
 
             <div className="border-t border-neutral-900 pt-3">
-              <ShareCardButton buildDataUrl={() => buildWorkoutShareCard(summary)} filename="brk-lift-session.png" />
+              <button
+                onClick={() => setSharePreviewOpen(true)}
+                className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+              >
+                <Share2 size={12} /> Share
+              </button>
             </div>
           </div>
+        )}
+
+        {sharePreviewOpen && summary && (
+          <WorkoutSharePreview session={summary} exMap={exMap} onClose={() => setSharePreviewOpen(false)} />
         )}
 
         {summary && onViewWorkout && (

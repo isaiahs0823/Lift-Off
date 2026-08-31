@@ -1,9 +1,8 @@
 import React, { useState } from "react";
-import { ChevronDown, ChevronUp, Award, MessageCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, Award, MessageCircle, Share2 } from "lucide-react";
 import { formatSetVerbose, formatSessionDuration, SET_TYPE_LABEL } from "../utils/workoutSets.js";
 import { featuredAndOtherPRs, sessionPRCount, PR_TYPE_LABEL, prDeltaLabel, prHeroLabel } from "../utils/prSummary.js";
-import { buildWorkoutShareCard } from "../utils/shareCard.js";
-import ShareCardButton from "./ShareCardButton.jsx";
+import WorkoutSharePreview from "./WorkoutSharePreview.jsx";
 import { equipmentDisplayLabel } from "../utils/equipmentProfiles.js";
 import { SET_QUALITY_GLYPH, SET_QUALITY_LABEL } from "../utils/workoutQuality.js";
 import { FileText } from "lucide-react";
@@ -21,6 +20,7 @@ function fmtTime(iso) {
 // up by its stable id — there is deliberately only one implementation of this screen.
 export default function WorkoutHistoryDetail({ session, state, exMap, onBack, onAskCoach, onViewRecap }) {
   const [collapsed, setCollapsed] = useState({});
+  const [sharePreviewOpen, setSharePreviewOpen] = useState(false);
 
   if (!session) {
     return (
@@ -203,8 +203,15 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
       )}
 
       <div className="border-t border-neutral-900 pt-3">
-        <ShareCardButton buildDataUrl={() => buildWorkoutShareCard(session)} filename="brk-lift-session.png" label="Share Workout" />
+        <button
+          onClick={() => setSharePreviewOpen(true)}
+          className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+        >
+          <Share2 size={12} /> Share Workout
+        </button>
       </div>
+
+      {sharePreviewOpen && <WorkoutSharePreview session={session} exMap={exMap} onClose={() => setSharePreviewOpen(false)} />}
 
       {onAskCoach && (
         <button
