@@ -642,9 +642,12 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         <SetupSchedulePrompt onSetup={() => onNavigate("schedule")} onLater={() => setDismissedPrompt(true)} />
       )}
 
-      {/* Modular 2-column row — Readiness paired with Bodyweight, each a compact focused tile
-          rather than another full-width card competing with the hero above (mockup section 5). */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Readiness and Bodyweight stack full-width on mobile — a real 2-column row only works
+          for the ring-gauge summary/prompt states; the full readiness check-in form (5 rating
+          rows + optional fields) needs its own full-width card or its buttons collide/clip
+          against the Bodyweight column. Two columns only ever return at md+ (tablet), where a
+          half-width form has real room; on every phone width this is always a single column. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
         <ReadinessCheckIn state={state} updateState={updateState} compact />
         {currentWeight != null ? (
           <BodyweightCard state={state} currentWeight={currentWeight} avg7={avg7} weeklyChange={weeklyChange} onNavigate={onNavigate} />
