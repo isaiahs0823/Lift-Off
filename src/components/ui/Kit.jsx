@@ -221,6 +221,88 @@ export function EmptyState({ icon: Icon, title, body, action, className = "" }) 
   );
 }
 
+// Icon-over-label quick-action tile (Today's "Quick actions" row) — a lighter-weight tap target
+// than a full ListRow/Button for a grid of 3-4 short actions.
+export function ActionTile({ icon: Icon, label, onClick, className = "" }) {
+  return (
+    <button onClick={onClick} className={`flex flex-col items-center gap-2 py-3 rounded-2xl bg-v5-surface hover:bg-v5-elevated ${className}`}>
+      <span className="w-10 h-10 rounded-full bg-v5-elevated flex items-center justify-center">
+        <Icon size={18} className="text-v5-red" />
+      </span>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext text-center leading-tight">{label}</span>
+    </button>
+  );
+}
+
 export function Divider({ className = "" }) {
   return <div className={`h-px bg-white/[0.06] ${className}`} />;
+}
+
+// ---------------- data viz ----------------
+
+// Circular progress ring — readiness score, adherence %, any "N out of 100" or "N%" metric that
+// deserves more visual weight than a plain number (Progress dashboard, Today's readiness card).
+// Pure SVG, no chart library. `tone` recolors the ring independent of the numeric value (e.g.
+// green/yellow/red readiness bands) — defaults to the brand red.
+const RING_TONE = { red: "#D2262E", success: "#29C17E", warn: "#f59e0b", subtle: "#5b5f66" };
+export function RingGauge({ pct, size = 76, strokeWidth = 7, tone = "red", label, value, sublabel, className = "" }) {
+  const clamped = Math.max(0, Math.min(100, pct ?? 0));
+  const r = (size - strokeWidth) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - clamped / 100);
+  return (
+    <div className={`flex items-center gap-3 ${className}`}>
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#2A2D31" strokeWidth={strokeWidth} />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={RING_TONE[tone] || RING_TONE.red}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={offset}
+            style={{ transition: "stroke-dashoffset 0.4s ease" }}
+          />
+        </svg>
+        {value != null && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-lg font-black text-v5-text tabular-nums">{value}</span>
+          </div>
+        )}
+      </div>
+      {(label || sublabel) && (
+        <div className="min-w-0">
+          {label && <div className="text-xs font-bold text-v5-text truncate">{label}</div>}
+          {sublabel && <div className="text-[11px] text-v5-subtext truncate mt-0.5">{sublabel}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Tiny Mon-Sun (or any N-bar) bar chart — weekly volume, weekly sets. Each bar's height is
+// relative to the tallest value in the set; a day with no value renders as a bare baseline dot
+// rather than an empty gap, so a quiet week still reads as 7 real days, not missing data.
+export function MiniBarChart({ bars, height = 56, className = "" }) {
+  const max = Math.max(1, ...bars.map((b) => b.value || 0));
+  return (
+    <div className={`flex items-end justify-between gap-1.5 ${className}`} style={{ height }}>
+      {bars.map((b, i) => {
+        const h = b.value > 0 ? Math.max(4, Math.round((b.value / max) * (height - 16))) : 2;
+        return (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+            <div
+              className={`w-full rounded-full ${b.active ? "bg-v5-red" : "bg-v5-elevated"}`}
+              style={{ height: h }}
+            />
+            <span className={`text-[9px] font-bold ${b.active ? "text-v5-red" : "text-v5-subtext/60"}`}>{b.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }

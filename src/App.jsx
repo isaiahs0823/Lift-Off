@@ -4798,8 +4798,15 @@ function TrainingExerciseCard({
 
       {confirmedSets.length > 0 && (
         <div className="space-y-1.5">
-          {confirmedSets.map((s, i) =>
-            editingSetIndex === i ? (
+          {confirmedSets.length > 1 && <SectionLabel tone="muted">Today's sets</SectionLabel>}
+          {confirmedSets.map((s, i) => {
+            // Purely a display highlight (never affects saving/editing/order) — the heaviest
+            // logged set this exercise, ties broken by reps, mirrors the mockup's "best set"
+            // column without inventing a second source of truth for what "best" means.
+            const isBest =
+              confirmedSets.length > 1 &&
+              confirmedSets.every((other, j) => j === i || s.weight > other.weight || (s.weight === other.weight && s.reps >= other.reps));
+            return editingSetIndex === i ? (
               <div key={i} className="flex items-center gap-2 text-sm bg-v5-elevated rounded-lg p-2">
                 <span className="text-v5-subtext shrink-0">Set {i + 1}:</span>
                 <input
@@ -4835,14 +4842,19 @@ function TrainingExerciseCard({
                 <Check size={13} className="text-v5-success shrink-0" />
                 <span className="text-v5-subtext shrink-0">Set {i + 1}</span>
                 <span className="flex-1 text-left text-v5-text font-bold">{formatSetCompact(s)}</span>
+                {isBest && (
+                  <span className="shrink-0 text-[9px] uppercase tracking-widest font-bold bg-v5-red/15 text-v5-red px-1.5 py-0.5 rounded-full">
+                    Best
+                  </span>
+                )}
                 {(s.rir != null && s.rir !== "") || (s.rpe != null && s.rpe !== "") ? (
                   <span className="text-[10px] text-v5-subtext shrink-0">
                     {s.rir != null && s.rir !== "" ? `RIR ${s.rir}` : `RPE ${s.rpe}`}
                   </span>
                 ) : null}
               </button>
-            )
-          )}
+            );
+          })}
         </div>
       )}
 

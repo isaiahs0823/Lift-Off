@@ -2,13 +2,14 @@ import React, { useState } from "react";
 import { computeReadinessScore, readinessBand, BAND_LABEL, READINESS_SHORT } from "../utils/readiness.js";
 import { buildCoachContext } from "../utils/coachContext.js";
 import { generateMorningCheckIn } from "../services/coachService.js";
+import { Card, SectionLabel, ButtonText, ButtonPrimary, RingGauge } from "./ui/Kit.jsx";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const BAND_COLOR = { green: "text-green-500", yellow: "text-yellow-500", red: "text-red-500" };
-const BAND_BORDER = { green: "border-green-700/50", yellow: "border-yellow-700/50", red: "border-red-700/50" };
+const BAND_TONE = { green: "success", yellow: "warn", red: "red" };
+const BAND_TEXT = { green: "text-v5-success", yellow: "text-amber-400", red: "text-v5-red" };
 
 const RATING_FIELDS = [
   { key: "sleepQuality", label: "Sleep quality" },
@@ -21,14 +22,14 @@ const RATING_FIELDS = [
 function RatingRow({ label, value, onChange }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-sm text-neutral-300">{label}</span>
+      <span className="text-sm text-v5-text/90">{label}</span>
       <div className="flex gap-1">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
             onClick={() => onChange(n)}
-            className={`w-8 h-8 text-xs font-bold border ${
-              value === n ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+            className={`w-8 h-8 rounded-lg text-xs font-bold ${
+              value === n ? "bg-v5-red text-white" : "bg-v5-elevated text-v5-subtext hover:text-v5-text"
             }`}
           >
             {n}
@@ -41,25 +42,27 @@ function RatingRow({ label, value, onChange }) {
 
 // Compact "already checked in today" summary. On the full readiness screen this shows the
 // coach's morning check-in message; on the Today dashboard (compact) it's just the score,
-// band, and one short line, with an Edit link back into the form either way.
+// band, and one short line, with an Edit link back into the form either way. The ring gauge
+// gives the score real visual weight — this is the one number BRK asks the athlete to glance at
+// every single morning, so it earns more than a plain digit.
 function TodaySummary({ entry, state, onEdit, compact }) {
   const score = computeReadinessScore(entry);
   const band = readinessBand(score);
   const message = compact ? READINESS_SHORT[band] : generateMorningCheckIn(buildCoachContext(state)).message;
   return (
-    <div className={`border ${BAND_BORDER[band]} bg-charcoal-panel p-4 space-y-2`}>
+    <Card padding="p-4" className="space-y-1">
       <div className="flex items-center justify-between">
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Readiness</div>
-        <button onClick={onEdit} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
-          Edit
-        </button>
+        <SectionLabel>Readiness</SectionLabel>
+        <ButtonText tone="muted" onClick={onEdit}>Edit</ButtonText>
       </div>
-      <div className="flex items-baseline gap-2">
-        <span className={`text-4xl font-bold ${BAND_COLOR[band]}`}>{score}</span>
-        <span className={`text-xs font-bold uppercase tracking-widest ${BAND_COLOR[band]}`}>{BAND_LABEL[band]}</span>
+      <div className="flex items-center gap-3">
+        <RingGauge pct={score ?? 0} value={score} tone={BAND_TONE[band] || "red"} size={64} strokeWidth={6} />
+        <div className="min-w-0">
+          <div className={`text-xs font-bold uppercase tracking-widest ${BAND_TEXT[band] || "text-v5-subtext"}`}>{BAND_LABEL[band]}</div>
+          <div className="text-sm text-v5-subtext whitespace-pre-line mt-0.5">{message}</div>
+        </div>
       </div>
-      <div className="text-sm text-neutral-400 whitespace-pre-line">{message}</div>
-    </div>
+    </Card>
   );
 }
 
@@ -67,16 +70,13 @@ function TodaySummary({ entry, state, onEdit, compact }) {
 // takes real screen space, so on Today it only opens once the user actually taps in.
 function CheckInPrompt({ onOpen }) {
   return (
-    <button
-      onClick={onOpen}
-      className="w-full text-left border border-neutral-800 bg-charcoal-panel p-4 flex items-center justify-between hover:border-neutral-600"
-    >
+    <Card onClick={onOpen} className="flex items-center justify-between">
       <div>
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Readiness</div>
-        <div className="text-sm text-neutral-400 mt-1">Check in — 2 min</div>
+        <SectionLabel>Readiness</SectionLabel>
+        <div className="text-sm text-v5-subtext mt-1">Check in — 2 min</div>
       </div>
-      <span className="shrink-0 px-4 py-2 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white">Check in</span>
-    </button>
+      <span className="shrink-0 px-4 py-2 rounded-lg text-xs uppercase tracking-widest font-bold bg-v5-red text-white">Check in</span>
+    </Card>
   );
 }
 
@@ -138,8 +138,8 @@ export default function ReadinessCheckIn({ state, updateState, compact = false }
   const previewScore = computeReadinessScore(form);
 
   return (
-    <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-4">
-      <div className="text-[11px] uppercase tracking-widest text-red-600">Daily readiness check-in</div>
+    <Card padding="p-4" className="space-y-4">
+      <SectionLabel>Daily readiness check-in</SectionLabel>
       <div className="space-y-2.5">
         {RATING_FIELDS.map((f) => (
           <RatingRow key={f.key} label={f.label} value={form[f.key]} onChange={(v) => setField(f.key, v)} />
@@ -147,21 +147,21 @@ export default function ReadinessCheckIn({ state, updateState, compact = false }
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Sleep hours (optional)</label>
+          <label className="block text-[10px] uppercase tracking-widest text-v5-subtext mb-1">Sleep hours (optional)</label>
           <input
             type="number"
             value={form.sleepHours}
             onChange={(e) => setField("sleepHours", e.target.value)}
-            className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+            className="w-full bg-v5-elevated rounded-lg text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-v5-red"
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Resting HR (optional)</label>
+          <label className="block text-[10px] uppercase tracking-widest text-v5-subtext mb-1">Resting HR (optional)</label>
           <input
             type="number"
             value={form.restingHR}
             onChange={(e) => setField("restingHR", e.target.value)}
-            className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+            className="w-full bg-v5-elevated rounded-lg text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-v5-red"
           />
         </div>
       </div>
@@ -170,16 +170,14 @@ export default function ReadinessCheckIn({ state, updateState, compact = false }
         value={form.notes}
         onChange={(e) => setField("notes", e.target.value)}
         placeholder="Notes — optional"
-        className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+        className="w-full bg-v5-elevated rounded-lg text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-v5-red placeholder:text-v5-subtext/50"
       />
       {previewScore != null && (
-        <div className="text-xs text-neutral-500">
-          Score preview: <span className="text-white font-bold">{previewScore}</span>
+        <div className="text-xs text-v5-subtext">
+          Score preview: <span className="text-v5-text font-bold">{previewScore}</span>
         </div>
       )}
-      <button onClick={save} className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
-        Save check-in
-      </button>
-    </div>
+      <ButtonPrimary onClick={save}>Save check-in</ButtonPrimary>
+    </Card>
   );
 }

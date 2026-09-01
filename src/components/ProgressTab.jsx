@@ -1,12 +1,14 @@
 import React, { useState } from "react";
-import { ChevronRight, Award, Calendar, TrendingUp, ClipboardCheck } from "lucide-react";
+import { ChevronRight, Award, Calendar, TrendingUp, ClipboardCheck, Flame } from "lucide-react";
 import BodyweightTab from "./BodyweightTab.jsx";
 import TrainingCalendar from "./TrainingCalendar.jsx";
 import AnalyticsTab from "./AnalyticsTab.jsx";
-import { ScreenHeader, SectionLabel, Card, HeroCard, MetricTile, ProgressBar, ListRow } from "./ui/Kit.jsx";
+import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
+import { ScreenHeader, SectionLabel, Card, MetricTile, ProgressBar, ListRow, RingGauge, MiniBarChart } from "./ui/Kit.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue } from "../utils/goalData.js";
 import { goalProgressPct } from "../utils/goalMath.js";
+import { hasSchedule, computeScheduleAdherence } from "../utils/weeklySchedule.js";
 
 function fmt1(v) {
   return v == null ? "—" : v.toFixed(1);
@@ -49,6 +51,35 @@ const DRILL_DOWNS = [
   { id: "analytics", label: "Analytics", desc: "Volume trends, muscle frequency, per-exercise stats", icon: TrendingUp },
 ];
 
+// Last 7 calendar days' total training volume, oldest first — deliberately "last 7 days ending
+// today" rather than a fixed Mon-Sun week, since the app has no fixed week-start convention
+// elsewhere (weeklySchedule.js's own adherence window works the same way).
+function weeklyVolumeBars(sessions) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const volume = sessions
+      .filter((s) => s.finishedAt?.slice(0, 10) === key)
+      .reduce((sum, s) => sum + (s.totalVolume || 0), 0);
+    days.push({ label: d.toLocaleDateString(undefined, { weekday: "narrow" }), value: volume, active: i === 0 });
+  }
+  return days;
+}
+
+// Whichever muscle group shows up most often across recent sessions' mainMuscles — an honest,
+// purely-frequency signal (never a fabricated "trending up/down" judgment BRK doesn't actually
+// compute). `null` when there's nothing recent to summarize.
+function topRecentMuscle(sessions) {
+  const recent = [...sessions].sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt)).slice(0, 6);
+  const counts = new Map();
+  recent.forEach((s) => (s.mainMuscles || []).forEach((m) => counts.set(m, (counts.get(m) || 0) + 1)));
+  if (counts.size === 0) return null;
+  const [muscle, count] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  return { muscle, count, of: recent.length };
+}
+
 // Visual-first landing: bodyweight snapshot, mission progress, recent PRs, and photo
 // thumbnails up front — the things worth glancing at daily. Calendar and Analytics (which
 // already houses per-exercise "performance" drill-down) are one tap away instead of competing
@@ -69,31 +100,39 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
   const primaryGoal = goals.find((g) => g.status === "active" && g.priority === "primary");
   const missionPct = primaryGoal ? goalProgressPct({ ...primaryGoal, currentValue: resolveGoalCurrentValue(primaryGoal, state) }) : null;
 
-  const recentPRs = [...(state.workoutSessions || [])]
+  const sessions = state.workoutSessions || [];
+  const recentPRs = [...sessions]
     .sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt))
     .flatMap((s) => (s.prs || []).map((p) => ({ ...p, sessionDate: s.finishedAt })))
     .slice(0, 3);
 
   const recentPhotos = [...(state.photos || [])].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4);
 
-  // Lightweight "at a glance" tile row — sessions logged and total PRs ever, purely derived from
-  // data already loaded here, no new state. Gives the dashboard a stats-first top row even
-  // before the athlete taps into a bodyweight/mission card.
-  const sessionCount = (state.workoutSessions || []).length;
-  const totalPRs = (state.workoutSessions || []).reduce((sum, s) => sum + (s.prs?.length || 0), 0);
+  const now = new Date();
+  const thisMonthSessions = sessions.filter((s) => {
+    const d = new Date(s.finishedAt);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+  const prsThisMonth = thisMonthSessions.reduce((sum, s) => sum + (s.prs?.length || 0), 0);
+
+  const scheduled = hasSchedule(state);
+  const adherence = scheduled ? computeScheduleAdherence(state, 7) : null;
+  const volumeBars = weeklyVolumeBars(sessions);
+  const focus = topRecentMuscle(sessions);
 
   return (
     <div className="space-y-5">
       <ScreenHeader eyebrow="Progress" title="Where you stand" />
 
-      <div className="grid grid-cols-2 gap-3">
-        <MetricTile label="Sessions logged" value={sessionCount} />
-        <MetricTile label="Total PRs" value={totalPRs} accent={totalPRs > 0} />
+      <div className="grid grid-cols-3 gap-2.5">
+        <MetricTile label="Bodyweight" value={currentWeight != null ? fmt1(currentWeight) : "—"} sublabel={currentWeight != null ? "lb" : undefined} />
+        <MetricTile label="This Month" value={thisMonthSessions.length} sublabel="Workouts" />
+        <MetricTile label="PRs" value={prsThisMonth} sublabel="This month" accent={prsThisMonth > 0} />
       </div>
 
       <Card onClick={() => onDrillDown("body")} className="space-y-2.5">
         <div className="flex items-center justify-between">
-          <SectionLabel>Bodyweight</SectionLabel>
+          <SectionLabel>Bodyweight trend</SectionLabel>
           <ChevronRight size={16} className="text-v5-subtext" />
         </div>
         {currentWeight != null ? (
@@ -110,6 +149,36 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
           <div className="text-sm text-v5-subtext">No entries yet — log your weight to see a trend here.</div>
         )}
       </Card>
+
+      {sessions.length > 0 && (
+        <Card className="space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionLabel>Weekly volume</SectionLabel>
+            <div className="text-xs text-v5-subtext">{volumeBars.reduce((s, b) => s + b.value, 0).toLocaleString()} lb</div>
+          </div>
+          <MiniBarChart bars={volumeBars} />
+          {adherence?.overall != null && (
+            <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between">
+              <RingGauge pct={adherence.overall} value={`${adherence.overall}%`} size={56} strokeWidth={5} label="Adherence" sublabel="Last 7 days" />
+            </div>
+          )}
+        </Card>
+      )}
+
+      {focus && (
+        <Card className="flex items-center gap-4">
+          <div className="shrink-0 relative w-16 h-32 overflow-hidden rounded-xl bg-v5-elevated flex items-center justify-center">
+            <MuscleBodyOutline exercise={{ muscle: focus.muscle }} size={64} />
+          </div>
+          <div className="min-w-0">
+            <SectionLabel tone="muted">Muscle focus</SectionLabel>
+            <div className="text-lg font-black text-v5-text mt-0.5">{focus.muscle}</div>
+            <div className="text-xs text-v5-subtext mt-0.5">
+              Trained {focus.count} of your last {focus.of} sessions
+            </div>
+          </div>
+        </Card>
+      )}
 
       {primaryGoal && (
         <Card onClick={() => onNavigate("mission")}>

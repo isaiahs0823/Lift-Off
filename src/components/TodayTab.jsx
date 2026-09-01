@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play } from "lucide-react";
+import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp } from "lucide-react";
 import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
 import NutritionCard from "./NutritionCard.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
-import { ScreenHeader, SectionLabel, Card, HeroCard, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, Pill, ProgressBar } from "./ui/Kit.jsx";
+import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
+import { ScreenHeader, SectionLabel, Card, HeroCard, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, Pill, ProgressBar, ActionTile } from "./ui/Kit.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue, goalHistory } from "../utils/goalData.js";
 import { goalProgressPct, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
@@ -233,6 +234,22 @@ function RecoveryLogCard({ label, state, updateState }) {
         <ButtonPrimary size="lg" onClick={() => setOpen(true)}>Log recovery</ButtonPrimary>
       )}
     </HeroCard>
+  );
+}
+
+// A real-photography hero band would need licensed athlete imagery this app doesn't have and
+// can't fabricate — this stands in for it using BRK's own illustrated anatomy figure, blown up
+// and set against a dark red-glow gradient so the workout card still opens with real visual
+// weight instead of just text. `exercise` is the plan's own lead movement (exMap[exId]), so the
+// highlighted region is always an honest reflection of what's actually first on today's card.
+function WorkoutHeroBand({ exercise }) {
+  return (
+    <div className="relative -mx-5 sm:-mx-6 -mt-5 sm:-mt-6 h-28 overflow-hidden rounded-t-2xl bg-gradient-to-br from-v5-red/20 via-v5-elevated to-v5-surface flex items-center justify-center">
+      <div className="absolute -right-4 top-1/2 -translate-y-1/2 opacity-90">
+        <MuscleBodyOutline exercise={exercise} size={130} />
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-r from-v5-surface via-v5-surface/40 to-transparent" />
+    </div>
   );
 }
 
@@ -469,6 +486,9 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
           const completedSession = todaySchedule.status === "completed" && run ? findTodaysSessionForPlan(state.workoutSessions, run.plan.name) : null;
           return (
             <HeroCard>
+              {run && todaySchedule.status !== "completed" && (
+                <WorkoutHeroBand exercise={exMap[run.plan.exercises[0]?.exId]} />
+              )}
               <SectionLabel>Today</SectionLabel>
               <div className="text-2xl font-black text-v5-text">{todaySchedule.label || "Training day"}</div>
               {run ? (
@@ -504,6 +524,9 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         })()
       ) : (
         <HeroCard>
+          {todayPlan && !programDay?.isRecoveryDay && !programDay.completedToday && (
+            <WorkoutHeroBand exercise={exMap[todayPlan.exercises[0]?.exId]} />
+          )}
           <div className="flex items-center justify-between gap-2">
             <SectionLabel>Today</SectionLabel>
             {(todayPlan || programDay?.isRecoveryDay) && !programDay.completedToday && !activeRun && (
@@ -643,11 +666,11 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
 
       <div>
         <SectionLabel tone="muted" className="mb-2">Quick actions</SectionLabel>
-        <div className="grid grid-cols-2 gap-2">
-          <ButtonSecondary size="sm" onClick={() => onNavigate("progress")}>Log weight</ButtonSecondary>
-          <ButtonSecondary size="sm" onClick={() => onNavigate("train")}>Change workout</ButtonSecondary>
-          <ButtonSecondary size="sm" onClick={() => onNavigate("progress")}>View progress</ButtonSecondary>
-          <ButtonSecondary size="sm" onClick={() => onNavigate("coach")}>Ask coach</ButtonSecondary>
+        <div className="grid grid-cols-4 gap-2">
+          <ActionTile icon={Weight} label="Log weight" onClick={() => onNavigate("progress")} />
+          <ActionTile icon={RefreshCw} label="Change workout" onClick={() => onNavigate("train")} />
+          <ActionTile icon={TrendingUp} label="View progress" onClick={() => onNavigate("progress")} />
+          <ActionTile icon={MessageCircle} label="Ask coach" onClick={() => onNavigate("coach")} />
         </div>
       </div>
     </div>
