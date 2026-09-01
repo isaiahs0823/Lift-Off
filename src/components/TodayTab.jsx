@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown } from "lucide-react";
+import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown, Target } from "lucide-react";
 import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
 import NutritionCard from "./NutritionCard.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
-import { ScreenHeader, SectionLabel, Card, HeroCard, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, Pill, ProgressBar, ActionTile, LineChart } from "./ui/Kit.jsx";
+import { SlideInPanel } from "./SlideInPanel.jsx";
+import { SectionLabel, Card, HeroCard, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, Pill, ActionTile, ListRow, LineChart } from "./ui/Kit.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue, goalHistory } from "../utils/goalData.js";
 import { goalProgressPct, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
@@ -55,7 +56,6 @@ function todayReadiness(state) {
   if (score == null) return null;
   return { score, band: readinessBand(score) };
 }
-const STATUS_COLOR = { ahead: "text-v5-success", on_track: "text-v5-success", behind: "text-v5-red", no_data: "text-v5-subtext" };
 const READINESS_COLOR = { green: "text-v5-success", yellow: "text-amber-400", red: "text-v5-red" };
 const GLYPH_FOR_STATUS = { completed: "✓", pending: "●", upcoming: "○", rest: "REST", missed: "×", skipped: "×", moved_away: "–", none: "" };
 const GLYPH_COLOR = {
@@ -269,6 +269,22 @@ function BodyweightCard({ state, currentWeight, avg7, weeklyChange, onNavigate }
   );
 }
 
+// Half-width partner for the compact NutritionCard — same idea: one concise insight + a tap
+// target, sized to sit comfortably next to Nutrition instead of stacking full-width (task
+// section 5). line-clamp keeps a longer Coach message from stretching the card taller than its
+// Nutrition neighbor.
+function CoachBriefCard({ message, onNavigate }) {
+  return (
+    <Card onClick={() => onNavigate("coach")} className="space-y-2">
+      <SectionLabel className="flex items-center gap-1.5">
+        <MessageCircle size={12} /> Coach Brief
+      </SectionLabel>
+      <div className="text-xs text-v5-text/90 leading-relaxed line-clamp-3">{message}</div>
+      <div className="text-[11px] font-bold uppercase tracking-widest text-v5-red">View plan →</div>
+    </Card>
+  );
+}
+
 function SetupSchedulePrompt({ onSetup, onLater }) {
   return (
     <Card className="flex items-center justify-between gap-3">
@@ -318,6 +334,9 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
   }
 
   const [swapOpen, setSwapOpen] = useState(false);
+  // The full readiness questionnaire is a dedicated sheet, not a permanent block on Today (task
+  // section 3) — Today only ever shows ReadinessCheckIn's compact ring-gauge/prompt state.
+  const [readinessSheetOpen, setReadinessSheetOpen] = useState(false);
 
   const coachContext = buildCoachContext(state, exMap);
   const coachMessage = generateTodaySnapshot(coachContext).message;
@@ -366,6 +385,14 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
 
   if (swapOpen && !activeRun) {
     return <SwapWorkoutSheet state={state} updateState={updateState} exMap={exMap} onClose={() => setSwapOpen(false)} onNavigate={onNavigate} />;
+  }
+
+  if (readinessSheetOpen) {
+    return (
+      <SlideInPanel title="Daily readiness check-in" onBack={() => setReadinessSheetOpen(false)}>
+        <ReadinessCheckIn state={state} updateState={updateState} onSaved={() => setReadinessSheetOpen(false)} />
+      </SlideInPanel>
+    );
   }
 
   return (
@@ -648,7 +675,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
           against the Bodyweight column. Two columns only ever return at md+ (tablet), where a
           half-width form has real room; on every phone width this is always a single column. */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
-        <ReadinessCheckIn state={state} updateState={updateState} compact />
+        <ReadinessCheckIn state={state} updateState={updateState} compact onOpenFull={() => setReadinessSheetOpen(true)} />
         {currentWeight != null ? (
           <BodyweightCard state={state} currentWeight={currentWeight} avg7={avg7} weeklyChange={weeklyChange} onNavigate={onNavigate} />
         ) : (
@@ -659,38 +686,39 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         )}
       </div>
 
-      <NutritionCard state={state} onNavigate={onNavigate} />
+      {/* Nutrition and Coach Brief — two compact snapshots side by side rather than two more
+          full-width cards (task section 5). Both drop to their `compact` presentation so
+          neither cramps at 375px: one headline metric each, tap through for the rest. */}
+      <div className="grid grid-cols-2 gap-3">
+        <NutritionCard state={state} onNavigate={onNavigate} compact />
+        <CoachBriefCard message={coachMessage} onNavigate={onNavigate} />
+      </div>
 
-      <Card>
-        <SectionLabel className="mb-2 flex items-center gap-1.5">
-          <MessageCircle size={12} /> Coach Brief
-        </SectionLabel>
-        <div className="text-sm text-v5-text/90 leading-relaxed">{coachMessage}</div>
-        <ButtonText onClick={() => onNavigate("coach")} className="mt-2.5">View plan →</ButtonText>
-      </Card>
-
-      {weekStrip && <WeekStrip strip={weekStrip} />}
-
-      {missionView && (
-        <Card onClick={() => onNavigate("mission")}>
-          <div className="flex items-center justify-between mb-2">
-            <SectionLabel tone="muted">Mission</SectionLabel>
-            <div className={`text-[11px] uppercase tracking-widest font-bold ${STATUS_COLOR[missionView.status]}`}>{GOAL_STATUS_LABEL[missionView.status]}</div>
-          </div>
-          <div className="text-lg font-bold text-v5-text truncate">{missionView.goal.title}</div>
-          <ProgressBar pct={missionView.pct} className="mt-2.5" />
-          <div className="text-xs text-v5-subtext mt-1.5">{missionView.pct}% complete</div>
-        </Card>
-      )}
-
-      {recentWin && (
-        <Card>
-          <SectionLabel tone="muted" className="mb-1.5 flex items-center gap-1.5">
-            <Award size={12} className="text-v5-red" /> Recent win
-          </SectionLabel>
-          <div className="text-base font-bold text-v5-text">{exMap[recentWin.exId]?.name || recentWin.exId}</div>
-          {recentWin.weight != null && <div className="text-lg text-v5-subtext">{recentWin.weight} × {recentWin.reps}</div>}
-        </Card>
+      {/* Secondary/supporting information, consolidated under one heading instead of each
+          being its own giant full-width card (task section 6) — this week's schedule stays its
+          own compact glance-strip, Mission and Recent Win collapse to single-line rows, and
+          Quick Actions stays the icon-tile row it already was. */}
+      {(weekStrip || missionView || recentWin) && (
+        <div className="space-y-2">
+          <SectionLabel tone="muted">More today</SectionLabel>
+          {weekStrip && <WeekStrip strip={weekStrip} />}
+          {missionView && (
+            <ListRow
+              icon={Target}
+              title={missionView.goal.title}
+              subtitle={`${missionView.pct}% complete · ${GOAL_STATUS_LABEL[missionView.status]}`}
+              onClick={() => onNavigate("mission")}
+            />
+          )}
+          {recentWin && (
+            <ListRow
+              icon={Award}
+              title={exMap[recentWin.exId]?.name || recentWin.exId}
+              subtitle={recentWin.weight != null ? `${recentWin.weight} × ${recentWin.reps} · Recent win` : "Recent win"}
+              onClick={() => onNavigate("progress")}
+            />
+          )}
+        </div>
       )}
 
       <div>

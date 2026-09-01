@@ -4,7 +4,7 @@ import { resolveTodayWorkout } from "../utils/programSchedule.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
-import { ScreenHeader, SectionLabel, Card, HeroCard, ButtonPrimary, ButtonText, StatTile, Pill, ListRow } from "./ui/Kit.jsx";
+import { ScreenHeader, SectionLabel, HeroCard, ButtonPrimary, ButtonText, StatTile, Pill, ActionTile } from "./ui/Kit.jsx";
 
 // Never auto-discards on age — a workout logged right up to midnight, or one left open for
 // days, is still fully recoverable, just described differently: minutes/hours for something
@@ -39,6 +39,10 @@ function elapsedLabel(startedAt) {
 export default function TrainTab({ state, updateState, exMap, activeRun, onStartRun, onStartRecovery, onResumeWorkout, onDiscardWorkout, onNavigate }) {
   const programDay = resolveTodayWorkout(state);
   const [swapOpen, setSwapOpen] = useState(false);
+  // Collapsed by default — Train is a "decide what to do" screen, not a place to scroll through
+  // a full per-exercise breakdown before reaching Start (task section 7/16). Expands in place
+  // for the athlete who wants to preview the day first.
+  const [showExercises, setShowExercises] = useState(false);
 
   if (swapOpen && !activeRun) {
     return <SwapWorkoutSheet state={state} updateState={updateState} exMap={exMap} onClose={() => setSwapOpen(false)} onNavigate={onNavigate} />;
@@ -150,14 +154,30 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
             </>
           ) : (
             <>
-              {/* Day preview — same compact anatomy row used in My Plan/program detail, so the
-                  athlete can see today's muscle emphasis before committing to Start. */}
+              {/* Day preview collapses to one summary line by default — Train is a "decide what
+                  to do" screen, so Start stays right under the program name instead of below a
+                  full per-exercise list (task section 7). Tapping the summary previews the day
+                  inline for anyone who wants it before committing. */}
               {programDay.plan?.exercises?.length > 0 && (
-                <div className="rounded-xl bg-v5-elevated/60 px-1">
-                  {programDay.plan.exercises.map((e, i) => (
-                    <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
-                  ))}
-                </div>
+                <>
+                  <button
+                    onClick={() => setShowExercises((v) => !v)}
+                    className="w-full flex items-center justify-between text-xs text-v5-subtext hover:text-v5-text"
+                  >
+                    <span>
+                      {programDay.plan.exercises.length} exercises ·{" "}
+                      {[...new Set(programDay.plan.exercises.map((e) => exMap[e.exId]?.muscle).filter(Boolean))].slice(0, 3).join(", ")}
+                    </span>
+                    <span className="shrink-0 uppercase tracking-widest font-bold text-v5-red">{showExercises ? "Hide" : "Preview"}</span>
+                  </button>
+                  {showExercises && (
+                    <div className="rounded-xl bg-v5-elevated/60 px-1">
+                      {programDay.plan.exercises.map((e, i) => (
+                        <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
               <ButtonPrimary size="lg" icon={Play} onClick={() => onStartRun(programDay.plan, programDay.programContext)}>
                 Start
@@ -174,12 +194,14 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
         Start workout today
       </ButtonPrimary>
 
-      <ListRow icon={ClipboardList} title="Programs" subtitle="All plans, hero programs, single-day templates" onClick={() => onNavigate("templates")} />
-      <ListRow icon={Timer} title="Cardio / conditioning" subtitle="Runs, sleds, intervals" onClick={() => onNavigate("cardio")} />
-
-      <div className="flex items-center gap-5 pt-1">
-        <ButtonText icon={Plus} onClick={() => onNavigate("build")}>Create plan</ButtonText>
-        <ButtonText tone="muted" icon={Dumbbell} onClick={() => onNavigate("log")}>Log a single exercise</ButtonText>
+      {/* Core training destinations as a compact action grid, not a stack of full-width rows —
+          Train should read as a control panel, with program discovery one tap deeper via
+          Programs rather than its own catalogue living on this landing screen (task section 7). */}
+      <div className="grid grid-cols-4 gap-2">
+        <ActionTile icon={ClipboardList} label="Programs" onClick={() => onNavigate("templates")} />
+        <ActionTile icon={Timer} label="Cardio" onClick={() => onNavigate("cardio")} />
+        <ActionTile icon={Plus} label="Custom workout" onClick={() => onNavigate("build")} />
+        <ActionTile icon={Dumbbell} label="Single exercise" onClick={() => onNavigate("log")} />
       </div>
     </div>
   );

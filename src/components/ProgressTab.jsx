@@ -156,19 +156,41 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
         </div>
       )}
 
-      {focus && (
-        <Card className="flex items-center gap-4">
-          <div className="shrink-0 relative w-16 h-32 overflow-hidden rounded-xl bg-v5-elevated flex items-center justify-center">
-            <MuscleBodyOutline exercise={{ muscle: focus.muscle }} size={64} />
-          </div>
-          <div className="min-w-0">
-            <SectionLabel tone="muted">Muscle focus</SectionLabel>
-            <div className="text-lg font-black text-v5-text mt-0.5">{focus.muscle}</div>
-            <div className="text-xs text-v5-subtext mt-0.5">
-              Trained {focus.count} of your last {focus.of} sessions
-            </div>
-          </div>
-        </Card>
+      {/* Second paired row — Muscle Focus next to Recent PRs, matching the Weekly Volume /
+          Adherence pattern above instead of each getting its own full-width card (task section
+          10). Falls back to a single stacked column if only one of the two has data. */}
+      {(focus || recentPRs.length > 0) && (
+        <div className={focus && recentPRs.length > 0 ? "grid grid-cols-2 gap-3" : "space-y-3"}>
+          {focus && (
+            <Card className="flex items-center gap-2.5">
+              <div className="shrink-0 relative w-10 h-16 overflow-hidden rounded-lg bg-v5-elevated flex items-center justify-center">
+                <MuscleBodyOutline exercise={{ muscle: focus.muscle }} size={44} />
+              </div>
+              <div className="min-w-0">
+                <SectionLabel tone="muted">Muscle focus</SectionLabel>
+                <div className="text-sm font-black text-v5-text mt-0.5 truncate">{focus.muscle}</div>
+                <div className="text-[11px] text-v5-subtext mt-0.5">
+                  {focus.count}/{focus.of} sessions
+                </div>
+              </div>
+            </Card>
+          )}
+          {recentPRs.length > 0 && (
+            <Card className="space-y-1.5">
+              <SectionLabel tone="muted" className="flex items-center gap-1.5">
+                <Award size={11} className="text-v5-red" /> Recent PRs
+              </SectionLabel>
+              <div className="space-y-1">
+                {recentPRs.slice(0, focus ? 2 : 3).map((pr, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="text-v5-subtext truncate">{exMap[pr.exId]?.name || pr.exId}</span>
+                    <span className="text-v5-text font-bold shrink-0 ml-2 tabular-nums">{pr.weight != null ? `${pr.weight} × ${pr.reps}` : `${pr.value} lb`}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
       )}
 
       {primaryGoal && (
@@ -180,22 +202,6 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
           <div className="text-base font-bold text-v5-text truncate">{primaryGoal.title}</div>
           <ProgressBar pct={missionPct} className="mt-2.5" />
           <div className="text-xs text-v5-subtext mt-1.5">{missionPct}% complete</div>
-        </Card>
-      )}
-
-      {recentPRs.length > 0 && (
-        <Card>
-          <SectionLabel tone="muted" className="mb-2.5 flex items-center gap-1.5">
-            <Award size={12} className="text-v5-red" /> Recent PRs
-          </SectionLabel>
-          <div className="space-y-2">
-            {recentPRs.map((pr, i) => (
-              <div key={i} className="flex items-center justify-between text-sm">
-                <span className="text-v5-subtext truncate">{exMap[pr.exId]?.name || pr.exId}</span>
-                <span className="text-v5-text font-bold shrink-0 ml-2 tabular-nums">{pr.weight != null ? `${pr.weight} × ${pr.reps}` : `${pr.value} lb`}</span>
-              </div>
-            ))}
-          </div>
         </Card>
       )}
 

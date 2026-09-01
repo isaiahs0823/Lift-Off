@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff, ListChecks, Sparkles, AlertCircle, Target, MessageCircle } from "lucide-react";
-import { ButtonPrimary, Pill, Divider } from "./ui/Kit.jsx";
+import { ButtonPrimary, Pill, Divider, ActionTile } from "./ui/Kit.jsx";
 import { syncCoachMemory } from "../utils/coachMemory.js";
 import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC, PHYSIQUE_PHASE_LABEL } from "../utils/athleteProfile.js";
 import { resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
@@ -24,24 +24,6 @@ import {
   resolveProposalOnMessage,
   supersedePendingProposals,
 } from "../utils/coachConversations.js";
-
-// Compact, Coach-local menu row — deliberately NOT the shared ListRow (that primitive's p-4
-// padding + w-9 icon circle is used all over the rest of the app; shrinking it here would
-// shrink Today/Progress/More too). Smaller icon circle, tighter padding, same tap target still
-// comfortably touch-sized (44px+ total row height).
-function CoachMenuRow({ icon: Icon, title, onClick }) {
-  return (
-    <button onClick={onClick} className="w-full flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-v5-surface hover:bg-v5-elevated text-left transition-colors">
-      <span className="flex items-center gap-2 min-w-0">
-        <span className="shrink-0 w-6 h-6 rounded-full bg-v5-elevated flex items-center justify-center">
-          <Icon size={12} className="text-v5-subtext" />
-        </span>
-        <span className="text-[13px] font-bold text-v5-text truncate">{title}</span>
-      </span>
-      <ChevronRight size={13} className="text-v5-subtext shrink-0" />
-    </button>
-  );
-}
 
 // Coach-local micro eyebrow — same role as the shared SectionLabel but a size smaller, so the
 // visual-scale reduction is real and not fighting the shared primitive's fixed 11px.
@@ -254,12 +236,18 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
         {hasFocus && <div className="text-[10px] text-v5-subtext">Focus: {[priorities.primary, priorities.secondary].filter(Boolean).join(", ")}</div>}
       </button>
 
-      <div className="space-y-1">
-        <CoachMenuRow icon={BookOpen} title="What Coach Knows About You" onClick={() => onNavigate?.("coachKnowledge")} />
-        <CoachMenuRow icon={Target} title="Development Priorities" onClick={() => onNavigate?.("developmentPriorities")} />
-        <CoachMenuRow icon={SettingsIcon} title="Coach Settings" onClick={() => onNavigate?.("coachSettings")} />
-        <CoachMenuRow icon={Apple} title="Nutrition Plan" onClick={() => onNavigate?.("nutrition")} />
-        <CoachMenuRow icon={ListChecks} title="Build a Program" onClick={() => setShowScheduleBuilder(true)} />
+      {/* Coach Tools consolidated into one compact grid instead of five stacked full-width
+          rows (task section 9) — Coach should read as "brief + conversation" first, with these
+          management destinations one glance below, not competing with the chat for space. */}
+      <div>
+        <MiniLabel tone="muted" className="mb-1.5">Coach tools</MiniLabel>
+        <div className="grid grid-cols-2 gap-2">
+          <ActionTile icon={BookOpen} label="Knowledge" onClick={() => onNavigate?.("coachKnowledge")} />
+          <ActionTile icon={Target} label="Priorities" onClick={() => onNavigate?.("developmentPriorities")} />
+          <ActionTile icon={Apple} label="Nutrition" onClick={() => onNavigate?.("nutrition")} />
+          <ActionTile icon={ListChecks} label="Program" onClick={() => setShowScheduleBuilder(true)} />
+          <ActionTile icon={SettingsIcon} label="Settings" onClick={() => onNavigate?.("coachSettings")} />
+        </div>
       </div>
 
       {openCommitments.length > 0 && (

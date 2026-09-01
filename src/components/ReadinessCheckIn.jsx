@@ -80,7 +80,7 @@ function CheckInPrompt({ onOpen }) {
   );
 }
 
-export default function ReadinessCheckIn({ state, updateState, compact = false }) {
+export default function ReadinessCheckIn({ state, updateState, compact = false, onOpenFull, onSaved }) {
   const entries = state.readinessLogs || [];
   const todayEntry = entries.find((e) => e.date.slice(0, 10) === todayStr());
   const [editing, setEditing] = useState(!compact && !todayEntry);
@@ -125,14 +125,25 @@ export default function ReadinessCheckIn({ state, updateState, compact = false }
       }
       return next;
     });
-    setEditing(false);
+    // When opened from Today's compact summary as a dedicated sheet (onSaved provided), let the
+    // parent screen collapse it back to the summary card — the full questionnaire never stays
+    // permanently expanded in that flow. The standalone (non-compact) usage keeps its own
+    // editing-state toggle unchanged.
+    if (onSaved) onSaved();
+    else setEditing(false);
   };
 
+  // On Today (compact), tapping in never expands the full form inline — it hands off to the
+  // parent, which opens a dedicated sheet instead (task: "the full readiness questionnaire
+  // should NOT permanently occupy the Today screen"). Elsewhere (the standalone Readiness
+  // screen), it still expands in place exactly as before.
+  const openFull = onOpenFull || (() => setEditing(true));
+
   if (!editing && todayEntry) {
-    return <TodaySummary entry={todayEntry} state={state} compact={compact} onEdit={() => setEditing(true)} />;
+    return <TodaySummary entry={todayEntry} state={state} compact={compact} onEdit={openFull} />;
   }
   if (!editing && compact) {
-    return <CheckInPrompt onOpen={() => setEditing(true)} />;
+    return <CheckInPrompt onOpen={openFull} />;
   }
 
   const previewScore = computeReadinessScore(form);
