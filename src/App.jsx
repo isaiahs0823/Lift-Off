@@ -2793,9 +2793,9 @@ export default function LiftLog() {
 
 function Header() {
   return (
-    <div className="px-4 sm:px-6 pt-4 pb-3 bg-v5-bg">
-      <div className="flex items-center gap-2.5">
-        <img src={BREAK_LOGO} alt="B.R.E.A.K. logo" className="w-8 h-8 rounded-full object-cover ring-1 ring-v5-red/50" />
+    <div className="px-4 sm:px-6 pt-3 pb-2 bg-v5-bg">
+      <div className="flex items-center gap-2">
+        <img src={BREAK_LOGO} alt="B.R.E.A.K. logo" className="w-7 h-7 rounded-full object-cover ring-1 ring-v5-red/50" />
         <div>
           <div className="text-v5-text font-black tracking-wide text-sm leading-none">
             BRK <span className="text-v5-red">-</span> LIFT

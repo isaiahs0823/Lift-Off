@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff, ListChecks, Sparkles, AlertCircle, Target, MessageCircle } from "lucide-react";
-import { SectionLabel, Card, ButtonPrimary, Pill, Divider } from "./ui/Kit.jsx";
+import { ButtonPrimary, Pill, Divider } from "./ui/Kit.jsx";
 import { syncCoachMemory } from "../utils/coachMemory.js";
 import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC, PHYSIQUE_PHASE_LABEL } from "../utils/athleteProfile.js";
 import { resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
@@ -31,15 +31,25 @@ import {
 // comfortably touch-sized (44px+ total row height).
 function CoachMenuRow({ icon: Icon, title, onClick }) {
   return (
-    <button onClick={onClick} className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-v5-surface hover:bg-v5-elevated text-left transition-colors">
-      <span className="flex items-center gap-2.5 min-w-0">
-        <span className="shrink-0 w-7 h-7 rounded-full bg-v5-elevated flex items-center justify-center">
-          <Icon size={14} className="text-v5-subtext" />
+    <button onClick={onClick} className="w-full flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-v5-surface hover:bg-v5-elevated text-left transition-colors">
+      <span className="flex items-center gap-2 min-w-0">
+        <span className="shrink-0 w-6 h-6 rounded-full bg-v5-elevated flex items-center justify-center">
+          <Icon size={12} className="text-v5-subtext" />
         </span>
-        <span className="text-sm font-bold text-v5-text truncate">{title}</span>
+        <span className="text-[13px] font-bold text-v5-text truncate">{title}</span>
       </span>
-      <ChevronRight size={14} className="text-v5-subtext shrink-0" />
+      <ChevronRight size={13} className="text-v5-subtext shrink-0" />
     </button>
+  );
+}
+
+// Coach-local micro eyebrow — same role as the shared SectionLabel but a size smaller, so the
+// visual-scale reduction is real and not fighting the shared primitive's fixed 11px.
+function MiniLabel({ children, tone = "red", className = "" }) {
+  return (
+    <div className={`text-[10px] font-bold uppercase tracking-[0.14em] ${tone === "red" ? "text-v5-red" : "text-v5-subtext"} ${className}`}>
+      {children}
+    </div>
   );
 }
 
@@ -216,38 +226,35 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
   const showStreaming = sending && streamingText !== "";
 
   return (
-    <div className="space-y-3">
-      {/* Compact local header — same info as before (eyebrow/title/context) but the context
-          line rides inline next to the title instead of stacking as its own row, and the title
-          drops one step (2xl -> xl) to trim height without losing hierarchy (task: tighten
-          top section, don't weaken it). */}
+    <div className="space-y-2.5 -mx-1">
+      {/* Compact local header — a real size drop (title 20px -> 18px), not just spacing. The
+          context line rides inline next to the title instead of stacking as its own row. */}
       <div>
-        <SectionLabel>Coach</SectionLabel>
+        <MiniLabel>Coach</MiniLabel>
         <div className="flex items-baseline justify-between gap-2 mt-0.5">
-          <div className="text-xl font-black text-v5-text tracking-tight">BRK Coach</div>
-          <div className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext/70 shrink-0" title={KNOWLEDGE_LEVEL_DESC[knowledgeLevel]}>
+          <div className="text-lg font-black text-v5-text tracking-tight">BRK Coach</div>
+          <div className="text-[9px] font-bold uppercase tracking-wide text-v5-subtext/70 shrink-0" title={KNOWLEDGE_LEVEL_DESC[knowledgeLevel]}>
             {KNOWLEDGE_LEVEL_LABEL[knowledgeLevel]}
           </div>
         </div>
       </div>
 
-      {/* Context card — what Coach is actually considering, so this reads as BRK's own coach
-          rather than a bolted-on chatbot page. Real fields only: specialty, declared phase,
-          declared development priorities. Tighter padding/spacing than before. */}
-      <Card onClick={() => onNavigate?.("coachSettings")} padding="p-3" className="space-y-1">
+      {/* Context card — what Coach is actually considering. A context selector, not a feature
+          hero: smaller radius, smaller padding, smaller type than before. */}
+      <button onClick={() => onNavigate?.("coachSettings")} className="w-full text-left bg-v5-surface rounded-xl p-2.5 space-y-0.5">
         <div className="flex items-center justify-between">
-          <SectionLabel className="flex items-center gap-1.5">
-            <MessageCircle size={11} /> {activeSpecialty?.label || "Coach"}
-          </SectionLabel>
-          <ChevronRight size={14} className="text-v5-subtext" />
+          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-v5-red">
+            <MessageCircle size={10} /> {activeSpecialty?.label || "Coach"}
+          </span>
+          <ChevronRight size={13} className="text-v5-subtext" />
         </div>
-        <div className="text-sm text-v5-text/90">
+        <div className="text-xs text-v5-text/90">
           {phase ? PHYSIQUE_PHASE_LABEL[phase] || "General Hypertrophy" : "General Hypertrophy"}
         </div>
-        {hasFocus && <div className="text-xs text-v5-subtext">Focus: {[priorities.primary, priorities.secondary].filter(Boolean).join(", ")}</div>}
-      </Card>
+        {hasFocus && <div className="text-[10px] text-v5-subtext">Focus: {[priorities.primary, priorities.secondary].filter(Boolean).join(", ")}</div>}
+      </button>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         <CoachMenuRow icon={BookOpen} title="What Coach Knows About You" onClick={() => onNavigate?.("coachKnowledge")} />
         <CoachMenuRow icon={Target} title="Development Priorities" onClick={() => onNavigate?.("developmentPriorities")} />
         <CoachMenuRow icon={SettingsIcon} title="Coach Settings" onClick={() => onNavigate?.("coachSettings")} />
@@ -256,45 +263,45 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
       </div>
 
       {openCommitments.length > 0 && (
-        <Card padding="p-3" className="space-y-1.5">
-          <SectionLabel tone="muted">Active commitments</SectionLabel>
+        <div className="bg-v5-surface rounded-xl p-2.5 space-y-1">
+          <MiniLabel tone="muted">Active commitments</MiniLabel>
           <div className="space-y-1">
             {openCommitments.map((c) => {
               const progress = c.type !== "custom" ? commitmentProgress(state, c) : null;
               return (
-                <div key={c.id} className="text-sm text-v5-text/90 flex items-center justify-between gap-2">
+                <div key={c.id} className="text-xs text-v5-text/90 flex items-center justify-between gap-2">
                   <span className="truncate">{c.text} — {c.period === "next_week" ? "next week" : "this week"}</span>
-                  {progress != null && <span className="text-v5-subtext text-xs shrink-0 tabular-nums">{progress}/{c.target}</span>}
+                  {progress != null && <span className="text-v5-subtext text-[10px] shrink-0 tabular-nums">{progress}/{c.target}</span>}
                 </div>
               );
             })}
           </div>
-        </Card>
+        </div>
       )}
 
       {openContext?.label && (
         <div className="flex items-center gap-2">
           <Pill tone="outline">Referencing</Pill>
-          <span className="text-xs text-v5-text/90 truncate">{openContext.label}</span>
+          <span className="text-[11px] text-v5-text/90 truncate">{openContext.label}</span>
         </div>
       )}
 
       {!isOnline && (
-        <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 rounded-xl px-3 py-2">
-          <WifiOff size={13} /> You're offline — Coach needs a connection to respond.
+        <div className="flex items-center gap-2 text-[11px] text-amber-400 bg-amber-500/10 rounded-lg px-2.5 py-2">
+          <WifiOff size={12} /> You're offline — Coach needs a connection to respond.
         </div>
       )}
 
-      <div className="rounded-2xl bg-v5-surface flex flex-col h-[65vh] min-h-[420px] overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
+      <div className="rounded-xl bg-v5-surface flex flex-col h-[65vh] min-h-[420px] overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
           {bubbles.length === 0 && !showThinking && !showStreaming && (
-            <div className="text-sm text-v5-subtext text-center py-4">
+            <div className="text-xs text-v5-subtext text-center py-3">
               Ask about a workout, your progress, nutrition, or what to focus on today.
             </div>
           )}
           {bubbles.map((m) => (
             <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm whitespace-pre-line ${m.role === "user" ? "bg-v5-red text-white" : "bg-v5-elevated text-v5-text"}`}>
+              <div className={`max-w-[85%] px-3 py-2 rounded-xl text-[13px] whitespace-pre-line ${m.role === "user" ? "bg-v5-red text-white" : "bg-v5-elevated text-v5-text"}`}>
                 {m.content}
                 {m.role === "assistant" && m.metadata?.proposal && (
                   <CoachProposalCard proposal={m.metadata.proposal} updateState={updateState} exMap={exMap} allExercises={allExercises} onResolve={(status) => resolveProposal(m.id, status)} />
@@ -304,12 +311,12 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
           ))}
           {showThinking && (
             <div className="flex justify-start">
-              <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm bg-v5-elevated text-v5-subtext italic">Coach is thinking…</div>
+              <div className="max-w-[85%] px-3 py-2 rounded-xl text-[13px] bg-v5-elevated text-v5-subtext italic">Coach is thinking…</div>
             </div>
           )}
           {showStreaming && (
             <div className="flex justify-start">
-              <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm bg-v5-elevated text-v5-text whitespace-pre-line">{streamingText}</div>
+              <div className="max-w-[85%] px-3 py-2 rounded-xl text-[13px] bg-v5-elevated text-v5-text whitespace-pre-line">{streamingText}</div>
             </div>
           )}
           {/* Two distinct fallback states, not a raw provider error dropped into the chat log.
@@ -324,31 +331,31 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
               server log line, for admin/dev use only. */}
           {error && errorStatus === 503 && (
             <div className="flex justify-start w-full">
-              <div className="w-full rounded-2xl bg-v5-elevated p-5 text-center space-y-2">
-                <Sparkles size={18} className="mx-auto text-v5-red" />
-                <SectionLabel>BRK AI Coach</SectionLabel>
-                <div className="text-base font-bold text-v5-text">Coming Soon</div>
-                <div className="text-sm text-v5-subtext max-w-xs mx-auto">
+              <div className="w-full rounded-xl bg-v5-elevated p-4 text-center space-y-1.5">
+                <Sparkles size={16} className="mx-auto text-v5-red" />
+                <MiniLabel className="justify-center flex">BRK AI Coach</MiniLabel>
+                <div className="text-sm font-bold text-v5-text">Coming Soon</div>
+                <div className="text-xs text-v5-subtext max-w-xs mx-auto">
                   Personalized coaching built around your training, readiness, nutrition, and progress is being prepared for beta.
                 </div>
-                {errorRequestId && <div className="text-[10px] text-v5-subtext/50 pt-1">Ref: {errorRequestId}</div>}
+                {errorRequestId && <div className="text-[9px] text-v5-subtext/50 pt-1">Ref: {errorRequestId}</div>}
               </div>
             </div>
           )}
           {error && errorStatus !== 503 && (
             <div className="flex justify-start w-full">
-              <div className="w-full rounded-2xl bg-v5-red/[0.08] ring-1 ring-v5-red/25 p-5 text-center space-y-2">
-                <AlertCircle size={18} className="mx-auto text-v5-red" />
-                <SectionLabel>BRK AI Coach</SectionLabel>
-                <div className="text-base font-bold text-v5-text">Temporarily unavailable</div>
-                <div className="text-sm text-v5-subtext">Your training data is safe. Try again shortly.</div>
+              <div className="w-full rounded-xl bg-v5-red/[0.08] ring-1 ring-v5-red/25 p-4 text-center space-y-1.5">
+                <AlertCircle size={16} className="mx-auto text-v5-red" />
+                <MiniLabel className="justify-center flex">BRK AI Coach</MiniLabel>
+                <div className="text-sm font-bold text-v5-text">Temporarily unavailable</div>
+                <div className="text-xs text-v5-subtext">Your training data is safe. Try again shortly.</div>
                 <button
                   onClick={retry}
-                  className="mx-auto flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-v5-red hover:opacity-80 pt-1"
+                  className="mx-auto flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-v5-red hover:opacity-80 pt-1"
                 >
-                  <RotateCcw size={12} /> Retry
+                  <RotateCcw size={11} /> Retry
                 </button>
-                {errorRequestId && <div className="text-[10px] text-v5-subtext/50">Ref: {errorRequestId}</div>}
+                {errorRequestId && <div className="text-[9px] text-v5-subtext/50">Ref: {errorRequestId}</div>}
               </div>
             </div>
           )}
@@ -356,13 +363,13 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
         </div>
 
         {bubbles.length === 0 && (
-          <div className="flex flex-wrap gap-1.5 px-3 pb-2">
+          <div className="flex flex-wrap gap-1 px-2.5 pb-2">
             {QUICK_QUESTIONS.map((q) => (
               <button
                 key={q}
                 onClick={() => send(q)}
                 disabled={sending || !isOnline || errorStatus === 503}
-                className="px-2.5 py-1.5 rounded-full text-[11px] bg-v5-elevated text-v5-subtext hover:text-v5-red disabled:opacity-40"
+                className="px-2 py-1 rounded-full text-[10px] bg-v5-elevated text-v5-subtext hover:text-v5-red disabled:opacity-40"
               >
                 {q}
               </button>
@@ -370,7 +377,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
           </div>
         )}
 
-        <div className="border-t border-white/[0.06] p-2.5 flex gap-2">
+        <div className="border-t border-white/[0.06] p-2 flex gap-1.5">
           <input
             type="text"
             value={input}
@@ -378,15 +385,15 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send(input)}
             placeholder="Ask your coach..."
             disabled={sending || !isOnline || errorStatus === 503}
-            className="flex-1 min-w-0 bg-v5-elevated rounded-xl text-v5-text px-3.5 py-2.5 text-base focus:outline-none focus:ring-1 focus:ring-v5-red disabled:opacity-60 placeholder:text-v5-subtext/50"
+            className="flex-1 min-w-0 bg-v5-elevated rounded-lg text-v5-text px-3 py-2 text-base focus:outline-none focus:ring-1 focus:ring-v5-red disabled:opacity-60 placeholder:text-v5-subtext/50"
           />
           <ButtonPrimary
-            size="md"
+            size="sm"
             fullWidth={false}
             icon={Send}
             onClick={() => send(input)}
             disabled={sending || !isOnline || errorStatus === 503 || !input.trim()}
-            className="shrink-0 px-4"
+            className="shrink-0 px-3.5"
           >
             Send
           </ButtonPrimary>
@@ -394,18 +401,18 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
       </div>
 
       {history.length > 0 && (
-        <div className="space-y-2">
-          <SectionLabel tone="muted">Earlier Coach notes</SectionLabel>
-          <div className="space-y-2.5">
+        <div className="space-y-1.5">
+          <MiniLabel tone="muted">Earlier Coach notes</MiniLabel>
+          <div className="space-y-2">
             {history.slice(0, 10).map((h, i) => (
               <React.Fragment key={h.id}>
                 {i > 0 && <Divider />}
                 <div>
-                  <div className="text-[11px] text-v5-subtext/70">
+                  <div className="text-[10px] text-v5-subtext/70">
                     {new Date(h.date).toLocaleString()}
                     {h.question ? ` — ${h.question}` : ""}
                   </div>
-                  <div className="text-sm text-v5-text/90 mt-0.5 whitespace-pre-line">{h.message}</div>
+                  <div className="text-xs text-v5-text/90 mt-0.5 whitespace-pre-line">{h.message}</div>
                 </div>
               </React.Fragment>
             ))}
