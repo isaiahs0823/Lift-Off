@@ -3,6 +3,7 @@ import { ChevronRight, Award, Calendar, TrendingUp, ClipboardCheck } from "lucid
 import BodyweightTab from "./BodyweightTab.jsx";
 import TrainingCalendar from "./TrainingCalendar.jsx";
 import AnalyticsTab from "./AnalyticsTab.jsx";
+import { ScreenHeader, SectionLabel, Card, HeroCard, MetricTile, ProgressBar, ListRow } from "./ui/Kit.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue } from "../utils/goalData.js";
 import { goalProgressPct } from "../utils/goalMath.js";
@@ -14,7 +15,7 @@ function fmt1(v) {
 // Same hand-rolled sparkline as BodyweightTab's, sized down for a snapshot card. Kept local
 // (not shared) since it's a small enough drawing routine that a shared component would add
 // more indirection than it saves.
-function MiniSparkline({ points, height = 44 }) {
+function MiniSparkline({ points, height = 48 }) {
   if (points.length < 2) return null;
   const width = 280;
   const values = points.map((p) => p.value);
@@ -27,10 +28,18 @@ function MiniSparkline({ points, height = 44 }) {
     return [x, y];
   });
   const path = coords.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const areaPath = `${path} L${coords[coords.length - 1][0].toFixed(1)},${height} L${coords[0][0].toFixed(1)},${height} Z`;
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height }}>
-      <path d={path} fill="none" stroke="#dc2626" strokeWidth="2" />
-      <circle cx={coords[coords.length - 1][0]} cy={coords[coords.length - 1][1]} r="3" fill="#dc2626" />
+      <defs>
+        <linearGradient id="progressSparkFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#D2262E" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="#D2262E" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill="url(#progressSparkFill)" stroke="none" />
+      <path d={path} fill="none" stroke="#D2262E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={coords[coords.length - 1][0]} cy={coords[coords.length - 1][1]} r="3.5" fill="#D2262E" />
     </svg>
   );
 }
@@ -67,107 +76,90 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
 
   const recentPhotos = [...(state.photos || [])].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4);
 
+  // Lightweight "at a glance" tile row — sessions logged and total PRs ever, purely derived from
+  // data already loaded here, no new state. Gives the dashboard a stats-first top row even
+  // before the athlete taps into a bodyweight/mission card.
+  const sessionCount = (state.workoutSessions || []).length;
+  const totalPRs = (state.workoutSessions || []).reduce((sum, s) => sum + (s.prs?.length || 0), 0);
+
   return (
-    <div className="space-y-4">
-      <div>
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Progress</div>
-        <div className="text-xl font-bold text-white mt-1">Where you stand</div>
+    <div className="space-y-5">
+      <ScreenHeader eyebrow="Progress" title="Where you stand" />
+
+      <div className="grid grid-cols-2 gap-3">
+        <MetricTile label="Sessions logged" value={sessionCount} />
+        <MetricTile label="Total PRs" value={totalPRs} accent={totalPRs > 0} />
       </div>
 
-      <button onClick={() => onDrillDown("body")} className="w-full text-left border border-red-900/40 bg-charcoal-panel p-4 space-y-2 hover:border-red-700/60">
+      <Card onClick={() => onDrillDown("body")} className="space-y-2.5">
         <div className="flex items-center justify-between">
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Bodyweight</div>
-          <ChevronRight size={16} className="text-neutral-600" />
+          <SectionLabel>Bodyweight</SectionLabel>
+          <ChevronRight size={16} className="text-v5-subtext" />
         </div>
         {currentWeight != null ? (
           <>
-            <div className="text-3xl font-bold text-white">
-              {fmt1(currentWeight)} <span className="text-sm font-normal text-neutral-500">lb</span>
+            <div className="text-3xl font-black text-v5-text">
+              {fmt1(currentWeight)} <span className="text-sm font-normal text-v5-subtext">lb</span>
             </div>
-            <div className="text-xs text-neutral-500">
+            <div className="text-xs text-v5-subtext">
               7-day avg {fmt1(avg7)} · {weeklyChange != null ? `${weeklyChange >= 0 ? "+" : ""}${fmt1(weeklyChange)} lb/wk` : "—"}
             </div>
             <MiniSparkline points={chartPoints} />
           </>
         ) : (
-          <div className="text-sm text-neutral-500">No entries yet — log your weight to see a trend here.</div>
+          <div className="text-sm text-v5-subtext">No entries yet — log your weight to see a trend here.</div>
         )}
-      </button>
+      </Card>
 
       {primaryGoal && (
-        <button onClick={() => onNavigate("mission")} className="w-full text-left border border-neutral-800 bg-charcoal-panel p-4 hover:border-neutral-600">
+        <Card onClick={() => onNavigate("mission")}>
           <div className="flex items-center justify-between mb-2">
-            <div className="text-[11px] uppercase tracking-widest text-neutral-500">Mission</div>
-            <ChevronRight size={16} className="text-neutral-600" />
+            <SectionLabel tone="muted">Mission</SectionLabel>
+            <ChevronRight size={16} className="text-v5-subtext" />
           </div>
-          <div className="text-base font-bold text-white truncate">{primaryGoal.title}</div>
-          <div className="h-2 bg-charcoal-deep border border-neutral-800 overflow-hidden mt-2">
-            <div className="h-full bg-red-700" style={{ width: `${missionPct}%` }} />
-          </div>
-          <div className="text-xs text-neutral-500 mt-1">{missionPct}% complete</div>
-        </button>
+          <div className="text-base font-bold text-v5-text truncate">{primaryGoal.title}</div>
+          <ProgressBar pct={missionPct} className="mt-2.5" />
+          <div className="text-xs text-v5-subtext mt-1.5">{missionPct}% complete</div>
+        </Card>
       )}
 
       {recentPRs.length > 0 && (
-        <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500 flex items-center gap-1.5">
-            <Award size={12} className="text-red-500" /> Recent PRs
+        <Card>
+          <SectionLabel tone="muted" className="mb-2.5 flex items-center gap-1.5">
+            <Award size={12} className="text-v5-red" /> Recent PRs
+          </SectionLabel>
+          <div className="space-y-2">
+            {recentPRs.map((pr, i) => (
+              <div key={i} className="flex items-center justify-between text-sm">
+                <span className="text-v5-subtext truncate">{exMap[pr.exId]?.name || pr.exId}</span>
+                <span className="text-v5-text font-bold shrink-0 ml-2 tabular-nums">{pr.weight != null ? `${pr.weight} × ${pr.reps}` : `${pr.value} lb`}</span>
+              </div>
+            ))}
           </div>
-          {recentPRs.map((pr, i) => (
-            <div key={i} className="flex items-center justify-between text-sm">
-              <span className="text-neutral-300 truncate">{exMap[pr.exId]?.name || pr.exId}</span>
-              <span className="text-white font-bold shrink-0 ml-2">{pr.weight != null ? `${pr.weight} × ${pr.reps}` : `${pr.value} lb`}</span>
-            </div>
-          ))}
-        </div>
+        </Card>
       )}
 
       {recentPhotos.length > 0 && (
-        <button onClick={() => onNavigate("photos")} className="w-full text-left border border-neutral-800 bg-charcoal-panel p-4 space-y-2 hover:border-neutral-600">
+        <Card onClick={() => onNavigate("photos")} className="space-y-2.5">
           <div className="flex items-center justify-between">
-            <div className="text-[11px] uppercase tracking-widest text-neutral-500">Progress photos</div>
-            <ChevronRight size={16} className="text-neutral-600" />
+            <SectionLabel tone="muted">Progress photos</SectionLabel>
+            <ChevronRight size={16} className="text-v5-subtext" />
           </div>
           <div className="flex gap-2">
             {recentPhotos.map((p) => (
-              <img key={p.id} src={p.dataUrl} alt="" className="w-16 h-16 object-cover border border-neutral-800" />
+              <img key={p.id} src={p.dataUrl} alt="" className="w-16 h-16 rounded-lg object-cover" />
             ))}
           </div>
-        </button>
+        </Card>
       )}
 
-      <div className="space-y-2 pt-2">
+      <div className="space-y-2">
         {/* Unconditional — the goal-gated Mission card above only appears with an active goal,
             but weekly review/adherence (including the weekly schedule breakdown) is useful
             with or without one, so it needs a way in that doesn't depend on having a goal set. */}
-        <button
-          onClick={() => onNavigate("mission")}
-          className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-4 hover:border-neutral-600"
-        >
-          <div className="flex items-center gap-3">
-            <ClipboardCheck size={18} className="text-neutral-500" />
-            <div className="text-left">
-              <div className="text-base font-bold text-white">Weekly review</div>
-              <div className="text-xs text-neutral-500">Adherence, streak, and goals</div>
-            </div>
-          </div>
-          <ChevronRight size={18} className="text-neutral-600 shrink-0" />
-        </button>
+        <ListRow icon={ClipboardCheck} title="Weekly review" subtitle="Adherence, streak, and goals" onClick={() => onNavigate("mission")} />
         {DRILL_DOWNS.map((d) => (
-          <button
-            key={d.id}
-            onClick={() => onDrillDown(d.id)}
-            className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-4 hover:border-neutral-600"
-          >
-            <div className="flex items-center gap-3">
-              <d.icon size={18} className="text-neutral-500" />
-              <div className="text-left">
-                <div className="text-base font-bold text-white">{d.label}</div>
-                <div className="text-xs text-neutral-500">{d.desc}</div>
-              </div>
-            </div>
-            <ChevronRight size={18} className="text-neutral-600 shrink-0" />
-          </button>
+          <ListRow key={d.id} icon={d.icon} title={d.label} subtitle={d.desc} onClick={() => onDrillDown(d.id)} />
         ))}
       </div>
     </div>
@@ -180,7 +172,7 @@ export default function ProgressTab({ state, updateState, allExercises, exMap, o
   if (view !== "landing") {
     return (
       <div className="space-y-4">
-        <button onClick={() => setView("landing")} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+        <button onClick={() => setView("landing")} className="text-xs font-bold uppercase tracking-widest text-v5-subtext hover:text-v5-red">
           ← Progress
         </button>
         {view === "body" && <BodyweightTab state={state} updateState={updateState} />}

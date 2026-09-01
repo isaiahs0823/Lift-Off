@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { ChevronRight, ClipboardList, Timer, Dumbbell, Plus, Play, RefreshCw, Map } from "lucide-react";
+import { ClipboardList, Timer, Dumbbell, Plus, Play, RefreshCw, Map } from "lucide-react";
 import { resolveTodayWorkout } from "../utils/programSchedule.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
+import { ScreenHeader, SectionLabel, Card, HeroCard, ButtonPrimary, ButtonText, StatTile, Pill, ListRow } from "./ui/Kit.jsx";
 
 // Never auto-discards on age — a workout logged right up to midnight, or one left open for
 // days, is still fully recoverable, just described differently: minutes/hours for something
@@ -62,106 +63,74 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
     const currentExName = currentIdx >= 0 ? exMap[activeRun.swaps?.[currentIdx] ?? activeRun.exercises[currentIdx].exId]?.name : null;
 
     return (
-      <div className="space-y-4">
-        <div>
-          <div className="text-[11px] uppercase tracking-widest text-v5-red">Train</div>
-          <div className="text-xl font-bold text-v5-text mt-1">Resume workout</div>
-        </div>
+      <div className="space-y-5">
+        <ScreenHeader eyebrow="Train" title="Resume workout" />
 
-        <div className="bg-v5-surface rounded-2xl p-5 space-y-3">
+        <HeroCard>
           <div>
-            <div className="text-xl font-bold text-v5-text">{activeRun.planName}</div>
+            <div className="text-xl font-black text-v5-text">{activeRun.planName}</div>
             <div className="text-sm text-v5-subtext">Started {elapsedLabel(activeRun.startedAt)}</div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Exercises</div>
-              <div className="text-lg font-bold text-v5-text">
-                {completedExercises}
-                {totalExercises ? ` / ${totalExercises}` : ""}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Completed sets</div>
-              <div className="text-lg font-bold text-v5-text">{completedSets}</div>
-            </div>
+            <StatTile label="Exercises" value={`${completedExercises}${totalExercises ? ` / ${totalExercises}` : ""}`} />
+            <StatTile label="Completed sets" value={completedSets} />
           </div>
           {hasUnsavedSet && (
             <div className="text-xs text-v5-red font-bold">
               Unsaved set restored{currentExName ? ` — ${currentExName}` : ""}
             </div>
           )}
-          <button
-            onClick={onResumeWorkout}
-            className="w-full py-4 rounded-xl text-sm uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
-          >
-            Resume workout
-          </button>
-          <button onClick={onDiscardWorkout} className="w-full text-center text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red py-1">
-            Discard workout
-          </button>
-        </div>
+          <ButtonPrimary size="lg" onClick={onResumeWorkout}>Resume workout</ButtonPrimary>
+          <ButtonText tone="muted" onClick={onDiscardWorkout} className="w-full py-1">Discard workout</ButtonText>
+        </HeroCard>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <div className="text-[11px] uppercase tracking-widest text-v5-red">Train</div>
-        <div className="text-xl font-bold text-v5-text mt-1">Choose your workout</div>
-      </div>
+    <div className="space-y-5">
+      <ScreenHeader eyebrow="Train" title="Choose your workout" />
 
       {programDay && !programDay.isComplete && (
-        <div className="bg-v5-surface rounded-2xl p-5 space-y-2">
+        <HeroCard>
           <div className="flex items-center justify-between gap-2">
-            <div className="text-[11px] uppercase tracking-widest text-v5-red">Current program</div>
-            <button
-              onClick={() => setSwapOpen(true)}
-              aria-label="Swap workout"
-              className="shrink-0 flex items-center gap-1 text-[10px] uppercase tracking-widest text-v5-subtext hover:text-v5-text"
-            >
-              <RefreshCw size={11} /> Swap workout
-            </button>
+            <SectionLabel>Current program</SectionLabel>
+            <ButtonText tone="muted" icon={RefreshCw} onClick={() => setSwapOpen(true)} aria-label="Swap workout">
+              Swap workout
+            </ButtonText>
           </div>
           {/* The headline always names the ACTUAL active program (from currentProgram itself,
               not today's resolved workout) — an outside-program override must never make this
               card read as if the active program changed; see resolveTodayWorkout's isOutsideProgram. */}
-          <div className="text-xl font-bold text-v5-text">{state.currentProgram?.programName}</div>
+          <div className="text-xl font-black text-v5-text">{state.currentProgram?.programName}</div>
           {programDay.isRecoveryDay ? (
             <div className="text-sm text-v5-subtext">
               {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
               {programDay.dayLabel}
             </div>
           ) : programDay.isOutsideProgram ? (
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">
-                  {programDay.sourceType === "program" ? "Today: from another program" : "Today: custom workout"}
-                </span>
-              </div>
+            <div className="space-y-1">
+              <Pill>{programDay.sourceType === "program" ? "Today: from another program" : "Today: custom workout"}</Pill>
               <div className="text-sm text-v5-subtext">
                 {programDay.programName}
                 {programDay.dayLabel ? ` — ${programDay.dayLabel}` : ""}
               </div>
               {programDay.plannedProgramName && (
-                <div className="text-xs text-v5-subtext/70">
+                <div className="text-xs text-v5-subtext/60">
                   {programDay.plannedProgramName}
                   {programDay.plannedDayLabel ? ` — ${programDay.plannedDayLabel}` : ""} still pending, unaffected
                 </div>
               )}
             </div>
           ) : programDay.isSwapped ? (
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Swapped for today</span>
-              </div>
+            <div className="space-y-1">
+              <Pill>Swapped for today</Pill>
               <div className="text-sm text-v5-subtext">
                 {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
                 {programDay.dayLabel}
               </div>
               {programDay.plannedDayLabel && (
-                <div className="text-xs text-v5-subtext/70">Originally planned: {programDay.plannedDayLabel}</div>
+                <div className="text-xs text-v5-subtext/60">Originally planned: {programDay.plannedDayLabel}</div>
               )}
             </div>
           ) : (
@@ -175,83 +144,42 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
               <div className="text-xs text-v5-subtext">
                 {programDay.routine?.movements?.length ?? 0} movements · Est. {programDay.estMinutes} min
               </div>
-              <button
-                onClick={() => onStartRecovery(programDay.routine, programDay.programContext)}
-                className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
-              >
+              <ButtonPrimary size="lg" onClick={() => onStartRecovery(programDay.routine, programDay.programContext)}>
                 Start Recovery Session
-              </button>
+              </ButtonPrimary>
             </>
           ) : (
             <>
               {/* Day preview — same compact anatomy row used in My Plan/program detail, so the
                   athlete can see today's muscle emphasis before committing to Start. */}
               {programDay.plan?.exercises?.length > 0 && (
-                <div className="pt-1">
+                <div className="rounded-xl bg-v5-elevated/60 px-1">
                   {programDay.plan.exercises.map((e, i) => (
                     <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
                   ))}
                 </div>
               )}
-              <button
-                onClick={() => onStartRun(programDay.plan, programDay.programContext)}
-                className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
-              >
+              <ButtonPrimary size="lg" icon={Play} onClick={() => onStartRun(programDay.plan, programDay.programContext)}>
                 Start
-              </button>
+              </ButtonPrimary>
             </>
           )}
-          <button
-            onClick={() => onNavigate("programTimeline")}
-            className="w-full flex items-center justify-center gap-1 pt-1 text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-text"
-          >
-            <Map size={12} /> Program Timeline
-          </button>
-        </div>
+          <ButtonText tone="muted" icon={Map} onClick={() => onNavigate("programTimeline")} className="pt-1">
+            Program Timeline
+          </ButtonText>
+        </HeroCard>
       )}
 
-      <button
-        onClick={() => onNavigate("startWorkout")}
-        className="w-full py-5 rounded-2xl text-base uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90 flex items-center justify-center gap-2"
-      >
-        <Play size={20} fill="currentColor" /> Start workout today
-      </button>
+      <ButtonPrimary size="lg" icon={Play} onClick={() => onNavigate("startWorkout")} className="py-5 text-base shadow-[0_12px_32px_-10px_rgba(210,38,46,0.6)]">
+        Start workout today
+      </ButtonPrimary>
 
-      <button
-        onClick={() => onNavigate("templates")}
-        className="w-full flex items-center justify-between bg-v5-surface rounded-2xl p-4 hover:bg-v5-elevated"
-      >
-        <div className="flex items-center gap-3">
-          <ClipboardList size={18} className="text-v5-subtext" />
-          <div className="text-left">
-            <div className="text-base font-bold text-v5-text">Programs</div>
-            <div className="text-xs text-v5-subtext">All plans, hero programs, single-day templates</div>
-          </div>
-        </div>
-        <ChevronRight size={18} className="text-v5-subtext shrink-0" />
-      </button>
+      <ListRow icon={ClipboardList} title="Programs" subtitle="All plans, hero programs, single-day templates" onClick={() => onNavigate("templates")} />
+      <ListRow icon={Timer} title="Cardio / conditioning" subtitle="Runs, sleds, intervals" onClick={() => onNavigate("cardio")} />
 
-      <button
-        onClick={() => onNavigate("cardio")}
-        className="w-full flex items-center justify-between bg-v5-surface rounded-2xl p-4 hover:bg-v5-elevated"
-      >
-        <div className="flex items-center gap-3">
-          <Timer size={18} className="text-v5-subtext" />
-          <div className="text-left">
-            <div className="text-base font-bold text-v5-text">Cardio / conditioning</div>
-            <div className="text-xs text-v5-subtext">Runs, sleds, intervals</div>
-          </div>
-        </div>
-        <ChevronRight size={18} className="text-v5-subtext shrink-0" />
-      </button>
-
-      <div className="flex items-center gap-4 pt-2">
-        <button onClick={() => onNavigate("build")} className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-v5-red hover:opacity-80">
-          <Plus size={14} /> Create plan
-        </button>
-        <button onClick={() => onNavigate("log")} className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-text">
-          <Dumbbell size={14} /> Log a single exercise
-        </button>
+      <div className="flex items-center gap-5 pt-1">
+        <ButtonText icon={Plus} onClick={() => onNavigate("build")}>Create plan</ButtonText>
+        <ButtonText tone="muted" icon={Dumbbell} onClick={() => onNavigate("log")}>Log a single exercise</ButtonText>
       </div>
     </div>
   );

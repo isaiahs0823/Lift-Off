@@ -16,7 +16,7 @@
 
 html, body, #root {
   height: 100%;
-  background: #151515;
+  background: #0A0A0B;
 }
 
 /* iOS Safari auto-zooms the page when a focused form control renders text smaller than 16px —

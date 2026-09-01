@@ -111,6 +111,7 @@ import { buildPRShareCard } from "./utils/shareCard.js";
 import WorkoutSharePreview from "./components/WorkoutSharePreview.jsx";
 import { suggestNext, topSetOf } from "./utils/progression.js";
 import { resolveCurrentProgramDay, programWeekAdherence } from "./utils/programSchedule.js";
+import { ScreenHeader, SectionLabel, Card, HeroCard, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, Pill, ListRow, ProgressBar } from "./components/ui/Kit.jsx";
 import { featuredAndOtherPRs, sessionPRCount, prDeltaLabel, prHeroLabel, prPreviousLabel, PR_TYPE_LABEL } from "./utils/prSummary.js";
 import CustomExerciseForm from "./components/CustomExerciseForm.jsx";
 import { selectableExercises, matchesExerciseSearch, formatCustomLabel, isArchived } from "./utils/customExercises.js";
@@ -2426,7 +2427,7 @@ export default function LiftLog() {
 
   if (!loaded) {
     return (
-      <div className="w-full min-h-[400px] flex items-center justify-center bg-charcoal-deep text-neutral-400 text-sm">
+      <div className="w-full min-h-[400px] flex items-center justify-center bg-v5-bg text-v5-subtext text-sm">
         Loading...
       </div>
     );
@@ -2441,7 +2442,7 @@ export default function LiftLog() {
   const restTimerRelevantTab = !runOnScreen && (tab === "log" || tab === "cardio");
 
   return (
-    <div className="w-full bg-charcoal-deep text-neutral-200 font-sans min-h-[600px]">
+    <div className="w-full bg-v5-bg text-v5-text font-sans min-h-[600px]">
       <Header />
       {/* Only mounted on screens where logging a set is actually possible — an active (not yet
           finished) guided run, the standalone Log tab, or Cardio/conditioning, the three places
@@ -2766,7 +2767,7 @@ export default function LiftLog() {
       </div>
 
       {!runOnScreen && (
-        <div className="fixed bottom-0 left-0 right-0 z-20 flex bg-v5-surface">
+        <div className="fixed bottom-0 left-0 right-0 z-20 flex bg-v5-surface border-t border-white/[0.06]">
           {TOP_TABS.map((t) => {
             const active = (SECTION_OF[tab] || tab) === t.id;
             return (
@@ -2790,16 +2791,14 @@ export default function LiftLog() {
 
 function Header() {
   return (
-    <div className="px-4 sm:px-6 pt-6 pb-4 border-b border-red-900/40 bg-gradient-to-b from-charcoal-panel to-charcoal-deep">
+    <div className="px-4 sm:px-6 pt-6 pb-4 bg-v5-bg">
       <div className="flex items-center gap-3">
-        <img
-          src={BREAK_LOGO}
-          alt="B.R.E.A.K. logo"
-          className="w-11 h-11 rounded-full object-cover ring-1 ring-red-700/60"
-        />
+        <img src={BREAK_LOGO} alt="B.R.E.A.K. logo" className="w-10 h-10 rounded-full object-cover ring-1 ring-v5-red/50" />
         <div>
-          <div className="text-white font-bold tracking-wider text-sm leading-none">BRK - LIFT</div>
-          <div className="text-[10px] text-neutral-500 tracking-widest uppercase mt-1">Keep the promises you make to yourself</div>
+          <div className="text-v5-text font-black tracking-wide text-sm leading-none">
+            BRK <span className="text-v5-red">-</span> LIFT
+          </div>
+          <div className="text-[9px] text-v5-subtext/70 tracking-[0.18em] uppercase mt-1.5">Keep the promises you make to yourself</div>
         </div>
       </div>
     </div>
@@ -5115,11 +5114,15 @@ function TrainingExerciseCard({
             </div>
           )}
 
+          {/* The one unmistakable primary action on this screen — larger and given a soft red
+              glow so it never reads as just another row of buttons among Plate Calc/Options. */}
           <button
             onClick={saveSet}
             disabled={weight === "" || reps === ""}
-            className={`w-full py-2.5 rounded-xl text-sm uppercase tracking-widest font-bold ${
-              weight !== "" && reps !== "" ? "bg-v5-red text-white hover:opacity-90" : "bg-v5-muted/50 text-v5-subtext/60 cursor-not-allowed"
+            className={`w-full py-3.5 rounded-xl text-sm uppercase tracking-widest font-bold transition-shadow ${
+              weight !== "" && reps !== ""
+                ? "bg-v5-red text-white hover:opacity-90 shadow-[0_10px_28px_-10px_rgba(210,38,46,0.6)]"
+                : "bg-v5-muted/50 text-v5-subtext/60 cursor-not-allowed"
             }`}
           >
             Save set
@@ -5242,14 +5245,11 @@ function GuidedRunView({
     // tested "Session complete" summary and is left as-is rather than risking a full rewrite.
     const recap = summary ? buildWorkoutRecap({ session: summary, logs: state.logs || [], exMap, state }) : null;
     return (
-      <div className="space-y-6">
-        <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">{run.planName}</div>
-          <div className="text-xl font-bold text-white mt-1">Session complete</div>
-        </div>
+      <div className="space-y-5">
+        <ScreenHeader eyebrow={run.planName} title="Session complete" />
 
         {summary && (
-          <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
+          <Card tone="accent" padding="p-5" className="space-y-3">
             {(() => {
               const { featured, others } = featuredAndOtherPRs(summary);
               if (featured) {
@@ -5260,47 +5260,47 @@ function GuidedRunView({
                 const isProfileScoped = pr.scope === "profile";
                 const profileLabel = isProfileScoped ? equipmentDisplayLabel(state, pr.equipmentProfileId, null) : null;
                 return (
-                  <div className="space-y-1.5 pb-3 border-b border-neutral-900">
+                  <div className="space-y-1.5 pb-3 border-b border-white/[0.06]">
                     <div className="flex items-center justify-between">
-                      <div className="text-[11px] uppercase tracking-widest text-red-600 font-bold flex items-center gap-1.5">
+                      <SectionLabel className="flex items-center gap-1.5">
                         <Award size={12} /> New {isProfileScoped ? "Profile " : ""}PR
-                      </div>
+                      </SectionLabel>
                       {others.length > 0 && (
-                        <div className="text-[10px] uppercase tracking-widest text-neutral-500">{others.length + 1} PRs</div>
+                        <div className="text-[10px] uppercase tracking-widest text-v5-subtext">{others.length + 1} PRs</div>
                       )}
                     </div>
-                    <div className="text-lg font-bold text-white leading-tight">{exMap[featured.exId]?.name || featured.exId}</div>
-                    {profileLabel && <div className="text-xs text-neutral-500">{profileLabel}</div>}
-                    <div className="text-3xl font-bold text-white leading-tight">{prHeroLabel(pr)}</div>
+                    <div className="text-lg font-bold text-v5-text leading-tight">{exMap[featured.exId]?.name || featured.exId}</div>
+                    {profileLabel && <div className="text-xs text-v5-subtext">{profileLabel}</div>}
+                    <div className="text-3xl font-black text-v5-text leading-tight">{prHeroLabel(pr)}</div>
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <div className="text-[11px] uppercase tracking-widest text-red-500 font-bold">{PR_TYPE_LABEL[pr.type]}</div>
+                      <div className="text-[11px] uppercase tracking-widest text-v5-red font-bold">{PR_TYPE_LABEL[pr.type]}</div>
                       {/* Task section 7: the most prominent PR surface in the app must not present
                           a Pain/Form Breakdown-flagged PR as identical, unqualified evidence to a
                           clean one — Grind gets a softer "Grind" tag, Form Breakdown/Pain get an
                           explicit "flagged" tag. */}
                       {pr.qualityFlag && (
-                        <span className="text-[9px] uppercase tracking-widest bg-neutral-800 text-neutral-300 px-1.5 py-0.5">
+                        <span className="text-[9px] uppercase tracking-widest bg-v5-elevated text-v5-subtext px-1.5 py-0.5 rounded-full">
                           {pr.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[pr.qualityFlag]} flagged`}
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-neutral-500">
-                      Previous: {prPreviousLabel(pr)} <span className="text-green-500 font-bold">{prDeltaLabel(pr)}</span>
+                    <div className="text-xs text-v5-subtext">
+                      Previous: {prPreviousLabel(pr)} <span className="text-v5-success font-bold">{prDeltaLabel(pr)}</span>
                     </div>
                     {others.length > 0 && (
-                      <div className="pt-2 mt-1 border-t border-neutral-900 space-y-1">
-                        <div className="text-[10px] uppercase tracking-widest text-neutral-600">Other PRs</div>
+                      <div className="pt-2 mt-1 border-t border-white/[0.06] space-y-1">
+                        <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70">Other PRs</div>
                         {others.map(({ exId, pr: op }) => (
-                          <div key={exId} className="flex items-center justify-between text-xs text-neutral-400 gap-2">
+                          <div key={exId} className="flex items-center justify-between text-xs text-v5-subtext gap-2">
                             <span className="truncate">
                               {exMap[exId]?.name || exId}
                               {op.qualityFlag && (
-                                <span className="ml-1.5 text-[9px] uppercase tracking-widest text-neutral-500">
+                                <span className="ml-1.5 text-[9px] uppercase tracking-widest text-v5-subtext/70">
                                   ({op.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[op.qualityFlag]} flagged`})
                                 </span>
                               )}
                             </span>
-                            <span className="text-red-500 font-bold shrink-0 ml-2">{prDeltaLabel(op)}</span>
+                            <span className="text-v5-success font-bold shrink-0 ml-2">{prDeltaLabel(op)}</span>
                           </div>
                         ))}
                       </div>
@@ -5310,10 +5310,10 @@ function GuidedRunView({
               }
               if (summary.bestLift) {
                 return (
-                  <div className="space-y-1 pb-3 border-b border-neutral-900">
-                    <div className="text-[10px] uppercase tracking-widest text-neutral-500">Best lift</div>
-                    <div className="text-lg font-bold text-white leading-tight">{exMap[summary.bestLift.exId]?.name || summary.bestLift.exId}</div>
-                    <div className="text-2xl font-bold text-white leading-tight">
+                  <div className="space-y-1 pb-3 border-b border-white/[0.06]">
+                    <SectionLabel tone="muted">Best lift</SectionLabel>
+                    <div className="text-lg font-bold text-v5-text leading-tight">{exMap[summary.bestLift.exId]?.name || summary.bestLift.exId}</div>
+                    <div className="text-2xl font-black text-v5-text leading-tight">
                       {summary.bestLift.weight} × {summary.bestLift.reps}
                     </div>
                   </div>
@@ -5323,42 +5323,28 @@ function GuidedRunView({
             })()}
 
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Duration</div>
-                <div className="text-lg font-bold text-white">{formatSessionDuration(summary.durationSec)}</div>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Working sets</div>
-                <div className="text-lg font-bold text-white">{summary.workingSets}</div>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Volume</div>
-                <div className="text-lg font-bold text-white">
-                  {summary.totalVolume.toLocaleString()} lb{summary.isVolumePR ? " — PR" : ""}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Total reps</div>
-                <div className="text-lg font-bold text-white">{summary.totalReps}</div>
-              </div>
+              <StatTile label="Duration" value={formatSessionDuration(summary.durationSec)} />
+              <StatTile label="Working sets" value={summary.workingSets} />
+              <StatTile label="Volume" value={`${summary.totalVolume.toLocaleString()} lb${summary.isVolumePR ? " — PR" : ""}`} />
+              <StatTile label="Total reps" value={summary.totalReps} />
             </div>
 
             {summary.perfDeltaPct != null && (
-              <div className="text-sm text-neutral-300">
+              <div className="text-sm text-v5-text/90">
                 Performance vs last {summary.planName}:{" "}
-                <span className={summary.perfDeltaPct >= 0 ? "text-green-500 font-bold" : "text-red-500 font-bold"}>
+                <span className={summary.perfDeltaPct >= 0 ? "text-v5-success font-bold" : "text-v5-red font-bold"}>
                   {summary.perfDeltaPct >= 0 ? "+" : ""}
                   {summary.perfDeltaPct}%
                 </span>
               </div>
             )}
             {summary.avgRir != null && (
-              <div className="text-sm text-neutral-300">
+              <div className="text-sm text-v5-text/90">
                 Average {rirSystem === "rpe" ? "RPE" : "RIR"}: {rirSystem === "rpe" ? Math.round((10 - summary.avgRir) * 10) / 10 : summary.avgRir}
               </div>
             )}
             {summary.mainMuscles.length > 0 && (
-              <div className="text-sm text-neutral-300">Main muscles trained: {summary.mainMuscles.join(", ")}</div>
+              <div className="text-sm text-v5-text/90">Main muscles trained: {summary.mainMuscles.join(", ")}</div>
             )}
 
             {/* Auto Post-Workout Recap additions (task Part 1) — progression per exercise,
@@ -5366,10 +5352,10 @@ function GuidedRunView({
                 same buildWorkoutRecap() the reopenable Workout History → Session → Recap screen
                 uses. Tone matches the rest of this card: factual, no cheering. */}
             {recap?.alternateGym && (
-              <div className="border-t border-neutral-900 pt-3 space-y-1">
-                <div className="text-[10px] uppercase tracking-widest text-red-600 font-bold">Alternate gym session</div>
-                {recap.alternateGym.locationLabel && <div className="text-sm text-neutral-200">{recap.alternateGym.locationLabel}</div>}
-                <div className="text-xs text-neutral-500">
+              <div className="border-t border-white/[0.06] pt-3 space-y-1">
+                <SectionLabel>Alternate gym session</SectionLabel>
+                {recap.alternateGym.locationLabel && <div className="text-sm text-v5-text/90">{recap.alternateGym.locationLabel}</div>}
+                <div className="text-xs text-v5-subtext">
                   {recap.alternateGym.differentEquipmentCount > 0
                     ? `${recap.alternateGym.differentEquipmentCount} exercise${
                         recap.alternateGym.differentEquipmentCount === 1 ? "" : "s"
@@ -5380,25 +5366,25 @@ function GuidedRunView({
             )}
 
             {recap?.wins.length > 0 && (
-              <div className="border-t border-neutral-900 pt-3 space-y-2">
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Progression</div>
+              <div className="border-t border-white/[0.06] pt-3 space-y-2">
+                <SectionLabel tone="muted">Progression</SectionLabel>
                 {recap.wins.map((w) => (
                   <div key={w.exId} className="flex items-center justify-between gap-2 text-sm">
-                    <span className="text-neutral-300 truncate">{w.name}</span>
-                    <span className="text-green-500 font-bold text-xs shrink-0">{w.progression.message}</span>
+                    <span className="text-v5-subtext truncate">{w.name}</span>
+                    <span className="text-v5-success font-bold text-xs shrink-0">{w.progression.message}</span>
                   </div>
                 ))}
               </div>
             )}
 
             {recap?.attention.length > 0 && (
-              <div className="border-t border-neutral-900 pt-3 space-y-2.5">
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Attention</div>
+              <div className="border-t border-white/[0.06] pt-3 space-y-2.5">
+                <SectionLabel tone="muted">Attention</SectionLabel>
                 {recap.attention.map((e) => (
                   <div key={e.exId} className="space-y-0.5">
-                    <div className="text-sm font-bold text-white">{e.name}</div>
-                    {e.painSummary && <div className="text-xs text-red-500">{painSummaryLabel(e.painSummary)}</div>}
-                    <div className="text-xs text-neutral-400">
+                    <div className="text-sm font-bold text-v5-text">{e.name}</div>
+                    {e.painSummary && <div className="text-xs text-v5-red">{painSummaryLabel(e.painSummary)}</div>}
+                    <div className="text-xs text-v5-subtext">
                       {[
                         e.qualityCounts.grind > 0 ? `${e.qualityCounts.grind} set${e.qualityCounts.grind === 1 ? "" : "s"} marked Grind` : null,
                         e.qualityCounts.form_breakdown > 0
@@ -5414,14 +5400,14 @@ function GuidedRunView({
             )}
 
             {recap?.perExercise.some((e) => e.nextTime) && (
-              <div className="border-t border-neutral-900 pt-3 space-y-2.5">
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Next time</div>
+              <div className="border-t border-white/[0.06] pt-3 space-y-2.5">
+                <SectionLabel tone="muted">Next time</SectionLabel>
                 {recap.perExercise
                   .filter((e) => e.nextTime)
                   .map((e) => (
                     <div key={e.exId}>
-                      <div className="text-sm font-bold text-white">{e.name}</div>
-                      <div className="text-sm text-neutral-300">
+                      <div className="text-sm font-bold text-v5-text">{e.name}</div>
+                      <div className="text-sm text-v5-subtext">
                         {e.nextTime.weight != null ? `Try ${e.nextTime.weight} × ${e.nextTime.repsLabel}` : e.nextTime.reason}
                       </div>
                     </div>
@@ -5430,39 +5416,32 @@ function GuidedRunView({
             )}
 
             {summary.coachMessage && (
-              <div className="border-t border-neutral-900 pt-3">
-                <div className="text-[10px] uppercase tracking-widest text-red-600 mb-1 flex items-center gap-1.5">
+              <div className="border-t border-white/[0.06] pt-3">
+                <SectionLabel className="mb-1 flex items-center gap-1.5">
                   <MessageCircle size={11} /> Coach
-                </div>
-                <div className="text-sm text-neutral-300 whitespace-pre-line">{summary.coachMessage}</div>
+                </SectionLabel>
+                <div className="text-sm text-v5-text/90 whitespace-pre-line">{summary.coachMessage}</div>
                 {onAskCoach && (
-                  <button onClick={onAskCoach} className="mt-2 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400">
-                    Ask Coach →
-                  </button>
+                  <ButtonText onClick={onAskCoach} className="mt-2">Ask Coach →</ButtonText>
                 )}
               </div>
             )}
 
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1.5">Rate this session</div>
+              <SectionLabel tone="muted" className="mb-1.5">Rate this session</SectionLabel>
               <div className="flex gap-1.5">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button key={n} onClick={() => onRate(summary.id, n)} className="p-0.5">
-                    <Star size={20} className={n <= (summary.rating || 0) ? "text-red-500 fill-red-500" : "text-neutral-700"} />
+                    <Star size={20} className={n <= (summary.rating || 0) ? "text-v5-red fill-v5-red" : "text-v5-subtext/40"} />
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="border-t border-neutral-900 pt-3">
-              <button
-                onClick={() => setSharePreviewOpen(true)}
-                className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
-              >
-                <Share2 size={12} /> Share
-              </button>
+            <div className="border-t border-white/[0.06] pt-3">
+              <ButtonText tone="muted" icon={Share2} onClick={() => setSharePreviewOpen(true)}>Share</ButtonText>
             </div>
-          </div>
+          </Card>
         )}
 
         {sharePreviewOpen && summary && (
@@ -5470,22 +5449,15 @@ function GuidedRunView({
         )}
 
         {summary && onViewWorkout && (
-          <button
-            onClick={() => onViewWorkout(summary.id)}
-            className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
-          >
-            View Workout
-          </button>
+          <ButtonSecondary onClick={() => onViewWorkout(summary.id)}>View Workout</ButtonSecondary>
         )}
 
         {run.source === "blank" && !run.programContext && (
           <button
             onClick={saveAsTemplate}
             disabled={templateSaved}
-            className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
-              templateSaved
-                ? "border-green-800 text-green-500 cursor-default"
-                : "border-neutral-700 text-neutral-300 hover:border-red-700 hover:text-red-500"
+            className={`w-full py-3 rounded-xl text-xs uppercase tracking-widest font-bold ${
+              templateSaved ? "bg-v5-success/10 text-v5-success cursor-default" : "bg-v5-elevated text-v5-subtext hover:text-v5-text"
             }`}
           >
             {templateSaved ? "Saved to My Plans ✓" : "Save as Workout Template"}
@@ -5507,46 +5479,37 @@ function GuidedRunView({
                   const hasPR = prExIds.has(entry.exId);
                   const isBaseline = !hasPR && !priorExIds.has(entry.exId);
                   return (
-                    <div key={entry.id || i} className="border border-neutral-800 bg-charcoal-panel px-4 py-3">
+                    <Card key={entry.id || i} padding="px-4 py-3">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-base text-white flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm font-bold text-v5-text flex items-center gap-1.5 min-w-0">
                           <span className="truncate">{exMap[entry.exId]?.name || entry.exId}</span>
-                          {hasPR && <span className="shrink-0 text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">PR</span>}
-                          {isBaseline && (
-                            <span className="shrink-0 text-[9px] uppercase tracking-widest border border-neutral-700 text-neutral-500 px-1.5 py-0.5">
-                              Baseline
-                            </span>
-                          )}
+                          {hasPR && <Pill className="shrink-0">PR</Pill>}
+                          {isBaseline && <Pill tone="inactive" className="shrink-0">Baseline</Pill>}
                         </span>
-                        <span className="text-xs text-neutral-500 shrink-0">Target {entry.targetReps}</span>
+                        <span className="text-xs text-v5-subtext shrink-0">Target {entry.targetReps}</span>
                       </div>
-                      <div className="text-xs text-neutral-400 mt-1">{entry.sets.map(formatSetCompact).join(", ")}</div>
-                    </div>
+                      <div className="text-xs text-v5-subtext mt-1">{entry.sets.map(formatSetCompact).join(", ")}</div>
+                    </Card>
                   );
                 })}
               </div>
             );
           })()
         ) : (
-          <div className="text-sm text-neutral-500">Nothing logged this session.</div>
+          <div className="text-sm text-v5-subtext">Nothing logged this session.</div>
         )}
 
-        <button
+        <ButtonSecondary
+          icon={Plus}
           onClick={() => {
             onReopen();
             setAddingExercise(true);
           }}
-          className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-red-700 hover:text-red-500 flex items-center justify-center gap-1.5"
         >
-          <Plus size={14} /> Add exercise
-        </button>
+          Add exercise
+        </ButtonSecondary>
 
-        <button
-          onClick={onExit}
-          className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
-        >
-          Back to plans
-        </button>
+        <ButtonPrimary size="lg" onClick={onExit}>Back to plans</ButtonPrimary>
       </div>
     );
   }
@@ -6626,17 +6589,11 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Plans & programs</div>
-          <div className="text-xl font-bold text-white mt-1">Browse everything</div>
-        </div>
-        {onGoToBuild && (
-          <button onClick={onGoToBuild} className="shrink-0 flex items-center gap-1.5 text-xs uppercase tracking-widest text-red-500 hover:text-red-400">
-            <Plus size={14} /> Create plan
-          </button>
-        )}
-      </div>
+      <ScreenHeader
+        eyebrow="Plans & programs"
+        title="Browse everything"
+        right={onGoToBuild && <ButtonText icon={Plus} onClick={onGoToBuild}>Create plan</ButtonText>}
+      />
 
       {/* Shown only while pendingFrequencyReview is set — i.e. only right after the athlete
           changed Planned Training Days while a program was active (see AthleteProfileForm.save()).
@@ -6644,78 +6601,65 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
           below pre-set to the new day count. currentProgram is untouched either way until the
           athlete explicitly starts a different program day from that picker. */}
       {pendingReview && (
-        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
-          <div className="text-sm text-neutral-200">
-            You changed your planned training frequency from <span className="font-bold text-white">{pendingReview.fromDays}</span> to{" "}
-            <span className="font-bold text-white">{pendingReview.toDays}</span> days per week.
+        <HeroCard>
+          <div className="text-sm text-v5-text/90">
+            You changed your planned training frequency from <span className="font-bold text-v5-text">{pendingReview.fromDays}</span> to{" "}
+            <span className="font-bold text-v5-text">{pendingReview.toDays}</span> days per week.
           </div>
-          <div className="text-xs text-neutral-500">Would you like BRK to adapt your current program?</div>
+          <div className="text-xs text-v5-subtext">Would you like BRK to adapt your current program?</div>
           <div className="flex gap-2">
-            <button
-              onClick={openReview}
-              className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
-            >
+            <ButtonPrimary size="sm" onClick={openReview} className="flex-1">
               Review {pendingReview.toDays}-Day Version
-            </button>
-            <button
-              onClick={dismissPendingReview}
-              className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
-            >
+            </ButtonPrimary>
+            <ButtonSecondary size="sm" onClick={dismissPendingReview} className="flex-1">
               Keep Current Program
-            </button>
+            </ButtonSecondary>
           </div>
-        </div>
+        </HeroCard>
       )}
 
       {state.customPlans.length > 0 && (
-        <div className="space-y-3">
-          <div className="text-[11px] uppercase tracking-widest text-red-600">My plans</div>
+        <div className="space-y-2.5">
+          <SectionLabel>My plans</SectionLabel>
           <div className="space-y-2">
             {state.customPlans.map((p) => (
-              <div key={p.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
+              // Two independent tap targets (open detail vs. jump straight to Start) — kept as
+              // sibling buttons inside a plain (non-button) Card, never a button nested inside
+              // ListRow's own button, which the HTML spec disallows.
+              <Card key={p.id} className="flex items-center justify-between gap-3">
                 <button onClick={() => setDetail({ kind: "customPlan", id: p.id })} className="flex-1 min-w-0 text-left">
-                  <div className="text-base text-white truncate">{p.name}</div>
-                  <div className="text-xs text-neutral-600">{p.exercises.length} exercises</div>
+                  <div className="text-sm font-bold text-v5-text truncate">{p.name}</div>
+                  <div className="text-xs text-v5-subtext mt-0.5">{p.exercises.length} exercises</div>
                 </button>
-                <button
-                  onClick={() => onStartRun(p)}
-                  className="shrink-0 ml-3 text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
-                >
-                  <ChevronRight size={12} /> Start
-                </button>
-              </div>
+                <ButtonText icon={ChevronRight} onClick={() => onStartRun(p)} className="shrink-0">
+                  Start
+                </ButtonText>
+              </Card>
             ))}
           </div>
         </div>
       )}
 
       {(state.customPrograms || []).length > 0 && (
-        <div className="space-y-3">
-          <div className="text-[11px] uppercase tracking-widest text-red-600">My programs</div>
+        <div className="space-y-2.5">
+          <SectionLabel>My programs</SectionLabel>
           <div className="space-y-2">
             {state.customPrograms.map((prog) => (
-              <button
+              <ListRow
                 key={prog.id}
                 onClick={() => setDetail({ kind: "customProgram", id: prog.id })}
-                className="w-full flex items-center justify-between px-4 py-3 border border-neutral-800 bg-charcoal-panel text-left"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base font-medium text-white truncate">{prog.name}</span>
+                title={
+                  <span className="flex items-center gap-2">
+                    <span className="truncate">{prog.name}</span>
                     {isCompleteCustom(prog.id) ? (
-                      <span className="text-[9px] uppercase tracking-widest bg-neutral-700 text-white px-1.5 py-0.5 shrink-0">Complete</span>
+                      <Pill tone="inactive">Complete</Pill>
                     ) : (
-                      isCurrentCustom(prog.id) && (
-                        <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
-                      )
+                      isCurrentCustom(prog.id) && <Pill>Current</Pill>
                     )}
-                  </div>
-                  <div className="text-[11px] text-neutral-500 mt-0.5 truncate">
-                    {prog.days.length} days{prog.weeks ? ` · ${prog.weeks} weeks` : ""}
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-neutral-600 shrink-0 ml-2" />
-              </button>
+                  </span>
+                }
+                subtitle={`${prog.days.length} days${prog.weeks ? ` · ${prog.weeks} weeks` : ""}`}
+              />
             ))}
           </div>
         </div>
@@ -6727,11 +6671,11 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
           fall back to structure guidance instead of fabricating a program. Nothing here is
           hidden — the full "All Programs" list below is unaffected and still shows everything
           regardless of day count. */}
-      <div className="space-y-3">
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Find a program for your schedule</div>
+      <div className="space-y-2.5">
+        <SectionLabel>Find a program for your schedule</SectionLabel>
         {reviewCompare && (
-          <div className="text-xs text-neutral-400 border-l-2 border-red-700 pl-2.5">
-            Current: <span className="text-neutral-200">{state.currentProgram?.programName || "No active program"}</span> (
+          <div className="text-xs text-v5-subtext border-l-2 border-v5-red pl-2.5">
+            Current: <span className="text-v5-text/90">{state.currentProgram?.programName || "No active program"}</span> (
             {reviewCompare.fromDays} days) → Proposed: {reviewCompare.toDays} days
           </div>
         )}
@@ -6760,135 +6704,107 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
             });
             const guidance = FREQUENCY_GUIDANCE[selectedDays];
             const programRow = (p, isRecommended) => (
-              <button
+              <ListRow
                 key={p.id}
+                tone={isRecommended ? "accent" : "default"}
                 onClick={() => setDetail({ kind: p.source === "custom" ? "customProgram" : "program", id: p.id })}
-                className={`w-full flex items-center justify-between px-4 py-3 border text-left ${
-                  isRecommended ? "border-red-700 bg-red-950/10" : "border-neutral-800 bg-charcoal-panel"
-                }`}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base font-medium text-white truncate">{p.name}</span>
-                    {isRecommended && (
-                      <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Recommended</span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-neutral-500 mt-0.5 truncate">
-                    {p.tagline}
-                    {p.weeks ? ` · ${p.weeks} weeks` : ""}
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-neutral-600 shrink-0 ml-2" />
-              </button>
+                title={
+                  <span className="flex items-center gap-2">
+                    <span className="truncate">{p.name}</span>
+                    {isRecommended && <Pill>Recommended</Pill>}
+                  </span>
+                }
+                subtitle={`${p.tagline}${p.weeks ? ` · ${p.weeks} weeks` : ""}`}
+              />
             );
             return (
               <div className="space-y-3">
                 {guidance?.warning && (
-                  <div className="border border-amber-900/40 bg-amber-950/10 px-3 py-2.5 text-xs text-amber-500/90">{guidance.note}</div>
+                  <div className="rounded-xl bg-amber-500/10 px-3 py-2.5 text-xs text-amber-400">{guidance.note}</div>
                 )}
                 {rec.recommended && (
                   <div className="space-y-1.5">
-                    <div className="text-[10px] uppercase tracking-widest text-neutral-600">Recommended</div>
+                    <SectionLabel tone="muted">Recommended</SectionLabel>
                     {programRow(rec.recommended, true)}
                   </div>
                 )}
                 {rec.others.length > 0 && (
                   <div className="space-y-1.5">
-                    <div className="text-[10px] uppercase tracking-widest text-neutral-600">Other Options</div>
+                    <SectionLabel tone="muted">Other Options</SectionLabel>
                     {rec.others.map((p) => programRow(p, false))}
                   </div>
                 )}
                 {rec.matches.length === 0 && guidance && !guidance.warning && (
-                  <div className="text-xs text-neutral-500 border border-neutral-800 bg-charcoal-panel px-3 py-3 space-y-2">
+                  <Card className="space-y-2 text-xs text-v5-subtext">
                     <div>
                       No built-in program at {selectedDays} days yet. Recommended structure: {guidance.structure.join(" / ")}.
                     </div>
-                    <div className="text-neutral-600">{guidance.note}</div>
-                    {onGoToBuild && (
-                      <button onClick={onGoToBuild} className="text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400">
-                        Build one from scratch →
-                      </button>
-                    )}
-                  </div>
+                    <div className="text-v5-subtext/70">{guidance.note}</div>
+                    {onGoToBuild && <ButtonText onClick={onGoToBuild}>Build one from scratch →</ButtonText>}
+                  </Card>
                 )}
               </div>
             );
           })()}
       </div>
 
-      <div className="space-y-3">
-        <div className="text-[11px] uppercase tracking-widest text-neutral-500">All Programs</div>
-        <p className="text-xs text-neutral-500">
+      <div className="space-y-2.5">
+        <SectionLabel tone="muted">All Programs</SectionLabel>
+        <p className="text-xs text-v5-subtext">
           Full multi-day splits built around a specific look and training identity. Copy any single day into your
           own plans.
         </p>
         <div className="space-y-2">
           {(state.programs || []).map((prog) => (
-            <button
+            <ListRow
               key={prog.id}
+              tone="accent"
               onClick={() => setDetail({ kind: "program", id: prog.id })}
-              className="w-full flex items-center justify-between px-4 py-3 border border-red-900/40 bg-charcoal-panel text-left"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-base font-medium text-white truncate">{prog.name}</span>
+              title={
+                <span className="flex items-center gap-2">
+                  <span className="truncate">{prog.name}</span>
                   {isComplete(prog.id) ? (
-                    <span className="text-[9px] uppercase tracking-widest bg-neutral-700 text-white px-1.5 py-0.5 shrink-0">Complete</span>
+                    <Pill tone="inactive">Complete</Pill>
                   ) : (
-                    isCurrent(prog.id) && (
-                      <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5 shrink-0">Current</span>
-                    )
+                    isCurrent(prog.id) && <Pill>Current</Pill>
                   )}
-                </div>
-                <div className="text-[11px] text-neutral-500 mt-0.5 truncate">
-                  {prog.tagline}
-                  {prog.weeks ? ` · ${prog.weeks} weeks` : ""}
-                </div>
-              </div>
-              <ChevronRight size={16} className="text-neutral-600 shrink-0 ml-2" />
-            </button>
+                </span>
+              }
+              subtitle={`${prog.tagline}${prog.weeks ? ` · ${prog.weeks} weeks` : ""}`}
+            />
           ))}
         </div>
       </div>
 
-      <div className="space-y-3">
-        <div className="text-[11px] uppercase tracking-widest text-neutral-500">Single day templates</div>
-        <p className="text-xs text-neutral-500">Standard split templates. Copy one into your own plans to customize it.</p>
+      <div className="space-y-2.5">
+        <SectionLabel tone="muted">Single day templates</SectionLabel>
+        <p className="text-xs text-v5-subtext">Standard split templates. Copy one into your own plans to customize it.</p>
         <div className="space-y-2">
           {state.templates.map((tpl) => (
-            <button
-              key={tpl.id}
-              onClick={() => setDetail({ kind: "template", id: tpl.id })}
-              className="w-full flex items-center justify-between px-4 py-3 border border-neutral-800 bg-charcoal-panel text-left"
-            >
-              <span className="text-base font-medium text-white truncate">{tpl.name}</span>
-              <ChevronRight size={16} className="text-neutral-600 shrink-0 ml-2" />
-            </button>
+            <ListRow key={tpl.id} title={tpl.name} onClick={() => setDetail({ kind: "template", id: tpl.id })} />
           ))}
         </div>
       </div>
 
       {(state.completedPrograms || []).length > 0 && (
-        <div className="space-y-3">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Completed programs</div>
-          <p className="text-xs text-neutral-500">Every program you've finished — earned, not reset silently.</p>
+        <div className="space-y-2.5">
+          <SectionLabel tone="muted">Completed programs</SectionLabel>
+          <p className="text-xs text-v5-subtext">Every program you've finished — earned, not reset silently.</p>
           <div className="space-y-2">
             {state.completedPrograms.map((c) => (
-              <div key={c.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
+              // Plain (non-button) Card — its only action is the sibling Restart button, so
+              // there's no outer click target competing with it.
+              <Card key={c.id} className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-base text-white truncate">{c.programName}</div>
-                  <div className="text-xs text-neutral-600 mt-0.5">
+                  <div className="text-sm font-bold text-v5-text truncate">{c.programName}</div>
+                  <div className="text-xs text-v5-subtext mt-0.5">
                     {c.weeks} weeks · {new Date(c.startDate).toLocaleDateString()} – {new Date(c.endDate).toLocaleDateString()}
                   </div>
                 </div>
-                <button
-                  onClick={() => onRestartCompletedProgram(c.programId, c.programSource)}
-                  className="shrink-0 ml-3 text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
-                >
-                  <ChevronRight size={12} /> Restart
-                </button>
-              </div>
+                <ButtonText icon={ChevronRight} onClick={() => onRestartCompletedProgram(c.programId, c.programSource)} className="shrink-0">
+                  Restart
+                </ButtonText>
+              </Card>
             ))}
           </div>
         </div>
