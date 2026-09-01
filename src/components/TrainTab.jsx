@@ -63,7 +63,7 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
     const currentExName = currentIdx >= 0 ? exMap[activeRun.swaps?.[currentIdx] ?? activeRun.exercises[currentIdx].exId]?.name : null;
 
     return (
-      <div className="space-y-5">
+      <div className="space-y-4">
         <ScreenHeader eyebrow="Train" title="Resume workout" />
 
         <HeroCard>
@@ -88,7 +88,7 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <ScreenHeader eyebrow="Train" title="Choose your workout" />
 
       {programDay && !programDay.isComplete && (

@@ -369,7 +369,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div>
         <div className="text-2xl font-black text-v5-text tracking-tight">{greeting()}</div>
         <div className="text-xs text-v5-subtext mt-0.5">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>

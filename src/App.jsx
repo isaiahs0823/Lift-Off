@@ -6600,7 +6600,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <ScreenHeader
         eyebrow="Plans & programs"
         title="Browse everything"

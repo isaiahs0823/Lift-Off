@@ -95,7 +95,7 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
   const focus = topRecentMuscle(sessions);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <ScreenHeader
         eyebrow="Progress"
         title="Where you stand"

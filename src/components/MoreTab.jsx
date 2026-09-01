@@ -57,7 +57,7 @@ function TrainingDetailToggle({ state, updateState }) {
 
 export default function MoreTab({ state, updateState, onNavigate }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <ScreenHeader eyebrow="More" title="Tools & settings" />
 
       <div className="space-y-2">

@@ -22,7 +22,7 @@ import MuscleBodyOutline from "../MuscleBodyOutline.jsx";
 export function SectionLabel({ children, tone = "red", className = "" }) {
   return (
     <div
-      className={`text-[11px] font-bold uppercase tracking-[0.16em] ${tone === "red" ? "text-v5-red" : "text-v5-subtext"} ${className}`}
+      className={`text-[11px] font-bold uppercase tracking-[0.12em] ${tone === "red" ? "text-v5-red" : "text-v5-subtext"} ${className}`}
     >
       {children}
     </div>
@@ -42,8 +42,8 @@ export function ScreenHeader({ eyebrow, title, subtitle, right, className = "" }
             case, but "Browse everything" next to a "Create plan" action showed why hard
             truncation is the wrong default: it clipped to "Browse everyth…" for no reason.
             Wrapping to a second line reads fine and never loses words. */}
-        <div className="text-2xl font-black text-v5-text tracking-tight mt-1">{title}</div>
-        {subtitle && <div className="text-sm text-v5-subtext mt-1">{subtitle}</div>}
+        <div className="text-xl font-black text-v5-text tracking-tight mt-0.5">{title}</div>
+        {subtitle && <div className="text-sm text-v5-subtext mt-0.5">{subtitle}</div>}
       </div>
       {right && <div className="shrink-0">{right}</div>}
     </div>
@@ -66,9 +66,11 @@ const CARD_TONE = {
 };
 
 // Base card shell. Pass `onClick` to make it an interactive button (adds hover feedback and a
-// pointer cursor) — omit it for a static content card.
-export function Card({ children, tone = "default", onClick, className = "", padding = "p-4", as }) {
-  const base = `${padding} rounded-2xl text-left transition-colors ${CARD_TONE[tone] || CARD_TONE.default}`;
+// pointer cursor) — omit it for a static content card. `radius` defaults to the standard
+// non-hero corner (rounded-xl) — HeroCard below overrides it to stay slightly more rounded, per
+// the density pass's "hero cards may stay slightly larger/rounder" rule.
+export function Card({ children, tone = "default", onClick, className = "", padding = "p-3.5", radius = "rounded-xl", as }) {
+  const base = `${padding} ${radius} text-left transition-colors ${CARD_TONE[tone] || CARD_TONE.default}`;
   const interactive = onClick ? "w-full hover:bg-v5-elevated active:opacity-90" : "";
   const Comp = as || (onClick ? "button" : "div");
   return (
@@ -79,17 +81,22 @@ export function Card({ children, tone = "default", onClick, className = "", padd
 }
 
 // The one big focal card per screen (Today's workout, Train's current program). Larger padding,
-// accent tone by default, room for a headline + a couple of stat lines + a CTA.
+// accent tone by default, room for a headline + a couple of stat lines + a CTA. Still the most
+// generous Card variant after the density pass — just not as oversized as before.
 export function HeroCard({ children, className = "", tone = "accent" }) {
-  return <Card tone={tone} padding="p-5 sm:p-6" className={`space-y-3 ${className}`}>{children}</Card>;
+  return (
+    <Card tone={tone} padding="p-4 sm:p-5" radius="rounded-2xl" className={`space-y-3 ${className}`}>
+      {children}
+    </Card>
+  );
 }
 
 // ---- buttons ----
 
 const BTN_SIZE = {
   sm: "py-2 px-4 text-[11px]",
-  md: "py-3 px-5 text-xs",
-  lg: "py-4 px-6 text-sm",
+  md: "py-2.5 px-4 text-xs",
+  lg: "py-3 px-5 text-sm",
 };
 
 // Solid red, white text — the one primary action per screen/card ("Start Workout," "Save Set").
@@ -152,9 +159,9 @@ export function StatTile({ value, label, className = "", valueClassName = "" }) 
 // card surface, optionally tappable to drill in.
 export function MetricTile({ value, label, sublabel, onClick, accent = false, className = "" }) {
   return (
-    <Card onClick={onClick} padding="p-4" className={`space-y-1 ${className}`} tone={accent ? "accent" : "default"}>
+    <Card onClick={onClick} padding="p-3" className={`space-y-1 ${className}`} tone={accent ? "accent" : "default"}>
       <div className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext">{label}</div>
-      <div className="text-2xl font-black text-v5-text tabular-nums leading-none">{value}</div>
+      <div className="text-xl font-black text-v5-text tabular-nums leading-none">{value}</div>
       {sublabel && <div className="text-xs text-v5-subtext">{sublabel}</div>}
     </Card>
   );
@@ -182,11 +189,11 @@ export function Pill({ children, tone = "solid", className = "" }) {
 // trailing chevron with custom content (a Pill, a delta) when needed.
 export function ListRow({ icon: Icon, title, subtitle, onClick, right, tone = "default", className = "" }) {
   return (
-    <Card onClick={onClick} tone={tone} className={`flex items-center justify-between gap-3 ${className}`}>
-      <div className="flex items-center gap-3 min-w-0">
+    <Card onClick={onClick} tone={tone} className={`flex items-center justify-between gap-2.5 ${className}`}>
+      <div className="flex items-center gap-2.5 min-w-0">
         {Icon && (
-          <span className="shrink-0 w-9 h-9 rounded-full bg-v5-elevated flex items-center justify-center">
-            <Icon size={16} className="text-v5-subtext" />
+          <span className="shrink-0 w-8 h-8 rounded-full bg-v5-elevated flex items-center justify-center">
+            <Icon size={14} className="text-v5-subtext" />
           </span>
         )}
         <div className="min-w-0 text-left">
@@ -194,7 +201,7 @@ export function ListRow({ icon: Icon, title, subtitle, onClick, right, tone = "d
           {subtitle && <div className="text-xs text-v5-subtext truncate mt-0.5">{subtitle}</div>}
         </div>
       </div>
-      {right !== undefined ? right : onClick && <ChevronRight size={16} className="text-v5-subtext shrink-0" />}
+      {right !== undefined ? right : onClick && <ChevronRight size={15} className="text-v5-subtext shrink-0" />}
     </Card>
   );
 }
@@ -226,9 +233,9 @@ export function EmptyState({ icon: Icon, title, body, action, className = "" }) 
 // than a full ListRow/Button for a grid of 3-4 short actions.
 export function ActionTile({ icon: Icon, label, onClick, className = "" }) {
   return (
-    <button onClick={onClick} className={`flex flex-col items-center gap-2 py-3 rounded-2xl bg-v5-surface hover:bg-v5-elevated ${className}`}>
-      <span className="w-10 h-10 rounded-full bg-v5-elevated flex items-center justify-center">
-        <Icon size={18} className="text-v5-red" />
+    <button onClick={onClick} className={`flex flex-col items-center gap-1.5 py-2.5 rounded-xl bg-v5-surface hover:bg-v5-elevated ${className}`}>
+      <span className="w-9 h-9 rounded-full bg-v5-elevated flex items-center justify-center">
+        <Icon size={16} className="text-v5-red" />
       </span>
       <span className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext text-center leading-tight">{label}</span>
     </button>
