@@ -9,12 +9,12 @@ import { sessionPRCount } from "../utils/prSummary.js";
 const CAL_GLYPH = { completed: "✓", pending: "●", upcoming: "○", rest: "–", missed: "×", skipped: "×", moved_away: "·", none: "" };
 const CAL_GLYPH_COLOR = {
   completed: "text-green-500",
-  pending: "text-red-500",
-  upcoming: "text-neutral-700",
-  rest: "text-neutral-600",
-  missed: "text-red-600",
-  skipped: "text-red-600",
-  moved_away: "text-neutral-700",
+  pending: "text-v5-red",
+  upcoming: "text-v5-subtext/40",
+  rest: "text-v5-subtext/70",
+  missed: "text-v5-red",
+  skipped: "text-v5-red",
+  moved_away: "text-v5-subtext/40",
   none: "text-transparent",
 };
 const STATUS_WORD = {
@@ -79,38 +79,38 @@ function DayDetail({ dateKeyStr, data, exMap, onBack, scheduleDay, onViewWorkout
   return (
     <SlideInPanel title={label} onBack={onBack}>
       {scheduleDay && scheduleDay.status !== "none" && (
-        <div className="border border-neutral-800 bg-charcoal-panel p-3 flex items-center justify-between">
+        <div className="border border-white/10 bg-v5-elevated p-3 flex items-center justify-between">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Scheduled</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Scheduled</div>
             <div className="text-sm text-white font-bold">{scheduleDay.label || DAY_TYPE_LABEL[scheduleDay.type]}</div>
           </div>
           <span className={`text-xs font-bold ${CAL_GLYPH_COLOR[scheduleDay.status]}`}>{STATUS_WORD[scheduleDay.status]}</span>
         </div>
       )}
       {data.sessions.length === 0 && data.cardio.length === 0 && !data.bodyweight && data.photos === 0 ? (
-        <div className="text-sm text-neutral-500">Nothing logged this day.</div>
+        <div className="text-sm text-v5-subtext">Nothing logged this day.</div>
       ) : (
         <div className="space-y-3">
           {data.sessions.map((s) =>
             onViewWorkout ? (
-              <button key={s.id} onClick={() => onViewWorkout(s.id)} className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 hover:border-red-700">
+              <button key={s.id} onClick={() => onViewWorkout(s.id)} className="w-full text-left border border-white/10 bg-v5-elevated p-3 hover:border-v5-red">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 text-sm text-white font-bold min-w-0">
-                    <Dumbbell size={14} className="text-red-500 shrink-0" /> <span className="truncate">{s.planName}</span>
+                    <Dumbbell size={14} className="text-v5-red shrink-0" /> <span className="truncate">{s.planName}</span>
                   </div>
-                  <ChevronRight size={14} className="text-neutral-600 shrink-0" />
+                  <ChevronRight size={14} className="text-v5-subtext/70 shrink-0" />
                 </div>
-                <div className="text-xs text-neutral-400 mt-1">
+                <div className="text-xs text-v5-subtext mt-1">
                   {s.workingSets} working sets · {s.totalVolume.toLocaleString()} lb volume
                   {sessionPRCount(s) > 0 ? ` · ${sessionPRCount(s)} PR${sessionPRCount(s) > 1 ? "s" : ""}` : ""}
                 </div>
               </button>
             ) : (
-              <div key={s.id} className="border border-neutral-800 bg-charcoal-panel p-3">
+              <div key={s.id} className="border border-white/10 bg-v5-elevated p-3">
                 <div className="flex items-center gap-1.5 text-sm text-white font-bold">
-                  <Dumbbell size={14} className="text-red-500" /> {s.planName}
+                  <Dumbbell size={14} className="text-v5-red" /> {s.planName}
                 </div>
-                <div className="text-xs text-neutral-400 mt-1">
+                <div className="text-xs text-v5-subtext mt-1">
                   {s.workingSets} working sets · {s.totalVolume.toLocaleString()} lb volume
                   {sessionPRCount(s) > 0 ? ` · ${sessionPRCount(s)} PR${sessionPRCount(s) > 1 ? "s" : ""}` : ""}
                 </div>
@@ -118,22 +118,22 @@ function DayDetail({ dateKeyStr, data, exMap, onBack, scheduleDay, onViewWorkout
             )
           )}
           {data.cardio.map((c) => (
-            <div key={c.id} className="border border-neutral-800 bg-charcoal-panel p-3">
+            <div key={c.id} className="border border-white/10 bg-v5-elevated p-3">
               <div className="flex items-center gap-1.5 text-sm text-white font-bold">
-                <Timer size={14} className="text-red-500" /> {exMap[c.exId]?.name || c.exId}
+                <Timer size={14} className="text-v5-red" /> {exMap[c.exId]?.name || c.exId}
               </div>
-              <div className="text-xs text-neutral-400 mt-1">
+              <div className="text-xs text-v5-subtext mt-1">
                 {c.distance != null ? `${c.distance} ${c.distanceUnit}` : ""}
                 {c.duration != null ? ` · ${c.duration} min` : ""}
               </div>
             </div>
           ))}
           {data.bodyweight && (
-            <div className="border border-neutral-800 bg-charcoal-panel p-3">
+            <div className="border border-white/10 bg-v5-elevated p-3">
               <div className="flex items-center gap-1.5 text-sm text-white font-bold">
-                <Scale size={14} className="text-red-500" /> Body log
+                <Scale size={14} className="text-v5-red" /> Body log
               </div>
-              <div className="text-xs text-neutral-400 mt-1">
+              <div className="text-xs text-v5-subtext mt-1">
                 {data.bodyweight.weight != null ? `${data.bodyweight.weight} lb` : ""}
                 {data.bodyweight.waist != null ? ` · ${data.bodyweight.waist} in waist` : ""}
                 {data.bodyweight.bodyFat != null ? ` · ${data.bodyweight.bodyFat}% bf` : ""}
@@ -141,8 +141,8 @@ function DayDetail({ dateKeyStr, data, exMap, onBack, scheduleDay, onViewWorkout
             </div>
           )}
           {data.photos > 0 && (
-            <div className="border border-neutral-800 bg-charcoal-panel p-3 flex items-center gap-1.5 text-sm text-white font-bold">
-              <Camera size={14} className="text-red-500" /> {data.photos} progress photo{data.photos > 1 ? "s" : ""}
+            <div className="border border-white/10 bg-v5-elevated p-3 flex items-center gap-1.5 text-sm text-white font-bold">
+              <Camera size={14} className="text-v5-red" /> {data.photos} progress photo{data.photos > 1 ? "s" : ""}
             </div>
           )}
         </div>
@@ -199,16 +199,16 @@ export default function TrainingCalendar({ state, exMap, onViewWorkout }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <button onClick={goPrev} className="text-neutral-500 hover:text-red-500 p-1">
+        <button onClick={goPrev} className="text-v5-subtext hover:text-v5-red p-1">
           <ChevronLeft size={18} />
         </button>
         <div className="text-sm font-bold text-white">{monthLabel(year, month)}</div>
-        <button onClick={goNext} className="text-neutral-500 hover:text-red-500 p-1">
+        <button onClick={goNext} className="text-v5-subtext hover:text-v5-red p-1">
           <ChevronRight size={18} />
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-widest text-neutral-600">
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-widest text-v5-subtext/70">
         {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
           <div key={i}>{d}</div>
         ))}
@@ -228,19 +228,19 @@ export default function TrainingCalendar({ state, exMap, onViewWorkout }) {
               key={i}
               onClick={() => setSelectedDay(key)}
               className={`aspect-square flex flex-col items-center justify-center border text-xs relative ${
-                isToday ? "border-red-700" : "border-neutral-900"
-              } ${data ? "bg-charcoal-panel" : ""} hover:border-neutral-600`}
+                isToday ? "border-v5-red" : "border-white/[0.06]"
+              } ${data ? "bg-v5-elevated" : ""} hover:border-v5-red/40`}
             >
               {scheduleGlyph && (
                 <span className={`absolute top-0.5 right-0.5 text-[9px] leading-none font-bold ${scheduleGlyphColor}`}>{scheduleGlyph}</span>
               )}
-              <span className={isToday ? "text-red-500 font-bold" : "text-neutral-400"}>{d}</span>
+              <span className={isToday ? "text-v5-red font-bold" : "text-v5-subtext"}>{d}</span>
               {data && (
                 <div className="flex items-center gap-0.5 mt-0.5">
                   {data.sessions.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-red-600" />}
-                  {data.cardio.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" />}
+                  {data.cardio.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-v5-subtext" />}
                   {data.bodyweight && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
-                  {data.prCount > 0 && <Award size={9} className="text-red-500" />}
+                  {data.prCount > 0 && <Award size={9} className="text-v5-red" />}
                 </div>
               )}
             </button>
@@ -248,28 +248,28 @@ export default function TrainingCalendar({ state, exMap, onViewWorkout }) {
         })}
       </div>
 
-      <div className="flex items-center gap-4 text-[10px] text-neutral-500">
+      <div className="flex items-center gap-4 text-[10px] text-v5-subtext">
         <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-red-600" /> Trained
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" /> Cardio
+          <span className="w-1.5 h-1.5 rounded-full bg-v5-subtext" /> Cardio
         </span>
         <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-400" /> Check-in
         </span>
         <span className="flex items-center gap-1">
-          <Award size={10} className="text-red-500" /> PR
+          <Award size={10} className="text-v5-red" /> PR
         </span>
       </div>
 
       {scheduled && (
-        <div className="flex items-center gap-3 text-[10px] text-neutral-500 flex-wrap">
+        <div className="flex items-center gap-3 text-[10px] text-v5-subtext flex-wrap">
           <span className="flex items-center gap-1"><span className="text-green-500 font-bold">✓</span> Completed</span>
-          <span className="flex items-center gap-1"><span className="text-red-500 font-bold">●</span> Scheduled</span>
-          <span className="flex items-center gap-1"><span className="text-neutral-700 font-bold">○</span> Upcoming</span>
-          <span className="flex items-center gap-1"><span className="text-neutral-600 font-bold">–</span> Rest</span>
-          <span className="flex items-center gap-1"><span className="text-red-600 font-bold">×</span> Missed</span>
+          <span className="flex items-center gap-1"><span className="text-v5-red font-bold">●</span> Scheduled</span>
+          <span className="flex items-center gap-1"><span className="text-v5-subtext/40 font-bold">○</span> Upcoming</span>
+          <span className="flex items-center gap-1"><span className="text-v5-subtext/70 font-bold">–</span> Rest</span>
+          <span className="flex items-center gap-1"><span className="text-v5-red font-bold">×</span> Missed</span>
         </div>
       )}
     </div>

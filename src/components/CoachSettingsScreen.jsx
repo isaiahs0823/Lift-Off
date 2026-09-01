@@ -68,25 +68,25 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Coach</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Coach</div>
           <div className="text-xl font-bold text-white mt-1">Coach settings</div>
         </div>
         {onBack && (
-          <button onClick={onBack} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+          <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
             ← Back
           </button>
         )}
       </div>
 
-      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500">Coach specialty</label>
+      <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext">Coach specialty</label>
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-neutral-600">Current</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">Current</div>
           <div className="text-base font-bold text-white">{currentSpecialty.label}</div>
-          <div className="text-xs text-neutral-500 mt-0.5">{currentSpecialty.subtitle}</div>
+          <div className="text-xs text-v5-subtext mt-0.5">{currentSpecialty.subtitle}</div>
         </div>
         {profile.coachSpecialty === "bodybuilding" && (profile.physiquePhase || profile.physiquePriorities?.primary) && (
-          <div className="text-[11px] text-neutral-400 pt-2 border-t border-neutral-800 space-y-0.5">
+          <div className="text-[11px] text-v5-subtext pt-2 border-t border-white/10 space-y-0.5">
             {profile.physiquePhase && (
               <div>
                 Current phase: <span className="text-white font-bold">{PHYSIQUE_PHASE_LABEL[profile.physiquePhase]}</span>
@@ -106,7 +106,7 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
         )}
         <button
           onClick={() => onNavigate?.("coachSelect")}
-          className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
+          className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30"
         >
           Change Coach
         </button>
@@ -114,19 +114,19 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
 
       <button
         onClick={() => onNavigate?.("developmentPriorities")}
-        className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-4 hover:border-red-700"
+        className="w-full flex items-center justify-between border border-white/10 bg-v5-elevated p-4 hover:border-v5-red"
       >
         <div className="text-left">
           <div className="text-sm font-bold text-white">Development Priorities</div>
-          <div className="text-xs text-neutral-500 mt-0.5">Which muscle groups matter most to you</div>
+          <div className="text-xs text-v5-subtext mt-0.5">Which muscle groups matter most to you</div>
         </div>
-        <ChevronRight size={18} className="text-neutral-600 shrink-0" />
+        <ChevronRight size={18} className="text-v5-subtext/70 shrink-0" />
       </button>
 
       {profile.coachSpecialty === "bodybuilding" && (
         <>
           <div>
-            <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Current phase</label>
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Current phase</label>
             <div className="grid grid-cols-2 gap-1.5">
               {PHYSIQUE_PHASES.map((p) => (
                 <button
@@ -134,8 +134,8 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
                   onClick={() => patch({ physiquePhase: p })}
                   className={`py-2 px-2 text-[11px] font-bold uppercase tracking-wide border ${
                     (profile.physiquePhase || "general_hypertrophy") === p
-                      ? "bg-red-700 border-red-700 text-white"
-                      : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                      ? "bg-v5-red border-v5-red text-white"
+                      : "border-white/10 text-v5-subtext hover:border-v5-red/40"
                   }`}
                 >
                   {PHYSIQUE_PHASE_LABEL[p]}
@@ -145,16 +145,16 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
           </div>
 
           <div>
-            <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Weak point focus</label>
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Weak point focus</label>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <div className="text-[10px] text-neutral-600 mb-1">Primary</div>
+                <div className="text-[10px] text-v5-subtext/70 mb-1">Primary</div>
                 <select
                   value={profile.physiquePriorities?.primary || ""}
                   onChange={(e) =>
                     patch({ physiquePriorities: { ...profile.physiquePriorities, primary: e.target.value || null } })
                   }
-                  className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+                  className="w-full bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
                 >
                   <option value="">None set</option>
                   {PHYSIQUE_PRIORITY_MUSCLES.map((m) => (
@@ -165,13 +165,13 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
                 </select>
               </div>
               <div>
-                <div className="text-[10px] text-neutral-600 mb-1">Secondary</div>
+                <div className="text-[10px] text-v5-subtext/70 mb-1">Secondary</div>
                 <select
                   value={profile.physiquePriorities?.secondary || ""}
                   onChange={(e) =>
                     patch({ physiquePriorities: { ...profile.physiquePriorities, secondary: e.target.value || null } })
                   }
-                  className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+                  className="w-full bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
                 >
                   <option value="">None set</option>
                   {PHYSIQUE_PRIORITY_MUSCLES.map((m) => (
@@ -187,32 +187,32 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
       )}
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">How should Coach talk to you?</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-2">How should Coach talk to you?</label>
         <div className="space-y-1.5">
           {COACHING_STYLES.map((s) => (
             <button
               key={s}
               onClick={() => patch({ coachingStyle: s })}
               className={`w-full text-left px-3 py-2.5 border ${
-                profile.coachingStyle === s ? "border-red-700 bg-red-950/20" : "border-neutral-800 hover:border-neutral-600"
+                profile.coachingStyle === s ? "border-v5-red bg-v5-red/20" : "border-white/10 hover:border-v5-red/40"
               }`}
             >
-              <div className={`text-sm font-bold ${profile.coachingStyle === s ? "text-white" : "text-neutral-300"}`}>{COACHING_STYLE_LABEL[s]}</div>
-              <div className="text-xs text-neutral-500 mt-0.5">{COACHING_STYLE_DESC[s]}</div>
+              <div className={`text-sm font-bold ${profile.coachingStyle === s ? "text-white" : "text-v5-text/90"}`}>{COACHING_STYLE_LABEL[s]}</div>
+              <div className="text-xs text-v5-subtext mt-0.5">{COACHING_STYLE_DESC[s]}</div>
             </button>
           ))}
         </div>
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Response length</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Response length</label>
         <div className="flex gap-2">
           {RESPONSE_LENGTHS.map((r) => (
             <button
               key={r}
               onClick={() => patch({ responseLength: r })}
               className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
-                profile.responseLength === r ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400"
+                profile.responseLength === r ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext"
               }`}
             >
               {RESPONSE_LENGTH_LABEL[r]}
@@ -221,15 +221,15 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
         </div>
       </div>
 
-      <div className="border border-neutral-800 bg-charcoal-panel p-4">
+      <div className="border border-white/10 bg-v5-elevated p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-bold text-white">Learn from my training data</div>
-            <div className="text-xs text-neutral-500 mt-0.5">When off, Coach stops detecting new patterns. Existing memories stay until you delete them.</div>
+            <div className="text-xs text-v5-subtext mt-0.5">When off, Coach stops detecting new patterns. Existing memories stay until you delete them.</div>
           </div>
           <button
             onClick={() => patch({ learningEnabled: !profile.learningEnabled })}
-            className={`shrink-0 w-11 h-6 rounded-full relative transition-colors ${profile.learningEnabled ? "bg-red-700" : "bg-neutral-800"}`}
+            className={`shrink-0 w-11 h-6 rounded-full relative transition-colors ${profile.learningEnabled ? "bg-v5-red" : "bg-v5-elevated"}`}
             aria-label="Toggle learning from training data"
           >
             <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${profile.learningEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
@@ -238,34 +238,34 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
       </div>
 
       <div className="space-y-2">
-        <button onClick={() => onNavigate?.("coachKnowledge")} className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-3 text-sm text-neutral-300 hover:border-neutral-600">
+        <button onClick={() => onNavigate?.("coachKnowledge")} className="w-full flex items-center justify-between border border-white/10 bg-v5-elevated p-3 text-sm text-v5-text/90 hover:border-v5-red/40">
           What Coach knows about you
-          <ChevronRight size={16} className="text-neutral-600" />
+          <ChevronRight size={16} className="text-v5-subtext/70" />
         </button>
-        <button onClick={() => onNavigate?.("coachProfile")} className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-3 text-sm text-neutral-300 hover:border-neutral-600">
+        <button onClick={() => onNavigate?.("coachProfile")} className="w-full flex items-center justify-between border border-white/10 bg-v5-elevated p-3 text-sm text-v5-text/90 hover:border-v5-red/40">
           Edit full athlete profile
-          <ChevronRight size={16} className="text-neutral-600" />
+          <ChevronRight size={16} className="text-v5-subtext/70" />
         </button>
       </div>
 
-      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
-        <div className="text-[11px] uppercase tracking-widest text-red-600">AI Connection</div>
+      <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">AI Connection</div>
 
         {connState === "idle" && (
-          <button onClick={testConnection} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30">
+          <button onClick={testConnection} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30">
             Test Connection
           </button>
         )}
 
-        {connState === "testing" && <div className="text-sm text-neutral-400">Testing…</div>}
+        {connState === "testing" && <div className="text-sm text-v5-subtext">Testing…</div>}
 
         {connState === "connected" && (
           <div className="space-y-1.5">
             <div className="text-sm font-bold text-green-500">CONNECTED</div>
-            <div className="text-xs text-neutral-500">
-              Model: <span className="text-neutral-300">{connResult?.model}</span>
+            <div className="text-xs text-v5-subtext">
+              Model: <span className="text-v5-text/90">{connResult?.model}</span>
             </div>
-            <button onClick={testConnection} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+            <button onClick={testConnection} className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red">
               Test again
             </button>
           </div>
@@ -273,20 +273,20 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
 
         {connState === "failed" && (
           <div className="space-y-1.5">
-            <div className="text-sm font-bold text-red-500">FAILED</div>
-            <div className="text-xs text-neutral-400">Reason: {connResult?.reason}</div>
-            {connResult?.requestId && <div className="text-[10px] text-neutral-600">Error ID: {connResult.requestId}</div>}
-            <button onClick={testConnection} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+            <div className="text-sm font-bold text-v5-red">FAILED</div>
+            <div className="text-xs text-v5-subtext">Reason: {connResult?.reason}</div>
+            {connResult?.requestId && <div className="text-[10px] text-v5-subtext/70">Error ID: {connResult.requestId}</div>}
+            <button onClick={testConnection} className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red">
               Retry
             </button>
           </div>
         )}
       </div>
 
-      <div className="border border-neutral-800 p-4 space-y-2">
+      <div className="border border-white/10 p-4 space-y-2">
         <div className="text-sm font-bold text-white">Clear conversation memory</div>
-        <div className="text-xs text-neutral-500">Resets everything Coach has learned from conversations and detected patterns. Your workout history, goals, and logs are never affected.</div>
-        <button onClick={clearMemory} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-red-900 text-red-500 hover:bg-red-950/30">
+        <div className="text-xs text-v5-subtext">Resets everything Coach has learned from conversations and detected patterns. Your workout history, goals, and logs are never affected.</div>
+        <button onClick={clearMemory} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red/25 text-v5-red hover:bg-v5-red/30">
           Clear conversation memory
         </button>
       </div>

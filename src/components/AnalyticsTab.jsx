@@ -4,7 +4,7 @@ import { computeExerciseAnalytics, computeOverallAnalytics } from "../utils/anal
 import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
 
 const TREND_ICON = { up: TrendingUp, down: TrendingDown, flat: Minus, insufficient_data: null };
-const TREND_COLOR = { up: "text-green-500", down: "text-red-500", flat: "text-neutral-400", insufficient_data: "text-neutral-600" };
+const TREND_COLOR = { up: "text-green-500", down: "text-v5-red", flat: "text-v5-subtext", insufficient_data: "text-v5-subtext/70" };
 const TREND_LABEL = { up: "Trending up", down: "Trending down", flat: "Flat", insufficient_data: "Not enough data" };
 
 // Exercise detail/history — the one place in BRK where a larger "detail"-size anatomy figure is
@@ -22,53 +22,53 @@ function ExerciseAnalyticsCard({ exId, exMap, state }) {
           <MuscleBodyOutline exercise={exercise} size="detail" />
           <div className="min-w-0">
             <div className="text-lg font-bold text-white truncate">{exercise.name}</div>
-            {exercise.muscle && <div className="text-xs text-neutral-500 mt-0.5">{exercise.muscle}</div>}
+            {exercise.muscle && <div className="text-xs text-v5-subtext mt-0.5">{exercise.muscle}</div>}
           </div>
         </div>
       )}
       {!stats ? (
-        <div className="text-sm text-neutral-500">No logs yet for this exercise.</div>
+        <div className="text-sm text-v5-subtext">No logs yet for this exercise.</div>
       ) : (
-        <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
+        <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Best set</div>
+              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Best set</div>
               <div className="text-white font-bold">{stats.bestSet ? `${stats.bestSet.weight} × ${stats.bestSet.reps}` : "—"}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Est. 1RM</div>
+              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Est. 1RM</div>
               <div className="text-white font-bold">{stats.estimatedOneRM} lb</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Recent working weight</div>
+              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Recent working weight</div>
               <div className="text-white font-bold">{stats.recentWorkingWeight ?? "—"} lb</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Volume trend</div>
+              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Volume trend</div>
               <div className={`font-bold flex items-center gap-1 ${TREND_COLOR[stats.volumeTrend]}`}>
                 {TrendIcon && <TrendIcon size={14} />} {TREND_LABEL[stats.volumeTrend]}
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Avg RIR</div>
+              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Avg RIR</div>
               <div className="text-white font-bold">{stats.avgRir ?? "—"}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-neutral-500">Frequency</div>
+              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Frequency</div>
               <div className="text-white font-bold">{stats.frequencyPerWeek}/week</div>
             </div>
           </div>
-          <div className="text-xs text-neutral-500 border-t border-neutral-900 pt-3">
+          <div className="text-xs text-v5-subtext border-t border-white/[0.06] pt-3">
             Last trained {new Date(stats.lastTrained).toLocaleDateString()} · {stats.totalSessions} sessions logged
           </div>
           {stats.prHistory.length > 0 && (
-            <div className="border-t border-neutral-900 pt-3">
-              <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1.5">PR history</div>
+            <div className="border-t border-white/[0.06] pt-3">
+              <div className="text-[10px] uppercase tracking-widest text-v5-subtext mb-1.5">PR history</div>
               <div className="space-y-1">
                 {stats.prHistory.map((pr, i) => (
                   <div key={i} className="flex items-center justify-between text-xs">
-                    <span className="text-neutral-500">{new Date(pr.date).toLocaleDateString()}</span>
-                    <span className="text-neutral-300">
+                    <span className="text-v5-subtext">{new Date(pr.date).toLocaleDateString()}</span>
+                    <span className="text-v5-text/90">
                       {pr.type === "weight" ? `${pr.value} lb` : `${pr.value} lb e1RM`}
                     </span>
                   </div>
@@ -91,31 +91,31 @@ export default function AnalyticsTab({ state, allExercises, exMap }) {
   return (
     <div className="space-y-6">
       <div>
-        <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Weekly volume</div>
-        <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-2">
+        <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Weekly volume</div>
+        <div className="border border-white/10 bg-v5-elevated p-4 space-y-2">
           {overall.weeklyVolume.map((w) => (
             <div key={w.weekLabel} className="flex items-center gap-2">
-              <span className="w-16 shrink-0 text-[11px] text-neutral-500">{w.weekLabel}</span>
-              <div className="flex-1 h-4 bg-charcoal-deep border border-neutral-900">
-                <div className="h-full bg-red-700" style={{ width: `${(w.volume / maxVolume) * 100}%` }} />
+              <span className="w-16 shrink-0 text-[11px] text-v5-subtext">{w.weekLabel}</span>
+              <div className="flex-1 h-4 bg-v5-surface border border-white/[0.06]">
+                <div className="h-full bg-v5-red" style={{ width: `${(w.volume / maxVolume) * 100}%` }} />
               </div>
-              <span className="w-16 shrink-0 text-right text-[11px] text-neutral-400">{w.volume.toLocaleString()}</span>
+              <span className="w-16 shrink-0 text-right text-[11px] text-v5-subtext">{w.volume.toLocaleString()}</span>
             </div>
           ))}
           {overall.avgDurationMin != null && (
-            <div className="text-xs text-neutral-500 border-t border-neutral-900 pt-2">Average session: {overall.avgDurationMin} min</div>
+            <div className="text-xs text-v5-subtext border-t border-white/[0.06] pt-2">Average session: {overall.avgDurationMin} min</div>
           )}
         </div>
       </div>
 
       {overall.muscleFrequency.length > 0 && (
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Muscle group frequency</div>
-          <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-1.5">
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Muscle group frequency</div>
+          <div className="border border-white/10 bg-v5-elevated p-4 space-y-1.5">
             {overall.muscleFrequency.slice(0, 8).map((m) => (
               <div key={m.muscle} className="flex items-center justify-between text-sm">
-                <span className="text-neutral-300">{m.muscle}</span>
-                <span className="text-neutral-500">{m.count}</span>
+                <span className="text-v5-text/90">{m.muscle}</span>
+                <span className="text-v5-subtext">{m.count}</span>
               </div>
             ))}
           </div>
@@ -125,36 +125,36 @@ export default function AnalyticsTab({ state, allExercises, exMap }) {
       {(overall.improving.length > 0 || overall.declining.length > 0 || overall.stalled.length > 0) && (
         <div className="grid grid-cols-1 gap-3">
           {overall.improving.length > 0 && (
-            <div className="border border-green-900/40 bg-charcoal-panel p-4">
+            <div className="border border-green-900/40 bg-v5-elevated p-4">
               <div className="text-[11px] uppercase tracking-widest text-green-500 mb-2 flex items-center gap-1.5">
                 <TrendingUp size={12} /> Improving
               </div>
               {overall.improving.map((l) => (
                 <div key={l.exId} className="flex items-center justify-between text-sm py-0.5">
-                  <span className="text-neutral-300">{l.name}</span>
+                  <span className="text-v5-text/90">{l.name}</span>
                   <span className="text-green-500">+{l.pctChange}%</span>
                 </div>
               ))}
             </div>
           )}
           {overall.declining.length > 0 && (
-            <div className="border border-red-900/40 bg-charcoal-panel p-4">
-              <div className="text-[11px] uppercase tracking-widest text-red-500 mb-2 flex items-center gap-1.5">
+            <div className="border border-v5-red/25 bg-v5-elevated p-4">
+              <div className="text-[11px] uppercase tracking-widest text-v5-red mb-2 flex items-center gap-1.5">
                 <TrendingDown size={12} /> Declining
               </div>
               {overall.declining.map((l) => (
                 <div key={l.exId} className="flex items-center justify-between text-sm py-0.5">
-                  <span className="text-neutral-300">{l.name}</span>
-                  <span className="text-red-500">{l.pctChange}%</span>
+                  <span className="text-v5-text/90">{l.name}</span>
+                  <span className="text-v5-red">{l.pctChange}%</span>
                 </div>
               ))}
             </div>
           )}
           {overall.stalled.length > 0 && (
-            <div className="border border-neutral-800 bg-charcoal-panel p-4">
-              <div className="text-[11px] uppercase tracking-widest text-neutral-400 mb-2">Stalled (3 sessions, same weight, target missed)</div>
+            <div className="border border-white/10 bg-v5-elevated p-4">
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Stalled (3 sessions, same weight, target missed)</div>
               {overall.stalled.map((l) => (
-                <div key={l.exId} className="text-sm text-neutral-300 py-0.5">
+                <div key={l.exId} className="text-sm text-v5-text/90 py-0.5">
                   {l.name}
                 </div>
               ))}
@@ -164,15 +164,15 @@ export default function AnalyticsTab({ state, allExercises, exMap }) {
       )}
 
       <div>
-        <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Per-exercise</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Per-exercise</div>
         {trainedExIds.length === 0 ? (
-          <div className="text-sm text-neutral-500">Log a few sessions to see per-exercise analytics.</div>
+          <div className="text-sm text-v5-subtext">Log a few sessions to see per-exercise analytics.</div>
         ) : (
           <>
             <select
               value={selectedExId}
               onChange={(e) => setSelectedExId(e.target.value)}
-              className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700 mb-3"
+              className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:border-v5-red mb-3"
             >
               {trainedExIds.map((id) => (
                 <option key={id} value={id}>

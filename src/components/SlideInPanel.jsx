@@ -13,13 +13,13 @@ export function SlideInPanel({ title, subtitle, onBack, children }) {
   return (
     <div className="overflow-hidden">
       <div className={`transform transition-transform duration-300 ease-out ${entered ? "translate-x-0" : "translate-x-full"}`}>
-        <div className="flex items-center gap-3 px-4 py-3 mb-4 border border-red-900/40 bg-charcoal-panel">
-          <button onClick={onBack} className="text-neutral-400 hover:text-red-500 p-1 -ml-1 shrink-0" aria-label="Back">
+        <div className="flex items-center gap-3 px-4 py-3 mb-4 border border-v5-red/25 bg-v5-elevated">
+          <button onClick={onBack} className="text-v5-subtext hover:text-v5-red p-1 -ml-1 shrink-0" aria-label="Back">
             <ChevronLeft size={20} />
           </button>
           <div className="min-w-0">
             <div className="text-sm font-bold text-white truncate">{title}</div>
-            {subtitle && <div className="text-xs text-neutral-500 mt-0.5 truncate">{subtitle}</div>}
+            {subtitle && <div className="text-xs text-v5-subtext mt-0.5 truncate">{subtitle}</div>}
           </div>
         </div>
         <div className="space-y-4">{children}</div>

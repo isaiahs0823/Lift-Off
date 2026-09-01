@@ -28,9 +28,9 @@ function TagList({ items, onAdd, onRemove, suggestions, placeholder }) {
       {items.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {items.map((item) => (
-            <span key={item} className="flex items-center gap-1 px-2.5 py-1 text-xs border border-neutral-800 text-neutral-300 bg-charcoal-deep">
+            <span key={item} className="flex items-center gap-1 px-2.5 py-1 text-xs border border-white/10 text-v5-text/90 bg-v5-surface">
               {item}
-              <button onClick={() => onRemove(item)} className="text-neutral-600 hover:text-red-500">
+              <button onClick={() => onRemove(item)} className="text-v5-subtext/70 hover:text-v5-red">
                 <X size={11} />
               </button>
             </span>
@@ -44,9 +44,9 @@ function TagList({ items, onAdd, onRemove, suggestions, placeholder }) {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add(draft)}
           placeholder={placeholder}
-          className="flex-1 min-w-0 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="flex-1 min-w-0 bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
-        <button onClick={() => add(draft)} className="shrink-0 px-3 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+        <button onClick={() => add(draft)} className="shrink-0 px-3 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40">
           Add
         </button>
       </div>
@@ -55,7 +55,7 @@ function TagList({ items, onAdd, onRemove, suggestions, placeholder }) {
           {suggestions
             .filter((s) => !items.includes(s))
             .map((s) => (
-              <button key={s} onClick={() => add(s)} className="px-2 py-1 text-[11px] text-neutral-500 border border-neutral-900 hover:border-neutral-700 hover:text-neutral-300">
+              <button key={s} onClick={() => add(s)} className="px-2 py-1 text-[11px] text-v5-subtext border border-white/[0.06] hover:border-white/10 hover:text-v5-text/90">
                 + {s}
               </button>
             ))}
@@ -117,32 +117,32 @@ export default function AthleteProfileForm({ state, updateState, mode = "edit", 
   const body = (
     <div className="space-y-6">
       {mode === "onboarding" && (
-        <p className="text-sm text-neutral-400">
+        <p className="text-sm text-v5-subtext">
           A few quick questions so BRK Coach has a starting point — you can skip any of this and it'll figure the rest out over time.
         </p>
       )}
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Why does your goal matter to you?</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Why does your goal matter to you?</label>
         <input
           type="text"
           value={motivation}
           onChange={(e) => setMotivation(e.target.value)}
           placeholder="Optional — e.g. I want to prove I can finish something difficult"
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
-        <p className="text-[11px] text-neutral-600 mt-1">Private. Coach uses this sparingly — not repeated every day.</p>
+        <p className="text-[11px] text-v5-subtext/70 mt-1">Private. Coach uses this sparingly — not repeated every day.</p>
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Training experience</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Training experience</label>
         <div className="grid grid-cols-4 gap-1.5">
           {EXPERIENCE_LEVELS.map((lvl) => (
             <button
               key={lvl}
               onClick={() => setExperience(lvl)}
               className={`py-2 text-[11px] font-bold uppercase tracking-wide border ${
-                experience === lvl ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                experience === lvl ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
               }`}
             >
               {EXPERIENCE_LABEL[lvl]}
@@ -154,48 +154,48 @@ export default function AthleteProfileForm({ state, updateState, mode = "edit", 
       <TrainingDaysSelector value={preferredDays} onChange={setPreferredDays} />
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Preferred session length (min)</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Preferred session length (min)</label>
         <input
           type="number"
           value={preferredDuration}
           onChange={(e) => setPreferredDuration(e.target.value)}
           placeholder="e.g. 60"
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Scheduling constraints</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Scheduling constraints</label>
         <TagList items={constraints} onAdd={(v) => setConstraints((c) => [...c, v])} onRemove={(v) => setConstraints((c) => c.filter((x) => x !== v))} suggestions={CONSTRAINT_SUGGESTIONS} placeholder="e.g. 24-hour shifts" />
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">How should Coach talk to you?</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-2">How should Coach talk to you?</label>
         <div className="space-y-1.5">
           {COACHING_STYLES.map((s) => (
             <button
               key={s}
               onClick={() => setCoachingStyle(s)}
               className={`w-full text-left px-3 py-2.5 border ${
-                coachingStyle === s ? "border-red-700 bg-red-950/20" : "border-neutral-800 hover:border-neutral-600"
+                coachingStyle === s ? "border-v5-red bg-v5-red/20" : "border-white/10 hover:border-v5-red/40"
               }`}
             >
-              <div className={`text-sm font-bold ${coachingStyle === s ? "text-white" : "text-neutral-300"}`}>{COACHING_STYLE_LABEL[s]}</div>
-              <div className="text-xs text-neutral-500 mt-0.5">{COACHING_STYLE_DESC[s]}</div>
+              <div className={`text-sm font-bold ${coachingStyle === s ? "text-white" : "text-v5-text/90"}`}>{COACHING_STYLE_LABEL[s]}</div>
+              <div className="text-xs text-v5-subtext mt-0.5">{COACHING_STYLE_DESC[s]}</div>
             </button>
           ))}
         </div>
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Response length</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Response length</label>
         <div className="flex gap-2">
           {RESPONSE_LENGTHS.map((r) => (
             <button
               key={r}
               onClick={() => setResponseLength(r)}
               className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
-                responseLength === r ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400"
+                responseLength === r ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext"
               }`}
             >
               {RESPONSE_LENGTH_LABEL[r]}
@@ -205,7 +205,7 @@ export default function AthleteProfileForm({ state, updateState, mode = "edit", 
       </div>
 
       {mode === "onboarding" && !showMore && (
-        <button onClick={() => setShowMore(true)} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+        <button onClick={() => setShowMore(true)} className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red">
           More preferences (optional) ▾
         </button>
       )}
@@ -213,27 +213,27 @@ export default function AthleteProfileForm({ state, updateState, mode = "edit", 
       {showMore && (
         <>
           <div>
-            <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Training style</label>
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Training style</label>
             <input
               type="text"
               value={trainingStyle}
               onChange={(e) => setTrainingStyle(e.target.value)}
               placeholder="e.g. Heavy compounds, minimal isolation"
-              className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+              className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
             />
           </div>
           <div>
-            <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Equipment / gym access</label>
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Equipment / gym access</label>
             <TagList items={equipment} onAdd={(v) => setEquipment((e) => [...e, v])} onRemove={(v) => setEquipment((e) => e.filter((x) => x !== v))} placeholder="e.g. Home gym, dumbbells only" />
           </div>
         </>
       )}
 
-      <button onClick={save} className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
+      <button onClick={save} className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90">
         {mode === "onboarding" ? "Save & continue" : "Save profile"}
       </button>
       {mode === "onboarding" && onSkip && (
-        <button onClick={save} className="w-full text-center text-xs text-neutral-500 hover:text-neutral-300 py-1">
+        <button onClick={save} className="w-full text-center text-xs text-v5-subtext hover:text-v5-text/90 py-1">
           Skip for now
         </button>
       )}
@@ -244,7 +244,7 @@ export default function AthleteProfileForm({ state, updateState, mode = "edit", 
     return (
       <div className="space-y-6">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Coach setup</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Coach setup</div>
           <div className="text-xl font-bold text-white mt-1">A few quick questions</div>
         </div>
         {body}

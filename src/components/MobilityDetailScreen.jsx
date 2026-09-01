@@ -24,21 +24,21 @@ export default function MobilityDetailScreen({ movementId, onBack }) {
 
   return (
     <SlideInPanel title={movement.name} subtitle={`${movement.bodyRegion.join(", ")} · ${MOBILITY_TYPE_LABEL[movement.type]}`} onBack={onBack}>
-      <div className="flex items-center gap-4 border border-neutral-800 bg-charcoal-panel p-4">
+      <div className="flex items-center gap-4 border border-white/10 bg-v5-elevated p-4">
         <MuscleBodyOutline exercise={mobilityAnatomyExercise(movement)} size="detail" />
         <div>
           <div className="text-lg font-bold text-white">{prescriptionLabel(movement)}</div>
-          {movement.equipment && movement.equipment !== "None" && <div className="text-xs text-neutral-500 mt-1">Equipment: {movement.equipment}</div>}
-          <div className="text-xs text-neutral-600 mt-1 capitalize">{movement.difficulty}</div>
+          {movement.equipment && movement.equipment !== "None" && <div className="text-xs text-v5-subtext mt-1">Equipment: {movement.equipment}</div>}
+          <div className="text-xs text-v5-subtext/70 mt-1 capitalize">{movement.difficulty}</div>
         </div>
       </div>
 
       <div>
-        <div className="text-[11px] uppercase tracking-widest text-red-600 mb-2">How to</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-red mb-2">How to</div>
         <ol className="space-y-1.5">
           {movement.instructions.map((step, i) => (
-            <li key={i} className="text-sm text-neutral-300 flex gap-2">
-              <span className="text-neutral-600 shrink-0">{i + 1}.</span>
+            <li key={i} className="text-sm text-v5-text/90 flex gap-2">
+              <span className="text-v5-subtext/70 shrink-0">{i + 1}.</span>
               {step}
             </li>
           ))}
@@ -47,11 +47,11 @@ export default function MobilityDetailScreen({ movementId, onBack }) {
 
       {movement.cues.length > 0 && (
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Cues</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Cues</div>
           <ul className="space-y-1.5">
             {movement.cues.map((cue, i) => (
-              <li key={i} className="text-sm text-neutral-400 flex gap-2">
-                <span className="text-neutral-700 shrink-0">—</span>
+              <li key={i} className="text-sm text-v5-subtext flex gap-2">
+                <span className="text-v5-subtext/40 shrink-0">—</span>
                 {cue}
               </li>
             ))}

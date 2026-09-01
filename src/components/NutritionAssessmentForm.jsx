@@ -37,9 +37,9 @@ function TagList({ items, onAdd, onRemove, placeholder }) {
       {items.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {items.map((item) => (
-            <span key={item} className="flex items-center gap-1 px-2.5 py-1 text-xs border border-neutral-800 text-neutral-300 bg-charcoal-deep">
+            <span key={item} className="flex items-center gap-1 px-2.5 py-1 text-xs border border-white/10 text-v5-text/90 bg-v5-surface">
               {item}
-              <button onClick={() => onRemove(item)} className="text-neutral-600 hover:text-red-500">
+              <button onClick={() => onRemove(item)} className="text-v5-subtext/70 hover:text-v5-red">
                 <X size={11} />
               </button>
             </span>
@@ -53,9 +53,9 @@ function TagList({ items, onAdd, onRemove, placeholder }) {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add(draft)}
           placeholder={placeholder}
-          className="flex-1 min-w-0 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="flex-1 min-w-0 bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
-        <button onClick={() => add(draft)} className="shrink-0 px-3 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+        <button onClick={() => add(draft)} className="shrink-0 px-3 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40">
           Add
         </button>
       </div>
@@ -66,15 +66,15 @@ function TagList({ items, onAdd, onRemove, placeholder }) {
 function Field({ label, hint, children }) {
   return (
     <div>
-      <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">{label}</label>
+      <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-neutral-600 mt-1">{hint}</p>}
+      {hint && <p className="text-[11px] text-v5-subtext/70 mt-1">{hint}</p>}
     </div>
   );
 }
 
 function TextInput(props) {
-  return <input {...props} className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700" />;
+  return <input {...props} className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:border-v5-red" />;
 }
 
 function ChipGroup({ options, value, labelMap, onChange, columns = 2 }) {
@@ -85,7 +85,7 @@ function ChipGroup({ options, value, labelMap, onChange, columns = 2 }) {
           key={opt}
           onClick={() => onChange(opt)}
           className={`py-2.5 px-2 text-[11px] font-bold uppercase tracking-wide border ${
-            value === opt ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+            value === opt ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
           }`}
         >
           {labelMap[opt]}
@@ -225,7 +225,7 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
       title: "About you",
       body: (
         <div className="space-y-4">
-          <p className="text-sm text-neutral-400">Before I give you numbers, I need to understand how you actually live.</p>
+          <p className="text-sm text-v5-subtext">Before I give you numbers, I need to understand how you actually live.</p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Age">
               <TextInput type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="e.g. 29" />
@@ -260,7 +260,7 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
               <button
                 key={g}
                 onClick={() => setPrimaryGoal(g)}
-                className={`w-full text-left px-3 py-2.5 border ${primaryGoal === g ? "border-red-700 bg-red-950/20 text-white" : "border-neutral-800 text-neutral-300 hover:border-neutral-600"}`}
+                className={`w-full text-left px-3 py-2.5 border ${primaryGoal === g ? "border-v5-red bg-v5-red/20 text-white" : "border-white/10 text-v5-text/90 hover:border-v5-red/40"}`}
               >
                 {NUTRITION_GOAL_LABEL[g]}
               </button>
@@ -380,7 +380,7 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
       title: "Current baseline",
       body: (
         <div className="space-y-4">
-          <p className="text-xs text-neutral-500">All optional — only fill in what you actually know.</p>
+          <p className="text-xs text-v5-subtext">All optional — only fill in what you actually know.</p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Current calorie intake" hint="If known">
               <TextInput type="number" value={currentCalorieIntake} onChange={(e) => setCurrentCalorieIntake(e.target.value)} placeholder="e.g. 2600" />
@@ -407,13 +407,13 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
       body: (
         <div className="space-y-4">
           <p className="text-sm text-white font-bold">Now forget the perfect version of your week.</p>
-          <p className="text-sm text-neutral-300">Think about how you actually live. Can you realistically follow this structure most days?</p>
+          <p className="text-sm text-v5-text/90">Think about how you actually live. Can you realistically follow this structure most days?</p>
           <div className="space-y-1.5">
             {REALISTIC_ADHERENCE_OPTIONS.map((opt) => (
               <button
                 key={opt}
                 onClick={() => setRealisticAdherence(opt)}
-                className={`w-full text-left px-3 py-2.5 border ${realisticAdherence === opt ? "border-red-700 bg-red-950/20 text-white" : "border-neutral-800 text-neutral-300 hover:border-neutral-600"}`}
+                className={`w-full text-left px-3 py-2.5 border ${realisticAdherence === opt ? "border-v5-red bg-v5-red/20 text-white" : "border-white/10 text-v5-text/90 hover:border-v5-red/40"}`}
               >
                 {REALISTIC_ADHERENCE_LABEL[opt]}
               </button>
@@ -421,13 +421,13 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
           </div>
           {(realisticAdherence === "maybe" || realisticAdherence === "no") && (
             <div className="space-y-2">
-              <p className="text-xs text-neutral-500">What specifically makes it hard? Pick anything that applies — this changes the plan, not just a note.</p>
+              <p className="text-xs text-v5-subtext">What specifically makes it hard? Pick anything that applies — this changes the plan, not just a note.</p>
               <div className="flex flex-wrap gap-1.5">
                 {ADHERENCE_BARRIERS.map((b) => (
                   <button
                     key={b}
                     onClick={() => toggleBarrier(b)}
-                    className={`px-2.5 py-1.5 text-[11px] border ${adherenceBarriers.includes(b) ? "border-red-700 bg-red-950/20 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+                    className={`px-2.5 py-1.5 text-[11px] border ${adherenceBarriers.includes(b) ? "border-v5-red bg-v5-red/20 text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
                   >
                     {ADHERENCE_BARRIER_LABEL[b]}
                   </button>
@@ -446,10 +446,10 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
             <button
               key={c}
               onClick={() => setControlLevel(c)}
-              className={`w-full text-left px-3 py-2.5 border ${controlLevel === c ? "border-red-700 bg-red-950/20" : "border-neutral-800 hover:border-neutral-600"}`}
+              className={`w-full text-left px-3 py-2.5 border ${controlLevel === c ? "border-v5-red bg-v5-red/20" : "border-white/10 hover:border-v5-red/40"}`}
             >
-              <div className={`text-sm font-bold ${controlLevel === c ? "text-white" : "text-neutral-300"}`}>{CONTROL_LEVEL_LABEL[c]}</div>
-              <div className="text-xs text-neutral-500 mt-0.5">{CONTROL_LEVEL_DESC[c]}</div>
+              <div className={`text-sm font-bold ${controlLevel === c ? "text-white" : "text-v5-text/90"}`}>{CONTROL_LEVEL_LABEL[c]}</div>
+              <div className="text-xs text-v5-subtext mt-0.5">{CONTROL_LEVEL_DESC[c]}</div>
             </button>
           ))}
         </div>
@@ -462,7 +462,7 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
     return (
       <div className="space-y-6">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Nutrition</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Nutrition</div>
           <div className="text-xl font-bold text-white mt-1">Here's where I'd start</div>
         </div>
         {!targets ? (
@@ -471,40 +471,40 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
           </p>
         ) : (
           <>
-            <p className="text-sm text-neutral-400">
+            <p className="text-sm text-v5-subtext">
               Based on your goal, activity, and current bodyweight — this is an <span className="text-white font-bold">estimate</span>, not a known fact. We'll refine it from what actually happens.
             </p>
-            <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-1">
-              <div className="text-[11px] uppercase tracking-widest text-neutral-500">Estimated maintenance</div>
-              <div className="text-lg font-bold text-neutral-300">{targets.estimatedMaintenance.toLocaleString()} kcal/day</div>
+            <div className="border border-white/10 bg-v5-elevated p-4 space-y-1">
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Estimated maintenance</div>
+              <div className="text-lg font-bold text-v5-text/90">{targets.estimatedMaintenance.toLocaleString()} kcal/day</div>
             </div>
-            <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
+            <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-3">
               <div>
-                <div className="text-[11px] uppercase tracking-widest text-neutral-500">Starting target</div>
+                <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Starting target</div>
                 <div className="text-2xl font-bold text-white">{targets.calories.toLocaleString()} kcal</div>
               </div>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div>
                   <div className="text-lg font-bold text-white">{targets.protein}g</div>
-                  <div className="text-[10px] uppercase tracking-widest text-neutral-500">Protein</div>
+                  <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Protein</div>
                 </div>
                 <div>
                   <div className="text-lg font-bold text-white">{targets.carbs}g</div>
-                  <div className="text-[10px] uppercase tracking-widest text-neutral-500">Carbs</div>
+                  <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Carbs</div>
                 </div>
                 <div>
                   <div className="text-lg font-bold text-white">{targets.fat}g</div>
-                  <div className="text-[10px] uppercase tracking-widest text-neutral-500">Fat</div>
+                  <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Fat</div>
                 </div>
               </div>
             </div>
             <div className="space-y-1">
               <p className="text-sm font-bold text-white">Now the important question:</p>
-              <p className="text-sm text-neutral-300">Can you actually execute this with your real schedule?</p>
+              <p className="text-sm text-v5-text/90">Can you actually execute this with your real schedule?</p>
             </div>
           </>
         )}
-        <button onClick={onDone} className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
+        <button onClick={onDone} className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90">
           Continue to Nutrition
         </button>
       </div>
@@ -517,9 +517,9 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
   return (
     <div className="space-y-6">
       <div>
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Nutrition Assessment</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Nutrition Assessment</div>
         <div className="text-xl font-bold text-white mt-1">{current.title}</div>
-        <div className="text-[11px] text-neutral-600 mt-1">
+        <div className="text-[11px] text-v5-subtext/70 mt-1">
           Step {step + 1} of {steps.length}
         </div>
       </div>
@@ -528,13 +528,13 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
 
       <div className="flex gap-2">
         {step > 0 && (
-          <button onClick={() => setStep((s) => s - 1)} className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+          <button onClick={() => setStep((s) => s - 1)} className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40">
             Back
           </button>
         )}
         <button
           onClick={() => (isLast ? finishAssessment() : setStep((s) => s + 1))}
-          className="flex-[2] py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+          className="flex-[2] py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
         >
           {isLast ? "See my starting numbers" : "Next"}
         </button>

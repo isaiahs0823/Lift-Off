@@ -25,9 +25,9 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
   if (!session) {
     return (
       <div className="space-y-4">
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Workout Details</div>
-        <div className="text-sm text-neutral-400">This workout couldn't be found.</div>
-        <button onClick={onBack} className="text-xs uppercase tracking-widest text-red-500 hover:text-red-400">
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Workout Details</div>
+        <div className="text-sm text-v5-subtext">This workout couldn't be found.</div>
+        <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-red hover:text-v5-red">
           ← Back
         </button>
       </div>
@@ -47,44 +47,44 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Workout Details</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Workout Details</div>
           <div className="text-xl font-bold text-white mt-1">{session.planName}</div>
         </div>
-        <button onClick={onBack} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+        <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
           ← Back
         </button>
       </div>
 
-      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
-        <div className="text-sm text-neutral-400">
+      <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
+        <div className="text-sm text-v5-subtext">
           {fmtDate(session.finishedAt)}
           <br />
           Started {fmtTime(session.startedAt)} · Finished {fmtTime(session.finishedAt)}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Duration</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Duration</div>
             <div className="text-lg font-bold text-white">{formatSessionDuration(session.durationSec)}</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Working sets</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Working sets</div>
             <div className="text-lg font-bold text-white">{session.workingSets}</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Volume</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Volume</div>
             <div className="text-lg font-bold text-white">
               {session.totalVolume.toLocaleString()} lb{session.isVolumePR ? " — PR" : ""}
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Total reps</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Total reps</div>
             <div className="text-lg font-bold text-white">{session.totalReps}</div>
           </div>
         </div>
-        <div className="text-sm text-neutral-300">Exercises completed: {session.exerciseCount}</div>
-        {session.mainMuscles?.length > 0 && <div className="text-sm text-neutral-300">Muscles trained: {session.mainMuscles.join(", ")}</div>}
+        <div className="text-sm text-v5-text/90">Exercises completed: {session.exerciseCount}</div>
+        {session.mainMuscles?.length > 0 && <div className="text-sm text-v5-text/90">Muscles trained: {session.mainMuscles.join(", ")}</div>}
         {session.sessionContext?.locationMode === "alternate_gym" && (
-          <div className="text-[10px] uppercase tracking-widest text-red-600 font-bold border-t border-neutral-900 pt-2">
+          <div className="text-[10px] uppercase tracking-widest text-v5-red font-bold border-t border-white/[0.06] pt-2">
             Alternate gym{session.sessionContext.locationLabel ? ` — ${session.sessionContext.locationLabel}` : ""}
           </div>
         )}
@@ -93,22 +93,22 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
       {onViewRecap && (
         <button
           onClick={() => onViewRecap(session.id)}
-          className="w-full flex items-center justify-center gap-1.5 py-3 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
+          className="w-full flex items-center justify-center gap-1.5 py-3 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30"
         >
           <FileText size={13} /> View Recap
         </button>
       )}
 
       {prCount > 0 && (
-        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-2.5">
-          <div className="text-[11px] uppercase tracking-widest text-red-600 font-bold flex items-center gap-1.5">
+        <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-2.5">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red font-bold flex items-center gap-1.5">
             <Award size={12} /> PRs
           </div>
           {prList.map(({ exId, pr }) => (
             <div key={exId} className="flex items-center justify-between text-sm gap-2">
               <div className="min-w-0">
                 <div className="text-white font-bold truncate">{exMap[exId]?.name || exId}</div>
-                <div className="text-neutral-500 text-xs">
+                <div className="text-v5-subtext text-xs">
                   {prHeroLabel(pr)} · {PR_TYPE_LABEL[pr.type]}
                 </div>
               </div>
@@ -126,45 +126,45 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
             const isCollapsed = !!collapsed[key];
             const note = state.exerciseNotes?.[entry.exId]?.general?.trim();
             return (
-              <div key={key} className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
+              <div key={key} className="border border-white/10 bg-v5-elevated p-4 space-y-3">
                 <button onClick={() => setCollapsed((c) => ({ ...c, [key]: !c[key] }))} className="w-full flex items-center justify-between text-left gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-base font-bold text-white truncate">{exMap[entry.exId]?.name || entry.exId}</span>
-                    {exPRs.length > 0 && <span className="shrink-0 text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">PR</span>}
+                    {exPRs.length > 0 && <span className="shrink-0 text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">PR</span>}
                     {(entry.equipmentProfileId || entry.equipmentContext) && (
-                      <span className="shrink-0 text-[10px] text-neutral-500 truncate">{equipmentDisplayLabel(state, entry.equipmentProfileId, entry.equipmentContext)}</span>
+                      <span className="shrink-0 text-[10px] text-v5-subtext truncate">{equipmentDisplayLabel(state, entry.equipmentProfileId, entry.equipmentContext)}</span>
                     )}
                   </div>
-                  {isCollapsed ? <ChevronDown size={16} className="text-neutral-600 shrink-0" /> : <ChevronUp size={16} className="text-neutral-600 shrink-0" />}
+                  {isCollapsed ? <ChevronDown size={16} className="text-v5-subtext/70 shrink-0" /> : <ChevronUp size={16} className="text-v5-subtext/70 shrink-0" />}
                 </button>
                 {!isCollapsed && (
                   <>
                     <div className="space-y-1.5">
                       {entry.sets.map((s, si) => (
                         <div key={si} className="flex items-center gap-2 text-sm">
-                          <span className="text-neutral-500 shrink-0 w-14">Set {si + 1}</span>
+                          <span className="text-v5-subtext shrink-0 w-14">Set {si + 1}</span>
                           <span className="text-white flex-1">{formatSetVerbose(s)}</span>
                           {s.quality && s.quality !== "clean" && (
                             <span
-                              className="text-[10px] uppercase tracking-widest text-red-500 shrink-0"
+                              className="text-[10px] uppercase tracking-widest text-v5-red shrink-0"
                               title={s.quality === "pain" && s.pain?.bodyArea ? `${s.pain.bodyArea} — ${s.pain.severity ?? "?"}/10` : undefined}
                             >
                               {SET_QUALITY_GLYPH[s.quality]} {SET_QUALITY_LABEL[s.quality]}
                             </span>
                           )}
-                          <span className="text-[10px] uppercase tracking-widest text-neutral-600 shrink-0">{SET_TYPE_LABEL[s.setType || "working"]}</span>
+                          <span className="text-[10px] uppercase tracking-widest text-v5-subtext/70 shrink-0">{SET_TYPE_LABEL[s.setType || "working"]}</span>
                         </div>
                       ))}
                     </div>
                     {entry.jointNote && (
-                      <div className="text-xs text-red-500 border-t border-neutral-900 pt-2">
+                      <div className="text-xs text-v5-red border-t border-white/[0.06] pt-2">
                         {entry.jointNote.bodyArea ? `${entry.jointNote.bodyArea} discomfort` : "Discomfort noted"}
                         {entry.jointNote.severity != null ? `: ${entry.jointNote.severity}/10` : ""}
                         {entry.jointNote.note ? ` — ${entry.jointNote.note}` : ""}
                       </div>
                     )}
                     {exPRs.length > 0 && (
-                      <div className="text-xs text-red-500 font-bold border-t border-neutral-900 pt-2">
+                      <div className="text-xs text-v5-red font-bold border-t border-white/[0.06] pt-2">
                         {exPRs
                           .map(
                             (pr) =>
@@ -176,9 +176,9 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
                       </div>
                     )}
                     {note && (
-                      <div className="border-t border-neutral-900 pt-2">
-                        <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Note</div>
-                        <div className="text-sm text-neutral-300 whitespace-pre-line">{note}</div>
+                      <div className="border-t border-white/[0.06] pt-2">
+                        <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Note</div>
+                        <div className="text-sm text-v5-text/90 whitespace-pre-line">{note}</div>
                       </div>
                     )}
                   </>
@@ -188,24 +188,24 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
           })}
         </div>
       ) : (
-        <div className="text-sm text-neutral-500 border border-neutral-800 bg-charcoal-panel p-4">
+        <div className="text-sm text-v5-subtext border border-white/10 bg-v5-elevated p-4">
           Detailed set-by-set data isn't available for this session — it was completed before this feature was added. The totals above are still accurate.
         </div>
       )}
 
       {session.coachMessage && (
-        <div className="border border-neutral-800 bg-charcoal-panel p-4">
-          <div className="text-[10px] uppercase tracking-widest text-red-600 mb-1.5 flex items-center gap-1.5">
+        <div className="border border-white/10 bg-v5-elevated p-4">
+          <div className="text-[10px] uppercase tracking-widest text-v5-red mb-1.5 flex items-center gap-1.5">
             <MessageCircle size={11} /> Coach review
           </div>
-          <div className="text-sm text-neutral-300 whitespace-pre-line">{session.coachMessage}</div>
+          <div className="text-sm text-v5-text/90 whitespace-pre-line">{session.coachMessage}</div>
         </div>
       )}
 
-      <div className="border-t border-neutral-900 pt-3">
+      <div className="border-t border-white/[0.06] pt-3">
         <button
           onClick={() => setSharePreviewOpen(true)}
-          className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+          className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red"
         >
           <Share2 size={12} /> Share Workout
         </button>
@@ -216,13 +216,13 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
       {onAskCoach && (
         <button
           onClick={() => onAskCoach(session)}
-          className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
+          className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30"
         >
           Ask Coach About This Workout
         </button>
       )}
 
-      <button onClick={onBack} className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+      <button onClick={onBack} className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40">
         Done
       </button>
     </div>

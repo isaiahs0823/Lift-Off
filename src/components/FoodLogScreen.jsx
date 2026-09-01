@@ -44,9 +44,9 @@ function MacroRow({ label, value, target }) {
     <div className="text-center">
       <div className="text-sm font-bold text-white">
         {Math.round(value)}
-        {target != null && <span className="text-neutral-500">/{target}g</span>}
+        {target != null && <span className="text-v5-subtext">/{target}g</span>}
       </div>
-      <div className="text-[10px] uppercase tracking-widest text-neutral-500">{label}</div>
+      <div className="text-[10px] uppercase tracking-widest text-v5-subtext">{label}</div>
     </div>
   );
 }
@@ -85,17 +85,17 @@ function LoggedItemRow({ entry, editing, onStartEdit, onCancelEdit, onSave, onDe
     if (entry.carbs != null) macroBits.push(`${Math.round(entry.carbs)}c`);
     if (entry.fat != null) macroBits.push(`${Math.round(entry.fat)}f`);
     return (
-      <button onClick={onStartEdit} className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 flex items-center justify-between hover:border-neutral-600">
+      <button onClick={onStartEdit} className="w-full text-left border border-white/10 bg-v5-elevated p-3 flex items-center justify-between hover:border-v5-red/40">
         <div className="min-w-0">
           <div className="text-sm text-white font-bold truncate">{entry.food || "Quick add"}</div>
-          <div className="text-xs text-neutral-500 truncate">
+          <div className="text-xs text-v5-subtext truncate">
             {entry.servingDesc ? `${entry.servingDesc} · ` : ""}
             {entry.calories != null ? `${Math.round(entry.calories)} kcal` : "—"}
             {macroBits.length > 0 && ` · ${macroBits.join(" / ")}`}
             {(entry.meal === "pre_workout" || entry.meal === "post_workout") && ` · ${MEAL_SLOT_LABEL[entry.meal]}`}
           </div>
         </div>
-        <Pencil size={14} className="text-neutral-600 shrink-0 ml-2" />
+        <Pencil size={14} className="text-v5-subtext/70 shrink-0 ml-2" />
       </button>
     );
   }
@@ -112,14 +112,14 @@ function LoggedItemRow({ entry, editing, onStartEdit, onCancelEdit, onSave, onDe
   };
 
   return (
-    <div className="border border-red-900/40 bg-charcoal-panel p-3 space-y-2.5">
+    <div className="border border-v5-red/25 bg-v5-elevated p-3 space-y-2.5">
       <div className="text-sm text-white font-bold">{entry.food || "Quick add"}</div>
       <div className="flex flex-wrap gap-1.5">
         {MEAL_SLOTS.map((m) => (
           <button
             key={m}
             onClick={() => setMeal(m)}
-            className={`px-2 py-1 text-[10px] border ${meal === m ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+            className={`px-2 py-1 text-[10px] border ${meal === m ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
           >
             {MEAL_SLOT_LABEL[m]}
           </button>
@@ -127,30 +127,30 @@ function LoggedItemRow({ entry, editing, onStartEdit, onCancelEdit, onSave, onDe
       </div>
       {canRescale && (
         <div>
-          <label className="block text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Serving quantity</label>
+          <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Serving quantity</label>
           <input
             type="number"
             inputMode="decimal"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            className="w-24 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-1.5 text-sm focus:outline-none focus:border-red-700"
+            className="w-24 bg-v5-surface border border-white/10 text-v5-text px-2 py-1.5 text-sm focus:outline-none focus:border-v5-red"
           />
         </div>
       )}
       <div className="grid grid-cols-2 gap-2">
-        <input type="number" inputMode="decimal" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="Calories" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-1.5 text-sm focus:outline-none focus:border-red-700" />
-        <input type="number" inputMode="decimal" value={protein} onChange={(e) => setProtein(e.target.value)} placeholder="Protein" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-1.5 text-sm focus:outline-none focus:border-red-700" />
-        <input type="number" inputMode="decimal" value={carbs} onChange={(e) => setCarbs(e.target.value)} placeholder="Carbs" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-1.5 text-sm focus:outline-none focus:border-red-700" />
-        <input type="number" inputMode="decimal" value={fat} onChange={(e) => setFat(e.target.value)} placeholder="Fat" className="bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-1.5 text-sm focus:outline-none focus:border-red-700" />
+        <input type="number" inputMode="decimal" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="Calories" className="bg-v5-surface border border-white/10 text-v5-text px-2 py-1.5 text-sm focus:outline-none focus:border-v5-red" />
+        <input type="number" inputMode="decimal" value={protein} onChange={(e) => setProtein(e.target.value)} placeholder="Protein" className="bg-v5-surface border border-white/10 text-v5-text px-2 py-1.5 text-sm focus:outline-none focus:border-v5-red" />
+        <input type="number" inputMode="decimal" value={carbs} onChange={(e) => setCarbs(e.target.value)} placeholder="Carbs" className="bg-v5-surface border border-white/10 text-v5-text px-2 py-1.5 text-sm focus:outline-none focus:border-v5-red" />
+        <input type="number" inputMode="decimal" value={fat} onChange={(e) => setFat(e.target.value)} placeholder="Fat" className="bg-v5-surface border border-white/10 text-v5-text px-2 py-1.5 text-sm focus:outline-none focus:border-v5-red" />
       </div>
       <div className="flex items-center gap-2">
-        <button onClick={save} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1">
+        <button onClick={save} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90 flex items-center justify-center gap-1">
           <Check size={14} /> Save
         </button>
-        <button onClick={onCancelEdit} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600 flex items-center justify-center gap-1">
+        <button onClick={onCancelEdit} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 flex items-center justify-center gap-1">
           <X size={14} /> Cancel
         </button>
-        <button onClick={onDelete} className="p-2 text-neutral-600 hover:text-red-500" aria-label="Delete">
+        <button onClick={onDelete} className="p-2 text-v5-subtext/70 hover:text-v5-red" aria-label="Delete">
           <Trash2 size={16} />
         </button>
       </div>
@@ -209,33 +209,33 @@ export default function FoodLogScreen({ state, updateState, onNavigate, onAddFoo
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Nutrition</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Nutrition</div>
           <div className="text-xl font-bold text-white mt-1">Food Log</div>
         </div>
-        <button onClick={() => onNavigate("nutrition")} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+        <button onClick={() => onNavigate("nutrition")} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
           ← Back
         </button>
       </div>
 
-      <div className="flex items-center justify-between border border-neutral-800 bg-charcoal-panel px-2 py-2.5">
-        <button onClick={() => onChangeDate(shiftDateKey(selectedDate, -1))} className="p-2 text-neutral-400 hover:text-red-500" aria-label="Previous day">
+      <div className="flex items-center justify-between border border-white/10 bg-v5-elevated px-2 py-2.5">
+        <button onClick={() => onChangeDate(shiftDateKey(selectedDate, -1))} className="p-2 text-v5-subtext hover:text-v5-red" aria-label="Previous day">
           <ChevronLeft size={18} />
         </button>
         <div className="text-sm font-bold uppercase tracking-widest text-white">{dateLabel(selectedDate)}</div>
         <button
           onClick={() => onChangeDate(shiftDateKey(selectedDate, 1))}
           disabled={selectedDate >= tomorrowKey}
-          className="p-2 text-neutral-400 hover:text-red-500 disabled:opacity-30 disabled:hover:text-neutral-400"
+          className="p-2 text-v5-subtext hover:text-v5-red disabled:opacity-30 disabled:hover:text-v5-subtext"
           aria-label="Next day"
         >
           <ChevronRight size={18} />
         </button>
       </div>
 
-      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
+      <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
         <div className="text-2xl font-bold text-white">
           {Math.round(totals.calories).toLocaleString()}
-          {targets && <span className="text-base font-normal text-neutral-500"> / {targets.calories.toLocaleString()} kcal</span>}
+          {targets && <span className="text-base font-normal text-v5-subtext"> / {targets.calories.toLocaleString()} kcal</span>}
         </div>
         <div className="grid grid-cols-3 gap-3">
           <MacroRow label="Protein" value={totals.protein} target={targets?.protein} />
@@ -246,7 +246,7 @@ export default function FoodLogScreen({ state, updateState, onNavigate, onAddFoo
 
       <button
         onClick={() => onAddFood(guessMealSlot(), selectedDate)}
-        className="w-full py-3 text-sm uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+        className="w-full py-3 text-sm uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
       >
         Search Food
       </button>
@@ -258,9 +258,9 @@ export default function FoodLogScreen({ state, updateState, onNavigate, onAddFoo
         return (
           <div key={group} className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="text-[11px] uppercase tracking-widest text-neutral-500">{MEAL_GROUP_LABEL[group]}</div>
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">{MEAL_GROUP_LABEL[group]}</div>
               {items.length > 0 && (
-                <div className="text-[11px] text-neutral-500">
+                <div className="text-[11px] text-v5-subtext">
                   {Math.round(groupTotals.calories)} kcal · {Math.round(groupTotals.protein)}P · {Math.round(groupTotals.carbs)}C · {Math.round(groupTotals.fat)}F
                 </div>
               )}
@@ -268,7 +268,7 @@ export default function FoodLogScreen({ state, updateState, onNavigate, onAddFoo
             {canCopyFromYesterday && (
               <button
                 onClick={() => copyMealFromYesterday(group)}
-                className="w-full py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-500 hover:border-red-700 hover:text-red-500"
+                className="w-full py-2 text-[11px] uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red hover:text-v5-red"
               >
                 Copy {MEAL_GROUP_LABEL[group]} from yesterday
               </button>
@@ -286,7 +286,7 @@ export default function FoodLogScreen({ state, updateState, onNavigate, onAddFoo
             ))}
             <button
               onClick={() => onAddFood(group, selectedDate)}
-              className="w-full py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-500 hover:border-red-700 hover:text-red-500 flex items-center justify-center gap-1"
+              className="w-full py-2 text-[11px] uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red hover:text-v5-red flex items-center justify-center gap-1"
             >
               <Plus size={12} /> Add Food
             </button>
@@ -296,16 +296,16 @@ export default function FoodLogScreen({ state, updateState, onNavigate, onAddFoo
 
       {savedMeals.length > 0 && (
         <div className="space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Saved meals</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Saved meals</div>
           {savedMeals.map((m) => (
-            <div key={m.id} className="border border-neutral-800 bg-charcoal-panel p-3 flex items-center justify-between">
+            <div key={m.id} className="border border-white/10 bg-v5-elevated p-3 flex items-center justify-between">
               <div>
                 <div className="text-sm text-white font-bold">{m.name}</div>
-                <div className="text-xs text-neutral-500">
+                <div className="text-xs text-v5-subtext">
                   {m.totals.calories} kcal · {m.totals.protein}p / {m.totals.carbs}c / {m.totals.fat}f
                 </div>
               </div>
-              <button onClick={() => logSavedMeal(m)} className="shrink-0 px-3 py-1.5 text-[11px] uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30">
+              <button onClick={() => logSavedMeal(m)} className="shrink-0 px-3 py-1.5 text-[11px] uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30">
                 Log Meal
               </button>
             </div>

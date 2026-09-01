@@ -4,7 +4,7 @@ import BodyweightTab from "./BodyweightTab.jsx";
 import TrainingCalendar from "./TrainingCalendar.jsx";
 import AnalyticsTab from "./AnalyticsTab.jsx";
 import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
-import { ScreenHeader, SectionLabel, Card, MetricTile, ProgressBar, ListRow, RingGauge, MiniBarChart } from "./ui/Kit.jsx";
+import { ScreenHeader, SectionLabel, Card, MetricTile, ProgressBar, ListRow, RingGauge, MiniBarChart, LineChart, PeriodSelect } from "./ui/Kit.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue } from "../utils/goalData.js";
 import { goalProgressPct } from "../utils/goalMath.js";
@@ -14,37 +14,12 @@ function fmt1(v) {
   return v == null ? "—" : v.toFixed(1);
 }
 
-// Same hand-rolled sparkline as BodyweightTab's, sized down for a snapshot card. Kept local
-// (not shared) since it's a small enough drawing routine that a shared component would add
-// more indirection than it saves.
-function MiniSparkline({ points, height = 48 }) {
-  if (points.length < 2) return null;
-  const width = 280;
-  const values = points.map((p) => p.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const coords = points.map((p, i) => {
-    const x = (i / (points.length - 1)) * (width - 8) + 4;
-    const y = height - 4 - ((p.value - min) / span) * (height - 8);
-    return [x, y];
-  });
-  const path = coords.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  const areaPath = `${path} L${coords[coords.length - 1][0].toFixed(1)},${height} L${coords[0][0].toFixed(1)},${height} Z`;
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height }}>
-      <defs>
-        <linearGradient id="progressSparkFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#D2262E" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="#D2262E" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath} fill="url(#progressSparkFill)" stroke="none" />
-      <path d={path} fill="none" stroke="#D2262E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={coords[coords.length - 1][0]} cy={coords[coords.length - 1][1]} r="3.5" fill="#D2262E" />
-    </svg>
-  );
-}
+const PERIOD_OPTIONS = [
+  { value: "week", label: "This Week" },
+  { value: "month", label: "This Month" },
+  { value: "all", label: "All Time" },
+];
+const PERIOD_DAYS = { week: 7, month: 30, all: 365 };
 
 const DRILL_DOWNS = [
   { id: "calendar", label: "Training calendar", desc: "Every logged session by day", icon: Calendar },
@@ -86,15 +61,17 @@ function topRecentMuscle(sessions) {
 // for the same default screen via a segmented control. Adherence and Weekly Review stay on the
 // Mission screen where they already live, alongside the goal they're measuring progress on.
 function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
+  const [period, setPeriod] = useState("month");
   const entries = state.bodyweightLogs || [];
   const currentWeight = latestValue(entries, "weight");
   const avg7 = rollingAverage(entries, "weight", 7);
   const weeklyChange = weeklyRateOfChange(entries, "weight");
+  const periodDays = PERIOD_DAYS[period];
   const chartPoints = [...entries]
-    .filter((e) => e.weight != null)
+    .filter((e) => e.weight != null && Date.now() - new Date(e.date).getTime() <= periodDays * 86400000)
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(-30)
-    .map((e) => ({ date: e.date, value: e.weight }));
+    .map((e) => ({ label: new Date(e.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), value: e.weight }));
 
   const goals = state.goals || [];
   const primaryGoal = goals.find((g) => g.status === "active" && g.priority === "primary");
@@ -108,28 +85,33 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
 
   const recentPhotos = [...(state.photos || [])].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4);
 
-  const now = new Date();
-  const thisMonthSessions = sessions.filter((s) => {
-    const d = new Date(s.finishedAt);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
-  const prsThisMonth = thisMonthSessions.reduce((sum, s) => sum + (s.prs?.length || 0), 0);
+  const periodSessions = sessions.filter((s) => Date.now() - new Date(s.finishedAt).getTime() <= periodDays * 86400000);
+  const prsInPeriod = periodSessions.reduce((sum, s) => sum + (s.prs?.length || 0), 0);
 
   const scheduled = hasSchedule(state);
-  const adherence = scheduled ? computeScheduleAdherence(state, 7) : null;
+  const adherence = scheduled ? computeScheduleAdherence(state, periodDays) : null;
   const volumeBars = weeklyVolumeBars(sessions);
+  const totalVolume = volumeBars.reduce((s, b) => s + b.value, 0);
   const focus = topRecentMuscle(sessions);
 
   return (
     <div className="space-y-5">
-      <ScreenHeader eyebrow="Progress" title="Where you stand" />
+      <ScreenHeader
+        eyebrow="Progress"
+        title="Where you stand"
+        right={<PeriodSelect value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />}
+      />
 
+      {/* Top metric row — compact tiles, never the focal point themselves (mockup section 8). */}
       <div className="grid grid-cols-3 gap-2.5">
         <MetricTile label="Bodyweight" value={currentWeight != null ? fmt1(currentWeight) : "—"} sublabel={currentWeight != null ? "lb" : undefined} />
-        <MetricTile label="This Month" value={thisMonthSessions.length} sublabel="Workouts" />
-        <MetricTile label="PRs" value={prsThisMonth} sublabel="This month" accent={prsThisMonth > 0} />
+        <MetricTile label="Workouts" value={periodSessions.length} sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label} />
+        <MetricTile label="PRs" value={prsInPeriod} sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label} accent={prsInPeriod > 0} />
       </div>
 
+      {/* ONE strong, wide primary trend — bodyweight is the metric with the most consistent
+          real data across the app, so it's the chart that earns the dominant slot rather than
+          splitting attention across several tiny ones. */}
       <Card onClick={() => onDrillDown("body")} className="space-y-2.5">
         <div className="flex items-center justify-between">
           <SectionLabel>Bodyweight trend</SectionLabel>
@@ -143,26 +125,35 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
             <div className="text-xs text-v5-subtext">
               7-day avg {fmt1(avg7)} · {weeklyChange != null ? `${weeklyChange >= 0 ? "+" : ""}${fmt1(weeklyChange)} lb/wk` : "—"}
             </div>
-            <MiniSparkline points={chartPoints} />
+            <LineChart points={chartPoints} height={120} />
           </>
         ) : (
           <div className="text-sm text-v5-subtext">No entries yet — log your weight to see a trend here.</div>
         )}
       </Card>
 
-      {sessions.length > 0 && (
-        <Card className="space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionLabel>Weekly volume</SectionLabel>
-            <div className="text-xs text-v5-subtext">{volumeBars.reduce((s, b) => s + b.value, 0).toLocaleString()} lb</div>
-          </div>
-          <MiniBarChart bars={volumeBars} />
-          {adherence?.overall != null && (
-            <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between">
-              <RingGauge pct={adherence.overall} value={`${adherence.overall}%`} size={56} strokeWidth={5} label="Adherence" sublabel="Last 7 days" />
-            </div>
+      {/* Paired second row — weekly volume next to adherence, matching the mockup's balanced
+          two-card layout instead of bundling both metrics into one crowded card. */}
+      {(sessions.length > 0 || adherence?.overall != null) && (
+        <div className={sessions.length > 0 && adherence?.overall != null ? "grid grid-cols-2 gap-3" : "space-y-3"}>
+          {sessions.length > 0 && (
+            <Card className="space-y-2.5">
+              <SectionLabel tone="muted">Weekly volume</SectionLabel>
+              <div className="text-lg font-black text-v5-text tabular-nums">{totalVolume.toLocaleString()} <span className="text-xs font-normal text-v5-subtext">lb</span></div>
+              <MiniBarChart bars={volumeBars} height={44} />
+            </Card>
           )}
-        </Card>
+          {adherence?.overall != null && (() => {
+            const totalScheduled = adherence.lifting.scheduled + adherence.conditioning.scheduled + adherence.recovery.scheduled;
+            const totalCompleted = adherence.lifting.completed + adherence.conditioning.completed + adherence.recovery.completed;
+            return (
+              <Card className="flex flex-col justify-between space-y-2.5">
+                <SectionLabel tone="muted">Adherence</SectionLabel>
+                <RingGauge pct={adherence.overall} value={`${adherence.overall}%`} size={64} strokeWidth={6} sublabel={`${totalCompleted}/${totalScheduled} sessions`} />
+              </Card>
+            );
+          })()}
+        </div>
       )}
 
       {focus && (

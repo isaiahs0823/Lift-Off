@@ -37,16 +37,16 @@ function prescriptionLabel(movement) {
 
 function MovementCard({ movement, onClick }) {
   return (
-    <button onClick={onClick} className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 flex items-center gap-3 hover:border-neutral-600">
+    <button onClick={onClick} className="w-full text-left border border-white/10 bg-v5-elevated p-3 flex items-center gap-3 hover:border-v5-red/40">
       <MuscleBodyOutline exercise={mobilityAnatomyExercise(movement)} size="compact" />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-bold text-white truncate">{movement.name}</div>
-        <div className="text-[11px] text-neutral-500 mt-0.5 truncate">
+        <div className="text-[11px] text-v5-subtext mt-0.5 truncate">
           {movement.bodyRegion.join(", ")} · {MOBILITY_TYPE_LABEL[movement.type]}
         </div>
-        <div className="text-[11px] text-neutral-600 mt-0.5">{prescriptionLabel(movement)}</div>
+        <div className="text-[11px] text-v5-subtext/70 mt-0.5">{prescriptionLabel(movement)}</div>
       </div>
-      <ChevronRight size={16} className="text-neutral-600 shrink-0" />
+      <ChevronRight size={16} className="text-v5-subtext/70 shrink-0" />
     </button>
   );
 }
@@ -55,11 +55,11 @@ function RoutineRow({ routine, state, onStart, onLogManual }) {
   const minutes = estimateRoutineMinutes(routine);
   const completedToday = findTodaysRecoverySessionForPlan(state, recoveryPlanName({ routine }));
   return (
-    <div className="border border-neutral-800 bg-charcoal-panel p-3 space-y-2">
+    <div className="border border-white/10 bg-v5-elevated p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-bold text-white truncate">{routine.name}</div>
-          <div className="text-[11px] text-neutral-500 mt-0.5">
+          <div className="text-[11px] text-v5-subtext mt-0.5">
             {routine.movements.length} movements · Est. {minutes} min
           </div>
         </div>
@@ -72,13 +72,13 @@ function RoutineRow({ routine, state, onStart, onLogManual }) {
       <div className="flex gap-2">
         <button
           onClick={() => onStart(routine)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
         >
           <Play size={12} /> Start
         </button>
         <button
           onClick={() => onLogManual(routine)}
-          className="px-3 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-700 text-neutral-300 hover:border-neutral-500"
+          className="px-3 py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40"
         >
           Log Recovery Session
         </button>
@@ -113,13 +113,13 @@ export default function MobilityLibraryScreen({ state, onSelectMovement, onStart
   return (
     <div className="space-y-4">
       <div>
-        <div className="text-[11px] uppercase tracking-widest text-red-600">More</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">More</div>
         <div className="text-xl font-bold text-white mt-1">Mobility &amp; Stretching</div>
       </div>
 
       {!browsing && (
         <div className="space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Recovery routines</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Recovery routines</div>
           {RECOVERY_ROUTINES.map((routine) => (
             <RoutineRow key={routine.id} routine={routine} state={state} onStart={(r) => onStartRoutine(r, null)} onLogManual={(r) => onLogManualRoutine(r, null)} />
           ))}
@@ -127,15 +127,15 @@ export default function MobilityLibraryScreen({ state, onSelectMovement, onStart
       )}
 
       <div className="relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-600" />
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-v5-subtext/70" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search mobility…"
-          className="w-full bg-charcoal-panel border border-neutral-800 pl-8 pr-8 py-2.5 text-sm text-neutral-100 placeholder-neutral-600 focus:border-red-700 focus:outline-none"
+          className="w-full bg-v5-elevated border border-white/10 pl-8 pr-8 py-2.5 text-sm text-v5-text placeholder-neutral-600 focus:border-v5-red focus:outline-none"
         />
         {search && (
-          <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-600 hover:text-neutral-300" aria-label="Clear search">
+          <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-v5-subtext/70 hover:text-v5-text/90" aria-label="Clear search">
             <X size={14} />
           </button>
         )}
@@ -147,7 +147,7 @@ export default function MobilityLibraryScreen({ state, onSelectMovement, onStart
             key={r.label}
             onClick={() => setRegionFilter(r.label)}
             className={`shrink-0 px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border ${
-              regionFilter === r.label ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+              regionFilter === r.label ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
             }`}
           >
             {r.label}
@@ -160,7 +160,7 @@ export default function MobilityLibraryScreen({ state, onSelectMovement, onStart
             key={t}
             onClick={() => setTypeFilter((cur) => (cur === t ? null : t))}
             className={`shrink-0 px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border ${
-              typeFilter === t ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+              typeFilter === t ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
             }`}
           >
             {MOBILITY_TYPE_LABEL[t]}
@@ -169,7 +169,7 @@ export default function MobilityLibraryScreen({ state, onSelectMovement, onStart
       </div>
 
       <div className="space-y-2">
-        {filtered.length === 0 && <div className="text-sm text-neutral-600 py-6 text-center">No movements match.</div>}
+        {filtered.length === 0 && <div className="text-sm text-v5-subtext/70 py-6 text-center">No movements match.</div>}
         {filtered.map((m) => (
           <MovementCard key={m.id} movement={m} onClick={() => onSelectMovement(m.id)} />
         ))}

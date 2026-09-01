@@ -124,22 +124,22 @@ export default function MobilitySessionRunner({ routine, onComplete, onExit }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">
             {routine.name} · {stepIdx + 1} / {steps.length}
           </div>
           <div className="text-xl font-bold text-white mt-1">{step.movement.name}</div>
         </div>
-        <button onClick={onExit} className="text-neutral-500 hover:text-red-500 p-1" aria-label="Exit">
+        <button onClick={onExit} className="text-v5-subtext hover:text-v5-red p-1" aria-label="Exit">
           <X size={20} />
         </button>
       </div>
 
-      <div className="border-2 border-red-700 bg-charcoal-panel p-6 space-y-4 text-center">
+      <div className="border-2 border-v5-red bg-v5-elevated p-6 space-y-4 text-center">
         <div className="flex items-center justify-center gap-4">
           <MuscleBodyOutline exercise={mobilityAnatomyExercise(step.movement)} size="detail" />
         </div>
-        {step.side && <div className="text-sm uppercase tracking-widest text-neutral-400">{step.side} side</div>}
-        <div className="text-xs text-neutral-500">
+        {step.side && <div className="text-sm uppercase tracking-widest text-v5-subtext">{step.side} side</div>}
+        <div className="text-xs text-v5-subtext">
           Set {step.setIndex + 1} of {step.totalSets}
         </div>
 
@@ -148,7 +148,7 @@ export default function MobilitySessionRunner({ routine, onComplete, onExit }) {
             <div className="text-5xl font-bold text-white tabular-nums">{formatClock(remaining)}</div>
             <button
               onClick={() => setPaused((p) => !p)}
-              className="mx-auto flex items-center gap-2 px-5 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-700 text-neutral-300 hover:border-neutral-500"
+              className="mx-auto flex items-center gap-2 px-5 py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40"
             >
               {paused ? <Play size={14} /> : <Pause size={14} />} {paused ? "Resume" : "Pause"}
             </button>
@@ -156,10 +156,10 @@ export default function MobilitySessionRunner({ routine, onComplete, onExit }) {
         ) : (
           <>
             <div className="text-5xl font-bold text-white tabular-nums">{step.reps}</div>
-            <div className="text-xs text-neutral-500 uppercase tracking-widest">reps</div>
+            <div className="text-xs text-v5-subtext uppercase tracking-widest">reps</div>
             <button
               onClick={() => advance(true)}
-              className="mx-auto flex items-center gap-2 px-5 py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+              className="mx-auto flex items-center gap-2 px-5 py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
             >
               <Check size={14} /> Done
             </button>
@@ -168,10 +168,10 @@ export default function MobilitySessionRunner({ routine, onComplete, onExit }) {
       </div>
 
       <div className="flex items-center justify-between">
-        <button onClick={() => advance(false)} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-neutral-300">
+        <button onClick={() => advance(false)} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-text/90">
           Skip
         </button>
-        <div className="text-xs text-neutral-600 flex items-center gap-1.5">
+        <div className="text-xs text-v5-subtext/70 flex items-center gap-1.5">
           {isLastStep ? "Last movement" : (
             <>
               Next: {nextStep.movement.name}
@@ -182,7 +182,7 @@ export default function MobilitySessionRunner({ routine, onComplete, onExit }) {
       </div>
 
       {isTimed && (
-        <button onClick={() => advance(true)} className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-neutral-700 text-neutral-300 hover:border-neutral-500">
+        <button onClick={() => advance(true)} className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40">
           {isLastStep ? "Finish session" : "Next movement"}
         </button>
       )}

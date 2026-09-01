@@ -18,18 +18,18 @@ function FoodResultRow({ food, favorited, onSelect, onToggleFavorite }) {
   const sourceLabel = SOURCE_LABEL[food.matchSource] || SOURCE_LABEL[food.source] || null;
 
   return (
-    <div className="w-full border border-neutral-800 bg-charcoal-panel p-3 flex items-center gap-2 hover:border-red-700">
+    <div className="w-full border border-white/10 bg-v5-elevated p-3 flex items-center gap-2 hover:border-v5-red">
       <button onClick={() => onSelect(food)} className="flex-1 min-w-0 text-left">
-        {food.brand && <div className="text-[10px] uppercase tracking-widest text-neutral-500 truncate">{food.brand}</div>}
+        {food.brand && <div className="text-[10px] uppercase tracking-widest text-v5-subtext truncate">{food.brand}</div>}
         <div className="text-sm text-white font-bold truncate">{food.name}</div>
-        <div className="text-xs text-neutral-500 truncate">
+        <div className="text-xs text-v5-subtext truncate">
           {food.servingDesc || "1 serving"}
           {food.calories != null && <> · {Math.round(food.calories)} kcal</>}
           {macroBits.length > 0 && <> · {macroBits.join(" ")}</>}
-          {sourceLabel && <span className="text-neutral-700"> · {sourceLabel}</span>}
+          {sourceLabel && <span className="text-v5-subtext/40"> · {sourceLabel}</span>}
         </div>
       </button>
-      <button onClick={() => onToggleFavorite(food)} className={`shrink-0 p-1.5 ${favorited ? "text-red-500" : "text-neutral-600 hover:text-red-500"}`} aria-label={favorited ? "Remove favorite" : "Add favorite"}>
+      <button onClick={() => onToggleFavorite(food)} className={`shrink-0 p-1.5 ${favorited ? "text-v5-red" : "text-v5-subtext/70 hover:text-v5-red"}`} aria-label={favorited ? "Remove favorite" : "Add favorite"}>
         <Star size={16} fill={favorited ? "currentColor" : "none"} />
       </button>
     </div>
@@ -117,37 +117,37 @@ export default function AddFoodScreen({ state, updateState, onNavigate, onSelect
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Nutrition</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Nutrition</div>
           <div className="text-xl font-bold text-white mt-1">Add Food</div>
         </div>
-        <button onClick={() => onNavigate("nutritionLog")} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+        <button onClick={() => onNavigate("nutritionLog")} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
           ← Back
         </button>
       </div>
 
-      <div className="text-[11px] uppercase tracking-widest text-neutral-500">Adding to {MEAL_SLOT_LABEL[meal] || meal}</div>
+      <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Adding to {MEAL_SLOT_LABEL[meal] || meal}</div>
 
       <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-600" />
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-v5-subtext/70" />
         <input
           type="text"
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search foods, brands, restaurants..."
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 pl-9 pr-3 py-3 text-base focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text pl-9 pr-3 py-3 text-base focus:outline-none focus:border-v5-red"
         />
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <button onClick={() => onNavigate("nutritionScanBarcode")} className="flex flex-col items-center gap-1 py-2.5 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500">
+        <button onClick={() => onNavigate("nutritionScanBarcode")} className="flex flex-col items-center gap-1 py-2.5 text-[11px] uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red hover:text-v5-red">
           <Barcode size={16} />
           Scan Barcode
         </button>
-        <button onClick={() => setMode("quick")} className="py-2.5 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500">
+        <button onClick={() => setMode("quick")} className="py-2.5 text-[11px] uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red hover:text-v5-red">
           Quick Add
         </button>
-        <button onClick={() => setMode("full")} className="py-2.5 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500">
+        <button onClick={() => setMode("full")} className="py-2.5 text-[11px] uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red hover:text-v5-red">
           Create Food
         </button>
       </div>
@@ -177,14 +177,14 @@ export default function AddFoodScreen({ state, updateState, onNavigate, onSelect
       )}
 
       {results.remoteError && (
-        <div className="text-xs text-amber-500 border border-amber-900/40 bg-charcoal-panel p-3">
+        <div className="text-xs text-amber-500 border border-amber-900/40 bg-v5-elevated p-3">
           Couldn't reach the food database right now — showing what's saved locally. Try Scan Barcode, Quick Add, or Create Food instead.
         </div>
       )}
 
-      {query.trim().length === 0 && allResults.length > 0 && <div className="text-[11px] uppercase tracking-widest text-neutral-500">Recent</div>}
+      {query.trim().length === 0 && allResults.length > 0 && <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Recent</div>}
 
-      {loading && <div className="text-xs text-neutral-600 py-2 text-center">Searching…</div>}
+      {loading && <div className="text-xs text-v5-subtext/70 py-2 text-center">Searching…</div>}
 
       {!showEmptyState && (
         <div className="space-y-2">
@@ -201,16 +201,16 @@ export default function AddFoodScreen({ state, updateState, onNavigate, onSelect
       )}
 
       {showEmptyState && (
-        <div className="border border-neutral-800 bg-charcoal-panel p-5 text-center space-y-3">
-          <div className="text-sm text-neutral-400">We couldn't find that food.</div>
+        <div className="border border-white/10 bg-v5-elevated p-5 text-center space-y-3">
+          <div className="text-sm text-v5-subtext">We couldn't find that food.</div>
           <div className="flex flex-col gap-2">
-            <button onClick={() => onNavigate("nutritionScanBarcode")} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500 flex items-center justify-center gap-1.5">
+            <button onClick={() => onNavigate("nutritionScanBarcode")} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red hover:text-v5-red flex items-center justify-center gap-1.5">
               <Barcode size={14} /> Scan Barcode
             </button>
-            <button onClick={() => onNavigate("nutritionScanLabel")} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500">
+            <button onClick={() => onNavigate("nutritionScanLabel")} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red hover:text-v5-red">
               Scan Nutrition Label
             </button>
-            <button onClick={() => setMode("full")} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1.5">
+            <button onClick={() => setMode("full")} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90 flex items-center justify-center gap-1.5">
               <Plus size={14} /> Create Food
             </button>
           </div>

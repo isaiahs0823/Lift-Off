@@ -12,28 +12,28 @@ import {
 } from "../utils/developmentPriorities.js";
 
 const LEVEL_ACCENT = {
-  prioritize: "border-red-700 bg-red-950/10",
-  develop: "border-neutral-800 bg-charcoal-panel",
-  maintain: "border-neutral-800 bg-charcoal-panel",
+  prioritize: "border-v5-red bg-v5-red/10",
+  develop: "border-white/10 bg-v5-elevated",
+  maintain: "border-white/10 bg-v5-elevated",
 };
 
 function HowPrioritiesWork() {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border border-neutral-800 bg-charcoal-panel">
+    <div className="border border-white/10 bg-v5-elevated">
       <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-4 py-3 text-left">
-        <span className="text-xs uppercase tracking-widest text-neutral-400 font-bold">How priorities work</span>
-        {open ? <ChevronUp size={16} className="text-neutral-500" /> : <ChevronDown size={16} className="text-neutral-500" />}
+        <span className="text-xs uppercase tracking-widest text-v5-subtext font-bold">How priorities work</span>
+        {open ? <ChevronUp size={16} className="text-v5-subtext" /> : <ChevronDown size={16} className="text-v5-subtext" />}
       </button>
       {open && (
-        <div className="px-4 pb-4 space-y-3 border-t border-neutral-900 pt-3">
+        <div className="px-4 pb-4 space-y-3 border-t border-white/[0.06] pt-3">
           {PRIORITY_LEVELS.map((level) => (
             <div key={level}>
-              <div className="text-[11px] uppercase tracking-widest text-red-600 font-bold">{PRIORITY_LEVEL_LABEL[level]}</div>
-              <p className="text-sm text-neutral-400 mt-0.5">{PRIORITY_LEVEL_EXPLANATION[level]}</p>
+              <div className="text-[11px] uppercase tracking-widest text-v5-red font-bold">{PRIORITY_LEVEL_LABEL[level]}</div>
+              <p className="text-sm text-v5-subtext mt-0.5">{PRIORITY_LEVEL_EXPLANATION[level]}</p>
             </div>
           ))}
-          <p className="text-xs text-neutral-600 pt-1 border-t border-neutral-900">
+          <p className="text-xs text-v5-subtext/70 pt-1 border-t border-white/[0.06]">
             Priorities inform Coach and future adaptive suggestions — your readiness and recovery still come first. Curated BRK programs are never rewritten
             automatically because of a priority.
           </p>
@@ -49,13 +49,13 @@ function HowPrioritiesWork() {
 // Deliberately not drag-and-drop and not up/down arrows — an original, touch-safe BRK gesture.
 function MuscleRow({ muscleId, label, isMoving, onTapRow, onPickLevel, showLevelPicker, onToggleLevelPicker, currentLevel }) {
   return (
-    <div className={`border ${isMoving ? "border-red-700 bg-red-950/20" : "border-neutral-800 bg-charcoal-deep"}`}>
+    <div className={`border ${isMoving ? "border-v5-red bg-v5-red/20" : "border-white/10 bg-v5-surface"}`}>
       <button onClick={() => onTapRow(muscleId)} className="w-full flex items-center justify-between px-3 py-3 text-left">
-        <span className="text-sm text-neutral-100 flex items-center gap-2">
-          {isMoving && <Check size={14} className="text-red-500 shrink-0" />}
+        <span className="text-sm text-v5-text flex items-center gap-2">
+          {isMoving && <Check size={14} className="text-v5-red shrink-0" />}
           {label}
         </span>
-        {isMoving && <span className="text-[10px] uppercase tracking-widest text-red-500">Tap a spot to place</span>}
+        {isMoving && <span className="text-[10px] uppercase tracking-widest text-v5-red">Tap a spot to place</span>}
       </button>
       <div className="px-3 pb-2.5 flex items-center gap-1.5 flex-wrap">
         <button
@@ -63,7 +63,7 @@ function MuscleRow({ muscleId, label, isMoving, onTapRow, onPickLevel, showLevel
             e.stopPropagation();
             onToggleLevelPicker(muscleId);
           }}
-          className="px-2 py-1 text-[10px] uppercase tracking-widest font-bold border border-neutral-700 text-neutral-400 hover:border-neutral-500"
+          className="px-2 py-1 text-[10px] uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
         >
           {PRIORITY_LEVEL_LABEL[currentLevel]} ▾
         </button>
@@ -75,7 +75,7 @@ function MuscleRow({ muscleId, label, isMoving, onTapRow, onPickLevel, showLevel
                 e.stopPropagation();
                 onPickLevel(muscleId, l);
               }}
-              className="px-2 py-1 text-[10px] uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30"
+              className="px-2 py-1 text-[10px] uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30"
             >
               Move to {PRIORITY_LEVEL_LABEL[l]}
             </button>
@@ -88,9 +88,9 @@ function MuscleRow({ muscleId, label, isMoving, onTapRow, onPickLevel, showLevel
 function Section({ level, muscleIds, movingId, movingLevel, levelPickerFor, onTapRow, onPickLevel, onToggleLevelPicker, onPlaceAtEnd }) {
   return (
     <div className={`border p-3 space-y-2 ${LEVEL_ACCENT[level]}`}>
-      <div className="text-[11px] uppercase tracking-widest text-neutral-500 font-bold">{PRIORITY_LEVEL_LABEL[level]}</div>
+      <div className="text-[11px] uppercase tracking-widest text-v5-subtext font-bold">{PRIORITY_LEVEL_LABEL[level]}</div>
       {muscleIds.length === 0 ? (
-        <div className="text-xs text-neutral-600 py-2">No muscles here yet.</div>
+        <div className="text-xs text-v5-subtext/70 py-2">No muscles here yet.</div>
       ) : (
         <div className="space-y-1.5">
           {muscleIds.map((id) => (
@@ -111,7 +111,7 @@ function Section({ level, muscleIds, movingId, movingLevel, levelPickerFor, onTa
       {movingId && movingLevel === level && (
         <button
           onClick={() => onPlaceAtEnd(level)}
-          className="w-full py-2 text-[10px] uppercase tracking-widest text-neutral-600 border border-dashed border-neutral-800 hover:border-neutral-600 hover:text-neutral-400"
+          className="w-full py-2 text-[10px] uppercase tracking-widest text-v5-subtext/70 border border-dashed border-white/10 hover:border-v5-red/40 hover:text-v5-subtext"
         >
           Place at end of {PRIORITY_LEVEL_LABEL[level]}
         </button>
@@ -165,16 +165,16 @@ export default function DevelopmentPrioritiesScreen({ state, updateState, onBack
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Coach</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Coach</div>
           <div className="text-xl font-bold text-white mt-1">Development Priorities</div>
         </div>
         {onBack && (
-          <button onClick={onBack} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+          <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
             ← Back
           </button>
         )}
       </div>
-      <p className="text-sm text-neutral-400">Tell BRK which muscle groups matter most to you. Coach factors this in — your programs are never rewritten automatically.</p>
+      <p className="text-sm text-v5-subtext">Tell BRK which muscle groups matter most to you. Coach factors this in — your programs are never rewritten automatically.</p>
 
       <HowPrioritiesWork />
 

@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp } from "lucide-react";
+import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown } from "lucide-react";
 import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
 import NutritionCard from "./NutritionCard.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
-import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
-import { ScreenHeader, SectionLabel, Card, HeroCard, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, Pill, ProgressBar, ActionTile } from "./ui/Kit.jsx";
+import { ScreenHeader, SectionLabel, Card, HeroCard, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, Pill, ProgressBar, ActionTile, LineChart } from "./ui/Kit.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue, goalHistory } from "../utils/goalData.js";
 import { goalProgressPct, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
@@ -237,19 +236,36 @@ function RecoveryLogCard({ label, state, updateState }) {
   );
 }
 
-// A real-photography hero band would need licensed athlete imagery this app doesn't have and
-// can't fabricate — this stands in for it using BRK's own illustrated anatomy figure, blown up
-// and set against a dark red-glow gradient so the workout card still opens with real visual
-// weight instead of just text. `exercise` is the plan's own lead movement (exMap[exId]), so the
-// highlighted region is always an honest reflection of what's actually first on today's card.
-function WorkoutHeroBand({ exercise }) {
+// Paired with Readiness in a 2-column row (mockup section 5) — current number, a short trend
+// line, and a small sparkline built from the athlete's own recent bodyweight logs. Real data
+// only: with fewer than 2 points there's nothing to trend, so it falls back to just the number.
+function BodyweightCard({ state, currentWeight, avg7, weeklyChange, onNavigate }) {
+  const entries = (state.bodyweightLogs || [])
+    .slice()
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .slice(-10);
+  const points = entries.map((e) => ({
+    label: new Date(e.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    value: e.weight,
+  }));
+  const trendUp = weeklyChange != null && weeklyChange > 0;
+  const trendDown = weeklyChange != null && weeklyChange < 0;
   return (
-    <div className="relative -mx-5 sm:-mx-6 -mt-5 sm:-mt-6 h-28 overflow-hidden rounded-t-2xl bg-gradient-to-br from-v5-red/20 via-v5-elevated to-v5-surface flex items-center justify-center">
-      <div className="absolute -right-4 top-1/2 -translate-y-1/2 opacity-90">
-        <MuscleBodyOutline exercise={exercise} size={130} />
+    <Card onClick={() => onNavigate("progress")} padding="p-4" className="space-y-2">
+      <SectionLabel tone="muted">Bodyweight</SectionLabel>
+      <div className="text-2xl font-black text-v5-text tabular-nums leading-none">
+        {fmt1(currentWeight)} <span className="text-xs font-normal text-v5-subtext">lb</span>
       </div>
-      <div className="absolute inset-0 bg-gradient-to-r from-v5-surface via-v5-surface/40 to-transparent" />
-    </div>
+      {weeklyChange != null ? (
+        <div className={`flex items-center gap-1 text-[11px] font-bold ${trendUp ? "text-v5-success" : trendDown ? "text-v5-red" : "text-v5-subtext"}`}>
+          {trendUp ? <TrendingUp size={12} /> : trendDown ? <TrendingDown size={12} /> : null}
+          {fmt1(Math.abs(weeklyChange))} lb/wk
+        </div>
+      ) : (
+        <div className="text-[11px] text-v5-subtext">7-day avg {fmt1(avg7)}</div>
+      )}
+      {points.length >= 2 && <LineChart points={points} height={36} tone="subtle" className="[&_span]:hidden" />}
+    </Card>
   );
 }
 
@@ -359,41 +375,6 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         <div className="text-xs text-v5-subtext mt-0.5">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
       </div>
 
-      {currentWeight != null && (
-        <Card onClick={() => onNavigate("progress")} className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="shrink-0 w-9 h-9 rounded-full bg-v5-elevated flex items-center justify-center">
-              <Scale size={16} className="text-v5-subtext" />
-            </span>
-            <div>
-              <div className="text-2xl font-black text-v5-text">
-                {fmt1(currentWeight)} <span className="text-sm font-normal text-v5-subtext">lb</span>
-              </div>
-              <div className="text-xs text-v5-subtext">
-                7-day avg {fmt1(avg7)} · {weeklyChange != null ? `${weeklyChange >= 0 ? "+" : ""}${fmt1(weeklyChange)} lb/wk` : "—"}
-              </div>
-            </div>
-          </div>
-          <ChevronRight size={18} className="text-v5-subtext shrink-0" />
-        </Card>
-      )}
-
-      {missionView && (
-        <Card onClick={() => onNavigate("mission")}>
-          <div className="flex items-center justify-between mb-2">
-            <SectionLabel>Mission</SectionLabel>
-            <div className={`text-[11px] uppercase tracking-widest font-bold ${STATUS_COLOR[missionView.status]}`}>{GOAL_STATUS_LABEL[missionView.status]}</div>
-          </div>
-          <div className="text-lg font-bold text-v5-text truncate">{missionView.goal.title}</div>
-          <ProgressBar pct={missionView.pct} className="mt-2.5" />
-          <div className="text-xs text-v5-subtext mt-1.5">{missionView.pct}% complete</div>
-        </Card>
-      )}
-
-      <ReadinessCheckIn state={state} updateState={updateState} compact />
-
-      {weekStrip && <WeekStrip strip={weekStrip} />}
-
       {missedEntry && <MissedWorkoutBanner missed={missedEntry} state={state} updateState={updateState} onStartRun={onStartRun} />}
 
       {/* Today's training — the dominant card on the page. */}
@@ -484,49 +465,102 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
             );
           }
           const completedSession = todaySchedule.status === "completed" && run ? findTodaysSessionForPlan(state.workoutSessions, run.plan.name) : null;
-          return (
-            <HeroCard>
-              {run && todaySchedule.status !== "completed" && (
-                <WorkoutHeroBand exercise={exMap[run.plan.exercises[0]?.exId]} />
-              )}
-              <SectionLabel>Today</SectionLabel>
-              <div className="text-2xl font-black text-v5-text">{todaySchedule.label || "Training day"}</div>
-              {run ? (
-                <div className="text-sm text-v5-subtext">
-                  {run.plan.exercises.length} exercises · Est. {estimateMinutes(run.plan)} min
+          if (todaySchedule.status === "completed") {
+            return (
+              <HeroCard>
+                <div className="flex items-center gap-2 text-v5-success font-bold text-lg">
+                  <Check size={18} /> {todaySchedule.label || "Training day"}
                 </div>
-              ) : (
-                <div className="text-sm text-v5-subtext">No plan attached to this day yet.</div>
-              )}
+                <div className="text-sm text-v5-subtext">Complete</div>
+                {completedSession && (
+                  <div className="text-sm text-v5-subtext">
+                    {formatSessionDuration(completedSession.durationSec)} · {completedSession.workingSets} working sets · {completedSession.totalVolume.toLocaleString()} lb volume
+                  </div>
+                )}
+                {completedSession && onViewWorkout && (
+                  <ButtonPrimary onClick={() => onViewWorkout(completedSession.id)}>View Workout</ButtonPrimary>
+                )}
+              </HeroCard>
+            );
+          }
+          return (
+            <PhotoHero
+              exercise={run ? exMap[run.plan.exercises[0]?.exId] : null}
+              eyebrow="Today's workout"
+              title={todaySchedule.label || "Training day"}
+              meta={
+                run ? (
+                  <div className="flex items-center gap-4 text-xs font-bold text-v5-subtext">
+                    <span className="flex items-center gap-1.5"><Dumbbell size={13} className="text-v5-red" /> {run.plan.exercises.length} exercises</span>
+                    <span className="flex items-center gap-1.5"><Timer size={13} className="text-v5-red" /> Est. {estimateMinutes(run.plan)} min</span>
+                  </div>
+                ) : (
+                  <div className="text-sm text-v5-subtext">No plan attached to this day yet.</div>
+                )
+              }
+            >
               {readiness && (
-                <div className="text-sm text-v5-subtext">
+                <div className="text-xs text-v5-subtext">
                   Readiness <span className={`font-bold ${READINESS_COLOR[readiness.band]}`}>{readiness.score} {BAND_LABEL[readiness.band]}</span>
                 </div>
               )}
-              {todaySchedule.status === "completed" && (
-                <div className="text-sm text-v5-success font-bold flex items-center gap-1.5">
-                  <Check size={14} /> Complete
-                </div>
-              )}
-              {completedSession && (
-                <div className="text-sm text-v5-subtext">
-                  {formatSessionDuration(completedSession.durationSec)} · {completedSession.workingSets} working sets · {completedSession.totalVolume.toLocaleString()} lb volume
-                </div>
-              )}
-              {completedSession && onViewWorkout && (
-                <ButtonSecondary onClick={() => onViewWorkout(completedSession.id)}>View Workout</ButtonSecondary>
-              )}
               <ButtonPrimary size="lg" icon={Play} onClick={() => (run ? startScheduled(todaySchedule.source) : onNavigate("train"))}>
-                {!run ? "Choose a workout" : todaySchedule.status === "completed" ? "Log another session" : "Start workout"}
+                {run ? "Start workout" : "Choose a workout"}
               </ButtonPrimary>
-            </HeroCard>
+            </PhotoHero>
           );
         })()
+      ) : todayPlan && !programDay?.isRecoveryDay && !programDay.completedToday ? (
+        // The primary, most common Today state — this is the mockup's cinematic hero moment:
+        // large gradient card, anatomy figure integrated on the trailing edge, eyebrow/title/
+        // meta row, one unmistakable red CTA.
+        <PhotoHero
+          exercise={exMap[todayPlan.exercises[0]?.exId]}
+          eyebrow="Today's workout"
+          title={todayPlan.name}
+          meta={
+            <div className="flex items-center gap-4 text-xs font-bold text-v5-subtext">
+              <span className="flex items-center gap-1.5"><Dumbbell size={13} className="text-v5-red" /> {todayPlan.exercises.length} exercises</span>
+              <span className="flex items-center gap-1.5"><Timer size={13} className="text-v5-red" /> Est. {estimateMinutes(todayPlan)} min</span>
+            </div>
+          }
+        >
+          {programDay.isOutsideProgram ? (
+            <Pill>{programDay.sourceType === "program" ? "From another program" : "Custom workout today"}</Pill>
+          ) : (
+            programDay.isSwapped && <Pill>Swapped for today</Pill>
+          )}
+          {programDay.isOutsideProgram ? (
+            programDay.plannedProgramName && (
+              <div className="text-xs text-v5-subtext/70">
+                {programDay.plannedProgramName}
+                {programDay.plannedDayLabel ? ` — ${programDay.plannedDayLabel}` : ""} still pending, unaffected
+              </div>
+            )
+          ) : (
+            programDay.isSwapped &&
+            programDay.plannedDayLabel && <div className="text-xs text-v5-subtext/70">Originally planned: {programDay.plannedDayLabel}</div>
+          )}
+          {lastCompletedDaysAgo != null && (
+            <div className="text-xs text-v5-subtext/70">Last completed {lastCompletedDaysAgo === 0 ? "today" : `${lastCompletedDaysAgo} day${lastCompletedDaysAgo === 1 ? "" : "s"} ago`}</div>
+          )}
+          <div className="flex gap-2">
+            {programDay.isSwapped && (
+              <ButtonSecondary size="lg" fullWidth={false} onClick={() => setSwapOpen(true)} className="shrink-0 px-5">
+                Change
+              </ButtonSecondary>
+            )}
+            <ButtonPrimary size="lg" icon={Play} onClick={() => onStartRun(todayPlan, programDay.programContext)} className="flex-1">
+              Start workout
+            </ButtonPrimary>
+          </div>
+          <div className="flex items-center justify-between pt-1">
+            <ButtonText tone="muted" icon={Map} onClick={() => onNavigate("programTimeline")}>View Program</ButtonText>
+            {!activeRun && <ButtonText tone="muted" icon={RefreshCw} onClick={() => setSwapOpen(true)}>Swap workout</ButtonText>}
+          </div>
+        </PhotoHero>
       ) : (
         <HeroCard>
-          {todayPlan && !programDay?.isRecoveryDay && !programDay.completedToday && (
-            <WorkoutHeroBand exercise={exMap[todayPlan.exercises[0]?.exId]} />
-          )}
           <div className="flex items-center justify-between gap-2">
             <SectionLabel>Today</SectionLabel>
             {(todayPlan || programDay?.isRecoveryDay) && !programDay.completedToday && !activeRun && (
@@ -588,42 +622,6 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
                 </>
               );
             })()
-          ) : todayPlan ? (
-            <>
-              {programDay.isOutsideProgram ? (
-                <Pill>{programDay.sourceType === "program" ? "From another program" : "Custom workout today"}</Pill>
-              ) : (
-                programDay.isSwapped && <Pill>Swapped for today</Pill>
-              )}
-              <div className="text-2xl font-black text-v5-text">{todayPlan.name}</div>
-              {programDay.isOutsideProgram ? (
-                programDay.plannedProgramName && (
-                  <div className="text-xs text-v5-subtext/70">
-                    {programDay.plannedProgramName}
-                    {programDay.plannedDayLabel ? ` — ${programDay.plannedDayLabel}` : ""} still pending, unaffected
-                  </div>
-                )
-              ) : (
-                programDay.isSwapped &&
-                programDay.plannedDayLabel && <div className="text-xs text-v5-subtext/70">Originally planned: {programDay.plannedDayLabel}</div>
-              )}
-              <div className="text-sm text-v5-subtext">
-                {todayPlan.exercises.length} exercises · Est. {estimateMinutes(todayPlan)} min
-              </div>
-              {lastCompletedDaysAgo != null && (
-                <div className="text-xs text-v5-subtext/70">Last completed {lastCompletedDaysAgo === 0 ? "today" : `${lastCompletedDaysAgo} day${lastCompletedDaysAgo === 1 ? "" : "s"} ago`}</div>
-              )}
-              <div className="flex gap-2">
-                {programDay.isSwapped && (
-                  <ButtonSecondary size="lg" fullWidth={false} onClick={() => setSwapOpen(true)} className="shrink-0 px-5">
-                    Change
-                  </ButtonSecondary>
-                )}
-                <ButtonPrimary size="lg" icon={Play} onClick={() => onStartRun(todayPlan, programDay.programContext)} className="flex-1">
-                  Start workout
-                </ButtonPrimary>
-              </div>
-            </>
           ) : (
             <>
               <div className="text-sm text-v5-subtext">No workout queued up.</div>
@@ -644,15 +642,43 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         <SetupSchedulePrompt onSetup={() => onNavigate("schedule")} onLater={() => setDismissedPrompt(true)} />
       )}
 
+      {/* Modular 2-column row — Readiness paired with Bodyweight, each a compact focused tile
+          rather than another full-width card competing with the hero above (mockup section 5). */}
+      <div className="grid grid-cols-2 gap-3">
+        <ReadinessCheckIn state={state} updateState={updateState} compact />
+        {currentWeight != null ? (
+          <BodyweightCard state={state} currentWeight={currentWeight} avg7={avg7} weeklyChange={weeklyChange} onNavigate={onNavigate} />
+        ) : (
+          <Card onClick={() => onNavigate("progress")} padding="p-4" className="flex flex-col justify-center items-center text-center space-y-1.5">
+            <Scale size={18} className="text-v5-subtext/60" />
+            <div className="text-[11px] text-v5-subtext">Log your weight</div>
+          </Card>
+        )}
+      </div>
+
       <NutritionCard state={state} onNavigate={onNavigate} />
 
       <Card>
         <SectionLabel className="mb-2 flex items-center gap-1.5">
-          <MessageCircle size={12} /> Coach
+          <MessageCircle size={12} /> Coach Brief
         </SectionLabel>
         <div className="text-sm text-v5-text/90 leading-relaxed">{coachMessage}</div>
-        <ButtonText onClick={() => onNavigate("coach")} className="mt-2.5">Ask Coach →</ButtonText>
+        <ButtonText onClick={() => onNavigate("coach")} className="mt-2.5">View plan →</ButtonText>
       </Card>
+
+      {weekStrip && <WeekStrip strip={weekStrip} />}
+
+      {missionView && (
+        <Card onClick={() => onNavigate("mission")}>
+          <div className="flex items-center justify-between mb-2">
+            <SectionLabel tone="muted">Mission</SectionLabel>
+            <div className={`text-[11px] uppercase tracking-widest font-bold ${STATUS_COLOR[missionView.status]}`}>{GOAL_STATUS_LABEL[missionView.status]}</div>
+          </div>
+          <div className="text-lg font-bold text-v5-text truncate">{missionView.goal.title}</div>
+          <ProgressBar pct={missionView.pct} className="mt-2.5" />
+          <div className="text-xs text-v5-subtext mt-1.5">{missionView.pct}% complete</div>
+        </Card>
+      )}
 
       {recentWin && (
         <Card>

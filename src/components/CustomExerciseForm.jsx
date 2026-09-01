@@ -16,7 +16,7 @@ function Chip({ active, onClick, children }) {
       type="button"
       onClick={onClick}
       className={`px-3 py-1.5 text-xs border ${
-        active ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+        active ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
       }`}
     >
       {children}
@@ -134,13 +134,13 @@ export default function CustomExerciseForm({
           <div className="flex gap-2">
             <button
               onClick={() => onSaved?.(dupWarning.id)}
-              className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-700 text-neutral-200 hover:border-neutral-500"
+              className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40"
             >
               Use existing
             </button>
             <button
               onClick={doSave}
-              className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
+              className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90"
             >
               Create anyway
             </button>
@@ -149,7 +149,7 @@ export default function CustomExerciseForm({
       )}
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Exercise name *</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Exercise name *</label>
         <input
           type="text"
           value={name}
@@ -158,12 +158,12 @@ export default function CustomExerciseForm({
             setDupWarning(null);
           }}
           placeholder="e.g. Atlantis Pendulum Squat"
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:border-v5-red"
         />
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Primary muscle *</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Primary muscle *</label>
         <div className="flex flex-wrap gap-1.5">
           {muscleGroups.map((m) => (
             <Chip key={m} active={muscle === m} onClick={() => setMuscle(m)}>
@@ -174,7 +174,7 @@ export default function CustomExerciseForm({
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Secondary muscles</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Secondary muscles</label>
         <div className="flex flex-wrap gap-1.5">
           {muscleGroups
             .filter((m) => m !== muscle)
@@ -187,7 +187,7 @@ export default function CustomExerciseForm({
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Equipment type *</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Equipment type *</label>
         <div className="flex flex-wrap gap-1.5">
           {EQUIPMENT_TYPES.map((eq) => (
             <Chip key={eq} active={equipment === eq} onClick={() => setEquipment(eq)}>
@@ -198,7 +198,7 @@ export default function CustomExerciseForm({
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Movement category</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Movement category</label>
         <div className="flex flex-wrap gap-1.5">
           {MOVEMENT_CATEGORIES.map((c) => (
             <Chip key={c} active={movementCategory === c} onClick={() => setMovementCategory(movementCategory === c ? "" : c)}>
@@ -209,24 +209,24 @@ export default function CustomExerciseForm({
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Brand / manufacturer</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Brand / manufacturer</label>
         <input
           type="text"
           value={brand}
           onChange={(e) => setBrand(e.target.value)}
           placeholder="Optional — e.g. Atlantis"
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:border-v5-red"
         />
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Notes</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Notes</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Seat position, pin, grip, cues…"
           rows={2}
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700 resize-none"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red resize-none"
         />
       </div>
 
@@ -235,38 +235,38 @@ export default function CustomExerciseForm({
         disabled={!canSave}
         className={`w-full py-3 text-xs uppercase tracking-widest font-bold border flex items-center justify-center gap-1.5 ${
           canSave
-            ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-            : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+            ? "bg-v5-red border-v5-red text-white hover:opacity-90"
+            : "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed"
         }`}
       >
         <Check size={14} /> {isEdit ? "Save changes" : "Create exercise"}
       </button>
 
       {isEdit && (
-        <div className="border-t border-neutral-900 pt-4 space-y-2">
+        <div className="border-t border-white/[0.06] pt-4 space-y-2">
           {exercise.archived ? (
             <button
               onClick={restoreExercise}
-              className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-700 text-neutral-200 hover:border-neutral-500 flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40 flex items-center justify-center gap-1.5"
             >
               <RotateCcw size={13} /> Restore exercise
             </button>
           ) : confirmArchive ? (
-            <div className="border border-neutral-800 bg-charcoal-panel p-3 space-y-2">
-              <div className="text-xs text-neutral-400">
+            <div className="border border-white/10 bg-v5-elevated p-3 space-y-2">
+              <div className="text-xs text-v5-subtext">
                 Archive "{exercise.name}"? It'll disappear from search, but every past workout, PR, and progression record
                 stays intact.
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={archiveExercise}
-                  className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
+                  className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90"
                 >
                   Archive
                 </button>
                 <button
                   onClick={() => setConfirmArchive(false)}
-                  className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-500"
+                  className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-white/10 text-v5-subtext"
                 >
                   Cancel
                 </button>
@@ -275,7 +275,7 @@ export default function CustomExerciseForm({
           ) : (
             <button
               onClick={() => setConfirmArchive(true)}
-              className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-700 text-neutral-300 hover:border-neutral-500 flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40 flex items-center justify-center gap-1.5"
             >
               <Archive size={13} /> Archive exercise
             </button>
@@ -283,21 +283,21 @@ export default function CustomExerciseForm({
 
           {!usageCount &&
             (confirmDelete ? (
-              <div className="border border-red-900/40 bg-charcoal-panel p-3 space-y-2">
-                <div className="text-xs text-neutral-400">
+              <div className="border border-v5-red/25 bg-v5-elevated p-3 space-y-2">
+                <div className="text-xs text-v5-subtext">
                   Permanently delete "{exercise.name}"? It's never been used in any workout, so this can't be undone but
                   nothing else is affected.
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={deleteExercise}
-                    className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
+                    className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90"
                   >
                     Delete permanently
                   </button>
                   <button
                     onClick={() => setConfirmDelete(false)}
-                    className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-500"
+                    className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-white/10 text-v5-subtext"
                   >
                     Cancel
                   </button>
@@ -306,7 +306,7 @@ export default function CustomExerciseForm({
             ) : (
               <button
                 onClick={() => setConfirmDelete(true)}
-                className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-600 hover:text-red-600 hover:border-red-900 flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext/70 hover:text-v5-red hover:border-v5-red/25 flex items-center justify-center gap-1.5"
               >
                 <Trash2 size={13} /> Delete permanently — never used
               </button>

@@ -51,7 +51,7 @@ function DurationInput({ label, totalSec, onChange }) {
   const sec = totalSec % 60;
   return (
     <div>
-      <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">{label}</label>
+      <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">{label}</label>
       <div className="flex items-center gap-1.5">
         <input
           type="number"
@@ -59,11 +59,11 @@ function DurationInput({ label, totalSec, onChange }) {
           min="0"
           value={min}
           onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0) * 60 + sec)}
-          className="w-16 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2.5 text-base text-center focus:outline-none focus:border-red-700"
+          className="w-16 bg-v5-elevated border border-white/10 text-v5-text px-2 py-2.5 text-base text-center focus:outline-none focus:border-v5-red"
           style={{ fontSize: 16 }}
           aria-label={`${label} minutes`}
         />
-        <span className="text-neutral-600 text-sm">min</span>
+        <span className="text-v5-subtext/70 text-sm">min</span>
         <input
           type="number"
           inputMode="numeric"
@@ -71,11 +71,11 @@ function DurationInput({ label, totalSec, onChange }) {
           max="59"
           value={sec}
           onChange={(e) => onChange(min * 60 + Math.min(59, Math.max(0, Number(e.target.value) || 0)))}
-          className="w-16 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2.5 text-base text-center focus:outline-none focus:border-red-700"
+          className="w-16 bg-v5-elevated border border-white/10 text-v5-text px-2 py-2.5 text-base text-center focus:outline-none focus:border-v5-red"
           style={{ fontSize: 16 }}
           aria-label={`${label} seconds`}
         />
-        <span className="text-neutral-600 text-sm">sec</span>
+        <span className="text-v5-subtext/70 text-sm">sec</span>
       </div>
     </div>
   );
@@ -254,11 +254,11 @@ export default function IntervalTimerScreen({ updateState, allExercises, onBack 
       <div className="space-y-6 pb-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-[11px] uppercase tracking-widest text-red-600">Cardio &amp; Conditioning</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-red">Cardio &amp; Conditioning</div>
             <div className="text-xl font-bold text-white mt-1">Interval Timer</div>
           </div>
           {onBack && (
-            <button onClick={onBack} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500 flex items-center gap-1 shrink-0">
+            <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red flex items-center gap-1 shrink-0">
               <ChevronLeft size={14} /> Back
             </button>
           )}
@@ -269,54 +269,54 @@ export default function IntervalTimerScreen({ updateState, allExercises, onBack 
             <button
               key={p.label}
               onClick={() => setConfig((c) => ({ ...c, phase1Sec: p.phase1Sec, phase2Sec: p.phase2Sec }))}
-              className="py-2.5 text-xs font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600"
+              className="py-2.5 text-xs font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40"
             >
               {p.label}
             </button>
           ))}
         </div>
 
-        <div className="border-2 border-red-800 bg-charcoal-panel p-4 space-y-3">
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Phase 1</div>
+        <div className="border-2 border-v5-red/40 bg-v5-elevated p-4 space-y-3">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Phase 1</div>
           <div>
-            <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Name</label>
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Name</label>
             <input
               type="text"
               value={config.phase1Name}
               onChange={(e) => setConfig((c) => ({ ...c, phase1Name: e.target.value }))}
               placeholder="Work"
-              className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-base focus:outline-none focus:border-red-700"
+              className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-base focus:outline-none focus:border-v5-red"
               style={{ fontSize: 16 }}
             />
           </div>
           <DurationInput label="Duration" totalSec={config.phase1Sec} onChange={(v) => setConfig((c) => ({ ...c, phase1Sec: v }))} />
         </div>
 
-        <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Phase 2</div>
+        <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Phase 2</div>
           <div>
-            <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Name</label>
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Name</label>
             <input
               type="text"
               value={config.phase2Name}
               onChange={(e) => setConfig((c) => ({ ...c, phase2Name: e.target.value }))}
               placeholder="Recovery"
-              className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-base focus:outline-none focus:border-red-700"
+              className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-base focus:outline-none focus:border-v5-red"
               style={{ fontSize: 16 }}
             />
           </div>
           <DurationInput label="Duration" totalSec={config.phase2Sec} onChange={(v) => setConfig((c) => ({ ...c, phase2Sec: v }))} />
         </div>
 
-        <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
+        <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-bold text-white">Repeat Until Stopped</div>
-              <div className="text-xs text-neutral-500 mt-0.5">Cycles Phase 1 / Phase 2 continuously until you tap Stop.</div>
+              <div className="text-xs text-v5-subtext mt-0.5">Cycles Phase 1 / Phase 2 continuously until you tap Stop.</div>
             </div>
             <button
               onClick={() => setConfig((c) => ({ ...c, mode: c.mode === "continuous" ? "fixed" : "continuous" }))}
-              className={`shrink-0 w-11 h-6 rounded-full relative transition-colors ${config.mode === "continuous" ? "bg-red-700" : "bg-neutral-800"}`}
+              className={`shrink-0 w-11 h-6 rounded-full relative transition-colors ${config.mode === "continuous" ? "bg-v5-red" : "bg-v5-elevated"}`}
               aria-label="Toggle Repeat Until Stopped"
             >
               <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${config.mode === "continuous" ? "translate-x-5" : "translate-x-0.5"}`} />
@@ -324,17 +324,17 @@ export default function IntervalTimerScreen({ updateState, allExercises, onBack 
           </div>
           {config.mode === "fixed" && (
             <div>
-              <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Rounds</label>
+              <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Rounds</label>
               <input
                 type="number"
                 inputMode="numeric"
                 min="1"
                 value={config.rounds}
                 onChange={(e) => setConfig((c) => ({ ...c, rounds: Math.max(0, Number(e.target.value) || 0) }))}
-                className="w-20 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-base text-center focus:outline-none focus:border-red-700"
+                className="w-20 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-base text-center focus:outline-none focus:border-v5-red"
                 style={{ fontSize: 16 }}
               />
-              <span className="text-xs text-neutral-500 ml-2">
+              <span className="text-xs text-v5-subtext ml-2">
                 Total: {formatClock((config.phase1Sec + config.phase2Sec) * Math.max(0, config.rounds))}
               </span>
             </div>
@@ -342,14 +342,14 @@ export default function IntervalTimerScreen({ updateState, allExercises, onBack 
         </div>
 
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Countdown warning</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Countdown warning</label>
           <div className="grid grid-cols-4 gap-1.5">
             {COUNTDOWN_WARNING_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => setConfig((c) => ({ ...c, countdownWarningSec: opt.value }))}
                 className={`py-2 text-[11px] font-bold border ${
-                  config.countdownWarningSec === opt.value ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                  config.countdownWarningSec === opt.value ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
                 }`}
               >
                 {opt.label}
@@ -358,11 +358,11 @@ export default function IntervalTimerScreen({ updateState, allExercises, onBack 
           </div>
         </div>
 
-        {validationMsg && <div className="text-sm text-red-500">{validationMsg}</div>}
+        {validationMsg && <div className="text-sm text-v5-red">{validationMsg}</div>}
 
         <button
           onClick={start}
-          className="w-full py-4 text-sm uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
+          className="w-full py-4 text-sm uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90"
         >
           Start Interval Timer
         </button>
@@ -387,25 +387,25 @@ export default function IntervalTimerScreen({ updateState, allExercises, onBack 
       <div className="space-y-6 pb-4">
         <div
           className={`p-6 space-y-4 text-center transition-colors ${
-            isPhase1 ? "border-2 border-red-700 bg-red-950/10" : "border border-neutral-700 bg-charcoal-panel"
+            isPhase1 ? "border-2 border-v5-red bg-v5-red/10" : "border border-white/10 bg-v5-elevated"
           }`}
         >
-          <div className={`text-[13px] uppercase tracking-[0.2em] font-bold ${isPhase1 ? "text-red-500" : "text-neutral-400"}`}>
+          <div className={`text-[13px] uppercase tracking-[0.2em] font-bold ${isPhase1 ? "text-v5-red" : "text-v5-subtext"}`}>
             {phaseNameFor(config, phaseIdx)}
           </div>
-          <div className={`text-7xl font-bold tabular-nums leading-none ${paused ? "text-neutral-500" : "text-white"}`}>
+          <div className={`text-7xl font-bold tabular-nums leading-none ${paused ? "text-v5-subtext" : "text-white"}`}>
             {formatClock(remainingSec)}
           </div>
-          {paused && <div className="text-[11px] uppercase tracking-widest text-neutral-500">Paused</div>}
+          {paused && <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Paused</div>}
           {!isLastPhase ? (
-            <div className="text-xs text-neutral-500">
-              Next: <span className="text-neutral-300 font-bold">{phaseNameFor(config, nextPhaseIdx).toUpperCase()}</span> —{" "}
+            <div className="text-xs text-v5-subtext">
+              Next: <span className="text-v5-text/90 font-bold">{phaseNameFor(config, nextPhaseIdx).toUpperCase()}</span> —{" "}
               {formatClock(phaseDurationSec(config, nextPhaseIdx))}
             </div>
           ) : (
-            <div className="text-xs text-neutral-500">Final phase</div>
+            <div className="text-xs text-v5-subtext">Final phase</div>
           )}
-          <div className="text-[11px] uppercase tracking-widest text-neutral-600">
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">
             Round {round}
             {config.mode === "fixed" ? ` of ${Math.max(1, config.rounds)}` : " · Continuous"}
           </div>
@@ -415,14 +415,14 @@ export default function IntervalTimerScreen({ updateState, allExercises, onBack 
           <button
             onClick={togglePause}
             aria-label={paused ? "Resume interval timer" : "Pause interval timer"}
-            className="flex-1 py-5 text-sm uppercase tracking-widest font-bold border border-neutral-700 bg-charcoal-panel text-neutral-200 hover:border-neutral-500 flex items-center justify-center gap-2"
+            className="flex-1 py-5 text-sm uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-text/90 hover:border-v5-red/40 flex items-center justify-center gap-2"
           >
             {paused ? <Play size={18} /> : <Pause size={18} />} {paused ? "Resume" : "Pause"}
           </button>
           <button
             onClick={stop}
             aria-label="Stop interval timer"
-            className="flex-1 py-5 text-sm uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-2"
+            className="flex-1 py-5 text-sm uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90 flex items-center justify-center gap-2"
           >
             <Square size={18} /> Stop
           </button>
@@ -467,16 +467,16 @@ function IntervalSummaryScreen({ summary, conditioningExercises, updateState, on
   return (
     <div className="space-y-6 pb-4">
       <div className="text-center space-y-1 pt-4">
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Interval Session Complete</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Interval Session Complete</div>
         <div className="text-4xl font-bold text-white">{formatClock(elapsedSec)}</div>
-        <div className="text-sm text-neutral-500">total</div>
+        <div className="text-sm text-v5-subtext">total</div>
       </div>
 
-      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3 text-center">
+      <div className="border border-white/10 bg-v5-elevated p-4 space-y-3 text-center">
         <div className="text-3xl font-bold text-white">
           {completedRounds} completed round{completedRounds === 1 ? "" : "s"}
         </div>
-        <div className="text-sm text-neutral-400 space-y-0.5">
+        <div className="text-sm text-v5-subtext space-y-0.5">
           <div>
             {config.phase1Name} — {formatClock(config.phase1Sec)}
           </div>
@@ -487,8 +487,8 @@ function IntervalSummaryScreen({ summary, conditioningExercises, updateState, on
       </div>
 
       {conditioningExercises.length > 0 && (
-        <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Save as cardio log (optional)</div>
+        <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Save as cardio log (optional)</div>
           {saved ? (
             <div className="text-sm text-green-500">Saved to Cardio / conditioning.</div>
           ) : (
@@ -496,7 +496,7 @@ function IntervalSummaryScreen({ summary, conditioningExercises, updateState, on
               <select
                 value={selectedExId}
                 onChange={(e) => setSelectedExId(e.target.value)}
-                className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+                className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:border-v5-red"
               >
                 {conditioningExercises.map((ex) => (
                   <option key={ex.id} value={ex.id}>
@@ -506,7 +506,7 @@ function IntervalSummaryScreen({ summary, conditioningExercises, updateState, on
               </select>
               <button
                 onClick={saveAsCardioLog}
-                className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-700 text-neutral-200 hover:border-neutral-500"
+                className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40"
               >
                 Save as Cardio Log
               </button>
@@ -518,13 +518,13 @@ function IntervalSummaryScreen({ summary, conditioningExercises, updateState, on
       <div className="flex items-center gap-3">
         <button
           onClick={onRestart}
-          className="flex-1 py-4 text-sm uppercase tracking-widest font-bold border border-neutral-700 bg-charcoal-panel text-neutral-200 hover:border-neutral-500"
+          className="flex-1 py-4 text-sm uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-text/90 hover:border-v5-red/40"
         >
           Restart
         </button>
         <button
           onClick={onDone}
-          className="flex-1 py-4 text-sm uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
+          className="flex-1 py-4 text-sm uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90"
         >
           Done
         </button>

@@ -39,23 +39,23 @@ export default function ShareCardButton({ buildDataUrl, filename = "brk-lift-sha
 
   return (
     <>
-      <button onClick={open} className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+      <button onClick={open} className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red">
         <Share2 size={12} /> {label}
       </button>
       {preview && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
           <div className="max-w-xs w-full space-y-3" onClick={(e) => e.stopPropagation()}>
-            <img src={preview} alt="Share card preview" className="w-full border border-neutral-800" />
+            <img src={preview} alt="Share card preview" className="w-full border border-white/10" />
             <div className="flex gap-2">
               <button
                 onClick={save}
-                className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1.5"
+                className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90 flex items-center justify-center gap-1.5"
               >
                 <Download size={14} /> Save image
               </button>
               <button
                 onClick={() => setPreview(null)}
-                className="px-4 py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600"
+                className="px-4 py-3 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40"
               >
                 <X size={14} />
               </button>

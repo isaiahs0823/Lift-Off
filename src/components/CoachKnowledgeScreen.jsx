@@ -4,13 +4,13 @@ import { resolveProfile, COACHING_STYLE_LABEL, RESPONSE_LENGTH_LABEL } from "../
 import { editMemory, deleteMemory, correctMemory, MEMORY_CATEGORY_LABEL, confidenceLabel } from "../utils/coachMemoryStore.js";
 
 const STATUS_LABEL = { active: "Active", improving: "Improving", resolved: "Resolved", outdated: "Corrected" };
-const STATUS_COLOR = { active: "text-red-500", improving: "text-yellow-500", resolved: "text-green-500", outdated: "text-neutral-600" };
+const STATUS_COLOR = { active: "text-v5-red", improving: "text-yellow-500", resolved: "text-green-500", outdated: "text-v5-subtext/70" };
 
 function Section({ title, children, empty }) {
   return (
     <div className="space-y-2">
-      <div className="text-[11px] uppercase tracking-widest text-red-600">{title}</div>
-      {children || <div className="text-sm text-neutral-600">{empty}</div>}
+      <div className="text-[11px] uppercase tracking-widest text-v5-red">{title}</div>
+      {children || <div className="text-sm text-v5-subtext/70">{empty}</div>}
     </div>
   );
 }
@@ -38,18 +38,18 @@ function MemoryRow({ memory, updateState }) {
 
   if (editing) {
     return (
-      <div className="border border-neutral-800 bg-charcoal-panel p-3 space-y-2">
+      <div className="border border-white/10 bg-v5-elevated p-3 space-y-2">
         <input
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
         <div className="flex gap-2">
-          <button onClick={save} className="flex-1 py-1.5 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white">
+          <button onClick={save} className="flex-1 py-1.5 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white">
             Save
           </button>
-          <button onClick={() => setEditing(false)} className="flex-1 py-1.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400">
+          <button onClick={() => setEditing(false)} className="flex-1 py-1.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext">
             Cancel
           </button>
         </div>
@@ -58,37 +58,37 @@ function MemoryRow({ memory, updateState }) {
   }
 
   return (
-    <div className="border border-neutral-800 bg-charcoal-panel p-3 space-y-1.5">
+    <div className="border border-white/10 bg-v5-elevated p-3 space-y-1.5">
       <div className="flex items-start justify-between gap-2">
-        <div className="text-sm text-neutral-200">{memory.text}</div>
+        <div className="text-sm text-v5-text/90">{memory.text}</div>
         <div className="shrink-0 flex items-center gap-2">
-          <button onClick={() => setEditing(true)} className="text-neutral-600 hover:text-red-500 p-0.5">
+          <button onClick={() => setEditing(true)} className="text-v5-subtext/70 hover:text-v5-red p-0.5">
             <Pencil size={13} />
           </button>
-          <button onClick={remove} className="text-neutral-600 hover:text-red-500 p-0.5">
+          <button onClick={remove} className="text-v5-subtext/70 hover:text-v5-red p-0.5">
             <Trash2 size={13} />
           </button>
         </div>
       </div>
       <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest">
         <span className={STATUS_COLOR[memory.status]}>{STATUS_LABEL[memory.status]}</span>
-        {memory.source !== "stated" && <span className="text-neutral-600">{confidenceLabel(memory.evidenceCount)} confidence</span>}
+        {memory.source !== "stated" && <span className="text-v5-subtext/70">{confidenceLabel(memory.evidenceCount)} confidence</span>}
         {memory.source !== "stated" && !correcting && (
-          <button onClick={() => setCorrecting(true)} className="text-neutral-600 hover:text-red-500 ml-auto normal-case tracking-normal">
+          <button onClick={() => setCorrecting(true)} className="text-v5-subtext/70 hover:text-v5-red ml-auto normal-case tracking-normal">
             That's not right
           </button>
         )}
       </div>
       {correcting && (
-        <div className="flex items-center gap-2 pt-1 border-t border-neutral-900">
-          <span className="text-xs text-neutral-500">Correct Coach:</span>
+        <div className="flex items-center gap-2 pt-1 border-t border-white/[0.06]">
+          <span className="text-xs text-v5-subtext">Correct Coach:</span>
           <button onClick={() => correct(false)} className="text-xs text-yellow-500 hover:text-yellow-400">
             Lower confidence
           </button>
-          <button onClick={() => correct(true)} className="text-xs text-red-500 hover:text-red-400">
+          <button onClick={() => correct(true)} className="text-xs text-v5-red hover:text-v5-red">
             Remove
           </button>
-          <button onClick={() => setCorrecting(false)} className="text-xs text-neutral-600 hover:text-neutral-400 ml-auto">
+          <button onClick={() => setCorrecting(false)} className="text-xs text-v5-subtext/70 hover:text-v5-subtext ml-auto">
             Cancel
           </button>
         </div>
@@ -116,11 +116,11 @@ export default function CoachKnowledgeScreen({ state, updateState, onNavigate, o
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Coach</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Coach</div>
           <div className="text-xl font-bold text-white mt-1">What Coach knows about you</div>
         </div>
         {onBack && (
-          <button onClick={onBack} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+          <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
             ← Back
           </button>
         )}
@@ -128,12 +128,12 @@ export default function CoachKnowledgeScreen({ state, updateState, onNavigate, o
 
       <Section title="Goals" empty="No active goal set yet.">
         {(primary || secondary.length > 0) && (
-          <button onClick={() => onNavigate?.("mission")} className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 hover:border-neutral-600 space-y-1">
+          <button onClick={() => onNavigate?.("mission")} className="w-full text-left border border-white/10 bg-v5-elevated p-3 hover:border-v5-red/40 space-y-1">
             {primary && <div className="text-sm text-white font-bold">{primary.title}</div>}
             {secondary.map((g) => (
-              <div key={g.id} className="text-xs text-neutral-500">{g.title}</div>
+              <div key={g.id} className="text-xs text-v5-subtext">{g.title}</div>
             ))}
-            <div className="text-[10px] uppercase tracking-widest text-neutral-600 flex items-center gap-1 pt-1">
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 flex items-center gap-1 pt-1">
               Edit on Mission <ChevronRight size={10} />
             </div>
           </button>
@@ -142,7 +142,7 @@ export default function CoachKnowledgeScreen({ state, updateState, onNavigate, o
 
       <Section title="Training preferences" empty="Nothing set yet — add this from Coach Settings.">
         {(profile.preferredDays || profile.preferredDuration || profile.trainingStyle || profile.equipment.length > 0) && (
-          <div className="border border-neutral-800 bg-charcoal-panel p-3 space-y-1 text-sm text-neutral-300">
+          <div className="border border-white/10 bg-v5-elevated p-3 space-y-1 text-sm text-v5-text/90">
             {profile.preferredDays && <div>Prefers {profile.preferredDays} lifting days/week.</div>}
             {profile.preferredDuration && <div>Prefers ~{profile.preferredDuration} minute sessions.</div>}
             {profile.trainingStyle && <div>{profile.trainingStyle}</div>}
@@ -158,9 +158,9 @@ export default function CoachKnowledgeScreen({ state, updateState, onNavigate, o
         {profile.constraints.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {profile.constraints.map((c) => (
-              <span key={c} className="flex items-center gap-1 px-2.5 py-1 text-xs border border-neutral-800 text-neutral-300 bg-charcoal-panel">
+              <span key={c} className="flex items-center gap-1 px-2.5 py-1 text-xs border border-white/10 text-v5-text/90 bg-v5-elevated">
                 {c}
-                <button onClick={() => removeConstraintTag(c)} className="text-neutral-600 hover:text-red-500">
+                <button onClick={() => removeConstraintTag(c)} className="text-v5-subtext/70 hover:text-v5-red">
                   <X size={11} />
                 </button>
               </span>
@@ -173,7 +173,7 @@ export default function CoachKnowledgeScreen({ state, updateState, onNavigate, o
       </Section>
 
       <Section title="Coaching style">
-        <div className="border border-neutral-800 bg-charcoal-panel p-3 text-sm text-neutral-300 space-y-1">
+        <div className="border border-white/10 bg-v5-elevated p-3 text-sm text-v5-text/90 space-y-1">
           <div>{COACHING_STYLE_LABEL[profile.coachingStyle]}.</div>
           <div>{RESPONSE_LENGTH_LABEL[profile.responseLength]} responses.</div>
         </div>
@@ -191,9 +191,9 @@ export default function CoachKnowledgeScreen({ state, updateState, onNavigate, o
 
       <Section title="Motivation" empty="Not set — add this from Coach Settings.">
         {profile.motivation && (
-          <div className="border border-neutral-800 bg-charcoal-panel p-3 text-sm text-neutral-300">
+          <div className="border border-white/10 bg-v5-elevated p-3 text-sm text-v5-text/90">
             {profile.motivation}
-            <div className="text-[10px] uppercase tracking-widest text-neutral-600 mt-2">Private — never shared automatically</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mt-2">Private — never shared automatically</div>
           </div>
         )}
       </Section>

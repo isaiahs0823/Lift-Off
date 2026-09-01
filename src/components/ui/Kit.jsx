@@ -1,5 +1,6 @@
 import React from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, ChevronDown } from "lucide-react";
+import MuscleBodyOutline from "../MuscleBodyOutline.jsx";
 
 // ---------------- BRK SHARED DESIGN SYSTEM ----------------
 // Reusable primitives for the app-wide premium redesign. Everything here is built on the v5
@@ -209,7 +210,7 @@ export function ProgressBar({ pct, className = "", trackClassName = "", barClass
 }
 
 // Quiet placeholder for a section with nothing in it yet — icon, one line of copy, optional
-// action. Replaces ad-hoc "text-neutral-500, no border" empty text scattered around the app.
+// action. Replaces ad-hoc "text-v5-subtext, no border" empty text scattered around the app.
 export function EmptyState({ icon: Icon, title, body, action, className = "" }) {
   return (
     <div className={`text-center py-8 px-4 ${className}`}>
@@ -236,6 +237,51 @@ export function ActionTile({ icon: Icon, label, onClick, className = "" }) {
 
 export function Divider({ className = "" }) {
   return <div className={`h-px bg-white/[0.06] ${className}`} />;
+}
+
+// Dropdown-styled period picker ("This Month ⌄") — a plain <select> underneath so it stays
+// fully accessible/native on mobile, styled as a small dark pill to match the mockup's period
+// control rather than looking like a bare browser form element.
+export function PeriodSelect({ value, onChange, options, className = "" }) {
+  return (
+    <div className={`relative inline-flex items-center ${className}`}>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none bg-v5-surface text-v5-text text-xs font-bold rounded-full pl-3.5 pr-8 py-2 focus:outline-none focus:ring-1 focus:ring-v5-red"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown size={13} className="pointer-events-none absolute right-2.5 text-v5-subtext" />
+    </div>
+  );
+}
+
+// The big "cinematic" hero treatment the mockup opens most screens with — a wide gradient card
+// with BRK's illustrated anatomy figure set large and glowing at the trailing edge, eyebrow/
+// title/meta up top, CTA anchored at the bottom. Stands in for licensed athlete photography
+// (which this app doesn't have and won't fabricate) while still giving the hero real visual
+// weight instead of reading as "text on a card." Used for Today's workout, Active Workout's
+// current-exercise card, and Programs' featured program.
+export function PhotoHero({ exercise, eyebrow, title, meta, children, className = "" }) {
+  return (
+    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-v5-red/25 via-v5-elevated to-v5-surface p-5 sm:p-6 ${className}`}>
+      <div className="absolute -right-8 -bottom-10 opacity-95 pointer-events-none">
+        <MuscleBodyOutline exercise={exercise} size={190} />
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-r from-v5-surface via-v5-surface/55 to-transparent pointer-events-none" />
+      <div className="relative space-y-3">
+        {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
+        {title && <div className="text-[26px] leading-[1.1] font-black text-v5-text tracking-tight">{title}</div>}
+        {meta}
+        {children}
+      </div>
+    </div>
+  );
 }
 
 // ---------------- data viz ----------------
@@ -280,6 +326,59 @@ export function RingGauge({ pct, size = 76, strokeWidth = 7, tone = "red", label
           {sublabel && <div className="text-[11px] text-v5-subtext truncate mt-0.5">{sublabel}</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+// Wide primary trend chart (Progress's "one strong wide chart," not a cluster of tiny sparklines)
+// — pure SVG polyline + gradient fill, no chart library. `points`: [{label, value}], value may be
+// null for a day with no reading (the line just skips it rather than dropping to zero). Scales to
+// the data's own min/max with a little headroom so a flat stretch never reads as a cliff.
+export function LineChart({ points, height = 120, tone = "red", className = "" }) {
+  const valid = points.filter((p) => p.value != null);
+  if (valid.length < 2) {
+    return (
+      <div className={`flex items-center justify-center text-xs text-v5-subtext ${className}`} style={{ height }}>
+        Not enough data yet
+      </div>
+    );
+  }
+  const vals = valid.map((p) => p.value);
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const span = max - min || 1;
+  const lo = min - span * 0.15;
+  const hi = max + span * 0.15;
+  const w = 300;
+  const stepX = points.length > 1 ? w / (points.length - 1) : 0;
+  const coords = points
+    .map((p, i) => (p.value == null ? null : { x: i * stepX, y: height - ((p.value - lo) / (hi - lo)) * height }))
+    .filter(Boolean);
+  const path = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+  const areaPath = `${path} L${coords[coords.length - 1].x.toFixed(1)},${height} L${coords[0].x.toFixed(1)},${height} Z`;
+  const last = coords[coords.length - 1];
+  const stroke = RING_TONE[tone] || RING_TONE.red;
+  const axisLabels = [points[0], points[Math.floor((points.length - 1) / 2)], points[points.length - 1]];
+  return (
+    <div className={className}>
+      <svg viewBox={`0 0 ${w} ${height}`} width="100%" height={height} preserveAspectRatio="none" className="overflow-visible">
+        <defs>
+          <linearGradient id="brk-linechart-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill="url(#brk-linechart-fill)" />
+        <path d={path} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx={last.x} cy={last.y} r="4" fill={stroke} />
+      </svg>
+      <div className="flex justify-between mt-1.5">
+        {axisLabels.map((p, i) => (
+          <span key={i} className="text-[9px] font-bold text-v5-subtext/60">
+            {p.label}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

@@ -48,7 +48,7 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
               key={t}
               onClick={() => setType(t)}
               className={`flex flex-col items-center gap-1 py-2.5 border text-[10px] uppercase tracking-wide font-bold ${
-                active ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                active ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
               }`}
             >
               <Icon size={14} />
@@ -60,12 +60,12 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
 
       {showSource && (
         <div className="space-y-1.5">
-          <div className="text-[10px] uppercase tracking-widest text-neutral-600">Source</div>
+          <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70">Source</div>
           <button
             onClick={() => setSource(null)}
             disabled={!hasCurrentProgram && slot.type === "workout"}
             className={`w-full text-left px-3 py-2 text-sm border ${
-              !slot.source ? "border-red-700 text-white bg-red-950/20" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+              !slot.source ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
             } ${!hasCurrentProgram && slot.type === "workout" ? "opacity-40 cursor-not-allowed" : ""}`}
           >
             {slot.type === "conditioning" ? "No specific plan — open Cardio when it's due" : "Whatever's next — no specific plan"}
@@ -74,7 +74,7 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
             <button
               onClick={() => setSource({ kind: "currentProgram" })}
               className={`w-full text-left px-3 py-2 text-sm border ${
-                slot.source?.kind === "currentProgram" ? "border-red-700 text-white bg-red-950/20" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                slot.source?.kind === "currentProgram" ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
               }`}
             >
               Current program — next day in rotation
@@ -85,7 +85,7 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
               key={p.id}
               onClick={() => setSource({ kind: "plan", id: p.id })}
               className={`w-full text-left px-3 py-2 text-sm border truncate ${
-                slot.source?.kind === "plan" && slot.source.id === p.id ? "border-red-700 text-white bg-red-950/20" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                slot.source?.kind === "plan" && slot.source.id === p.id ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
               }`}
             >
               {p.name}
@@ -96,7 +96,7 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
               key={t.id}
               onClick={() => setSource({ kind: "template", id: t.id })}
               className={`w-full text-left px-3 py-2 text-sm border truncate ${
-                slot.source?.kind === "template" && slot.source.id === t.id ? "border-red-700 text-white bg-red-950/20" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                slot.source?.kind === "template" && slot.source.id === t.id ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
               }`}
             >
               {t.name}
@@ -106,12 +106,12 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
       )}
 
       <div>
-        <label className="block text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Label</label>
+        <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Label</label>
         <input
           type="text"
           value={slot.label}
           onChange={(e) => onChange({ ...slot, label: e.target.value })}
-          className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
       </div>
     </div>
@@ -121,20 +121,20 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
 function SlotRow({ title, slot, expanded, onToggle, onChange, onRemove, state, hasCurrentProgram }) {
   const Icon = TYPE_ICON[slot.type];
   return (
-    <div className="border border-neutral-800 bg-charcoal-panel">
+    <div className="border border-white/10 bg-v5-elevated">
       <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left">
         <div className="flex items-center gap-3 min-w-0">
-          <span className="text-[11px] uppercase tracking-widest text-neutral-500 w-9 shrink-0">{title}</span>
-          <Icon size={15} className={slot.type === "rest" ? "text-neutral-600" : "text-red-500"} />
+          <span className="text-[11px] uppercase tracking-widest text-v5-subtext w-9 shrink-0">{title}</span>
+          <Icon size={15} className={slot.type === "rest" ? "text-v5-subtext/70" : "text-v5-red"} />
           <span className="text-sm text-white truncate">{slot.label || DAY_TYPE_LABEL[slot.type]}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {onRemove && (
-            <span onClick={(e) => { e.stopPropagation(); onRemove(); }} className="text-neutral-600 hover:text-red-600 p-1">
+            <span onClick={(e) => { e.stopPropagation(); onRemove(); }} className="text-v5-subtext/70 hover:text-v5-red p-1">
               <Trash2 size={14} />
             </span>
           )}
-          {expanded ? <ChevronUp size={16} className="text-neutral-600" /> : <ChevronDown size={16} className="text-neutral-600" />}
+          {expanded ? <ChevronUp size={16} className="text-v5-subtext/70" /> : <ChevronDown size={16} className="text-v5-subtext/70" />}
         </div>
       </button>
       {expanded && (
@@ -212,33 +212,33 @@ export default function ScheduleEditor({ state, updateState, onBack }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Weekly schedule</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Weekly schedule</div>
           <div className="text-xl font-bold text-white mt-1">When do you train?</div>
         </div>
         {onBack && (
-          <button onClick={onBack} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+          <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
             ← Back
           </button>
         )}
       </div>
 
       <div>
-        <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Mode</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Mode</div>
         <div className="flex gap-2">
           <button
             onClick={() => setMode("fixed")}
-            className={`flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border ${mode === "fixed" ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400"}`}
+            className={`flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border ${mode === "fixed" ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext"}`}
           >
             Fixed week
           </button>
           <button
             onClick={() => setMode("rolling")}
-            className={`flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border ${mode === "rolling" ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400"}`}
+            className={`flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border ${mode === "rolling" ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext"}`}
           >
             Rolling
           </button>
         </div>
-        <p className="text-[11px] text-neutral-600 mt-1.5">
+        <p className="text-[11px] text-v5-subtext/70 mt-1.5">
           {mode === "fixed"
             ? "Repeats by weekday — best for a predictable schedule."
             : "Moves forward in order regardless of weekday, and waits on a missed day instead of jumping ahead — best for shift work or unpredictable weeks."}
@@ -246,7 +246,7 @@ export default function ScheduleEditor({ state, updateState, onBack }) {
       </div>
 
       {hasCurrentProgram && (
-        <button onClick={applySuggestion} className="text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400">
+        <button onClick={applySuggestion} className="text-[11px] uppercase tracking-widest text-v5-red hover:text-v5-red">
           Suggest a schedule from my current program
         </button>
       )}
@@ -269,17 +269,17 @@ export default function ScheduleEditor({ state, updateState, onBack }) {
       ) : (
         <div className="space-y-2">
           {rollingSequence.length === 0 && (
-            <div className="text-sm text-neutral-500 text-center py-6 border border-neutral-900">
+            <div className="text-sm text-v5-subtext text-center py-6 border border-white/[0.06]">
               No sequence yet. Add the first day below.
             </div>
           )}
           {rollingSequence.map((slot, idx) => (
             <div key={idx} className="flex items-start gap-1.5">
               <div className="flex flex-col gap-0.5 pt-3 shrink-0">
-                <button onClick={() => moveRollingSlot(idx, -1)} disabled={idx === 0} className="text-neutral-600 hover:text-red-500 disabled:opacity-20 p-0.5">
+                <button onClick={() => moveRollingSlot(idx, -1)} disabled={idx === 0} className="text-v5-subtext/70 hover:text-v5-red disabled:opacity-20 p-0.5">
                   <ChevronUp size={14} />
                 </button>
-                <button onClick={() => moveRollingSlot(idx, 1)} disabled={idx === rollingSequence.length - 1} className="text-neutral-600 hover:text-red-500 disabled:opacity-20 p-0.5">
+                <button onClick={() => moveRollingSlot(idx, 1)} disabled={idx === rollingSequence.length - 1} className="text-v5-subtext/70 hover:text-v5-red disabled:opacity-20 p-0.5">
                   <ChevronDown size={14} />
                 </button>
               </div>
@@ -297,7 +297,7 @@ export default function ScheduleEditor({ state, updateState, onBack }) {
               </div>
             </div>
           ))}
-          <button onClick={addRollingSlot} className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+          <button onClick={addRollingSlot} className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40">
             <Plus size={12} /> Add day
           </button>
         </div>
@@ -305,7 +305,7 @@ export default function ScheduleEditor({ state, updateState, onBack }) {
 
       <button
         onClick={save}
-        className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+        className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
       >
         Save schedule
       </button>

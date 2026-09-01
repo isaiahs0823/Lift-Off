@@ -30,8 +30,8 @@ function dateLabel(iso) {
 
 function StatCard({ label, value }) {
   return (
-    <div className="border border-neutral-800 bg-charcoal-panel p-3">
-      <div className="text-[10px] uppercase tracking-widest text-neutral-500">{label}</div>
+    <div className="border border-white/10 bg-v5-elevated p-3">
+      <div className="text-[10px] uppercase tracking-widest text-v5-subtext">{label}</div>
       <div className="text-lg font-bold text-white mt-1">{value == null ? "N/A" : value}</div>
     </div>
   );
@@ -62,7 +62,7 @@ function Sparkline({ points, height = 70 }) {
 }
 
 function EmptyState({ text }) {
-  return <div className="text-sm text-neutral-500 text-center py-10 border border-neutral-800 bg-charcoal-panel">{text}</div>;
+  return <div className="text-sm text-v5-subtext text-center py-10 border border-white/10 bg-v5-elevated">{text}</div>;
 }
 
 export default function DataWorkbookScreen({ state, exMap, onBack, onViewWorkout }) {
@@ -126,16 +126,16 @@ export default function DataWorkbookScreen({ state, exMap, onBack, onViewWorkout
     <div className="space-y-6 pb-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">My Data Workbook</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">My Data Workbook</div>
           <div className="text-xl font-bold text-white mt-1">Your training data, organized.</div>
         </div>
         {onBack && (
-          <button onClick={onBack} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500 flex items-center gap-1 shrink-0">
+          <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red flex items-center gap-1 shrink-0">
             <ChevronLeft size={14} /> Back
           </button>
         )}
       </div>
-      <p className="text-xs text-neutral-500 -mt-4">
+      <p className="text-xs text-v5-subtext -mt-4">
         Review your progress, filter your history, and export your data for backup, spreadsheets, or AI analysis.
       </p>
 
@@ -147,7 +147,7 @@ export default function DataWorkbookScreen({ state, exMap, onBack, onViewWorkout
               key={p.value}
               onClick={() => setPreset(p.value)}
               className={`shrink-0 px-3 py-2 text-[11px] uppercase tracking-wide font-bold border whitespace-nowrap ${
-                preset === p.value ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                preset === p.value ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
               }`}
             >
               {p.label}
@@ -161,34 +161,34 @@ export default function DataWorkbookScreen({ state, exMap, onBack, onViewWorkout
               type="date"
               value={customStart}
               onChange={(e) => setCustomStart(e.target.value)}
-              className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+              className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
               style={{ fontSize: 16 }}
             />
             <input
               type="date"
               value={customEnd}
               onChange={(e) => setCustomEnd(e.target.value)}
-              className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+              className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
               style={{ fontSize: 16 }}
             />
           </div>
         )}
 
-        <div className="border border-neutral-800 bg-charcoal-panel p-3">
+        <div className="border border-white/10 bg-v5-elevated p-3">
           <div className="text-sm font-bold text-white">{range.label}</div>
-          <div className="text-xs text-neutral-500 mt-0.5">{range.sublabel}</div>
-          {!customRangeIncomplete && <div className="text-xs text-neutral-400 mt-1">{computed.overview.workoutsCompleted} workouts</div>}
+          <div className="text-xs text-v5-subtext mt-0.5">{range.sublabel}</div>
+          {!customRangeIncomplete && <div className="text-xs text-v5-subtext mt-1">{computed.overview.workoutsCompleted} workouts</div>}
         </div>
       </div>
 
       {/* ---------------- TABS ---------------- */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 border-b border-neutral-800" style={{ scrollbarWidth: "none" }}>
+      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 border-b border-white/10" style={{ scrollbarWidth: "none" }}>
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
             className={`shrink-0 px-3 py-2.5 text-xs uppercase tracking-wide font-bold whitespace-nowrap border-b-2 ${
-              activeTab === t.id ? "border-red-600 text-white" : "border-transparent text-neutral-500 hover:text-neutral-300"
+              activeTab === t.id ? "border-red-600 text-white" : "border-transparent text-v5-subtext hover:text-v5-text/90"
             }`}
           >
             {t.label}
@@ -212,10 +212,10 @@ export default function DataWorkbookScreen({ state, exMap, onBack, onViewWorkout
       )}
 
       {/* ---------------- EXPORT ---------------- */}
-      <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-4">
+      <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-4">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Export Your Data</div>
-          <p className="text-xs text-neutral-500 mt-1">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Export Your Data</div>
+          <p className="text-xs text-v5-subtext mt-1">
             Download the selected data for backup, spreadsheet analysis, or use with AI tools.
           </p>
         </div>
@@ -224,28 +224,28 @@ export default function DataWorkbookScreen({ state, exMap, onBack, onViewWorkout
           <button
             onClick={() => runExport("xlsx")}
             disabled={exporting != null || customRangeIncomplete}
-            className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 disabled:opacity-60 flex items-center justify-center gap-1.5"
+            className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-1.5"
           >
             <FileSpreadsheet size={14} /> {exporting === "xlsx" ? "Preparing export…" : "Export Excel (.xlsx)"}
           </button>
           <button
             onClick={() => runExport("csv")}
             disabled={exporting != null || customRangeIncomplete}
-            className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600 disabled:opacity-60 flex items-center justify-center gap-1.5"
+            className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-text/90 hover:border-v5-red/40 disabled:opacity-60 flex items-center justify-center gap-1.5"
           >
             <FileText size={14} /> {exporting === "csv" ? "Preparing export…" : "Export CSV"}
           </button>
           <button
             onClick={() => runExport("json")}
             disabled={exporting != null || customRangeIncomplete}
-            className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600 disabled:opacity-60 flex items-center justify-center gap-1.5"
+            className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-text/90 hover:border-v5-red/40 disabled:opacity-60 flex items-center justify-center gap-1.5"
           >
             <FileJson size={14} /> {exporting === "json" ? "Preparing export…" : "Export JSON"}
           </button>
         </div>
 
-        <div className="text-[11px] text-neutral-500 space-y-1 pt-1 border-t border-neutral-800">
-          <div className="text-neutral-300 font-bold">Your data belongs to you.</div>
+        <div className="text-[11px] text-v5-subtext space-y-1 pt-1 border-t border-white/10">
+          <div className="text-v5-text/90 font-bold">Your data belongs to you.</div>
           <div>Exports are generated from your BRK fitness history and can be saved, backed up, or analyzed with other tools.</div>
         </div>
       </div>
@@ -257,9 +257,9 @@ export default function DataWorkbookScreen({ state, exMap, onBack, onViewWorkout
 function OverviewTabPanel({ overview: o }) {
   return (
     <div className="space-y-4">
-      <div className="border border-neutral-800 bg-charcoal-panel p-4">
-        <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Training Summary</div>
-        <div className="text-sm text-neutral-200 space-y-0.5">
+      <div className="border border-white/10 bg-v5-elevated p-4">
+        <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Training Summary</div>
+        <div className="text-sm text-v5-text/90 space-y-0.5">
           <div>{o.workoutsCompleted} workouts</div>
           <div>{o.totalWorkingSets.toLocaleString()} working sets</div>
           <div>{o.prCount} PRs</div>
@@ -282,12 +282,12 @@ function OverviewTabPanel({ overview: o }) {
       </div>
 
       {o.monthlyWorkouts.length > 1 && (
-        <div className="border border-neutral-800 bg-charcoal-panel p-4">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Monthly Workouts</div>
+        <div className="border border-white/10 bg-v5-elevated p-4">
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Monthly Workouts</div>
           <div className="space-y-1">
             {o.monthlyWorkouts.map((m) => (
               <div key={m.key} className="flex items-center justify-between text-sm">
-                <span className="text-neutral-400">{m.label}</span>
+                <span className="text-v5-subtext">{m.label}</span>
                 <span className="text-white font-bold">{m.count}</span>
               </div>
             ))}
@@ -307,19 +307,19 @@ function SessionsTabPanel({ rows, onViewWorkout }) {
         <button
           key={r.id}
           onClick={() => onViewWorkout && onViewWorkout(r.id)}
-          className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 hover:border-neutral-600"
+          className="w-full text-left border border-white/10 bg-v5-elevated p-3 hover:border-v5-red/40"
         >
           <div className="flex items-center justify-between gap-2">
             <div className="text-sm font-bold text-white truncate">{r.planName}</div>
-            <div className="text-[11px] text-neutral-500 shrink-0">{dateLabel(r.date)}</div>
+            <div className="text-[11px] text-v5-subtext shrink-0">{dateLabel(r.date)}</div>
           </div>
-          <div className="text-xs text-neutral-500 mt-0.5">{r.bodyParts}</div>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-400 mt-1.5">
+          <div className="text-xs text-v5-subtext mt-0.5">{r.bodyParts}</div>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-v5-subtext mt-1.5">
             <span>{r.durationLabel}</span>
             <span>{r.workingSets ?? "N/A"} sets</span>
             <span>{r.volume != null ? `${r.volume.toLocaleString()} lb` : "N/A"}</span>
             {r.avgRir != null && <span>{r.avgRir} avg RIR</span>}
-            {r.prCount > 0 && <span className="text-red-500 font-bold">{r.prCount} PR{r.prCount === 1 ? "" : "s"}</span>}
+            {r.prCount > 0 && <span className="text-v5-red font-bold">{r.prCount} PR{r.prCount === 1 ? "" : "s"}</span>}
           </div>
         </button>
       ))}
@@ -333,18 +333,18 @@ function ExercisesTabPanel({ rows }) {
   return (
     <div className="space-y-2">
       {rows.map((r) => (
-        <div key={r.exId} className="border border-neutral-800 bg-charcoal-panel p-3">
+        <div key={r.exId} className="border border-white/10 bg-v5-elevated p-3">
           <div className="text-sm font-bold text-white">{r.name}</div>
-          <div className="text-xs text-neutral-500 mt-0.5">
+          <div className="text-xs text-v5-subtext mt-0.5">
             {dateLabel(r.firstDate)} – {dateLabel(r.lastDate)}
           </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-400 mt-1.5">
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-v5-subtext mt-1.5">
             <span>{r.sessionCount} session{r.sessionCount === 1 ? "" : "s"}</span>
             <span>{r.totalSets} sets</span>
             <span>{r.totalReps} reps</span>
             <span>{r.totalVolume.toLocaleString()} lb volume</span>
           </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-300 mt-1">
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-v5-text/90 mt-1">
             <span>Best: {r.bestWeight != null ? `${r.bestWeight} × ${r.bestWeightReps}` : "N/A"}</span>
             <span>Est. 1RM: {r.bestE1RM != null ? `${r.bestE1RM} lb` : "N/A"}</span>
           </div>
@@ -360,18 +360,18 @@ function BodyweightTabPanel({ rows, overview }) {
   const points = rows.filter((r) => r.weight != null).map((r) => ({ date: r.date, value: r.weight }));
   return (
     <div className="space-y-3">
-      <div className="border border-neutral-800 bg-charcoal-panel p-4">
+      <div className="border border-white/10 bg-v5-elevated p-4">
         <div className="grid grid-cols-3 gap-2 text-center mb-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Start</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Start</div>
             <div className="text-base font-bold text-white">{overview.startingBodyweight ?? "N/A"}</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Current</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Current</div>
             <div className="text-base font-bold text-white">{overview.endingBodyweight ?? "N/A"}</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Change</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Change</div>
             <div className="text-base font-bold text-white">
               {overview.bodyweightChange != null ? `${overview.bodyweightChange > 0 ? "+" : ""}${overview.bodyweightChange}` : "N/A"}
             </div>
@@ -381,11 +381,11 @@ function BodyweightTabPanel({ rows, overview }) {
       </div>
       <div className="space-y-1.5">
         {[...rows].reverse().map((r, i) => (
-          <div key={`${r.date}-${i}`} className="flex items-center justify-between border border-neutral-800 bg-charcoal-panel px-3 py-2 text-sm">
-            <span className="text-neutral-400 text-xs">{dateLabel(r.date)}</span>
+          <div key={`${r.date}-${i}`} className="flex items-center justify-between border border-white/10 bg-v5-elevated px-3 py-2 text-sm">
+            <span className="text-v5-subtext text-xs">{dateLabel(r.date)}</span>
             <span className="text-white font-bold">
               {r.weight ?? "N/A"}
-              {r.bodyFat != null && <span className="text-neutral-500 font-normal text-xs ml-2">{r.bodyFat}% BF</span>}
+              {r.bodyFat != null && <span className="text-v5-subtext font-normal text-xs ml-2">{r.bodyFat}% BF</span>}
             </span>
           </div>
         ))}
@@ -399,23 +399,23 @@ function ReadinessTabPanel({ rows, avgReadiness }) {
   if (rows.length === 0) return <EmptyState text="No readiness check-ins in this period." />;
   return (
     <div className="space-y-2">
-      <div className="border border-neutral-800 bg-charcoal-panel p-3 flex items-center justify-between">
-        <span className="text-xs uppercase tracking-widest text-neutral-500">Average Readiness</span>
+      <div className="border border-white/10 bg-v5-elevated p-3 flex items-center justify-between">
+        <span className="text-xs uppercase tracking-widest text-v5-subtext">Average Readiness</span>
         <span className="text-lg font-bold text-white">{avgReadiness ?? "N/A"}</span>
       </div>
       {[...rows].reverse().map((r, i) => (
-        <div key={`${r.date}-${i}`} className="border border-neutral-800 bg-charcoal-panel p-3">
+        <div key={`${r.date}-${i}`} className="border border-white/10 bg-v5-elevated p-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-neutral-500">{dateLabel(r.date)}</span>
+            <span className="text-xs text-v5-subtext">{dateLabel(r.date)}</span>
             <span className="text-sm font-bold text-white">{r.score != null ? r.score : "N/A"}</span>
           </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-400 mt-1">
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-v5-subtext mt-1">
             {r.sleepQuality != null && <span>Sleep {r.sleepQuality}/5</span>}
             {r.soreness != null && <span>Soreness {r.soreness}/5</span>}
             {r.energy != null && <span>Energy {r.energy}/5</span>}
             {r.stress != null && <span>Stress {r.stress}/5</span>}
           </div>
-          {r.notes && <div className="text-xs text-neutral-500 mt-1 italic">{r.notes}</div>}
+          {r.notes && <div className="text-xs text-v5-subtext mt-1 italic">{r.notes}</div>}
         </div>
       ))}
     </div>
@@ -434,12 +434,12 @@ function NutritionTabPanel({ rows, summary }) {
         <StatCard label="Target Adherence" value={summary.targetAdherencePct != null ? `${summary.targetAdherencePct}%` : null} />
       </div>
       {[...rows].reverse().map((r) => (
-        <div key={r.date} className="border border-neutral-800 bg-charcoal-panel p-3">
+        <div key={r.date} className="border border-white/10 bg-v5-elevated p-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-neutral-500">{dateLabel(r.date)}</span>
+            <span className="text-xs text-v5-subtext">{dateLabel(r.date)}</span>
             <span className="text-sm font-bold text-white">{r.calories} cal</span>
           </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-400 mt-1">
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-v5-subtext mt-1">
             <span>{r.protein}g protein</span>
             <span>{r.carbs}g carbs</span>
             <span>{r.fat}g fat</span>

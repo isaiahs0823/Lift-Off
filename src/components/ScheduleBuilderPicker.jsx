@@ -31,7 +31,7 @@ export default function ScheduleBuilderPicker({ onBack, onSubmit }) {
     <SlideInPanel title="Build a Program" subtitle="Pick body parts per day, then hand it to Coach" onBack={onBack}>
       <div className="space-y-3">
         {WEEKDAY_ORDER.map((day) => (
-          <div key={day} className="border border-neutral-800 bg-charcoal-panel p-3 space-y-2">
+          <div key={day} className="border border-white/10 bg-v5-elevated p-3 space-y-2">
             <div className="text-xs font-bold text-white">{WEEKDAY_LABEL[day]}</div>
             <div className="flex flex-wrap gap-1.5">
               {BODY_PARTS.map((part) => {
@@ -42,7 +42,7 @@ export default function ScheduleBuilderPicker({ onBack, onSubmit }) {
                     type="button"
                     onClick={() => toggleBodyPart(day, part)}
                     className={`px-2.5 py-1.5 text-[11px] border ${
-                      active ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-red-700 hover:text-red-500"
+                      active ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red hover:text-v5-red"
                     }`}
                   >
                     {part}
@@ -57,7 +57,7 @@ export default function ScheduleBuilderPicker({ onBack, onSubmit }) {
         type="button"
         onClick={() => onSubmit(buildSummary())}
         disabled={!hasAnyDay}
-        className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600 disabled:opacity-40"
+        className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90 disabled:opacity-40"
       >
         Build Program With Coach
       </button>

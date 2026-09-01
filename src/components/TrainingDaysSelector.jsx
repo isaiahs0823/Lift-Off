@@ -13,7 +13,7 @@ export default function TrainingDaysSelector({ value, onChange, label = "How man
 
   return (
     <div>
-      {label && <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">{label}</label>}
+      {label && <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">{label}</label>}
       <div className="grid grid-cols-5 gap-1.5">
         {STANDARD_DAYS.map((d) => (
           <button
@@ -22,7 +22,7 @@ export default function TrainingDaysSelector({ value, onChange, label = "How man
             onClick={() => onChange(d)}
             aria-pressed={value === d}
             className={`py-2.5 text-sm font-bold border ${
-              value === d ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+              value === d ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
             }`}
           >
             {d}
@@ -31,13 +31,13 @@ export default function TrainingDaysSelector({ value, onChange, label = "How man
       </div>
 
       {value != null && (
-        <div className="text-[11px] text-neutral-500 mt-1.5">
-          Selected: <span className="text-neutral-300 font-bold">{value} day{value === 1 ? "" : "s"}</span>
+        <div className="text-[11px] text-v5-subtext mt-1.5">
+          Selected: <span className="text-v5-text/90 font-bold">{value} day{value === 1 ? "" : "s"}</span>
         </div>
       )}
 
       {!advancedOpen ? (
-        <button type="button" onClick={() => setAdvancedOpen(true)} className="text-[11px] text-neutral-600 hover:text-neutral-400 mt-1 py-2 -mx-1 px-1">
+        <button type="button" onClick={() => setAdvancedOpen(true)} className="text-[11px] text-v5-subtext/70 hover:text-v5-subtext mt-1 py-2 -mx-1 px-1">
           Train 7 days? (advanced)
         </button>
       ) : (

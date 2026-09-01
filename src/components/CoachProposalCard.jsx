@@ -14,7 +14,7 @@ export default function CoachProposalCard({ proposal, updateState, exMap, allExe
     if (proposal?.status && proposal.status !== "pending") {
       const label =
         proposal.status === "accepted" ? "Accepted" : proposal.status === "modified" ? "Accepted (modified)" : proposal.status === "superseded" ? "Superseded — see below" : "Declined";
-      return <div className="text-[11px] uppercase tracking-widest text-neutral-600 mt-2">{label}</div>;
+      return <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70 mt-2">{label}</div>;
     }
     return null;
   }
@@ -35,14 +35,14 @@ function CommitmentProposal({ proposal, updateState, onResolve }) {
   const decline = () => onResolve("declined");
 
   return (
-    <div className="mt-2 border border-red-900/40 bg-charcoal-panel p-3 space-y-2">
-      <div className="text-[10px] uppercase tracking-widest text-red-600">Proposed commitment</div>
+    <div className="mt-2 rounded-xl bg-v5-elevated ring-1 ring-v5-red/20 p-3 space-y-2">
+      <div className="text-[10px] uppercase tracking-widest text-v5-red">Proposed commitment</div>
       <div className="text-sm text-white font-bold">{proposal.text}</div>
       <div className="flex gap-2 pt-1">
-        <button onClick={accept} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
+        <button onClick={accept} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-red text-white hover:opacity-90">
           Accept Commitment
         </button>
-        <button onClick={decline} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+        <button onClick={decline} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-elevated text-v5-subtext hover:text-v5-text">
           Not Now
         </button>
       </div>
@@ -63,57 +63,57 @@ function NutritionProposal({ proposal, updateState, onResolve }) {
   };
 
   return (
-    <div className="mt-2 border border-red-900/40 bg-charcoal-panel p-3 space-y-3">
-      <div className="text-[10px] uppercase tracking-widest text-red-600">Proposed nutrition target change</div>
+    <div className="mt-2 rounded-xl bg-v5-elevated ring-1 ring-v5-red/20 p-3 space-y-3">
+      <div className="text-[10px] uppercase tracking-widest text-v5-red">Proposed nutrition target change</div>
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Current</div>
+          <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Current</div>
           <div className="text-white font-bold">{proposal.fromCalories} kcal</div>
-          <div className="text-neutral-500 text-xs">
+          <div className="text-v5-subtext text-xs">
             {proposal.fromMacros.protein}P · {proposal.fromMacros.carbs}C · {proposal.fromMacros.fat}F
           </div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Proposed</div>
+          <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Proposed</div>
           <div className="text-white font-bold">{proposal.toCalories} kcal</div>
-          <div className="text-neutral-500 text-xs">
+          <div className="text-v5-subtext text-xs">
             {proposal.toMacros.protein}P · {proposal.toMacros.carbs}C · {proposal.toMacros.fat}F
           </div>
         </div>
       </div>
-      <div className="text-xs text-neutral-400">
-        <span className="text-neutral-600 uppercase tracking-widest text-[10px]">Why — </span>
+      <div className="text-xs text-v5-subtext">
+        <span className="text-v5-subtext/70 uppercase tracking-widest text-[10px]">Why — </span>
         {proposal.reason}
       </div>
 
       {modifying ? (
         <div className="space-y-2">
-          <label className="block text-[10px] uppercase tracking-widest text-neutral-600">Calories</label>
+          <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70">Calories</label>
           <input
             type="number"
             inputMode="decimal"
             value={modifiedCalories}
             onChange={(e) => setModifiedCalories(e.target.value)}
-            className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+            className="w-full bg-v5-muted rounded-lg text-v5-text px-3 py-2 text-base focus:outline-none focus:ring-1 focus:ring-v5-red"
           />
           <div className="flex gap-2">
-            <button onClick={() => apply("modify", Number(modifiedCalories) || proposal.toCalories)} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
+            <button onClick={() => apply("modify", Number(modifiedCalories) || proposal.toCalories)} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-red text-white hover:opacity-90">
               Save
             </button>
-            <button onClick={() => setModifying(false)} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+            <button onClick={() => setModifying(false)} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-elevated text-v5-subtext hover:text-v5-text">
               Cancel
             </button>
           </div>
         </div>
       ) : (
         <div className="flex gap-2">
-          <button onClick={() => apply("accepted")} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
+          <button onClick={() => apply("accepted")} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-red text-white hover:opacity-90">
             Accept
           </button>
-          <button onClick={() => setModifying(true)} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600">
+          <button onClick={() => setModifying(true)} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-elevated text-v5-text/90 hover:text-v5-text">
             Modify
           </button>
-          <button onClick={() => apply("declined")} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+          <button onClick={() => apply("declined")} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-elevated text-v5-subtext hover:text-v5-text">
             Decline
           </button>
         </div>
@@ -180,15 +180,15 @@ function ProgramProposal({ proposal, updateState, exMap, allExercises, onResolve
 
   if (stage === "startDate") {
     return (
-      <div className="mt-2 border border-red-900/40 bg-charcoal-panel p-3 space-y-3">
-        <div className="text-[10px] uppercase tracking-widest text-red-600">When do you want to start?</div>
+      <div className="mt-2 rounded-xl bg-v5-elevated ring-1 ring-v5-red/20 p-3 space-y-3">
+        <div className="text-[10px] uppercase tracking-widest text-v5-red">When do you want to start?</div>
         <div className="space-y-2">
           {[
             ["today", "Start Today"],
             ["nextMonday", "Start Next Monday"],
             ["custom", "Select Date"],
           ].map(([val, label]) => (
-            <label key={val} className="flex items-center gap-2 text-sm text-neutral-200">
+            <label key={val} className="flex items-center gap-2 text-sm text-v5-text/90">
               <input type="radio" name="programStartOption" checked={startOption === val} onChange={() => setStartOption(val)} />
               {label}
             </label>
@@ -198,7 +198,7 @@ function ProgramProposal({ proposal, updateState, exMap, allExercises, onResolve
               type="date"
               value={customDate}
               onChange={(e) => setCustomDate(e.target.value)}
-              className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+              className="w-full bg-v5-muted rounded-lg text-v5-text px-3 py-2 text-base focus:outline-none focus:ring-1 focus:ring-v5-red"
             />
           )}
         </div>
@@ -206,11 +206,11 @@ function ProgramProposal({ proposal, updateState, exMap, allExercises, onResolve
           <button
             onClick={save}
             disabled={startOption === "custom" && !customDate}
-            className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600 disabled:opacity-40"
+            className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-red text-white hover:opacity-90 disabled:opacity-40"
           >
             Confirm &amp; Save
           </button>
-          <button onClick={() => setStage("review")} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+          <button onClick={() => setStage("review")} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-elevated text-v5-subtext hover:text-v5-text">
             Back
           </button>
         </div>
@@ -219,26 +219,26 @@ function ProgramProposal({ proposal, updateState, exMap, allExercises, onResolve
   }
 
   return (
-    <div className="mt-2 border border-red-900/40 bg-charcoal-panel p-3 space-y-3">
-      <div className="text-[10px] uppercase tracking-widest text-red-600">Proposed program</div>
+    <div className="mt-2 rounded-xl bg-v5-elevated ring-1 ring-v5-red/20 p-3 space-y-3">
+      <div className="text-[10px] uppercase tracking-widest text-v5-red">Proposed program</div>
       <div className="text-sm text-white font-bold">{proposal.name}</div>
-      {proposal.tagline && <div className="text-xs text-neutral-500">{proposal.tagline}</div>}
+      {proposal.tagline && <div className="text-xs text-v5-subtext">{proposal.tagline}</div>}
       {proposal.scheduleWarning && <div className="text-xs text-amber-500 border border-amber-900/40 bg-amber-950/20 px-2 py-1.5">{proposal.scheduleWarning}</div>}
 
       <div className="space-y-2">
         {(proposal.days || []).map((day) => {
           const workingSets = (day.exercises || []).reduce((s, e) => s + (Number(e.sets) || 0), 0);
           return (
-            <div key={day.id} className="border border-neutral-800 px-2.5 py-2">
+            <div key={day.id} className="rounded-lg bg-v5-muted/40 px-2.5 py-2">
               <div className="flex justify-between items-baseline gap-2">
                 <div className="text-xs font-bold text-white">{day.label}</div>
-                <div className="text-[10px] text-neutral-500 whitespace-nowrap">
+                <div className="text-[10px] text-v5-subtext whitespace-nowrap">
                   {(day.exercises || []).length} exercises · {workingSets} working sets
                 </div>
               </div>
               <div className="mt-1 space-y-0.5">
                 {(day.exercises || []).map((ex, i) => (
-                  <div key={i} className="text-[11px] text-neutral-400">
+                  <div key={i} className="text-[11px] text-v5-subtext">
                     {ex.exerciseName} — {ex.sets}x{ex.repMin === ex.repMax ? ex.repMin : `${ex.repMin}-${ex.repMax}`} @ {ex.targetRir} RIR
                   </div>
                 ))}
@@ -250,8 +250,8 @@ function ProgramProposal({ proposal, updateState, exMap, allExercises, onResolve
 
       {proposal.plannedVolume && (
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Weekly volume</div>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-neutral-400">
+          <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Weekly volume</div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-v5-subtext">
             {Object.entries(proposal.plannedVolume).map(([muscle, sets]) => (
               <div key={muscle}>
                 {muscle}: {sets}
@@ -262,19 +262,19 @@ function ProgramProposal({ proposal, updateState, exMap, allExercises, onResolve
       )}
 
       {proposal.reasoning && (
-        <div className="text-xs text-neutral-400">
-          <span className="text-neutral-600 uppercase tracking-widest text-[10px]">Why — </span>
+        <div className="text-xs text-v5-subtext">
+          <span className="text-v5-subtext/70 uppercase tracking-widest text-[10px]">Why — </span>
           {proposal.reasoning}
         </div>
       )}
 
-      <div className="text-[11px] text-neutral-600">Want changes? Just tell your Coach — e.g. "swap barbell squats for hack squats."</div>
+      <div className="text-[11px] text-v5-subtext/70">Want changes? Just tell your Coach — e.g. "swap barbell squats for hack squats."</div>
 
       <div className="flex gap-2 pt-1">
-        <button onClick={() => setStage("startDate")} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
+        <button onClick={() => setStage("startDate")} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-red text-white hover:opacity-90">
           Save Program
         </button>
-        <button onClick={decline} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+        <button onClick={decline} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-elevated text-v5-subtext hover:text-v5-text">
           Not Now
         </button>
       </div>

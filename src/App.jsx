@@ -32,6 +32,8 @@ import {
   MoreHorizontal,
   Pencil,
   FileSpreadsheet,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
@@ -111,7 +113,7 @@ import { buildPRShareCard } from "./utils/shareCard.js";
 import WorkoutSharePreview from "./components/WorkoutSharePreview.jsx";
 import { suggestNext, topSetOf } from "./utils/progression.js";
 import { resolveCurrentProgramDay, programWeekAdherence } from "./utils/programSchedule.js";
-import { ScreenHeader, SectionLabel, Card, HeroCard, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, Pill, ListRow, ProgressBar } from "./components/ui/Kit.jsx";
+import { ScreenHeader, SectionLabel, Card, HeroCard, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, Pill, ListRow, ProgressBar, LineChart, PeriodSelect } from "./components/ui/Kit.jsx";
 import { featuredAndOtherPRs, sessionPRCount, prDeltaLabel, prHeroLabel, prPreviousLabel, PR_TYPE_LABEL } from "./utils/prSummary.js";
 import CustomExerciseForm from "./components/CustomExerciseForm.jsx";
 import { selectableExercises, matchesExerciseSearch, formatCustomLabel, isArchived } from "./utils/customExercises.js";
@@ -2851,27 +2853,27 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, state, updateSta
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search the catalog..."
-        className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-xs focus:outline-none focus:border-red-700"
+        className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-xs focus:outline-none focus:border-v5-red"
       />
       <div className="space-y-1.5">
         {results.map((ex) => (
           <button
             key={ex.id}
             onClick={() => onSelect(ex.id)}
-            className="w-full text-left px-3 py-2 text-sm border border-neutral-900 text-neutral-300 hover:border-red-700 hover:text-white"
+            className="w-full text-left px-3 py-2 text-sm border border-white/[0.06] text-v5-text/90 hover:border-v5-red hover:text-white"
           >
             {ex.name}
-            <span className="text-xs text-neutral-600 ml-2">
+            <span className="text-xs text-v5-subtext/70 ml-2">
               {ex.custom ? formatCustomLabel(ex) : ex.muscle}
             </span>
           </button>
         ))}
         {results.length === 0 && (
-          <div className="text-xs text-neutral-600 py-4 text-center">No matches. Try a different search.</div>
+          <div className="text-xs text-v5-subtext/70 py-4 text-center">No matches. Try a different search.</div>
         )}
         <button
           onClick={() => setCreatingCustom(true)}
-          className="w-full text-left px-3 py-2.5 text-sm border border-dashed border-neutral-700 text-red-500 hover:border-red-700 hover:text-red-400 flex items-center gap-1.5"
+          className="w-full text-left px-3 py-2.5 text-sm border border-dashed border-white/10 text-v5-red hover:border-v5-red hover:text-v5-red flex items-center gap-1.5"
         >
           <Plus size={14} /> Create custom exercise
         </button>
@@ -3027,14 +3029,14 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
       {sets.map((row, idx) => (
         <div key={idx} className="space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-neutral-600 w-5">{idx + 1}</span>
+            <span className="text-xs text-v5-subtext/70 w-5">{idx + 1}</span>
             <input
               type="number"
               inputMode="decimal"
               placeholder="Weight"
               value={row.weight}
               onChange={(e) => updateSetRow(idx, "weight", e.target.value)}
-              className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+              className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
             />
             <input
               type="number"
@@ -3042,10 +3044,10 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
               placeholder="Reps"
               value={row.reps}
               onChange={(e) => updateSetRow(idx, "reps", e.target.value)}
-              className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+              className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
             />
             {sets.length > 1 && (
-              <button onClick={() => removeSetRow(idx)} className="text-neutral-600 hover:text-red-600 p-1">
+              <button onClick={() => removeSetRow(idx)} className="text-v5-subtext/70 hover:text-v5-red p-1">
                 <Trash2 size={14} />
               </button>
             )}
@@ -3053,7 +3055,7 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
           <div className="flex items-center gap-1.5 pl-7 overflow-x-auto">
             <button
               onClick={() => duplicateSetRow(idx)}
-              className="shrink-0 flex items-center gap-1 px-2 py-1 text-[11px] font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
+              className="shrink-0 flex items-center gap-1 px-2 py-1 text-[11px] font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
             >
               <Copy size={10} /> Duplicate
             </button>
@@ -3068,7 +3070,7 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
                       key={t.value}
                       onClick={() => updateSetRow(idx, "setType", t.value)}
                       className={`shrink-0 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide border ${
-                        active ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+                        active ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
                       }`}
                     >
                       {t.short}
@@ -3080,39 +3082,39 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
                   placeholder={rirSystem === "rpe" ? "RPE" : "RIR"}
                   value={rirSystem === "rpe" ? row.rpe ?? "" : row.rir ?? ""}
                   onChange={(e) => updateSetRow(idx, rirSystem === "rpe" ? "rpe" : "rir", e.target.value)}
-                  className="shrink-0 w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-1.5 py-0.5 text-[11px] text-center focus:outline-none focus:border-red-700"
+                  className="shrink-0 w-14 bg-v5-elevated border border-white/10 text-v5-text px-1.5 py-0.5 text-[11px] text-center focus:outline-none focus:border-v5-red"
                 />
               </div>
               {(row.drops || []).map((drop, dIdx) => (
                 <div key={dIdx} className="flex items-center gap-2 pl-7">
-                  <span className="text-xs text-neutral-700">↳</span>
+                  <span className="text-xs text-v5-subtext/40">↳</span>
                   <input
                     type="number"
                     placeholder="Drop weight"
                     value={drop.weight}
                     onChange={(e) => updateDropRow(idx, dIdx, "weight", e.target.value)}
-                    className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                    className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
                   />
                   <input
                     type="number"
                     placeholder="Drop reps"
                     value={drop.reps}
                     onChange={(e) => updateDropRow(idx, dIdx, "reps", e.target.value)}
-                    className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                    className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
                   />
-                  <button onClick={() => removeDropRow(idx, dIdx)} className="text-neutral-600 hover:text-red-600 p-1">
+                  <button onClick={() => removeDropRow(idx, dIdx)} className="text-v5-subtext/70 hover:text-v5-red p-1">
                     <Trash2 size={14} />
                   </button>
                 </div>
               ))}
-              <button onClick={() => addDropRow(idx)} className="pl-7 flex items-center gap-1 text-[11px] text-neutral-600 hover:text-red-500">
+              <button onClick={() => addDropRow(idx)} className="pl-7 flex items-center gap-1 text-[11px] text-v5-subtext/70 hover:text-v5-red">
                 <Plus size={11} /> Add drop
               </button>
             </>
           )}
         </div>
       ))}
-      <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-neutral-500 hover:text-red-500">
+      <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-v5-subtext hover:text-v5-red">
         <Plus size={12} /> Add set
       </button>
     </div>
@@ -3156,17 +3158,17 @@ function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete, rirSystem =
       onBack={onBack}
     >
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Target reps</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Target reps</label>
         <input
           type="number"
           value={targetReps}
           onChange={(e) => setTargetReps(e.target.value)}
-          className="w-24 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+          className="w-24 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
         />
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Sets</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Sets</label>
         <SetRowsEditor sets={sets} onChange={setSets} rirSystem={rirSystem} simple={simple} />
       </div>
 
@@ -3175,15 +3177,15 @@ function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete, rirSystem =
         disabled={!canSave}
         className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
           canSave
-            ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-            : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+            ? "bg-v5-red border-v5-red text-white hover:opacity-90"
+            : "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed"
         }`}
       >
         Save changes
       </button>
       <button
         onClick={onDelete}
-        className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-400 hover:text-red-500 hover:border-red-900/40 flex items-center justify-center gap-1.5"
+        className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-subtext hover:text-v5-red hover:border-v5-red/25 flex items-center justify-center gap-1.5"
       >
         <Trash2 size={14} /> Delete entry
       </button>
@@ -3218,8 +3220,8 @@ function ExerciseNotesPanel({ exId, state, updateState }) {
 
   if (editing) {
     return (
-      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
-        <div className="text-[11px] uppercase tracking-widest text-neutral-500 flex items-center gap-1.5">
+      <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
+        <div className="text-[11px] uppercase tracking-widest text-v5-subtext flex items-center gap-1.5">
           <StickyNote size={12} /> Exercise notes
         </div>
         {[
@@ -3228,20 +3230,20 @@ function ExerciseNotesPanel({ exId, state, updateState }) {
           ["general", "General", "Anything else worth remembering"],
         ].map(([key, label, placeholder]) => (
           <div key={key}>
-            <label className="block text-[10px] uppercase tracking-widest text-neutral-600 mb-1">{label}</label>
+            <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">{label}</label>
             <input
               type="text"
               value={draft[key] || ""}
               onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
               placeholder={placeholder}
-              className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+              className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
             />
           </div>
         ))}
         <div className="flex gap-2">
           <button
             onClick={save}
-            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
           >
             Save notes
           </button>
@@ -3250,7 +3252,7 @@ function ExerciseNotesPanel({ exId, state, updateState }) {
               setDraft(saved);
               setEditing(false);
             }}
-            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
+            className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
           >
             Cancel
           </button>
@@ -3262,37 +3264,37 @@ function ExerciseNotesPanel({ exId, state, updateState }) {
   return (
     <button
       onClick={() => setEditing(true)}
-      className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 hover:border-neutral-700"
+      className="w-full text-left border border-white/10 bg-v5-elevated p-3 hover:border-white/10"
     >
       <div className="flex items-center justify-between">
-        <div className="text-[11px] uppercase tracking-widest text-neutral-500 flex items-center gap-1.5">
+        <div className="text-[11px] uppercase tracking-widest text-v5-subtext flex items-center gap-1.5">
           <StickyNote size={12} /> Notes
         </div>
-        <span className="text-[11px] text-red-500">{hasAny ? "Edit" : "+ Add"}</span>
+        <span className="text-[11px] text-v5-red">{hasAny ? "Edit" : "+ Add"}</span>
       </div>
       {hasAny ? (
-        <div className="mt-1.5 space-y-0.5 text-sm text-neutral-300">
+        <div className="mt-1.5 space-y-0.5 text-sm text-v5-text/90">
           {saved.machine && (
             <div>
-              <span className="text-neutral-600">Setup: </span>
+              <span className="text-v5-subtext/70">Setup: </span>
               {saved.machine}
             </div>
           )}
           {saved.cue && (
             <div>
-              <span className="text-neutral-600">Cue: </span>
+              <span className="text-v5-subtext/70">Cue: </span>
               {saved.cue}
             </div>
           )}
           {saved.general && (
             <div>
-              <span className="text-neutral-600">Note: </span>
+              <span className="text-v5-subtext/70">Note: </span>
               {saved.general}
             </div>
           )}
         </div>
       ) : (
-        <div className="mt-1 text-xs text-neutral-600">Seat position, pin, grip, cues…</div>
+        <div className="mt-1 text-xs text-v5-subtext/70">Seat position, pin, grip, cues…</div>
       )}
     </button>
   );
@@ -3388,7 +3390,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
     if (!entry) {
       return (
         <SlideInPanel title="Entry not found" onBack={() => setEditingEntryId(null)}>
-          <div className="text-sm text-neutral-500">This entry no longer exists.</div>
+          <div className="text-sm text-v5-subtext">This entry no longer exists.</div>
         </SlideInPanel>
       );
     }
@@ -3423,7 +3425,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
           {onSwap && (
             <button
               onClick={() => setSwapOpen(true)}
-              className="shrink-0 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500 flex items-center gap-1"
+              className="shrink-0 text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red flex items-center gap-1"
             >
               <ArrowLeftRight size={12} /> Swap
             </button>
@@ -3434,31 +3436,31 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
       <ExerciseNotesPanel exId={exId} state={state} updateState={updateState} />
 
       {recentForEx.length > 0 && (
-        <div className="border border-neutral-800 bg-charcoal-panel p-4">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Last time</div>
+        <div className="border border-white/10 bg-v5-elevated p-4">
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Last time</div>
           <div className="space-y-1">
             {recentForEx[0].sets.map((s, i) => (
-              <div key={i} className="text-lg text-neutral-200">
+              <div key={i} className="text-lg text-v5-text/90">
                 {formatSetCompact(s)}
               </div>
             ))}
           </div>
-          <div className="text-xs text-neutral-600 mt-2 flex items-center gap-1.5">
+          <div className="text-xs text-v5-subtext/70 mt-2 flex items-center gap-1.5">
             {new Date(recentForEx[0].date).toLocaleDateString()}
             {(recentForEx[0].equipmentProfileId || recentForEx[0].equipmentContext) && (
-              <span className="text-neutral-500">· {equipmentDisplayLabel(state, recentForEx[0].equipmentProfileId, recentForEx[0].equipmentContext)}</span>
+              <span className="text-v5-subtext">· {equipmentDisplayLabel(state, recentForEx[0].equipmentProfileId, recentForEx[0].equipmentContext)}</span>
             )}
           </div>
         </div>
       )}
 
-      <div className="border border-red-900/40 bg-charcoal-panel p-4">
-        <div className="text-[11px] uppercase tracking-widest text-red-600 mb-2">Recommended</div>
+      <div className="border border-v5-red/25 bg-v5-elevated p-4">
+        <div className="text-[11px] uppercase tracking-widest text-v5-red mb-2">Recommended</div>
         {suggestion.suggestion !== null ? (
           <>
             <div className="text-4xl font-bold text-white">{suggestion.suggestion} lb x {suggestion.targetReps} reps</div>
-            <div className="text-xs text-neutral-500 mt-1">{suggestion.reason}</div>
-            {recentForEx.length > 0 && <div className="text-sm text-neutral-600 mt-2">Goal: beat last session without losing form.</div>}
+            <div className="text-xs text-v5-subtext mt-1">{suggestion.reason}</div>
+            {recentForEx.length > 0 && <div className="text-sm text-v5-subtext/70 mt-2">Goal: beat last session without losing form.</div>}
             <button
               onClick={() => {
                 setTargetReps(suggestion.targetReps ?? 8);
@@ -3468,13 +3470,13 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
                   )
                 );
               }}
-              className="mt-3 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400"
+              className="mt-3 text-[11px] uppercase tracking-widest text-v5-red hover:text-v5-red"
             >
               Use suggested — fill set 1
             </button>
           </>
         ) : (
-          <div className="text-sm text-neutral-400">{suggestion.reason}</div>
+          <div className="text-sm text-v5-subtext">{suggestion.reason}</div>
         )}
       </div>
 
@@ -3484,18 +3486,18 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
       />
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Target reps this session</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Target reps this session</label>
         <input
           type="number"
           value={targetReps}
           onChange={(e) => setTargetReps(e.target.value)}
-          className="w-24 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+          className="w-24 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
         />
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500">Today's sets</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext">Today's sets</label>
           {recentForEx.length > 0 && (
             <button
               onClick={() =>
@@ -3510,7 +3512,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
                   }))
                 )
               }
-              className="flex items-center gap-1 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+              className="flex items-center gap-1 text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red"
             >
               <Copy size={11} /> Copy last workout
             </button>
@@ -3524,8 +3526,8 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         disabled={!canSave}
         className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
           canSave
-            ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-            : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+            ? "bg-v5-red border-v5-red text-white hover:opacity-90"
+            : "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed"
         }`}
       >
         {saveLabel}
@@ -3533,7 +3535,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
 
       {showHistory && recentForEx.length > 0 && (
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">History</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">History</div>
           {/* Optional equipment-profile filter (task section 13) — shown only once the athlete
               actually has more than one machine's worth of history for this exercise; defaults
               to "All" so nothing is ever hidden without the athlete choosing to narrow it down. */}
@@ -3544,7 +3546,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
                   key={opt.key ?? "all"}
                   onClick={() => setHistoryEquipFilter(opt.key)}
                   className={`shrink-0 px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border rounded-full ${
-                    historyEquipFilter === opt.key ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+                    historyEquipFilter === opt.key ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
                   }`}
                 >
                   {opt.label}
@@ -3557,15 +3559,15 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
               <button
                 key={l.id}
                 onClick={() => setEditingEntryId(l.id)}
-                className="w-full flex items-center justify-between gap-2 text-xs border-b border-neutral-900 py-2 text-left hover:border-neutral-700"
+                className="w-full flex items-center justify-between gap-2 text-xs border-b border-white/[0.06] py-2 text-left hover:border-white/10"
               >
-                <span className="text-neutral-500 shrink-0">
+                <span className="text-v5-subtext shrink-0">
                   {new Date(l.date).toLocaleDateString()}
                   {(l.equipmentProfileId || l.equipmentContext) && (
-                    <span className="block text-neutral-600">{equipmentDisplayLabel(state, l.equipmentProfileId, l.equipmentContext)}</span>
+                    <span className="block text-v5-subtext/70">{equipmentDisplayLabel(state, l.equipmentProfileId, l.equipmentContext)}</span>
                   )}
                 </span>
-                <span className="text-sm text-neutral-300 text-right">{l.sets.map(formatSetCompact).join(", ")}</span>
+                <span className="text-sm text-v5-text/90 text-right">{l.sets.map(formatSetCompact).join(", ")}</span>
               </button>
             ))}
           </div>
@@ -3590,7 +3592,7 @@ function OnboardingView({ state, onStartRun, onGoToTemplates }) {
         />
         <div>
           <div className="text-xl font-bold text-white">Welcome to BRK - Lift</div>
-          <p className="text-sm text-neutral-400 mt-2 max-w-sm mx-auto">
+          <p className="text-sm text-v5-subtext mt-2 max-w-sm mx-auto">
             Log every set, follow a structured multi-day program, and let the app tell you what to lift next. Pick a
             program below to start Day 1 right now.
           </p>
@@ -3598,12 +3600,12 @@ function OnboardingView({ state, onStartRun, onGoToTemplates }) {
       </div>
 
       <div className="space-y-2">
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Pick a program</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Pick a program</div>
         {(state.programs || []).map((prog) => (
-          <div key={prog.id} className="border border-red-900/40 bg-charcoal-panel p-4 space-y-2">
+          <div key={prog.id} className="border border-v5-red/25 bg-v5-elevated p-4 space-y-2">
             <div>
               <div className="text-base font-medium text-white">{prog.name}</div>
-              <div className="text-xs text-neutral-500 mt-0.5">
+              <div className="text-xs text-v5-subtext mt-0.5">
                 {prog.tagline}
                 {prog.weeks ? ` · ${prog.weeks} weeks` : ""}
               </div>
@@ -3615,7 +3617,7 @@ function OnboardingView({ state, onStartRun, onGoToTemplates }) {
                   { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: 0, totalDays: prog.days.length }
                 )
               }
-              className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1.5"
+              className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90 flex items-center justify-center gap-1.5"
             >
               <ChevronRight size={12} /> Start Day 1
             </button>
@@ -3623,7 +3625,7 @@ function OnboardingView({ state, onStartRun, onGoToTemplates }) {
         ))}
       </div>
 
-      <button onClick={onGoToTemplates} className="w-full text-center text-xs text-neutral-500 hover:text-red-500 py-2">
+      <button onClick={onGoToTemplates} className="w-full text-center text-xs text-v5-subtext hover:text-v5-red py-2">
         Or browse everything in Templates
       </button>
     </div>
@@ -3663,23 +3665,23 @@ function PRCallout({ exMap, exId, prs, state, onDismiss }) {
   const isProfileScoped = headline?.scope === "profile";
   const profileLabel = isProfileScoped && state ? equipmentDisplayLabel(state, headline.equipmentProfileId, null) : null;
   return (
-    <div className="border border-red-700 bg-red-950/30 p-4 space-y-2 relative">
+    <div className="border border-v5-red bg-v5-red/30 p-4 space-y-2 relative">
       {onDismiss && (
-        <button onClick={onDismiss} className="absolute top-2 right-2 text-neutral-500 hover:text-white">
+        <button onClick={onDismiss} className="absolute top-2 right-2 text-v5-subtext hover:text-white">
           <X size={14} />
         </button>
       )}
-      <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-red-500">
+      <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-v5-red">
         <Award size={14} /> New {isProfileScoped ? "Profile " : ""}PR
       </div>
       <div className="text-lg font-bold text-white truncate pr-6">{exMap[exId]?.name || exId}</div>
-      {profileLabel && <div className="text-xs text-neutral-500 -mt-1">{profileLabel}</div>}
+      {profileLabel && <div className="text-xs text-v5-subtext -mt-1">{profileLabel}</div>}
       {headline && headline.weight != null && (
         <div className="text-2xl font-bold text-white">
           {headline.weight} × {headline.reps}
         </div>
       )}
-      <div className="space-y-0.5 text-sm text-neutral-300">
+      <div className="space-y-0.5 text-sm text-v5-text/90">
         {prs.map((pr, i) => (
           <div key={i}>{prLine(pr)}</div>
         ))}
@@ -3740,9 +3742,9 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
       <ReadinessCheckIn state={state} updateState={updateState} />
 
       {currentProgramDay?.isComplete && (
-        <div className="border border-red-900/40 bg-charcoal-panel px-4 py-3 space-y-3">
+        <div className="border border-v5-red/25 bg-v5-elevated px-4 py-3 space-y-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-red-600">Program complete</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-red">Program complete</div>
             <div className="text-base text-white mt-0.5">
               {currentProgramDay.programName} — {currentProgramDay.totalWeeks} weeks done
             </div>
@@ -3750,13 +3752,13 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
           <div className="flex items-center gap-2">
             <button
               onClick={onRestartProgram}
-              className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
+              className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90"
             >
               Restart
             </button>
             <button
               onClick={onGoToTemplates}
-              className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600"
+              className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-text/90 hover:border-v5-red/40"
             >
               New program
             </button>
@@ -3765,20 +3767,20 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
       )}
 
       {currentProgramDay && !currentProgramDay.isComplete && (
-        <div className="border border-red-900/40 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
+        <div className="border border-v5-red/25 bg-v5-elevated px-4 py-3 flex items-center justify-between">
           <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-widest text-red-600">Current program</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-red">Current program</div>
             <div className="text-base text-white mt-0.5 truncate">
               {currentProgramDay.programName}
               {currentProgramDay.weekNumber !== null
                 ? ` — Week ${currentProgramDay.weekNumber} of ${currentProgramDay.totalWeeks}, Day ${currentProgramDay.dayIndex + 1} of ${currentProgramDay.totalDays}`
                 : ` — Day ${currentProgramDay.dayIndex + 1} of ${currentProgramDay.totalDays}`}
             </div>
-            <div className="text-xs text-neutral-500 mt-0.5 truncate">{currentProgramDay.dayLabel}</div>
+            <div className="text-xs text-v5-subtext mt-0.5 truncate">{currentProgramDay.dayLabel}</div>
           </div>
           <button
             onClick={() => onStartRun(currentProgramDay.plan, currentProgramDay.programContext)}
-            className="shrink-0 ml-3 text-xs text-red-500 hover:text-red-400 flex items-center gap-1"
+            className="shrink-0 ml-3 text-xs text-v5-red hover:text-v5-red flex items-center gap-1"
           >
             <ChevronRight size={14} /> Start
           </button>
@@ -3786,13 +3788,13 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
       )}
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Exercise</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Exercise</label>
         <input
           type="text"
           value={exFilter}
           onChange={(e) => setExFilter(e.target.value)}
           placeholder="Search the catalog..."
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-xs mb-2 focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-xs mb-2 focus:outline-none focus:border-v5-red"
         />
         <select
           value={selectedExId}
@@ -3803,7 +3805,7 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
             }
             setSelectedExId(e.target.value);
           }}
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:border-v5-red"
         >
           {Object.entries(groupedByMuscle).map(([muscle, exs]) => (
             <optgroup key={muscle} label={muscle}>
@@ -3818,9 +3820,9 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
           <option value={CREATE_CUSTOM_EXERCISE_OPTION}>+ Create custom exercise</option>
         </select>
         {filteredExercises.length === 0 && (
-          <div className="text-xs text-neutral-600 mt-1.5">
+          <div className="text-xs text-v5-subtext/70 mt-1.5">
             No match —{" "}
-            <button type="button" onClick={() => setCreatingCustom(true)} className="text-red-500 hover:text-red-400 underline">
+            <button type="button" onClick={() => setCreatingCustom(true)} className="text-v5-red hover:text-v5-red underline">
               create a custom exercise
             </button>
             .
@@ -4228,8 +4230,9 @@ function todayReadinessSummary(state) {
 // the same onSaved(entry) contract GuidedRunView already wires up — so detectPRs, suggestNext,
 // buildSessionSummary and exports don't need to know this exists. The standalone Log tab and
 // history-edit flow keep using ExerciseLogger/SetRowsEditor untouched.
-const RIR_CHIPS = [3, 2, 1, 0];
-const RPE_CHIPS = [7, 8, 9, 10];
+function clampRirStep(n, system) {
+  return system === "rpe" ? Math.max(6, Math.min(10, n)) : Math.max(0, Math.min(5, n));
+}
 
 function TrainingExerciseCard({
   exId,
@@ -4245,6 +4248,8 @@ function TrainingExerciseCard({
   onDraftChange,
   onDraftDirty,
   sessionContext,
+  exIndex,
+  totalExercises,
 }) {
   const rirSystem = state.settings?.rirSystem || "rir";
   const trainingDetail = state.settings?.trainingDetail || "advanced";
@@ -4467,7 +4472,6 @@ function TrainingExerciseCard({
     };
   }, []);
 
-  const chips = rirSystem === "rpe" ? RPE_CHIPS : RIR_CHIPS;
   const showDraft = confirmedSets.length < targetSetCount || addingExtra;
   const lastEntry = recentForEx[0];
   const lastTopSet = lastEntry ? topSetOf(lastEntry.sets) : null;
@@ -4626,27 +4630,42 @@ function TrainingExerciseCard({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <MuscleBodyOutline exercise={exMap[exId]} size="standard" />
-          <div className="min-w-0">
-            <div className="text-xl font-bold text-v5-text truncate">{exMap[exId]?.name || exId}</div>
-            <div className="text-xs text-v5-subtext mt-0.5">{exMap[exId]?.muscle}</div>
-          </div>
-        </div>
-        {/* Quieter than the exercise title on purpose — a small icon-only tap target rather than
-            an uppercase/wide-tracking label competing for attention next to the name. */}
-        {onSwap && (
-          <button
-            onClick={() => setSwapOpen(true)}
-            aria-label="Swap"
-            title="Swap"
-            className="shrink-0 p-1.5 -mr-1.5 text-v5-subtext/70 hover:text-v5-red"
-          >
-            <ArrowLeftRight size={15} />
-          </button>
+      {/* The "current exercise hero" the mockup builds Active Workout around — anatomy figure
+          cleanly positioned in the card, exercise number/name/target muscles, and the last-time/
+          today's-target numbers overlaid right on the card rather than in a separate strip
+          below it. */}
+      <PhotoHero
+        exercise={exMap[exId]}
+        eyebrow={totalExercises ? `Exercise ${(exIndex ?? 0) + 1} of ${totalExercises}` : undefined}
+        title={exMap[exId]?.name || exId}
+        className="pb-4"
+      >
+        {exMap[exId]?.muscle && (
+          <div className="text-xs text-v5-subtext">Targets: {exMap[exId].muscle}</div>
         )}
-      </div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 pt-1">
+          {lastTopSet && (
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Last</div>
+              <div className="text-sm font-bold text-v5-text tabular-nums">{lastTopSet.weight} × {lastTopSet.reps}</div>
+            </div>
+          )}
+          {suggestion.suggestion != null && (
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-wide text-v5-red">Today's target</div>
+              <div className="text-sm font-bold text-v5-text tabular-nums">{suggestion.suggestion} × {suggestion.targetReps}</div>
+            </div>
+          )}
+        </div>
+      </PhotoHero>
+      {onSwap && (
+        <button
+          onClick={() => setSwapOpen(true)}
+          className="w-full flex items-center justify-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-v5-subtext hover:text-v5-red py-0.5"
+        >
+          <ArrowLeftRight size={12} /> Swap exercise
+        </button>
+      )}
 
       {/* Equipment Profile control (task section 3) — only for exercises where two physical
           units can plausibly load very differently, quiet/small so it never competes with the
@@ -4715,78 +4734,49 @@ function TrainingExerciseCard({
         </button>
       )}
 
-      {/* Compact progression header — replaces the old separate "Last time" line + "Today,
-          suggested" card + always-visible reason paragraph with one small block. The reason
-          (when there is one) sits behind a "Why?" toggle instead of permanently consuming
-          space, and the full last-session set-by-set breakdown is a separate, also-collapsed
-          disclosure just below rather than being duplicated here. When a specific equipment
-          profile/temporary machine is active, "Last" becomes same-machine history only (task
-          section 9/14) — with a "No history here" fallback pointing at the exercise's overall
-          last-performed date (section 11) rather than silently showing nothing, or worse,
-          another machine's numbers. */}
-      {(lastEntry || suggestion.suggestion != null || (isBucketedEquipment && overallRecentForEx.length > 0)) && (
-        <div className="bg-v5-surface rounded-xl px-4 py-3">
-          <div className="flex items-center gap-6">
-            {lastTopSet ? (
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Last{isBucketedEquipment ? " · this machine" : ""}</div>
-                <div className="text-lg font-bold text-v5-text tabular-nums">
-                  {lastTopSet.weight} × {lastTopSet.reps}
-                </div>
-              </div>
-            ) : isBucketedEquipment && overallRecentForEx.length > 0 ? (
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-wide text-v5-red">No history here</div>
-                <div className="text-xs text-v5-subtext mt-0.5">
-                  Last overall: {new Date(overallRecentForEx[0].date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                </div>
-              </div>
-            ) : null}
-            {suggestion.suggestion != null && (
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-wide text-v5-red">Target</div>
-                <div className="text-lg font-bold text-v5-text tabular-nums">
-                  {suggestion.suggestion} × {suggestion.targetReps}
-                </div>
-              </div>
-            )}
-            {suggestion.suggestion != null && (
-              <button
-                onClick={useSuggested}
-                className="ml-auto shrink-0 text-[11px] uppercase tracking-widest text-v5-red hover:opacity-80"
-              >
-                Use
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-4 mt-2">
-            {suggestion.reason && (
-              <button
-                onClick={() => setReasonOpen((o) => !o)}
-                className="text-[11px] text-v5-subtext hover:text-v5-text"
-              >
-                {reasonOpen ? "Hide" : "Why this target?"}
-              </button>
-            )}
-            {lastEntry && lastEntry.sets.length > 1 && (
-              <button
-                onClick={() => setLastSessionOpen((o) => !o)}
-                className="text-[11px] text-v5-subtext hover:text-v5-text"
-              >
-                Last session {lastSessionOpen ? "▴" : "▾"}
-              </button>
-            )}
-          </div>
-          {reasonOpen && suggestion.reason && <div className="mt-2 text-xs text-v5-subtext">{suggestion.reason}</div>}
-          {lastSessionOpen && lastEntry && (
-            <div className="mt-2 space-y-0.5">
-              {lastEntry.sets.map((s, i) => (
-                <div key={i} className="text-xs text-v5-subtext">
-                  {formatSetVerbose(s)}
-                </div>
-              ))}
+      {/* Compact progression controls — the actual Last/Target numbers now live on the hero
+          card above (overlaid, mockup-style), so this strip is just the "Use," "Why this
+          target," and same-machine caveats that don't fit up there. When a specific equipment
+          profile/temporary machine is active, a "No history here" callout points at the
+          exercise's overall last-performed date (task section 11) rather than silently showing
+          nothing, or worse, another machine's numbers. */}
+      {(isBucketedEquipment && !lastTopSet && overallRecentForEx.length > 0) && (
+        <div className="bg-v5-surface rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-wide text-v5-red">No history here</div>
+            <div className="text-xs text-v5-subtext mt-0.5">
+              Last overall: {new Date(overallRecentForEx[0].date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
             </div>
+          </div>
+        </div>
+      )}
+      {(suggestion.suggestion != null || (lastEntry && lastEntry.sets.length > 1)) && (
+        <div className="flex items-center gap-4 px-1">
+          {suggestion.suggestion != null && (
+            <button onClick={useSuggested} className="text-[11px] uppercase tracking-widest text-v5-red hover:opacity-80">
+              Use suggested
+            </button>
           )}
+          {suggestion.reason && (
+            <button onClick={() => setReasonOpen((o) => !o)} className="text-[11px] text-v5-subtext hover:text-v5-text">
+              {reasonOpen ? "Hide" : "Why this target?"}
+            </button>
+          )}
+          {lastEntry && lastEntry.sets.length > 1 && (
+            <button onClick={() => setLastSessionOpen((o) => !o)} className="text-[11px] text-v5-subtext hover:text-v5-text">
+              Last session {lastSessionOpen ? "▴" : "▾"}
+            </button>
+          )}
+        </div>
+      )}
+      {reasonOpen && suggestion.reason && <div className="px-1 text-xs text-v5-subtext">{suggestion.reason}</div>}
+      {lastSessionOpen && lastEntry && (
+        <div className="px-1 space-y-0.5">
+          {lastEntry.sets.map((s, i) => (
+            <div key={i} className="text-xs text-v5-subtext">
+              {formatSetVerbose(s)}
+            </div>
+          ))}
         </div>
       )}
 
@@ -4901,6 +4891,35 @@ function TrainingExerciseCard({
                 />
               </div>
             </div>
+            {/* RIR/RPE as a third always-visible column (mockup: weight/reps/RIR all shown at
+                once, not hidden behind a toggle) — compact stepper rather than a full box, so it
+                reads as lighter-weight than Weight/Reps without disappearing into Options. Still
+                writes to the exact same rirVal state Options' controls used before, and stays
+                fully optional: never stepped away from "" unless the athlete taps it. */}
+            {!isSimple && (
+              <div className="flex-[1.3] min-w-0 space-y-1">
+                <div className="text-[10px] uppercase tracking-wide text-v5-subtext text-center">{rirSystem === "rpe" ? "RPE" : "RIR"}</div>
+                <div className="bg-v5-muted rounded-lg px-1 py-1 flex flex-col items-center justify-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setRirVal((v) => clampRirStep((v === "" ? (rirSystem === "rpe" ? 7 : 3) : Number(v)) + 1, rirSystem))}
+                    className="text-v5-subtext hover:text-v5-red p-0.5"
+                    aria-label="Increase"
+                  >
+                    <ChevronUp size={14} />
+                  </button>
+                  <span className="text-xl font-bold text-v5-text tabular-nums leading-none">{rirVal === "" ? "—" : rirVal}</span>
+                  <button
+                    type="button"
+                    onClick={() => setRirVal((v) => clampRirStep((v === "" ? (rirSystem === "rpe" ? 9 : 1) : Number(v)) - 1, rirSystem))}
+                    className="text-v5-subtext hover:text-v5-red p-0.5"
+                    aria-label="Decrease"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Compact advanced-tools row — RIR/Set Type/Notes bundled behind "More", Plate Calc
@@ -4941,27 +4960,6 @@ function TrainingExerciseCard({
           )}
           {optionsOpen && (
             <div className="space-y-3 pt-1">
-              {!isSimple && (
-                <div>
-                  <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1.5">
-                    {rirSystem === "rpe" ? "RPE" : "RIR"}
-                  </div>
-                  <div className="flex gap-1.5">
-                    {chips.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setRirVal((v) => (String(v) === String(c) ? "" : c))}
-                        className={`flex-1 py-2 text-sm font-bold rounded-lg ${
-                          String(rirVal) === String(c) ? "bg-v5-red text-white" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
-                        }`}
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {!isSimple && (
                 <div>
                   <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1.5">Set type</div>
@@ -5582,7 +5580,7 @@ function GuidedRunView({
           away by unmounting it here would silently drop them. Staying mounted underneath keeps
           in-progress sets intact no matter when mid-workout this gets opened. */}
       {addingExercise && (
-        <div className="fixed inset-0 z-30 bg-charcoal-deep overflow-y-auto p-4 sm:p-6">
+        <div className="fixed inset-0 z-30 bg-v5-surface overflow-y-auto p-4 sm:p-6">
           <AddExercisePicker
             allExercises={allExercises}
             state={state}
@@ -5597,7 +5595,7 @@ function GuidedRunView({
         </div>
       )}
       {sessionOptionsOpen && onUpdateSessionContext && (
-        <div className="fixed inset-0 z-30 bg-charcoal-deep overflow-y-auto p-4 sm:p-6">
+        <div className="fixed inset-0 z-30 bg-v5-surface overflow-y-auto p-4 sm:p-6">
           <SessionOptionsSheet
             sessionContext={run.sessionContext}
             onChange={onUpdateSessionContext}
@@ -5706,9 +5704,9 @@ function GuidedRunView({
           const label = groupLabel(idx);
 
           return (
-            <div key={idx} className="border-t border-neutral-900 pt-6 first:border-t-0 first:pt-0">
+            <div key={idx} className="border-t border-white/[0.06] pt-6 first:border-t-0 first:pt-0">
               {label && (
-                <div className="text-[10px] uppercase tracking-widest text-red-600 font-bold mb-1.5">{label}</div>
+                <div className="text-[10px] uppercase tracking-widest text-v5-red font-bold mb-1.5">{label}</div>
               )}
               {isEditing ? (
                 <EditLogEntryPanel
@@ -5797,6 +5795,8 @@ function GuidedRunView({
                   }}
                   onSwap={(newExId) => onSwap(idx, newExId)}
                   sessionContext={run.sessionContext}
+                  exIndex={idx}
+                  totalExercises={totalExercises}
                   onSetSaved={(justSaved) => {
                     // Mid-group (e.g. still on A1 of an A1/A2 pair): no rest, straight into the
                     // next movement. Rest only starts once the group's last exercise logs a set,
@@ -5879,19 +5879,19 @@ function EditCardioEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
     >
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Distance</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Distance</label>
           <div className="flex gap-2">
             <input
               type="number"
               value={distance}
               onChange={(e) => setDistance(e.target.value)}
               placeholder="0"
-              className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+              className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
             />
             <select
               value={distanceUnit}
               onChange={(e) => setDistanceUnit(e.target.value)}
-              className="bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
+              className="bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-xs focus:outline-none focus:border-v5-red"
             >
               <option value="mi">mi</option>
               <option value="yd">yd</option>
@@ -5899,36 +5899,36 @@ function EditCardioEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
           </div>
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Duration (min)</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Duration (min)</label>
           <input
             type="number"
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
             placeholder="0"
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+            className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Load — sled/ruck only (lb)</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Load — sled/ruck only (lb)</label>
         <input
           type="number"
           value={load}
           onChange={(e) => setLoad(e.target.value)}
           placeholder="Optional"
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
         />
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Notes</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Notes</label>
         <input
           type="text"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="How it felt, route, weather, etc."
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
       </div>
 
@@ -5937,15 +5937,15 @@ function EditCardioEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
         disabled={!canSave}
         className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
           canSave
-            ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-            : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+            ? "bg-v5-red border-v5-red text-white hover:opacity-90"
+            : "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed"
         }`}
       >
         Save changes
       </button>
       <button
         onClick={onDelete}
-        className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-400 hover:text-red-500 hover:border-red-900/40 flex items-center justify-center gap-1.5"
+        className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-subtext hover:text-v5-red hover:border-v5-red/25 flex items-center justify-center gap-1.5"
       >
         <Trash2 size={14} /> Delete entry
       </button>
@@ -5970,7 +5970,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
 
   if (conditioningExercises.length === 0) {
     return (
-      <div className="text-center py-16 text-neutral-500 text-sm">
+      <div className="text-center py-16 text-v5-subtext text-sm">
         No conditioning exercises in the catalog yet. Add one (muscle group: Conditioning) from the Catalog tab.
       </div>
     );
@@ -6014,7 +6014,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
     if (!entry) {
       return (
         <SlideInPanel title="Entry not found" onBack={() => setEditingEntryId(null)}>
-          <div className="text-sm text-neutral-500">This entry no longer exists.</div>
+          <div className="text-sm text-v5-subtext">This entry no longer exists.</div>
         </SlideInPanel>
       );
     }
@@ -6043,24 +6043,24 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
     <div className="space-y-6">
       <button
         onClick={() => onNavigate?.("intervalTimer")}
-        className="w-full flex items-center justify-between border border-neutral-800 bg-charcoal-panel p-4 hover:border-neutral-600"
+        className="w-full flex items-center justify-between border border-white/10 bg-v5-elevated p-4 hover:border-v5-red/40"
       >
         <div className="flex items-center gap-3 text-left">
-          <Timer size={18} className="text-neutral-500 shrink-0" />
+          <Timer size={18} className="text-v5-subtext shrink-0" />
           <div>
             <div className="text-base font-bold text-white">Interval Timer</div>
-            <div className="text-xs text-neutral-500 mt-0.5">Alternate timed work and recovery intervals automatically.</div>
+            <div className="text-xs text-v5-subtext mt-0.5">Alternate timed work and recovery intervals automatically.</div>
           </div>
         </div>
-        <ChevronRight size={18} className="text-neutral-600 shrink-0" />
+        <ChevronRight size={18} className="text-v5-subtext/70 shrink-0" />
       </button>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Run / conditioning work</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Run / conditioning work</label>
         <select
           value={currentExId}
           onChange={(e) => setSelectedExId(e.target.value)}
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:border-v5-red"
         >
           {conditioningExercises.map((ex) => (
             <option key={ex.id} value={ex.id}>
@@ -6071,8 +6071,8 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
       </div>
 
       {(lastEntry || best) && (
-        <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Where you stand</div>
+        <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-2">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Where you stand</div>
           {best && (
             <div className="text-3xl font-bold text-white">
               Best {best.type === "pace" ? "pace" : "distance"}: {best.value}
@@ -6080,7 +6080,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
             </div>
           )}
           {lastEntry && (
-            <div className="text-sm text-neutral-500">
+            <div className="text-sm text-v5-subtext">
               Last: {new Date(lastEntry.date).toLocaleDateString()} —{" "}
               {lastEntry.distance ? `${lastEntry.distance} ${lastEntry.distanceUnit}` : ""}
               {lastEntry.distance && lastEntry.duration ? ", " : ""}
@@ -6093,19 +6093,19 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Distance</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Distance</label>
           <div className="flex gap-2">
             <input
               type="number"
               value={distance}
               onChange={(e) => setDistance(e.target.value)}
               placeholder="0"
-              className="flex-1 min-w-0 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+              className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
             />
             <select
               value={distanceUnit}
               onChange={(e) => setDistanceUnit(e.target.value)}
-              className="bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
+              className="bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-xs focus:outline-none focus:border-v5-red"
             >
               <option value="mi">mi</option>
               <option value="yd">yd</option>
@@ -6113,36 +6113,36 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
           </div>
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Duration (min)</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Duration (min)</label>
           <input
             type="number"
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
             placeholder="0"
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+            className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Load — sled/ruck only (lb)</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Load — sled/ruck only (lb)</label>
         <input
           type="number"
           value={load}
           onChange={(e) => setLoad(e.target.value)}
           placeholder="Optional"
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
         />
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Notes</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Notes</label>
         <input
           type="text"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="How it felt, route, weather, etc."
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
       </div>
 
@@ -6151,8 +6151,8 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
         disabled={!canSave}
         className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
           canSave
-            ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-            : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+            ? "bg-v5-red border-v5-red text-white hover:opacity-90"
+            : "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed"
         }`}
       >
         Save session
@@ -6160,7 +6160,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
 
       {recentForEx.length > 0 && (
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">History</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">History</div>
           <div className="space-y-1.5">
             {recentForEx.map((l) => {
               const pace = cardioPace(l);
@@ -6168,11 +6168,11 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
                 <button
                   key={l.id}
                   onClick={() => setEditingEntryId(l.id)}
-                  className="w-full text-xs border-b border-neutral-900 py-2 text-left hover:border-neutral-700"
+                  className="w-full text-xs border-b border-white/[0.06] py-2 text-left hover:border-white/10"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-neutral-500">{new Date(l.date).toLocaleDateString()}</span>
-                    <span className="text-sm text-neutral-300">
+                    <span className="text-v5-subtext">{new Date(l.date).toLocaleDateString()}</span>
+                    <span className="text-sm text-v5-text/90">
                       {l.distance ? `${l.distance} ${l.distanceUnit}` : ""}
                       {l.distance && l.duration ? " · " : ""}
                       {l.duration ? `${l.duration} min` : ""}
@@ -6180,7 +6180,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
                       {l.load ? ` · ${l.load} lb` : ""}
                     </span>
                   </div>
-                  {l.notes && <div className="text-neutral-600 mt-1 text-left">{l.notes}</div>}
+                  {l.notes && <div className="text-v5-subtext/70 mt-1 text-left">{l.notes}</div>}
                 </button>
               );
             })}
@@ -6279,10 +6279,10 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
     const session = findMostRecentSessionForPlan(state.workoutSessions, planName);
     if (!session) return null;
     return (
-      <div className="flex items-center justify-between text-xs text-neutral-500 pt-1.5 mt-1.5 border-t border-neutral-900">
+      <div className="flex items-center justify-between text-xs text-v5-subtext pt-1.5 mt-1.5 border-t border-white/[0.06]">
         <span>Completed {new Date(session.finishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
         {onViewWorkout && (
-          <button onClick={() => onViewWorkout(session.id)} className="text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400 flex items-center gap-1">
+          <button onClick={() => onViewWorkout(session.id)} className="text-[11px] uppercase tracking-widest text-v5-red hover:text-v5-red flex items-center gap-1">
             View Workout <ChevronRight size={11} />
           </button>
         )}
@@ -6295,7 +6295,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
     const session = findMostRecentSessionForPlan(state.recoverySessions, planName);
     if (!session) return null;
     return (
-      <div className="text-xs text-neutral-500 pt-1.5 mt-1.5 border-t border-neutral-900">
+      <div className="text-xs text-v5-subtext pt-1.5 mt-1.5 border-t border-white/[0.06]">
         Completed {new Date(session.finishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
       </div>
     );
@@ -6308,29 +6308,29 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
     const routine = recoveryRoutineById(day.routineId);
     const minutes = routine ? Math.round(routine.movements.reduce((s, m) => s + (m.durationSeconds || (m.reps || 0) * 3) * (m.sets || 1), 0) / 60) : 0;
     return (
-      <div key={di} className="border-t border-neutral-900 pt-3">
+      <div key={di} className="border-t border-white/[0.06] pt-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-red-500 flex items-center gap-1.5">
+          <span className="text-xs font-medium text-v5-red flex items-center gap-1.5">
             {day.label}
             {isCurrent(prog.id) && state.currentProgram.dayIndex === di && (
-              <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Next up</span>
+              <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Next up</span>
             )}
           </span>
           {isCurrent(prog.id) && state.currentProgram.dayIndex !== di && (
-            <button onClick={() => setCurrentProgramDay(di)} className="text-[11px] text-neutral-500 hover:text-neutral-300">
+            <button onClick={() => setCurrentProgramDay(di)} className="text-[11px] text-v5-subtext hover:text-v5-text/90">
               Set as today
             </button>
           )}
         </div>
-        <div className="text-xs text-neutral-500 mb-2">{routine ? `${routine.movements.length} movements · Est. ${minutes} min` : "Recovery routine"}</div>
+        <div className="text-xs text-v5-subtext mb-2">{routine ? `${routine.movements.length} movements · Est. ${minutes} min` : "Recovery routine"}</div>
         <div className="flex gap-3">
           <button
             onClick={() => onStartRecovery(routine, programContext)}
-            className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+            className="text-[11px] text-v5-red hover:text-v5-red flex items-center gap-1"
           >
             <ChevronRight size={11} /> Start Recovery Session
           </button>
-          <button onClick={() => onLogManualRecovery(routine, programContext)} className="text-[11px] text-neutral-500 hover:text-neutral-300">
+          <button onClick={() => onLogManualRecovery(routine, programContext)} className="text-[11px] text-v5-subtext hover:text-v5-text/90">
             Log Recovery Session
           </button>
         </div>
@@ -6350,7 +6350,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
           ))}
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => onStartRun(p)} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
+          <button onClick={() => onStartRun(p)} className="text-xs text-v5-red hover:text-v5-red flex items-center gap-1">
             <ChevronRight size={12} /> Start workout
           </button>
           <button
@@ -6359,7 +6359,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
               deleteCustomPlan(p.id);
               setDetail(null);
             }}
-            className="text-xs text-neutral-500 hover:text-red-600 flex items-center gap-1"
+            className="text-xs text-v5-subtext hover:text-v5-red flex items-center gap-1"
           >
             <Trash2 size={12} /> Delete
           </button>
@@ -6378,17 +6378,17 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
         onBack={() => setDetail(null)}
       >
         {prog.days.map((day, di) => (
-          <div key={di} className="border-t border-neutral-900 pt-3">
+          <div key={di} className="border-t border-white/[0.06] pt-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-red-500 flex items-center gap-1.5">
+              <span className="text-xs font-medium text-v5-red flex items-center gap-1.5">
                 {day.label}
                 {isCurrentCustom(prog.id) && state.currentProgram.dayIndex === di && (
-                  <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Next up</span>
+                  <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Next up</span>
                 )}
               </span>
               <div className="flex items-center gap-3">
                 {isCurrentCustom(prog.id) && state.currentProgram.dayIndex !== di && (
-                  <button onClick={() => setCurrentProgramDay(di)} className="text-[11px] text-neutral-500 hover:text-neutral-300">
+                  <button onClick={() => setCurrentProgramDay(di)} className="text-[11px] text-v5-subtext hover:text-v5-text/90">
                     Set as today
                   </button>
                 )}
@@ -6399,7 +6399,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
                       { programId: prog.id, programName: prog.name, source: "custom", dayIndex: di, totalDays: prog.days.length }
                     )
                   }
-                  className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+                  className="text-[11px] text-v5-red hover:text-v5-red flex items-center gap-1"
                 >
                   <ChevronRight size={11} /> Start workout
                 </button>
@@ -6419,7 +6419,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
             deleteCustomProgram(prog.id);
             setDetail(null);
           }}
-          className="text-xs text-neutral-500 hover:text-red-600 flex items-center gap-1"
+          className="text-xs text-v5-subtext hover:text-v5-red flex items-center gap-1"
         >
           <Trash2 size={12} /> Delete program
         </button>
@@ -6451,18 +6451,18 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
             const adherence = programWeekAdherence(state);
             if (!adherence || adherence.recovery.scheduled === 0) return null;
             return (
-              <div className="border border-neutral-800 bg-charcoal-panel px-4 py-3 space-y-1.5">
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500">
+              <div className="border border-white/10 bg-v5-elevated px-4 py-3 space-y-1.5">
+                <div className="text-[10px] uppercase tracking-widest text-v5-subtext">
                   {prog.name.toUpperCase()} — TRAILING {adherence.windowDays} DAYS
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-neutral-400">Strength sessions</span>
+                  <span className="text-v5-subtext">Strength sessions</span>
                   <span className="text-white font-bold">
                     {adherence.lifting.completed} / {adherence.lifting.scheduled}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-neutral-400">Recovery sessions</span>
+                  <span className="text-v5-subtext">Recovery sessions</span>
                   <span className="text-white font-bold">
                     {adherence.recovery.completed} / {adherence.recovery.scheduled}
                   </span>
@@ -6471,8 +6471,8 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
             );
           })()}
         {Object.keys(siblings).length > 1 && (
-          <div className="border border-neutral-800 bg-charcoal-panel px-4 py-3 space-y-2">
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">
+          <div className="border border-white/10 bg-v5-elevated px-4 py-3 space-y-2">
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">
               {prog.trainingDays} {prog.trainingDays === 1 ? "Day" : "Days"} / Week
             </div>
             <div className="flex gap-1.5">
@@ -6486,7 +6486,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
                     onClick={() => switchPreview(n)}
                     aria-pressed={active}
                     className={`flex-1 py-2 text-xs font-bold border ${
-                      active ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                      active ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
                     }`}
                   >
                     {n}
@@ -6494,27 +6494,27 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
                 );
               })}
             </div>
-            <p className="text-[11px] text-neutral-600">
+            <p className="text-[11px] text-v5-subtext/70">
               Previewing {baseProg.name} at {prog.trainingDays} days/week — tap Start on a day below to actually switch to it.
             </p>
           </div>
         )}
         {reviewCompare && (
-          <div className="border border-red-900/40 bg-charcoal-panel px-4 py-3 space-y-1.5">
-            <div className="text-[10px] uppercase tracking-widest text-neutral-600">Current → Proposed</div>
-            <div className="text-sm text-neutral-300">
-              <span className="text-neutral-400">{state.currentProgram?.programName || "No active program"}</span>
+          <div className="border border-v5-red/25 bg-v5-elevated px-4 py-3 space-y-1.5">
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70">Current → Proposed</div>
+            <div className="text-sm text-v5-text/90">
+              <span className="text-v5-subtext">{state.currentProgram?.programName || "No active program"}</span>
               {` (${reviewCompare.fromDays} days) → `}
               <span className="text-white font-bold">{prog.name}</span>
               {` (${prog.days.length} days)`}
             </div>
-            <div className="text-xs text-neutral-500">Approximate weekly volume: {totalWeeklySets(prog)} sets across {prog.days.length} sessions</div>
+            <div className="text-xs text-v5-subtext">Approximate weekly volume: {totalWeeklySets(prog)} sets across {prog.days.length} sessions</div>
             <button
               onClick={() => {
                 setReviewCompare(null);
                 setDetail(null);
               }}
-              className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-neutral-300"
+              className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-text/90"
             >
               Keep current plan instead
             </button>
@@ -6522,7 +6522,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
         )}
         <button
           onClick={() => copyProgramToCustom(prog)}
-          className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30 flex items-center justify-center gap-1.5"
+          className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30 flex items-center justify-center gap-1.5"
         >
           <Plus size={12} /> Add to my program
         </button>
@@ -6530,17 +6530,17 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
           day.type === "recovery" ? (
             recoveryDayRow(prog, day, di, { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: di, totalDays: prog.days.length })
           ) : (
-            <div key={di} className="border-t border-neutral-900 pt-3">
+            <div key={di} className="border-t border-white/[0.06] pt-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-red-500 flex items-center gap-1.5">
+                <span className="text-xs font-medium text-v5-red flex items-center gap-1.5">
                   {day.label}
                   {isCurrent(prog.id) && state.currentProgram.dayIndex === di && (
-                    <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Next up</span>
+                    <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Next up</span>
                   )}
                 </span>
                 <div className="flex items-center gap-3">
                   {isCurrent(prog.id) && state.currentProgram.dayIndex !== di && (
-                    <button onClick={() => setCurrentProgramDay(di)} className="text-[11px] text-neutral-500 hover:text-neutral-300">
+                    <button onClick={() => setCurrentProgramDay(di)} className="text-[11px] text-v5-subtext hover:text-v5-text/90">
                       Set as today
                     </button>
                   )}
@@ -6552,13 +6552,13 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
                         { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: di, totalDays: prog.days.length }
                       );
                     }}
-                    className="text-[11px] text-red-500 hover:text-red-400 flex items-center gap-1"
+                    className="text-[11px] text-v5-red hover:text-v5-red flex items-center gap-1"
                   >
                     <ChevronRight size={11} /> {reviewCompare ? "Apply — Start" : "Start workout"}
                   </button>
                   <button
                     onClick={() => copyDayToCustom(prog, day)}
-                    className="text-[11px] text-neutral-500 hover:text-red-500 flex items-center gap-1"
+                    className="text-[11px] text-v5-subtext hover:text-v5-red flex items-center gap-1"
                   >
                     <Plus size={11} /> Copy to my plans
                   </button>
@@ -6588,10 +6588,10 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
           ))}
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => onStartRun(tpl)} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
+          <button onClick={() => onStartRun(tpl)} className="text-xs text-v5-red hover:text-v5-red flex items-center gap-1">
             <ChevronRight size={12} /> Start workout
           </button>
-          <button onClick={() => copyToCustom(tpl)} className="text-xs text-neutral-500 hover:text-red-500 flex items-center gap-1">
+          <button onClick={() => copyToCustom(tpl)} className="text-xs text-v5-subtext hover:text-v5-red flex items-center gap-1">
             <Plus size={12} /> Copy to my plans
           </button>
         </div>
@@ -6760,33 +6760,72 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
           })()}
       </div>
 
-      <div className="space-y-2.5">
-        <SectionLabel tone="muted">All Programs</SectionLabel>
-        <p className="text-xs text-v5-subtext">
-          Full multi-day splits built around a specific look and training identity. Copy any single day into your
-          own plans.
-        </p>
-        <div className="space-y-2">
-          {(state.programs || []).map((prog) => (
-            <ListRow
-              key={prog.id}
-              tone="accent"
-              onClick={() => setDetail({ kind: "program", id: prog.id })}
-              title={
-                <span className="flex items-center gap-2">
-                  <span className="truncate">{prog.name}</span>
-                  {isComplete(prog.id) ? (
-                    <Pill tone="inactive">Complete</Pill>
-                  ) : (
-                    isCurrent(prog.id) && <Pill>Current</Pill>
-                  )}
-                </span>
-              }
-              subtitle={`${prog.tagline}${prog.weeks ? ` · ${prog.weeks} weeks` : ""}`}
-            />
-          ))}
-        </div>
-      </div>
+      {/* "Recommended for you" hero + a compact grid for the rest (mockup section 7) — the
+          featured pick is never a fabricated category, just the most personally relevant real
+          program: the athlete's own active program if they have one, otherwise the best match
+          for their stated training frequency, otherwise BRK's flagship. Every stat shown
+          (days/week, weeks, tagline) reads straight off the program's own real fields. */}
+      {(() => {
+        const all = state.programs || [];
+        if (all.length === 0) return null;
+        const activeFamilyId = state.currentProgram?.source === "builtin" ? all.find((p) => p.id === state.currentProgram.programId)?.familyId : null;
+        let featured = state.currentProgram?.source === "builtin" ? all.find((p) => p.id === state.currentProgram.programId) : null;
+        if (!featured) {
+          const prefDays = state.athleteProfile?.preferredDays ?? selectedDays;
+          if (prefDays != null) featured = recommendationFor(prefDays, { programs: all, customPrograms: [], preferFamilyId: activeFamilyId }).recommended;
+        }
+        if (!featured) featured = all[0];
+        const others = all.filter((p) => p.id !== featured.id);
+        const daysPerWeek = (prog) => prog.trainingDays || prog.days?.length || null;
+        return (
+          <>
+            <div className="space-y-2.5">
+              <SectionLabel>Recommended for you</SectionLabel>
+              <PhotoHero
+                exercise={exMap[featured.days?.[0]?.exercises?.[0]?.exId]}
+                eyebrow={featured.tagline}
+                title={featured.name}
+                meta={
+                  <div className="flex items-center gap-4 text-xs font-bold text-v5-subtext">
+                    {daysPerWeek(featured) && (
+                      <span className="flex items-center gap-1.5"><ClipboardList size={13} className="text-v5-red" /> {daysPerWeek(featured)} Days/Week</span>
+                    )}
+                    {featured.weeks && (
+                      <span className="flex items-center gap-1.5"><Timer size={13} className="text-v5-red" /> {featured.weeks} weeks</span>
+                    )}
+                    {isComplete(featured.id) ? <Pill tone="inactive">Complete</Pill> : isCurrent(featured.id) && <Pill>Current</Pill>}
+                  </div>
+                }
+              >
+                <ButtonPrimary size="lg" onClick={() => setDetail({ kind: "program", id: featured.id })}>
+                  View program
+                </ButtonPrimary>
+              </PhotoHero>
+            </div>
+
+            {others.length > 0 && (
+              <div className="space-y-2.5">
+                <SectionLabel tone="muted">Other programs</SectionLabel>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {others.map((prog) => (
+                    <Card key={prog.id} onClick={() => setDetail({ kind: "program", id: prog.id })} padding="p-3.5" className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-black text-v5-text truncate">{prog.name}</span>
+                        {isComplete(prog.id) ? <Pill tone="inactive">Done</Pill> : isCurrent(prog.id) && <Pill>Current</Pill>}
+                      </div>
+                      <div className="text-[11px] text-v5-subtext line-clamp-2">{prog.tagline}</div>
+                      <div className="text-[10px] font-bold text-v5-subtext/70 flex items-center gap-2 pt-0.5">
+                        {daysPerWeek(prog) && <span>{daysPerWeek(prog)} Days/Week</span>}
+                        {prog.weeks && <span>· {prog.weeks} wks</span>}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       <div className="space-y-2.5">
         <SectionLabel tone="muted">Single day templates</SectionLabel>
@@ -6920,21 +6959,21 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Create plan</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Create plan</div>
           <div className="text-xl font-bold text-white mt-1">Build a workout</div>
         </div>
         {onGoToPlans && (
-          <button onClick={onGoToPlans} className="shrink-0 text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+          <button onClick={onGoToPlans} className="shrink-0 text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
             My plans →
           </button>
         )}
       </div>
 
       {justSaved && (
-        <div className="border border-red-900/40 bg-charcoal-panel px-4 py-3 flex items-center justify-between">
-          <div className="text-sm text-neutral-300">Plan saved.</div>
+        <div className="border border-v5-red/25 bg-v5-elevated px-4 py-3 flex items-center justify-between">
+          <div className="text-sm text-v5-text/90">Plan saved.</div>
           {onGoToPlans && (
-            <button onClick={onGoToPlans} className="text-xs uppercase tracking-widest text-red-500 hover:text-red-400 flex items-center gap-1">
+            <button onClick={onGoToPlans} className="text-xs uppercase tracking-widest text-v5-red hover:text-v5-red flex items-center gap-1">
               <ChevronRight size={12} /> View my plans
             </button>
           )}
@@ -6942,26 +6981,26 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
       )}
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Plan name</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Plan name</label>
         <input
           type="text"
           value={planName}
           onChange={(e) => setPlanName(e.target.value)}
           placeholder="e.g. Fat loss phase - upper focus"
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:border-v5-red"
         />
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-2">Add exercises</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Add exercises</label>
         <input
           type="text"
           value={exFilter}
           onChange={(e) => setExFilter(e.target.value)}
           placeholder="Search the catalog..."
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-xs mb-2 focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-xs mb-2 focus:outline-none focus:border-v5-red"
         />
-        <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto border border-neutral-900 p-2">
+        <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto border border-white/[0.06] p-2">
           {filteredExercises.map((ex) => (
             <button
               key={ex.id}
@@ -6969,20 +7008,20 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
               disabled={selectedExercises.some((e) => e.exId === ex.id)}
               className={`text-left text-xs px-2 py-1.5 border ${
                 selectedExercises.some((e) => e.exId === ex.id)
-                  ? "border-red-800 text-red-600 bg-red-950/30"
-                  : "border-neutral-900 text-neutral-400 hover:border-neutral-700"
+                  ? "border-v5-red/40 text-v5-red bg-v5-red/30"
+                  : "border-white/[0.06] text-v5-subtext hover:border-white/10"
               }`}
             >
               {ex.name}
             </button>
           ))}
           {filteredExercises.length === 0 && (
-            <div className="col-span-2 text-xs text-neutral-600 py-2 text-center">No match — create it below.</div>
+            <div className="col-span-2 text-xs text-v5-subtext/70 py-2 text-center">No match — create it below.</div>
           )}
         </div>
         <button
           onClick={() => setCreatingCustom(true)}
-          className="w-full mt-2 py-2 text-xs uppercase tracking-widest font-bold border border-dashed border-neutral-700 text-red-500 hover:border-red-700 hover:text-red-400 flex items-center justify-center gap-1.5"
+          className="w-full mt-2 py-2 text-xs uppercase tracking-widest font-bold border border-dashed border-white/10 text-v5-red hover:border-v5-red hover:text-v5-red flex items-center justify-center gap-1.5"
         >
           <Plus size={13} /> Create custom exercise
         </button>
@@ -6991,11 +7030,11 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
       {selectedExercises.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="block text-[11px] uppercase tracking-widest text-neutral-500">Plan exercises</label>
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext">Plan exercises</label>
             {selectedExercises.length >= 2 && !supersetMode && (
               <button
                 onClick={() => setSupersetMode(true)}
-                className="text-[11px] uppercase tracking-widest text-red-500 hover:text-red-400"
+                className="text-[11px] uppercase tracking-widest text-v5-red hover:text-v5-red"
               >
                 Group as superset
               </button>
@@ -7003,16 +7042,16 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
           </div>
 
           {supersetMode && (
-            <div className="border border-red-900/40 bg-charcoal-panel p-3 space-y-2">
-              <div className="text-xs text-neutral-400">Select 2 or more exercises to superset, then confirm.</div>
+            <div className="border border-v5-red/25 bg-v5-elevated p-3 space-y-2">
+              <div className="text-xs text-v5-subtext">Select 2 or more exercises to superset, then confirm.</div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={createSuperset}
                   disabled={supersetPicks.length < 2}
                   className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
                     supersetPicks.length >= 2
-                      ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-                      : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+                      ? "bg-v5-red border-v5-red text-white hover:opacity-90"
+                      : "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed"
                   }`}
                 >
                   Create superset ({supersetPicks.length})
@@ -7022,7 +7061,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
                     setSupersetMode(false);
                     setSupersetPicks([]);
                   }}
-                  className="px-4 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                  className="px-4 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
                 >
                   Cancel
                 </button>
@@ -7031,7 +7070,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
           )}
 
           {selectedExercises.map((e) => (
-            <div key={e.exId} className="border border-neutral-900 px-3 py-2 space-y-1.5">
+            <div key={e.exId} className="border border-white/[0.06] px-3 py-2 space-y-1.5">
               <div className="flex items-center gap-2">
                 {supersetMode && (
                   <input
@@ -7041,9 +7080,9 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
                     className="shrink-0 w-4 h-4 accent-red-700"
                   />
                 )}
-                <span className="flex-1 min-w-0 text-base text-neutral-200 truncate">{exMap[e.exId]?.name}</span>
+                <span className="flex-1 min-w-0 text-base text-v5-text/90 truncate">{exMap[e.exId]?.name}</span>
                 {e.group && !supersetMode && (
-                  <span className="shrink-0 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide bg-red-900/40 text-red-400 px-1.5 py-0.5">
+                  <span className="shrink-0 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide bg-red-900/40 text-v5-red px-1.5 py-0.5">
                     Superset {e.group}
                     <button onClick={() => ungroup(e.exId)} className="hover:text-white">
                       <X size={10} />
@@ -7051,7 +7090,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
                   </span>
                 )}
                 {!supersetMode && (
-                  <button onClick={() => removeExercise(e.exId)} className="shrink-0 text-neutral-600 hover:text-red-600">
+                  <button onClick={() => removeExercise(e.exId)} className="shrink-0 text-v5-subtext/70 hover:text-v5-red">
                     <X size={14} />
                   </button>
                 )}
@@ -7062,16 +7101,16 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
                     type="number"
                     value={e.sets}
                     onChange={(ev) => updateExercise(e.exId, "sets", ev.target.value)}
-                    className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
+                    className="w-14 bg-v5-elevated border border-white/10 text-v5-text px-2 py-1 text-xs"
                   />
-                  <span className="text-neutral-600 text-xs">sets</span>
+                  <span className="text-v5-subtext/70 text-xs">sets</span>
                   <input
                     type="number"
                     value={e.reps}
                     onChange={(ev) => updateExercise(e.exId, "reps", ev.target.value)}
-                    className="w-14 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-1 text-xs"
+                    className="w-14 bg-v5-elevated border border-white/10 text-v5-text px-2 py-1 text-xs"
                   />
-                  <span className="text-neutral-600 text-xs">reps</span>
+                  <span className="text-v5-subtext/70 text-xs">reps</span>
                 </div>
               )}
             </div>
@@ -7092,8 +7131,8 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
             disabled={selectedExercises.length === 0}
             className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
               selectedExercises.length > 0
-                ? "bg-red-700 border-red-700 text-white hover:bg-red-600"
-                : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+                ? "bg-v5-red border-v5-red text-white hover:opacity-90"
+                : "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed"
             }`}
           >
             Start workout
@@ -7104,8 +7143,8 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
           disabled={!planName.trim() || selectedExercises.length === 0}
           className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
             planName.trim() && selectedExercises.length > 0
-              ? "bg-charcoal-panel border-red-700 text-red-500 hover:bg-red-950/30"
-              : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+              ? "bg-v5-elevated border-v5-red text-v5-red hover:bg-v5-red/30"
+              : "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed"
           }`}
         >
           Save plan
@@ -7125,7 +7164,7 @@ function TopUsedTab({ state, exMap }) {
 
   if (ranked.length === 0) {
     return (
-      <div className="text-center py-16 text-neutral-500 text-sm">
+      <div className="text-center py-16 text-v5-subtext text-sm">
         No sessions logged yet. Log a workout and this tab tracks what you actually train most.
       </div>
     );
@@ -7135,18 +7174,18 @@ function TopUsedTab({ state, exMap }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-neutral-500">Ranked by how often you've logged each lift.</p>
+      <p className="text-xs text-v5-subtext">Ranked by how often you've logged each lift.</p>
       {ranked.map((r, i) => (
-        <div key={r.ex.id} className="border border-neutral-800 bg-charcoal-panel px-4 py-3">
+        <div key={r.ex.id} className="border border-white/10 bg-v5-elevated px-4 py-3">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              {i === 0 && <Star size={12} className="text-red-600" />}
+              {i === 0 && <Star size={12} className="text-v5-red" />}
               <span className="text-base text-white">{r.ex.name}</span>
             </div>
-            <span className="text-xs text-neutral-500">{r.count}x</span>
+            <span className="text-xs text-v5-subtext">{r.count}x</span>
           </div>
-          <div className="h-1 bg-neutral-900">
-            <div className="h-1 bg-red-700" style={{ width: `${(r.count / max) * 100}%` }} />
+          <div className="h-1 bg-v5-surface">
+            <div className="h-1 bg-v5-red" style={{ width: `${(r.count / max) * 100}%` }} />
           </div>
         </div>
       ))}
@@ -7209,7 +7248,7 @@ function CatalogTab({ state, updateState, allExercises }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-neutral-500">
+      <p className="text-xs text-v5-subtext">
         Every movement and machine in the library. Can't find something you use — add it once and it shows up
         everywhere you pick an exercise.
       </p>
@@ -7220,12 +7259,12 @@ function CatalogTab({ state, updateState, allExercises }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search exercises..."
-          className="flex-1 bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="flex-1 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
         <select
           value={muscleFilter}
           onChange={(e) => setMuscleFilter(e.target.value)}
-          className="bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-xs focus:outline-none focus:border-red-700"
+          className="bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-xs focus:outline-none focus:border-v5-red"
         >
           <option value="All">All</option>
           {MUSCLE_GROUPS.map((m) => (
@@ -7236,14 +7275,14 @@ function CatalogTab({ state, updateState, allExercises }) {
         </select>
       </div>
 
-      <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+      <label className="flex items-center gap-1.5 text-xs text-v5-subtext">
         <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
         Show archived custom exercises
       </label>
 
       <button
         onClick={() => setCreatingCustom(true)}
-        className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30 flex items-center justify-center gap-1.5"
+        className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30 flex items-center justify-center gap-1.5"
       >
         <Plus size={14} /> Create custom exercise
       </button>
@@ -7251,28 +7290,28 @@ function CatalogTab({ state, updateState, allExercises }) {
       <div className="space-y-5">
         {Object.entries(grouped).map(([muscle, exs]) => (
           <div key={muscle}>
-            <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">{muscle}</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">{muscle}</div>
             <div className="space-y-1.5">
               {exs.map((ex) => (
                 <div
                   key={ex.id}
-                  className={`flex items-center justify-between text-sm border bg-charcoal-panel px-3 py-2 ${
-                    isArchived(ex) ? "border-neutral-900 opacity-50" : "border-neutral-900"
+                  className={`flex items-center justify-between text-sm border bg-v5-elevated px-3 py-2 ${
+                    isArchived(ex) ? "border-white/[0.06] opacity-50" : "border-white/[0.06]"
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="text-base text-neutral-200 truncate">{ex.name}</div>
+                    <div className="text-base text-v5-text/90 truncate">{ex.name}</div>
                     {ex.custom && (
-                      <div className="text-[10px] uppercase tracking-wider text-neutral-600 mt-0.5 truncate">
+                      <div className="text-[10px] uppercase tracking-wider text-v5-subtext/70 mt-0.5 truncate">
                         {formatCustomLabel(ex)}
                         {isArchived(ex) ? " • Archived" : ""}
                       </div>
                     )}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    {!ex.custom && <span className="text-[10px] uppercase tracking-wider text-neutral-600">{ex.type}</span>}
+                    {!ex.custom && <span className="text-[10px] uppercase tracking-wider text-v5-subtext/70">{ex.type}</span>}
                     {ex.custom && (
-                      <button onClick={() => setEditingExercise(ex)} className="text-neutral-600 hover:text-red-600">
+                      <button onClick={() => setEditingExercise(ex)} className="text-v5-subtext/70 hover:text-v5-red">
                         <Pencil size={13} />
                       </button>
                     )}
@@ -7283,7 +7322,7 @@ function CatalogTab({ state, updateState, allExercises }) {
           </div>
         ))}
         {filtered.length === 0 && (
-          <div className="text-center py-10 text-neutral-600 text-sm">No matches — create it above.</div>
+          <div className="text-center py-10 text-v5-subtext/70 text-sm">No matches — create it above.</div>
         )}
       </div>
     </div>
@@ -7408,27 +7447,27 @@ function PhotoFullView({ photo, onBack, onDelete }) {
 
   return (
     <SlideInPanel title="Progress photo" subtitle={new Date(photo.date).toLocaleString()} onBack={onBack}>
-      <img src={photo.dataUrl} alt="Progress" className="w-full border border-neutral-800" />
-      {photo.context && <div className="text-xs text-neutral-500">{photo.context}</div>}
+      <img src={photo.dataUrl} alt="Progress" className="w-full border border-white/10" />
+      {photo.context && <div className="text-xs text-v5-subtext">{photo.context}</div>}
       <div className="flex items-center gap-2">
         {shareSupported ? (
           <button
             onClick={handleShare}
-            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1.5"
+            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90 flex items-center justify-center gap-1.5"
           >
             <Share2 size={14} /> Share
           </button>
         ) : (
           <button
             onClick={handleDownload}
-            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1.5"
+            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90 flex items-center justify-center gap-1.5"
           >
             <Download size={14} /> Download
           </button>
         )}
         <button
           onClick={onDelete}
-          className="py-3 px-4 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-300 hover:border-neutral-600 flex items-center justify-center gap-1.5"
+          className="py-3 px-4 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-text/90 hover:border-v5-red/40 flex items-center justify-center gap-1.5"
         >
           <Trash2 size={14} /> Delete
         </button>
@@ -7503,7 +7542,7 @@ function PhotosTab({ state, updateState }) {
       <button
         onClick={handleTakePhoto}
         disabled={busy}
-        className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 disabled:opacity-50 flex items-center justify-center gap-1.5"
+        className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5"
       >
         <Camera size={16} /> {busy ? "Processing..." : "Take progress photo"}
       </button>
@@ -7515,10 +7554,10 @@ function PhotosTab({ state, updateState }) {
         onChange={handleFileSelected}
         className="hidden"
       />
-      {errorMsg && <div className="text-xs text-red-500">{errorMsg}</div>}
+      {errorMsg && <div className="text-xs text-v5-red">{errorMsg}</div>}
 
       {photos.length === 0 ? (
-        <div className="text-center py-16 text-neutral-500 text-sm">
+        <div className="text-center py-16 text-v5-subtext text-sm">
           No progress photos yet. Take one to start tracking visually over time.
         </div>
       ) : (
@@ -7527,7 +7566,7 @@ function PhotosTab({ state, updateState }) {
             <button
               key={p.id}
               onClick={() => setViewingId(p.id)}
-              className="aspect-square overflow-hidden border border-neutral-800 bg-charcoal-panel"
+              className="aspect-square overflow-hidden border border-white/10 bg-v5-elevated"
             >
               <img src={p.dataUrl} alt="" className="w-full h-full object-cover" />
             </button>
@@ -7630,16 +7669,16 @@ function SettingsTab({ state, updateState, onNavigate }) {
 
   return (
     <div className="space-y-6">
-      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-4">
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Training</div>
+      <div className="border border-white/10 bg-v5-elevated p-4 space-y-4">
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Training</div>
 
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Effort tracking</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Effort tracking</label>
           <div className="flex gap-2">
             <button
               onClick={() => updateSettings({ rirSystem: "rir" })}
               className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
-                settings.rirSystem !== "rpe" ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                settings.rirSystem !== "rpe" ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
               }`}
             >
               RIR
@@ -7647,17 +7686,17 @@ function SettingsTab({ state, updateState, onNavigate }) {
             <button
               onClick={() => updateSettings({ rirSystem: "rpe" })}
               className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
-                settings.rirSystem === "rpe" ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                settings.rirSystem === "rpe" ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
               }`}
             >
               RPE
             </button>
           </div>
-          <p className="text-xs text-neutral-600 mt-1.5">Reps in reserve (0–5+) or rate of perceived exertion (6–10), logged per set.</p>
+          <p className="text-xs text-v5-subtext/70 mt-1.5">Reps in reserve (0–5+) or rate of perceived exertion (6–10), logged per set.</p>
         </div>
 
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Rest timer defaults (seconds)</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Rest timer defaults (seconds)</label>
           <div className="grid grid-cols-2 gap-2">
             {[
               ["compound", "Compound"],
@@ -7666,12 +7705,12 @@ function SettingsTab({ state, updateState, onNavigate }) {
               ["superset", "Superset"],
             ].map(([key, label]) => (
               <div key={key}>
-                <div className="text-[10px] text-neutral-600 mb-1">{label}</div>
+                <div className="text-[10px] text-v5-subtext/70 mb-1">{label}</div>
                 <input
                   type="number"
                   value={(settings.restDefaults || DEFAULT_REST_DEFAULTS)[key]}
                   onChange={(e) => updateRestDefault(key, e.target.value)}
-                  className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+                  className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
                 />
               </div>
             ))}
@@ -7679,14 +7718,14 @@ function SettingsTab({ state, updateState, onNavigate }) {
         </div>
 
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Barbell weight</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Barbell weight</label>
           <div className="flex gap-2 items-center">
             {[45, 35].map((w) => (
               <button
                 key={w}
                 onClick={() => updateSettings({ barWeight: w })}
                 className={`px-4 py-2 text-xs font-bold border ${
-                  settings.barWeight === w ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                  settings.barWeight === w ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
                 }`}
               >
                 {w} lb
@@ -7697,30 +7736,30 @@ function SettingsTab({ state, updateState, onNavigate }) {
               value={settings.barWeight}
               onChange={(e) => updateSettings({ barWeight: Number(e.target.value) || 0 })}
               placeholder="Custom"
-              className="w-24 bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+              className="w-24 bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
             />
           </div>
         </div>
       </div>
 
-      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-4">
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Rest Timer Alerts</div>
+      <div className="border border-white/10 bg-v5-elevated p-4 space-y-4">
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Rest Timer Alerts</div>
 
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm text-neutral-200">Rest timer sound</div>
-            <div className="text-xs text-neutral-600">Plays a beep when rest ends, while BRK is open.</div>
+            <div className="text-sm text-v5-text/90">Rest timer sound</div>
+            <div className="text-xs text-v5-subtext/70">Plays a beep when rest ends, while BRK is open.</div>
           </div>
           <div className="flex gap-1.5 shrink-0 ml-3">
             <button
               onClick={() => updateSettings({ restTimerSound: true })}
-              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerSound !== false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerSound !== false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
             >
               ON
             </button>
             <button
               onClick={() => updateSettings({ restTimerSound: false })}
-              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerSound === false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerSound === false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
             >
               OFF
             </button>
@@ -7728,17 +7767,17 @@ function SettingsTab({ state, updateState, onNavigate }) {
         </div>
 
         <div className="flex items-center justify-between">
-          <div className="text-sm text-neutral-200">Vibration</div>
+          <div className="text-sm text-v5-text/90">Vibration</div>
           <div className="flex gap-1.5 shrink-0 ml-3">
             <button
               onClick={() => updateSettings({ restTimerVibration: true })}
-              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerVibration !== false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerVibration !== false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
             >
               ON
             </button>
             <button
               onClick={() => updateSettings({ restTimerVibration: false })}
-              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerVibration === false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerVibration === false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
             >
               OFF
             </button>
@@ -7747,18 +7786,18 @@ function SettingsTab({ state, updateState, onNavigate }) {
 
         <div>
           <div className="flex items-center justify-between">
-            <div className="text-sm text-neutral-200">Background alerts</div>
+            <div className="text-sm text-v5-text/90">Background alerts</div>
             {notifPermission === "granted" && (
               <div className="flex gap-1.5 shrink-0 ml-3">
                 <button
                   onClick={() => updateSettings({ restTimerBackgroundAlerts: true })}
-                  className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerBackgroundAlerts !== false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+                  className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerBackgroundAlerts !== false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
                 >
                   ON
                 </button>
                 <button
                   onClick={() => updateSettings({ restTimerBackgroundAlerts: false })}
-                  className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerBackgroundAlerts === false ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`}
+                  className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerBackgroundAlerts === false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
                 >
                   OFF
                 </button>
@@ -7767,44 +7806,44 @@ function SettingsTab({ state, updateState, onNavigate }) {
           </div>
           {notifPermission === "default" && (
             <div className="mt-2 space-y-2">
-              <p className="text-xs text-neutral-500">BRK can notify you when your rest timer ends while your phone is locked or you're using another app.</p>
-              <button onClick={requestRestTimerAlerts} className="px-4 py-2 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
+              <p className="text-xs text-v5-subtext">BRK can notify you when your rest timer ends while your phone is locked or you're using another app.</p>
+              <button onClick={requestRestTimerAlerts} className="px-4 py-2 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90">
                 Enable
               </button>
             </div>
           )}
-          {notifPermission === "denied" && <p className="text-xs text-neutral-600 mt-1">OFF — Notification permission denied</p>}
-          {notifPermission === "unsupported" && <p className="text-xs text-neutral-600 mt-1">Not supported in this browser. Foreground sound still works.</p>}
+          {notifPermission === "denied" && <p className="text-xs text-v5-subtext/70 mt-1">OFF — Notification permission denied</p>}
+          {notifPermission === "unsupported" && <p className="text-xs text-v5-subtext/70 mt-1">Not supported in this browser. Foreground sound still works.</p>}
         </div>
       </div>
 
-      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Data &amp; Privacy</div>
+      <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Data &amp; Privacy</div>
         <button
           onClick={() => onNavigate?.("dataWorkbook")}
-          className="w-full flex items-center justify-between border border-neutral-800 p-3 hover:border-neutral-600"
+          className="w-full flex items-center justify-between border border-white/10 p-3 hover:border-v5-red/40"
         >
           <div className="text-left flex items-center gap-3">
-            <FileSpreadsheet size={18} className="text-neutral-500 shrink-0" />
+            <FileSpreadsheet size={18} className="text-v5-subtext shrink-0" />
             <div>
               <div className="text-sm font-bold text-white">My Data Workbook</div>
-              <div className="text-xs text-neutral-500 mt-0.5">Review, filter, and export the fitness data BRK has collected.</div>
+              <div className="text-xs text-v5-subtext mt-0.5">Review, filter, and export the fitness data BRK has collected.</div>
             </div>
           </div>
-          <ChevronRight size={18} className="text-neutral-600 shrink-0" />
+          <ChevronRight size={18} className="text-v5-subtext/70 shrink-0" />
         </button>
       </div>
 
-      <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-4">
+      <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-4">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Data backup</div>
-          <p className="text-xs text-neutral-500 mt-1">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Data backup</div>
+          <p className="text-xs text-v5-subtext mt-1">
             Everything is stored on this device only — there's no account or server. Export a backup before
             switching phones or clearing browser data, and import it to restore.
           </p>
         </div>
 
-        <div className="text-xs text-neutral-400 space-y-1">
+        <div className="text-xs text-v5-subtext space-y-1">
           <div>{counts.logs} lift logs</div>
           <div>{counts.cardioLogs} run / conditioning logs</div>
           <div>{counts.customExercises} custom exercises</div>
@@ -7819,13 +7858,13 @@ function SettingsTab({ state, updateState, onNavigate }) {
         <div className="flex flex-col sm:flex-row gap-2">
           <button
             onClick={handleExport}
-            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1.5"
+            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90 flex items-center justify-center gap-1.5"
           >
             <Download size={14} /> Export data
           </button>
           <button
             onClick={handleImportClick}
-            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-200 hover:border-neutral-600 flex items-center justify-center gap-1.5"
+            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-text/90 hover:border-v5-red/40 flex items-center justify-center gap-1.5"
           >
             <Upload size={14} /> Import data
           </button>
@@ -7839,7 +7878,7 @@ function SettingsTab({ state, updateState, onNavigate }) {
         </div>
 
         {importMessage && (
-          <div className={`text-xs ${importMessage.type === "error" ? "text-red-500" : "text-green-500"}`}>
+          <div className={`text-xs ${importMessage.type === "error" ? "text-v5-red" : "text-green-500"}`}>
             {importMessage.text}
           </div>
         )}

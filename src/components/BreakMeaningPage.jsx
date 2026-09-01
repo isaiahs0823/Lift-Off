@@ -14,8 +14,8 @@ import { HERO_CONTENT, BREAK_VALUES, STANDARD_SECTION, CLOSING_STATEMENT } from 
 function LetterCard({ value }) {
   const Icon = value.icon;
   return (
-    <div className="border border-neutral-800 bg-charcoal-panel px-4 py-4 flex items-start gap-4">
-      <div className="font-brk-display text-4xl sm:text-5xl font-black leading-none text-red-600 shrink-0 w-10 sm:w-12 text-center">
+    <div className="border border-white/10 bg-v5-elevated px-4 py-4 flex items-start gap-4">
+      <div className="font-brk-display text-4xl sm:text-5xl font-black leading-none text-v5-red shrink-0 w-10 sm:w-12 text-center">
         {value.letter}
       </div>
       <div className="min-w-0 flex-1">
@@ -23,7 +23,7 @@ function LetterCard({ value }) {
           <div className="font-brk-heading text-sm font-bold uppercase tracking-widest text-white">{value.word}</div>
           {Icon && <Icon size={18} className="text-red-700/70 shrink-0 mt-0.5" aria-hidden="true" />}
         </div>
-        <p className="font-brk-body text-sm text-neutral-400 mt-1.5 leading-relaxed">{value.description}</p>
+        <p className="font-brk-body text-sm text-v5-subtext mt-1.5 leading-relaxed">{value.description}</p>
       </div>
     </div>
   );
@@ -34,7 +34,7 @@ export default function BreakMeaningPage({ onBack, logoSrc }) {
     <SlideInPanel title="B.R.E.A.K. Meaning" onBack={onBack}>
       <div className="-mt-4 space-y-8 pb-6">
         {/* Hero */}
-        <div className="text-center px-2 pt-2 pb-6 border-b border-neutral-800">
+        <div className="text-center px-2 pt-2 pb-6 border-b border-white/10">
           {logoSrc && (
             <img
               src={logoSrc}
@@ -42,16 +42,16 @@ export default function BreakMeaningPage({ onBack, logoSrc }) {
               className="w-14 h-14 rounded-full object-cover ring-1 ring-red-700/60 mx-auto mb-4"
             />
           )}
-          <div className="font-brk-heading text-[11px] font-bold uppercase tracking-[0.35em] text-neutral-500">
+          <div className="font-brk-heading text-[11px] font-bold uppercase tracking-[0.35em] text-v5-subtext">
             {HERO_CONTENT.eyebrow}
           </div>
           <div className="font-brk-display text-3xl sm:text-4xl font-black tracking-tight text-white mt-2 break-words">
             {HERO_CONTENT.title}
           </div>
-          <div className="font-brk-heading text-sm font-bold uppercase tracking-[0.3em] text-red-600 mt-1.5">
+          <div className="font-brk-heading text-sm font-bold uppercase tracking-[0.3em] text-v5-red mt-1.5">
             {HERO_CONTENT.subtitle}
           </div>
-          <p className="font-brk-body text-sm text-neutral-400 mt-5 max-w-xs mx-auto leading-relaxed whitespace-pre-line">
+          <p className="font-brk-body text-sm text-v5-subtext mt-5 max-w-xs mx-auto leading-relaxed whitespace-pre-line">
             {HERO_CONTENT.quote}
           </p>
         </div>
@@ -64,9 +64,9 @@ export default function BreakMeaningPage({ onBack, logoSrc }) {
         </div>
 
         {/* The Standard */}
-        <div className="px-1 pt-2 border-t border-neutral-800">
-          <div className="text-[11px] uppercase tracking-widest text-red-600 mb-3 pt-6">{STANDARD_SECTION.heading}</div>
-          <p className="font-brk-body text-sm text-neutral-300 leading-relaxed whitespace-pre-line">{STANDARD_SECTION.body}</p>
+        <div className="px-1 pt-2 border-t border-white/10">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red mb-3 pt-6">{STANDARD_SECTION.heading}</div>
+          <p className="font-brk-body text-sm text-v5-text/90 leading-relaxed whitespace-pre-line">{STANDARD_SECTION.body}</p>
         </div>
 
         {/* Closing statement */}

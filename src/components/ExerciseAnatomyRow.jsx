@@ -16,15 +16,15 @@ export default function ExerciseAnatomyRow({ exercise, exId, name, prescription,
   const muscle = exercise?.muscle;
 
   return (
-    <div className="flex items-center gap-3 py-1.5 border-t border-neutral-900">
+    <div className="flex items-center gap-3 py-1.5 border-t border-white/[0.06]">
       <MuscleBodyOutline exercise={exercise} size={size} />
       <div className="min-w-0 flex-1">
-        <div className="text-sm text-neutral-200 truncate">
+        <div className="text-sm text-v5-text/90 truncate">
           {displayName}
           {group ? ` (${group})` : ""}
         </div>
-        {muscle && <div className="text-[11px] text-neutral-500 truncate mt-0.5">{muscle}</div>}
-        {prescription && <div className="text-[11px] text-neutral-600 mt-0.5">{prescription}</div>}
+        {muscle && <div className="text-[11px] text-v5-subtext truncate mt-0.5">{muscle}</div>}
+        {prescription && <div className="text-[11px] text-v5-subtext/70 mt-0.5">{prescription}</div>}
       </div>
     </div>
   );

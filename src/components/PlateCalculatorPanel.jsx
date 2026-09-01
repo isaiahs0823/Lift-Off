@@ -16,13 +16,13 @@ export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUs
   const isCustomBar = !BAR_WEIGHT_OPTIONS.includes(barWeight);
 
   return (
-    <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-4">
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-neutral-500">
+    <div className="border border-white/10 bg-v5-elevated p-4 space-y-4">
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-v5-subtext">
         <Calculator size={12} /> Plate calculator
       </div>
 
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">Bar weight</div>
+        <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1.5">Bar weight</div>
         <div className="flex flex-wrap gap-1.5">
           {BAR_WEIGHT_OPTIONS.map((w) => (
             <button
@@ -32,7 +32,7 @@ export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUs
                 setCustomBar("");
               }}
               className={`px-3 py-2 text-xs font-bold border ${
-                barWeight === w ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                barWeight === w ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
               }`}
             >
               {w} lb
@@ -48,27 +48,27 @@ export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUs
               if (e.target.value !== "" && !Number.isNaN(n)) setBarWeight(n);
             }}
             placeholder="Custom"
-            className={`w-24 bg-charcoal-deep border px-2 py-2 text-xs text-neutral-100 focus:outline-none focus:border-red-700 ${
-              isCustomBar ? "border-red-700" : "border-neutral-800"
+            className={`w-24 bg-v5-surface border px-2 py-2 text-xs text-v5-text focus:outline-none focus:border-v5-red ${
+              isCustomBar ? "border-v5-red" : "border-white/10"
             }`}
           />
         </div>
       </div>
 
-      <div className="text-center border border-neutral-800 bg-charcoal-deep py-4">
-        <div className="text-[10px] uppercase tracking-widest text-neutral-600">Current load</div>
+      <div className="text-center border border-white/10 bg-v5-surface py-4">
+        <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70">Current load</div>
         <div className="text-5xl font-bold text-white tabular-nums mt-1">{total}</div>
-        <div className="text-xs text-neutral-500 mt-0.5">lb · bar {barWeight} lb</div>
+        <div className="text-xs text-v5-subtext mt-0.5">lb · bar {barWeight} lb</div>
       </div>
 
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">Tap to add a plate pair</div>
+        <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1.5">Tap to add a plate pair</div>
         <div className="grid grid-cols-3 gap-2">
           {PLATE_SIZES.map((size) => (
             <button
               key={size}
               onClick={() => setStack((s) => addPlatePair(s, size))}
-              className="py-3 text-base font-bold border border-neutral-700 text-white bg-charcoal-deep hover:border-red-700 active:bg-red-950/30"
+              className="py-3 text-base font-bold border border-white/10 text-white bg-v5-surface hover:border-v5-red active:bg-v5-red/30"
               aria-label={`Add ${size} lb plate pair`}
             >
               {size}
@@ -79,16 +79,16 @@ export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUs
 
       {loaded.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-neutral-600 mb-1.5">Per side</div>
+          <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1.5">Per side</div>
           <div className="space-y-1.5">
             {loaded.map(({ size, pairs }) => (
-              <div key={size} className="flex items-center justify-between border border-neutral-800 bg-charcoal-deep px-3 py-2">
+              <div key={size} className="flex items-center justify-between border border-white/10 bg-v5-surface px-3 py-2">
                 <span className="text-sm font-bold text-white">
-                  {size} <span className="text-neutral-500 font-normal">× {pairs}</span>
+                  {size} <span className="text-v5-subtext font-normal">× {pairs}</span>
                 </span>
                 <button
                   onClick={() => setStack((s) => removePlatePair(s, size))}
-                  className="shrink-0 w-8 h-8 flex items-center justify-center border border-neutral-700 text-neutral-300 hover:border-red-700 hover:text-red-500"
+                  className="shrink-0 w-8 h-8 flex items-center justify-center border border-white/10 text-v5-text/90 hover:border-v5-red hover:text-v5-red"
                   aria-label={`Remove one ${size} lb plate pair`}
                 >
                   <Minus size={14} />
@@ -102,14 +102,14 @@ export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUs
       <div className="flex items-center gap-2">
         <button
           onClick={() => setStack(emptyStack())}
-          className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-300 hover:border-neutral-600 flex items-center justify-center gap-1.5"
+          className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-text/90 hover:border-v5-red/40 flex items-center justify-center gap-1.5"
         >
           <RotateCcw size={12} /> Reset plates
         </button>
         {onUseWeight && (
           <button
             onClick={() => onUseWeight(total)}
-            className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-red-700 bg-red-700 text-white hover:bg-red-600"
+            className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90"
           >
             Use {total} lb
           </button>
@@ -128,7 +128,7 @@ export function PlateCalculatorToggle({ barWeight, onUseWeight }) {
     <div>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+        className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red"
       >
         <Calculator size={12} /> Plate calculator {open ? "▴" : "▾"}
       </button>

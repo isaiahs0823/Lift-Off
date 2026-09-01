@@ -16,37 +16,37 @@ function IDontHaveThat({ meal, onApply, onClose }) {
   };
 
   return (
-    <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-3">
+    <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-3">
       <div className="text-sm text-white">What do you have instead?</div>
       <input
         type="text"
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="e.g. ground beef, eggs, rice"
-        className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+        className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
       />
-      <button onClick={build} className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-red-700 text-red-500 hover:bg-red-950/30">
+      <button onClick={build} className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30">
         Build from this
       </button>
       {result && (
-        <div className="space-y-2 pt-2 border-t border-neutral-900">
+        <div className="space-y-2 pt-2 border-t border-white/[0.06]">
           {result.items.map((i) => (
-            <div key={i.name} className="text-sm text-neutral-300">
+            <div key={i.name} className="text-sm text-v5-text/90">
               {i.name} — {i.servingDesc}
             </div>
           ))}
           <div className="flex gap-2 pt-1">
-            <button onClick={() => onApply(result)} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
+            <button onClick={() => onApply(result)} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90">
               Use this
             </button>
-            <button onClick={onClose} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+            <button onClick={onClose} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40">
               Cancel
             </button>
           </div>
         </div>
       )}
       {!result && (
-        <button onClick={onClose} className="text-xs text-neutral-600 hover:text-neutral-400">
+        <button onClick={onClose} className="text-xs text-v5-subtext/70 hover:text-v5-subtext">
           Cancel
         </button>
       )}
@@ -59,32 +59,32 @@ function MealCard({ meal, profile, onSwap, onDontHave }) {
   const [showDontHave, setShowDontHave] = useState(false);
 
   return (
-    <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
+    <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div className="text-sm font-bold text-white">
           {meal.label.toUpperCase()} — {meal.time}
         </div>
-        <div className="text-xs text-neutral-500">{meal.totals.calories} kcal</div>
+        <div className="text-xs text-v5-subtext">{meal.totals.calories} kcal</div>
       </div>
       <div className="space-y-1.5">
         {meal.items.map((item) => (
           <div key={item.name} className="flex items-center justify-between text-sm">
-            <div className="text-neutral-300">
-              {item.name} <span className="text-neutral-600">— {item.servingDesc}</span>
+            <div className="text-v5-text/90">
+              {item.name} <span className="text-v5-subtext/70">— {item.servingDesc}</span>
             </div>
-            <button onClick={() => setSwapItem(swapItem === item.name ? null : item.name)} className="text-[10px] uppercase tracking-widest text-red-500 hover:text-red-400 shrink-0 ml-2">
+            <button onClick={() => setSwapItem(swapItem === item.name ? null : item.name)} className="text-[10px] uppercase tracking-widest text-v5-red hover:text-v5-red shrink-0 ml-2">
               Swap
             </button>
           </div>
         ))}
       </div>
-      <div className="text-[11px] text-neutral-600">
+      <div className="text-[11px] text-v5-subtext/70">
         {meal.totals.protein}p / {meal.totals.carbs}c / {meal.totals.fat}f
       </div>
 
       {swapItem && (
-        <div className="border-t border-neutral-900 pt-2 space-y-1.5">
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500">Swap {swapItem} for</div>
+        <div className="border-t border-white/[0.06] pt-2 space-y-1.5">
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Swap {swapItem} for</div>
           <div className="flex flex-wrap gap-1.5">
             {getSwapOptions(swapItem, profile).map((f) => (
               <button
@@ -93,7 +93,7 @@ function MealCard({ meal, profile, onSwap, onDontHave }) {
                   onSwap(meal.id, swapItem, f);
                   setSwapItem(null);
                 }}
-                className="px-2.5 py-1.5 text-[11px] border border-neutral-800 text-neutral-300 hover:border-red-700 hover:text-red-500"
+                className="px-2.5 py-1.5 text-[11px] border border-white/10 text-v5-text/90 hover:border-v5-red hover:text-v5-red"
               >
                 {f.name}
               </button>
@@ -103,7 +103,7 @@ function MealCard({ meal, profile, onSwap, onDontHave }) {
       )}
 
       {!showDontHave ? (
-        <button onClick={() => setShowDontHave(true)} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+        <button onClick={() => setShowDontHave(true)} className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red">
           I don't have this tonight
         </button>
       ) : (
@@ -156,10 +156,10 @@ export default function MealPlanView({ state, updateState, onBack }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-red-600">Nutrition</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Nutrition</div>
           <div className="text-xl font-bold text-white mt-1">Meal Plan</div>
         </div>
-        <button onClick={onBack} className="text-xs uppercase tracking-widest text-neutral-500 hover:text-red-500">
+        <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
           ← Back
         </button>
       </div>
@@ -167,9 +167,9 @@ export default function MealPlanView({ state, updateState, onBack }) {
       {!targets ? (
         <p className="text-sm text-amber-500">Set up your nutrition targets first.</p>
       ) : !plan ? (
-        <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
-          <p className="text-sm text-neutral-400">Build a practical daily meal plan from your targets and preferences.</p>
-          <button onClick={regenerate} className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600">
+        <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
+          <p className="text-sm text-v5-subtext">Build a practical daily meal plan from your targets and preferences.</p>
+          <button onClick={regenerate} className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90">
             Generate Meal Plan
           </button>
         </div>
@@ -178,7 +178,7 @@ export default function MealPlanView({ state, updateState, onBack }) {
           {plan.meals.map((meal) => (
             <MealCard key={meal.id} meal={meal} profile={profile} onSwap={handleSwap} onDontHave={handleDontHave} />
           ))}
-          <button onClick={regenerate} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+          <button onClick={regenerate} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40">
             Regenerate
           </button>
         </>

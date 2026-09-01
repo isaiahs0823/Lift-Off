@@ -62,22 +62,22 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/85 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div
-        className="w-full sm:max-w-md sm:mx-4 bg-charcoal-panel border border-neutral-800 sm:border max-h-[94vh] flex flex-col"
+        className="w-full sm:max-w-md sm:mx-4 bg-v5-elevated border border-white/10 sm:border max-h-[94vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-900 shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] shrink-0">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-red-600 font-bold">Share Workout</div>
-            <div className="text-sm text-neutral-400">{session.planName}</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-red font-bold">Share Workout</div>
+            <div className="text-sm text-v5-subtext">{session.planName}</div>
           </div>
-          <button onClick={onClose} className="p-1 text-neutral-500 hover:text-red-500">
+          <button onClick={onClose} className="p-1 text-v5-subtext hover:text-v5-red">
             <X size={18} />
           </button>
         </div>
 
         <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-4">
           {/* Live preview */}
-          <div className="flex items-center justify-center bg-black/40 border border-neutral-900 py-4">
+          <div className="flex items-center justify-center bg-black/40 border border-white/[0.06] py-4">
             {dataUrl ? (
               <img
                 src={dataUrl}
@@ -86,20 +86,20 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
                 style={{ aspectRatio: `${size.width} / ${size.height}` }}
               />
             ) : (
-              <div className="text-xs text-neutral-500 py-20">Preview unavailable</div>
+              <div className="text-xs text-v5-subtext py-20">Preview unavailable</div>
             )}
           </div>
 
           {/* Template picker */}
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1.5">Style</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext mb-1.5">Style</div>
             <div className="grid grid-cols-3 gap-1.5">
               {SHARE_TEMPLATES.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setTemplate(t.id)}
                   className={`py-2.5 px-1.5 text-center border ${
-                    template === t.id ? "border-red-700 bg-red-950/20 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                    template === t.id ? "border-v5-red bg-v5-red/20 text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
                   }`}
                 >
                   <div className="text-[11px] font-bold uppercase tracking-wide">{t.label}</div>
@@ -110,18 +110,18 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
 
           {/* Size picker */}
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1.5">Export Size</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext mb-1.5">Export Size</div>
             <div className="grid grid-cols-3 gap-1.5">
               {SHARE_SIZES.map((s) => (
                 <button
                   key={s.id}
                   onClick={() => setSizeId(s.id)}
                   className={`py-2 text-center border ${
-                    sizeId === s.id ? "border-red-700 bg-red-950/20 text-white" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"
+                    sizeId === s.id ? "border-v5-red bg-v5-red/20 text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
                   }`}
                 >
                   <div className="text-[11px] font-bold uppercase tracking-wide">{s.label}</div>
-                  <div className="text-[10px] text-neutral-500">{s.ratio}</div>
+                  <div className="text-[10px] text-v5-subtext">{s.ratio}</div>
                 </button>
               ))}
             </div>
@@ -131,15 +131,15 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
           {showFeaturedPicker && featurable.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500">Featured Lift</div>
-                <button onClick={() => setPickerOpen((o) => !o)} className="text-[10px] uppercase tracking-widest text-red-500 hover:text-red-400">
+                <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Featured Lift</div>
+                <button onClick={() => setPickerOpen((o) => !o)} className="text-[10px] uppercase tracking-widest text-v5-red hover:text-v5-red">
                   {pickerOpen ? "Close" : "Change"}
                 </button>
               </div>
-              <div className="border border-neutral-800 px-3 py-2.5 flex items-center justify-between gap-2">
+              <div className="border border-white/10 px-3 py-2.5 flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="text-sm font-bold text-white truncate">{featured?.name || "—"}</div>
-                  <div className="text-xs text-neutral-500">
+                  <div className="text-xs text-v5-subtext">
                     {featured?.weight != null ? `${featured.weight} × ${featured.reps}` : ""} {featured?.isPR ? "· PR" : ""}
                     {!featuredOverride && " · Auto-selected"}
                   </div>
@@ -147,14 +147,14 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
                 {featuredOverride && (
                   <button
                     onClick={() => setFeaturedOverride(null)}
-                    className="shrink-0 text-[10px] uppercase tracking-widest text-neutral-500 hover:text-red-500"
+                    className="shrink-0 text-[10px] uppercase tracking-widest text-v5-subtext hover:text-v5-red"
                   >
                     Reset
                   </button>
                 )}
               </div>
               {pickerOpen && (
-                <div className="mt-1.5 border border-neutral-800 divide-y divide-neutral-900 max-h-48 overflow-y-auto">
+                <div className="mt-1.5 border border-white/10 divide-y divide-neutral-900 max-h-48 overflow-y-auto">
                   {featurable.map((lift) => (
                     <button
                       key={lift.exId}
@@ -162,18 +162,18 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
                         setFeaturedOverride(lift);
                         setPickerOpen(false);
                       }}
-                      className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-neutral-900"
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-v5-surface"
                     >
                       <div className="min-w-0">
                         <div className="text-sm text-white flex items-center gap-1.5 min-w-0">
                           <span className="truncate min-w-0">{lift.name}</span>
-                          {lift.isPR && <span className="shrink-0 text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">PR</span>}
+                          {lift.isPR && <span className="shrink-0 text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">PR</span>}
                         </div>
-                        <div className="text-xs text-neutral-500">
+                        <div className="text-xs text-v5-subtext">
                           {lift.weight} × {lift.reps}
                         </div>
                       </div>
-                      {featured?.exId === lift.exId && <Check size={16} className="text-red-500 shrink-0" />}
+                      {featured?.exId === lift.exId && <Check size={16} className="text-v5-red shrink-0" />}
                     </button>
                   ))}
                 </div>
@@ -182,15 +182,15 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
           )}
         </div>
 
-        <div className="flex gap-2 p-4 border-t border-neutral-900 shrink-0">
+        <div className="flex gap-2 p-4 border-t border-white/[0.06] shrink-0">
           <button
             onClick={save}
-            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold bg-red-700 border border-red-700 text-white hover:bg-red-600 flex items-center justify-center gap-1.5"
+            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold bg-v5-red border border-v5-red text-white hover:opacity-90 flex items-center justify-center gap-1.5"
           >
             {typeof navigator !== "undefined" && navigator.share ? <Share2 size={14} /> : <Download size={14} />}
             {typeof navigator !== "undefined" && navigator.share ? "Share" : "Save Image"}
           </button>
-          <button onClick={onClose} className="px-5 py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-300 hover:border-neutral-600">
+          <button onClick={onClose} className="px-5 py-3 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40">
             Done
           </button>
         </div>

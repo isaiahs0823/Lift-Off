@@ -47,15 +47,15 @@ function groupRows(rows) {
 function SearchBar({ value, onChange }) {
   return (
     <div className="relative">
-      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-600" />
+      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-v5-subtext/70" />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Search workouts or exercises…"
-        className="w-full bg-charcoal-panel border border-neutral-800 pl-8 pr-8 py-2.5 text-sm text-neutral-100 placeholder-neutral-600 focus:border-red-700 focus:outline-none"
+        className="w-full bg-v5-elevated border border-white/10 pl-8 pr-8 py-2.5 text-sm text-v5-text placeholder-neutral-600 focus:border-v5-red focus:outline-none"
       />
       {value && (
-        <button onClick={() => onChange("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-600 hover:text-neutral-300" aria-label="Clear search">
+        <button onClick={() => onChange("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-v5-subtext/70 hover:text-v5-text/90" aria-label="Clear search">
           <X size={14} />
         </button>
       )}
@@ -71,7 +71,7 @@ function FilterChips({ value, onChange }) {
           key={f}
           onClick={() => onChange(value === f ? null : f)}
           className={`shrink-0 px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border ${
-            value === f ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+            value === f ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
           }`}
         >
           {f}
@@ -90,28 +90,28 @@ function WorkoutRow({ row, exMap, onClick, showPlannedBadges, subLabel }) {
     <button
       onClick={onClick}
       className={`w-full text-left border p-3 space-y-2 ${
-        showPlannedBadges && row.isToday ? "border-red-700 bg-red-950/10" : "border-neutral-800 bg-charcoal-panel hover:border-neutral-600"
+        showPlannedBadges && row.isToday ? "border-v5-red bg-v5-red/10" : "border-white/10 bg-v5-elevated hover:border-v5-red/40"
       }`}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-bold text-white truncate">{row.dayLabel || row.programName}</div>
-          <div className="text-[11px] text-neutral-500 mt-0.5 truncate">
+          <div className="text-[11px] text-v5-subtext mt-0.5 truncate">
             {subLabel ? `${subLabel} · ` : ""}
             {row.exerciseCount} exercises · Est. {row.estMinutes} min
           </div>
         </div>
-        <ChevronRight size={16} className="text-neutral-600 shrink-0" />
+        <ChevronRight size={16} className="text-v5-subtext/70 shrink-0" />
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         {showPlannedBadges && row.isToday && !row.isPlanned && (
-          <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Swapped for today</span>
+          <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Swapped for today</span>
         )}
         {showPlannedBadges && row.isToday && row.isPlanned && (
-          <span className="text-[9px] uppercase tracking-widest bg-red-700 text-white px-1.5 py-0.5">Planned</span>
+          <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Planned</span>
         )}
         {showPlannedBadges && !row.isToday && row.isPlanned && (
-          <span className="text-[9px] uppercase tracking-widest border border-neutral-700 text-neutral-400 px-1.5 py-0.5">Originally planned</span>
+          <span className="text-[9px] uppercase tracking-widest border border-white/10 text-v5-subtext px-1.5 py-0.5">Originally planned</span>
         )}
         {row.completedSession && (
           <span className="text-[9px] uppercase tracking-widest text-green-500 flex items-center gap-1">
@@ -125,7 +125,7 @@ function WorkoutRow({ row, exMap, onClick, showPlannedBadges, subLabel }) {
             <MuscleBodyOutline key={i} exercise={exMap[e.exId]} size={28} />
           ))}
           {row.exercises.length > previewExercises.length && (
-            <span className="text-[11px] text-neutral-600">+{row.exercises.length - previewExercises.length} more</span>
+            <span className="text-[11px] text-v5-subtext/70">+{row.exercises.length - previewExercises.length} more</span>
           )}
         </div>
       )}
@@ -235,13 +235,13 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
         <div className="flex gap-2 pt-2">
           <button
             onClick={() => commitRow(previewRow)}
-            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border bg-red-700 border-red-700 text-white hover:bg-red-600"
+            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
           >
             Use This Workout Today
           </button>
           <button
             onClick={() => setPreviewRow(null)}
-            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600"
+            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
           >
             Cancel
           </button>
@@ -258,7 +258,7 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
 
   return (
     <SlideInPanel title="Choose Today's Workout" subtitle={state.currentProgram?.programName || null} onBack={onClose}>
-      <div className="flex gap-1.5 border-b border-neutral-800 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+      <div className="flex gap-1.5 border-b border-white/10 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -269,7 +269,7 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
               setOpenGroupId(null);
             }}
             className={`shrink-0 px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold border ${
-              tabView === t.id ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+              tabView === t.id ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
             }`}
           >
             {t.label}
@@ -279,7 +279,7 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
 
       {tabView === "current" && overview && (
         <div className="space-y-2">
-          <div className="text-xs text-neutral-500">{overview.weekNumber ? `Week ${overview.weekNumber} · ${overview.programName}` : overview.programName}</div>
+          <div className="text-xs text-v5-subtext">{overview.weekNumber ? `Week ${overview.weekNumber} · ${overview.programName}` : overview.programName}</div>
           {currentRows.map((row) => (
             <WorkoutRow key={rowKey(row)} row={row} exMap={exMap} showPlannedBadges onClick={() => setPreviewRow(row)} />
           ))}
@@ -291,13 +291,13 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
           <SearchBar value={search} onChange={setSearch} />
           <FilterChips value={filter} onChange={setFilter} />
           {openGroupId && !filtering && (
-            <button onClick={() => setOpenGroupId(null)} className="text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-500">
+            <button onClick={() => setOpenGroupId(null)} className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red">
               ← All programs
             </button>
           )}
           {filtering || openGroupId ? (
             <div className="space-y-2">
-              {visibleAllRows.length === 0 && <div className="text-sm text-neutral-600 py-4 text-center">No workouts match.</div>}
+              {visibleAllRows.length === 0 && <div className="text-sm text-v5-subtext/70 py-4 text-center">No workouts match.</div>}
               {visibleAllRows.map((row) => (
                 <WorkoutRow key={rowKey(row)} row={row} exMap={exMap} subLabel={row.groupName} onClick={() => setPreviewRow(row)} />
               ))}
@@ -308,13 +308,13 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
                 <button
                   key={g.groupId}
                   onClick={() => setOpenGroupId(g.groupId)}
-                  className="w-full text-left border border-neutral-800 bg-charcoal-panel p-3 flex items-center justify-between hover:border-neutral-600"
+                  className="w-full text-left border border-white/10 bg-v5-elevated p-3 flex items-center justify-between hover:border-v5-red/40"
                 >
                   <div>
                     <div className="text-sm font-bold text-white">{g.groupName}</div>
-                    <div className="text-[11px] text-neutral-500 mt-0.5">{g.rows.length} workout{g.rows.length === 1 ? "" : "s"}</div>
+                    <div className="text-[11px] text-v5-subtext mt-0.5">{g.rows.length} workout{g.rows.length === 1 ? "" : "s"}</div>
                   </div>
-                  <ChevronRight size={16} className="text-neutral-600 shrink-0" />
+                  <ChevronRight size={16} className="text-v5-subtext/70 shrink-0" />
                 </button>
               ))}
             </div>
@@ -326,7 +326,7 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
         <div className="space-y-3">
           <SearchBar value={search} onChange={setSearch} />
           <div className="space-y-2">
-            {visibleMineRows.length === 0 && <div className="text-sm text-neutral-600 py-4 text-center">No saved workouts yet.</div>}
+            {visibleMineRows.length === 0 && <div className="text-sm text-v5-subtext/70 py-4 text-center">No saved workouts yet.</div>}
             {visibleMineRows.map((row) => (
               <WorkoutRow key={rowKey(row)} row={row} exMap={exMap} subLabel={row.groupName} onClick={() => setPreviewRow(row)} />
             ))}
@@ -334,7 +334,7 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
           {onNavigate && (
             <button
               onClick={goCreateWorkout}
-              className="w-full flex items-center justify-center gap-1.5 py-3 text-xs uppercase tracking-widest font-bold border border-dashed border-neutral-700 text-neutral-300 hover:border-red-700 hover:text-red-500"
+              className="w-full flex items-center justify-center gap-1.5 py-3 text-xs uppercase tracking-widest font-bold border border-dashed border-white/10 text-v5-text/90 hover:border-v5-red hover:text-v5-red"
             >
               <Plus size={14} /> Create Workout for Today
             </button>

@@ -17,24 +17,24 @@ export function AddEquipmentProfileForm({ onSave, onCancel, saveLabel = "Save" }
   const [label, setLabel] = useState("");
   const [gymLabel, setGymLabel] = useState("");
   return (
-    <div className="border border-neutral-800 bg-charcoal-panel p-3 space-y-2.5">
+    <div className="border border-white/10 bg-v5-elevated p-3 space-y-2.5">
       <div>
-        <label className="block text-[10px] uppercase tracking-widest text-neutral-500 mb-1">Profile name</label>
+        <label className="block text-[10px] uppercase tracking-widest text-v5-subtext mb-1">Profile name</label>
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Eastside Gym Seated Curl"
-          className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
           autoFocus
         />
       </div>
       <div>
-        <label className="block text-[10px] uppercase tracking-widest text-neutral-500 mb-1">Gym / location (optional)</label>
+        <label className="block text-[10px] uppercase tracking-widest text-v5-subtext mb-1">Gym / location (optional)</label>
         <input
           value={gymLabel}
           onChange={(e) => setGymLabel(e.target.value)}
           placeholder="Eastside Fitness"
-          className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
       </div>
       <div className="flex gap-2">
@@ -42,12 +42,12 @@ export function AddEquipmentProfileForm({ onSave, onCancel, saveLabel = "Save" }
           onClick={() => label.trim() && onSave(label.trim(), gymLabel.trim())}
           disabled={!label.trim()}
           className={`flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border ${
-            label.trim() ? "bg-red-700 border-red-700 text-white hover:bg-red-600" : "border-neutral-800 text-neutral-700 cursor-not-allowed"
+            label.trim() ? "bg-v5-red border-v5-red text-white hover:opacity-90" : "border-white/10 text-v5-subtext/40 cursor-not-allowed"
           }`}
         >
           {saveLabel}
         </button>
-        <button onClick={onCancel} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-neutral-800 text-neutral-400 hover:border-neutral-600">
+        <button onClick={onCancel} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40">
           Cancel
         </button>
       </div>
@@ -81,44 +81,44 @@ export default function EquipmentProfileSheet({ exId, exName, state, updateState
 
   return (
     <SlideInPanel title="Equipment Profile" subtitle={exName} onBack={onBack}>
-      <p className="text-xs text-neutral-500">Track this machine separately so progress compares apples to apples.</p>
+      <p className="text-xs text-v5-subtext">Track this machine separately so progress compares apples to apples.</p>
 
       <div className="space-y-1.5">
         <button
           onClick={() => onSelect({ equipmentProfileId: null, equipmentContext: null })}
           className={`w-full flex items-center gap-2.5 px-3 py-3 text-left border ${
-            isDefaultSelected ? "border-red-700 bg-red-950/10" : "border-neutral-800 bg-charcoal-panel"
+            isDefaultSelected ? "border-v5-red bg-v5-red/10" : "border-white/10 bg-v5-elevated"
           }`}
         >
           <span
             className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-              isDefaultSelected ? "border-red-600" : "border-neutral-700"
+              isDefaultSelected ? "border-red-600" : "border-white/10"
             }`}
           >
             {isDefaultSelected && <span className="w-2 h-2 rounded-full bg-red-600" />}
           </span>
-          <span className="text-sm text-neutral-100 flex-1 truncate">Default Machine</span>
+          <span className="text-sm text-v5-text flex-1 truncate">Default Machine</span>
         </button>
 
         {profiles.map((p) => {
           const selected = equipmentProfileId === p.id && equipmentContext !== TEMPORARY_EQUIPMENT_CONTEXT;
           return (
-            <div key={p.id} className={`flex items-center border ${selected ? "border-red-700 bg-red-950/10" : "border-neutral-800 bg-charcoal-panel"}`}>
+            <div key={p.id} className={`flex items-center border ${selected ? "border-v5-red bg-v5-red/10" : "border-white/10 bg-v5-elevated"}`}>
               <button
                 onClick={() => onSelect({ equipmentProfileId: p.id, equipmentContext: null })}
                 className="flex-1 min-w-0 flex items-center gap-2.5 px-3 py-3 text-left"
               >
                 <span
                   className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                    selected ? "border-red-600" : "border-neutral-700"
+                    selected ? "border-red-600" : "border-white/10"
                   }`}
                 >
                   {selected && <span className="w-2 h-2 rounded-full bg-red-600" />}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-sm text-neutral-100 truncate">{p.label}</span>
+                  <span className="block text-sm text-v5-text truncate">{p.label}</span>
                   {(p.gymLabel || p.isDefault) && (
-                    <span className="block text-[10px] text-neutral-500 truncate">
+                    <span className="block text-[10px] text-v5-subtext truncate">
                       {[p.gymLabel, p.isDefault ? "Usual for this exercise" : null].filter(Boolean).join(" · ")}
                     </span>
                   )}
@@ -132,7 +132,7 @@ export default function EquipmentProfileSheet({ exId, exName, state, updateState
                   }}
                   aria-label={`Set ${p.label} as usual profile`}
                   title="Set as usual profile"
-                  className="shrink-0 p-3 text-neutral-600 hover:text-red-500"
+                  className="shrink-0 p-3 text-v5-subtext/70 hover:text-v5-red"
                 >
                   <Star size={14} />
                 </button>
@@ -149,25 +149,25 @@ export default function EquipmentProfileSheet({ exId, exName, state, updateState
           onClick={() => setAdding(true)}
           disabled={atCap}
           className={`w-full flex items-center justify-center gap-1.5 py-3 text-xs uppercase tracking-widest font-bold border border-dashed ${
-            atCap ? "border-neutral-800 text-neutral-700 cursor-not-allowed" : "border-neutral-700 text-neutral-300 hover:border-red-700 hover:text-red-500"
+            atCap ? "border-white/10 text-v5-subtext/40 cursor-not-allowed" : "border-white/10 text-v5-text/90 hover:border-v5-red hover:text-v5-red"
           }`}
         >
           <Plus size={14} /> {atCap ? `Limit reached (${MAX_PROFILES_PER_EXERCISE})` : "Add machine profile"}
         </button>
       )}
 
-      <div className="pt-2 border-t border-neutral-900">
+      <div className="pt-2 border-t border-white/[0.06]">
         <button
           onClick={() => onSelect({ equipmentProfileId: null, equipmentContext: TEMPORARY_EQUIPMENT_CONTEXT })}
           className={`w-full flex items-center justify-between px-3 py-3 text-left border ${
-            isTemporarySelected ? "border-red-700 bg-red-950/10" : "border-neutral-800 bg-charcoal-panel"
+            isTemporarySelected ? "border-v5-red bg-v5-red/10" : "border-white/10 bg-v5-elevated"
           }`}
         >
           <span className="min-w-0">
-            <span className="block text-sm font-bold text-neutral-100">Different machine today</span>
-            <span className="block text-[10px] text-neutral-500 mt-0.5">One-off — won't affect saved profiles or suggestions</span>
+            <span className="block text-sm font-bold text-v5-text">Different machine today</span>
+            <span className="block text-[10px] text-v5-subtext mt-0.5">One-off — won't affect saved profiles or suggestions</span>
           </span>
-          {isTemporarySelected && <Check size={16} className="text-red-500 shrink-0" />}
+          {isTemporarySelected && <Check size={16} className="text-v5-red shrink-0" />}
         </button>
       </div>
     </SlideInPanel>

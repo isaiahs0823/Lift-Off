@@ -20,7 +20,7 @@ function fmtDelta(v, digits = 1) {
 // posture of the rest of the app. Just enough to show shape/direction, not a precision tool.
 function Sparkline({ points, height = 80 }) {
   if (points.length < 2) {
-    return <div className="text-xs text-neutral-600 py-6 text-center">Log a few more days to see a trend line.</div>;
+    return <div className="text-xs text-v5-subtext/70 py-6 text-center">Log a few more days to see a trend line.</div>;
   }
   const width = 320;
   const values = points.map((p) => p.value);
@@ -52,21 +52,21 @@ function EditEntryPanel({ entry, onBack, onSave, onDelete }) {
     <SlideInPanel title="Edit entry" subtitle={new Date(entry.date).toLocaleDateString()} onBack={onBack}>
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Weight</label>
-          <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700" />
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Weight</label>
+          <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="w-full bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red" />
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Waist</label>
-          <input type="number" value={waist} onChange={(e) => setWaist(e.target.value)} className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700" />
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Waist</label>
+          <input type="number" value={waist} onChange={(e) => setWaist(e.target.value)} className="w-full bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red" />
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Body fat %</label>
-          <input type="number" value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700" />
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Body fat %</label>
+          <input type="number" value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} className="w-full bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red" />
         </div>
       </div>
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Notes</label>
-        <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700" />
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Notes</label>
+        <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red" />
       </div>
       <button
         onClick={() =>
@@ -79,11 +79,11 @@ function EditEntryPanel({ entry, onBack, onSave, onDelete }) {
           })
         }
         disabled={!canSave}
-        className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${canSave ? "bg-red-700 border-red-700 text-white hover:bg-red-600" : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"}`}
+        className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${canSave ? "bg-v5-red border-v5-red text-white hover:opacity-90" : "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed"}`}
       >
         Save changes
       </button>
-      <button onClick={onDelete} className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-400 hover:text-red-500 hover:border-red-900/40 flex items-center justify-center gap-1.5">
+      <button onClick={onDelete} className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-subtext hover:text-v5-red hover:border-v5-red/25 flex items-center justify-center gap-1.5">
         <Trash2 size={14} /> Delete entry
       </button>
     </SlideInPanel>
@@ -164,41 +164,41 @@ export default function BodyweightTab({ state, updateState }) {
   return (
     <div className="space-y-6">
       <div>
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Physique</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Physique</div>
         <div className="text-xl font-bold text-white mt-1">Body composition</div>
       </div>
 
-      <div className="border border-neutral-800 bg-charcoal-panel p-4 space-y-3">
-        <div className="text-[11px] uppercase tracking-widest text-neutral-500">{existingToday ? "Update today's entry" : "Log today"}</div>
+      <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
+        <div className="text-[11px] uppercase tracking-widest text-v5-subtext">{existingToday ? "Update today's entry" : "Log today"}</div>
         <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="block text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Weight</label>
+            <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Weight</label>
             <input
               type="number"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
               placeholder={existingToday?.weight != null ? String(existingToday.weight) : "lb"}
-              className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+              className="w-full bg-v5-surface border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Waist</label>
+            <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Waist</label>
             <input
               type="number"
               value={waist}
               onChange={(e) => setWaist(e.target.value)}
               placeholder={existingToday?.waist != null ? String(existingToday.waist) : "in"}
-              className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+              className="w-full bg-v5-surface border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-widest text-neutral-600 mb-1">Body fat %</label>
+            <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Body fat %</label>
             <input
               type="number"
               value={bodyFat}
               onChange={(e) => setBodyFat(e.target.value)}
               placeholder={existingToday?.bodyFat != null ? String(existingToday.bodyFat) : "%"}
-              className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+              className="w-full bg-v5-surface border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
             />
           </div>
         </div>
@@ -207,47 +207,47 @@ export default function BodyweightTab({ state, updateState }) {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Notes — optional"
-          className="w-full bg-charcoal-deep border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
         <button
           onClick={saveToday}
           disabled={!canSave}
-          className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${canSave ? "bg-red-700 border-red-700 text-white hover:bg-red-600" : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"}`}
+          className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${canSave ? "bg-v5-red border-v5-red text-white hover:opacity-90" : "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed"}`}
         >
           {existingToday ? "Update entry" : "Log entry"}
         </button>
       </div>
 
-      <div className="border border-red-900/40 bg-charcoal-panel p-4 space-y-4">
-        <div className="text-[11px] uppercase tracking-widest text-red-600">Trend</div>
+      <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-4">
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Trend</div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Current</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Current</div>
             <div className="text-2xl font-bold text-white">{fmt(latestValue(entries, "weight"))} lb</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">7-day avg</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">7-day avg</div>
             <div className="text-2xl font-bold text-white">{fmt(rollingAverage(entries, "weight", 7))} lb</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">14-day avg</div>
-            <div className="text-lg text-neutral-300">{fmt(rollingAverage(entries, "weight", 14))} lb</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">14-day avg</div>
+            <div className="text-lg text-v5-text/90">{fmt(rollingAverage(entries, "weight", 14))} lb</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Weekly rate</div>
-            <div className="text-lg text-neutral-300">{fmtDelta(weeklyRate)} lb/week</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Weekly rate</div>
+            <div className="text-lg text-v5-text/90">{fmtDelta(weeklyRate)} lb/week</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Total change</div>
-            <div className="text-lg text-neutral-300">{fmtDelta(totalChange(entries, "weight"))} lb</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Total change</div>
+            <div className="text-lg text-v5-text/90">{fmtDelta(totalChange(entries, "weight"))} lb</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Status</div>
-            <div className="text-lg text-neutral-300">{PACE_LABEL[pace]}</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Status</div>
+            <div className="text-lg text-v5-text/90">{PACE_LABEL[pace]}</div>
           </div>
         </div>
         {projectedDate && (
-          <div className="text-xs text-neutral-400 border-t border-neutral-900 pt-3">
+          <div className="text-xs text-v5-subtext border-t border-white/[0.06] pt-3">
             At this pace, projected to hit your {weightGoal.title} goal around{" "}
             <span className="text-white font-bold">{new Date(projectedDate).toLocaleDateString()}</span>.
           </div>
@@ -256,28 +256,28 @@ export default function BodyweightTab({ state, updateState }) {
       </div>
 
       {(rollingAverage(entries, "waist", 14) != null || rollingAverage(entries, "bodyFat", 14) != null) && (
-        <div className="border border-neutral-800 bg-charcoal-panel p-4 grid grid-cols-2 gap-3">
+        <div className="border border-white/10 bg-v5-elevated p-4 grid grid-cols-2 gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Waist (14-day avg)</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Waist (14-day avg)</div>
             <div className="text-lg font-bold text-white">{fmt(rollingAverage(entries, "waist", 14))} in</div>
-            <div className="text-xs text-neutral-500">{fmtDelta(weeklyRateOfChange(entries, "waist"))} in/week</div>
+            <div className="text-xs text-v5-subtext">{fmtDelta(weeklyRateOfChange(entries, "waist"))} in/week</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500">Body fat (14-day avg)</div>
+            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Body fat (14-day avg)</div>
             <div className="text-lg font-bold text-white">{fmt(rollingAverage(entries, "bodyFat", 14))}%</div>
-            <div className="text-xs text-neutral-500">{fmtDelta(weeklyRateOfChange(entries, "bodyFat"))}%/week</div>
+            <div className="text-xs text-v5-subtext">{fmtDelta(weeklyRateOfChange(entries, "bodyFat"))}%/week</div>
           </div>
         </div>
       )}
 
       {sortedEntries.length > 0 && (
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-neutral-500 mb-2">History</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">History</div>
           <div className="space-y-1.5">
             {sortedEntries.slice(0, 30).map((e) => (
-              <button key={e.id} onClick={() => setEditingId(e.id)} className="w-full flex items-center justify-between text-xs border-b border-neutral-900 py-2 text-left hover:border-neutral-700">
-                <span className="text-neutral-500">{new Date(e.date).toLocaleDateString()}</span>
-                <span className="text-sm text-neutral-300">
+              <button key={e.id} onClick={() => setEditingId(e.id)} className="w-full flex items-center justify-between text-xs border-b border-white/[0.06] py-2 text-left hover:border-white/10">
+                <span className="text-v5-subtext">{new Date(e.date).toLocaleDateString()}</span>
+                <span className="text-sm text-v5-text/90">
                   {e.weight != null ? `${e.weight} lb` : ""}
                   {e.waist != null ? ` · ${e.waist} in waist` : ""}
                   {e.bodyFat != null ? ` · ${e.bodyFat}% bf` : ""}

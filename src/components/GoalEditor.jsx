@@ -63,22 +63,22 @@ export function GoalEditor({ goal, allExercises, exMap, hasPrimary, onBack, onSa
   return (
     <SlideInPanel title={goal ? "Edit goal" : "New goal"} onBack={onBack}>
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Goal title</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Goal title</label>
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Reach 205 lb"
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-base focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
         />
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Type</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Type</label>
         <select
           value={type}
           onChange={(e) => handleTypeChange(e.target.value)}
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:border-v5-red"
         >
           {GOAL_TYPES.map((t) => (
             <option key={t.value} value={t.value}>
@@ -90,11 +90,11 @@ export function GoalEditor({ goal, allExercises, exMap, hasPrimary, onBack, onSa
 
       {type === "lift" && (
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Linked exercise (optional)</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Linked exercise (optional)</label>
           <select
             value={linkedExId}
             onChange={(e) => setLinkedExId(e.target.value)}
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2.5 text-sm focus:outline-none focus:border-red-700 mb-2"
+            className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:border-v5-red mb-2"
           >
             <option value="">Not linked — track manually</option>
             {allExercises.map((ex) => (
@@ -108,7 +108,7 @@ export function GoalEditor({ goal, allExercises, exMap, hasPrimary, onBack, onSa
               <button
                 onClick={() => setMetric("weight")}
                 className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
-                  metric === "weight" ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400"
+                  metric === "weight" ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext"
                 }`}
               >
                 Heaviest weight
@@ -116,14 +116,14 @@ export function GoalEditor({ goal, allExercises, exMap, hasPrimary, onBack, onSa
               <button
                 onClick={() => setMetric("e1rm")}
                 className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
-                  metric === "e1rm" ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400"
+                  metric === "e1rm" ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext"
                 }`}
               >
                 Estimated 1RM
               </button>
             </div>
           )}
-          <p className="text-xs text-neutral-600 mt-1.5">
+          <p className="text-xs text-v5-subtext/70 mt-1.5">
             Linked, current value tracks itself off your logs for {exMap[linkedExId]?.name || "that exercise"}.
           </p>
         </div>
@@ -131,65 +131,65 @@ export function GoalEditor({ goal, allExercises, exMap, hasPrimary, onBack, onSa
 
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Start</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Start</label>
           <input
             type="number"
             value={startValue}
             onChange={(e) => setStartValue(e.target.value)}
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+            className="w-full bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
           />
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Current</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Current</label>
           <input
             type="number"
             value={currentValue}
             onChange={(e) => setCurrentValue(e.target.value)}
             disabled={type === "lift" && !!linkedExId}
             placeholder={type === "lift" && linkedExId ? "auto" : ""}
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700 disabled:text-neutral-600"
+            className="w-full bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red disabled:text-v5-subtext/70"
           />
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Target</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Target</label>
           <input
             type="number"
             value={targetValue}
             onChange={(e) => setTargetValue(e.target.value)}
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+            className="w-full bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
           />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Units</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Units</label>
           <input
             type="text"
             value={units}
             onChange={(e) => setUnits(e.target.value)}
             placeholder="lb, %, min..."
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+            className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
           />
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Target date</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Target date</label>
           <input
             type="date"
             value={targetDate}
             onChange={(e) => setTargetDate(e.target.value)}
-            className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-2 py-2 text-sm focus:outline-none focus:border-red-700"
+            className="w-full bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Priority</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Priority</label>
         <div className="flex gap-2">
           <button
             onClick={() => setPriority("primary")}
             className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
-              priority === "primary" ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400"
+              priority === "primary" ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext"
             }`}
           >
             Primary
@@ -197,38 +197,38 @@ export function GoalEditor({ goal, allExercises, exMap, hasPrimary, onBack, onSa
           <button
             onClick={() => setPriority("secondary")}
             className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
-              priority === "secondary" ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400"
+              priority === "secondary" ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext"
             }`}
           >
             Secondary
           </button>
         </div>
         {priority === "primary" && hasPrimary && goal?.priority !== "primary" && (
-          <p className="text-xs text-neutral-600 mt-1.5">This replaces your current primary goal — it becomes secondary.</p>
+          <p className="text-xs text-v5-subtext/70 mt-1.5">This replaces your current primary goal — it becomes secondary.</p>
         )}
       </div>
 
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Why this goal (optional)</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Why this goal (optional)</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           placeholder="Your reason — shown nowhere else, just for you."
-          className="w-full bg-charcoal-panel border border-neutral-800 text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:border-red-700"
+          className="w-full bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
       </div>
 
       {goal && (
         <div>
-          <label className="block text-[11px] uppercase tracking-widest text-neutral-500 mb-1.5">Status</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Status</label>
           <div className="flex gap-2">
             {["active", "paused", "completed"].map((s) => (
               <button
                 key={s}
                 onClick={() => setStatus(s)}
                 className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
-                  status === s ? "bg-red-700 border-red-700 text-white" : "border-neutral-800 text-neutral-400"
+                  status === s ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext"
                 }`}
               >
                 {s}
@@ -242,7 +242,7 @@ export function GoalEditor({ goal, allExercises, exMap, hasPrimary, onBack, onSa
         onClick={handleSave}
         disabled={!canSave}
         className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
-          canSave ? "bg-red-700 border-red-700 text-white hover:bg-red-600" : "bg-charcoal-panel border-neutral-800 text-neutral-700 cursor-not-allowed"
+          canSave ? "bg-v5-red border-v5-red text-white hover:opacity-90" : "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed"
         }`}
       >
         {goal ? "Save changes" : "Create goal"}
@@ -251,7 +251,7 @@ export function GoalEditor({ goal, allExercises, exMap, hasPrimary, onBack, onSa
       {goal && onDelete && (
         <button
           onClick={onDelete}
-          className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-neutral-800 bg-charcoal-panel text-neutral-400 hover:text-red-500 hover:border-red-900/40 flex items-center justify-center gap-1.5"
+          className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-subtext hover:text-v5-red hover:border-v5-red/25 flex items-center justify-center gap-1.5"
         >
           <Trash2 size={14} /> Delete goal
         </button>

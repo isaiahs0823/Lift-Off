@@ -26,24 +26,24 @@ export default function RepeatRecentWorkoutPicker({ state, onStartRun, onBack })
   return (
     <SlideInPanel title="Repeat recent workout" subtitle="Starts a new session with the same exercises" onBack={onBack}>
       {sessions.length === 0 ? (
-        <div className="text-sm text-neutral-500 py-6 text-center">No completed workouts yet.</div>
+        <div className="text-sm text-v5-subtext py-6 text-center">No completed workouts yet.</div>
       ) : (
         <div className="space-y-1.5">
           {sessions.map((s) => (
             <button
               key={s.id}
               onClick={() => repeat(s)}
-              className="w-full text-left border border-neutral-800 bg-charcoal-panel px-4 py-3 hover:border-red-700 flex items-center justify-between gap-3"
+              className="w-full text-left border border-white/10 bg-v5-elevated px-4 py-3 hover:border-v5-red flex items-center justify-between gap-3"
             >
               <div className="min-w-0">
                 <div className="text-base text-white truncate">{s.planName}</div>
-                <div className="text-xs text-neutral-500 mt-0.5">
+                <div className="text-xs text-v5-subtext mt-0.5">
                   {new Date(s.finishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   {s.mainMuscles?.length > 0 ? ` · ${s.mainMuscles.join(", ")}` : ""} · {s.exerciseCount} exercise
                   {s.exerciseCount === 1 ? "" : "s"}
                 </div>
               </div>
-              <ChevronRight size={16} className="text-neutral-600 shrink-0" />
+              <ChevronRight size={16} className="text-v5-subtext/70 shrink-0" />
             </button>
           ))}
         </div>
