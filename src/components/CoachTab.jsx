@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff, ListChecks, Sparkles, AlertCircle, Target, MessageCircle } from "lucide-react";
-import { ScreenHeader, SectionLabel, Card, ListRow, ButtonPrimary, Pill, Divider } from "./ui/Kit.jsx";
+import { SectionLabel, Card, ButtonPrimary, Pill, Divider } from "./ui/Kit.jsx";
 import { syncCoachMemory } from "../utils/coachMemory.js";
 import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC, PHYSIQUE_PHASE_LABEL } from "../utils/athleteProfile.js";
 import { resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
@@ -24,6 +24,24 @@ import {
   resolveProposalOnMessage,
   supersedePendingProposals,
 } from "../utils/coachConversations.js";
+
+// Compact, Coach-local menu row — deliberately NOT the shared ListRow (that primitive's p-4
+// padding + w-9 icon circle is used all over the rest of the app; shrinking it here would
+// shrink Today/Progress/More too). Smaller icon circle, tighter padding, same tap target still
+// comfortably touch-sized (44px+ total row height).
+function CoachMenuRow({ icon: Icon, title, onClick }) {
+  return (
+    <button onClick={onClick} className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-v5-surface hover:bg-v5-elevated text-left transition-colors">
+      <span className="flex items-center gap-2.5 min-w-0">
+        <span className="shrink-0 w-7 h-7 rounded-full bg-v5-elevated flex items-center justify-center">
+          <Icon size={14} className="text-v5-subtext" />
+        </span>
+        <span className="text-sm font-bold text-v5-text truncate">{title}</span>
+      </span>
+      <ChevronRight size={14} className="text-v5-subtext shrink-0" />
+    </button>
+  );
+}
 
 const GENERAL_QUICK_QUESTIONS = [
   "How was my last workout?",
@@ -198,22 +216,30 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
   const showStreaming = sending && streamingText !== "";
 
   return (
-    <div className="space-y-5">
-      <ScreenHeader
-        eyebrow="Coach"
-        title="BRK Coach"
-        subtitle={`Context: ${KNOWLEDGE_LEVEL_LABEL[knowledgeLevel]}`}
-      />
+    <div className="space-y-3">
+      {/* Compact local header — same info as before (eyebrow/title/context) but the context
+          line rides inline next to the title instead of stacking as its own row, and the title
+          drops one step (2xl -> xl) to trim height without losing hierarchy (task: tighten
+          top section, don't weaken it). */}
+      <div>
+        <SectionLabel>Coach</SectionLabel>
+        <div className="flex items-baseline justify-between gap-2 mt-0.5">
+          <div className="text-xl font-black text-v5-text tracking-tight">BRK Coach</div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext/70 shrink-0" title={KNOWLEDGE_LEVEL_DESC[knowledgeLevel]}>
+            {KNOWLEDGE_LEVEL_LABEL[knowledgeLevel]}
+          </div>
+        </div>
+      </div>
 
       {/* Context card — what Coach is actually considering, so this reads as BRK's own coach
-          rather than a bolted-on chatbot page (mockup section 9). Real fields only: specialty,
-          declared phase, declared development priorities. */}
-      <Card onClick={() => onNavigate?.("coachSettings")} className="space-y-1.5">
+          rather than a bolted-on chatbot page. Real fields only: specialty, declared phase,
+          declared development priorities. Tighter padding/spacing than before. */}
+      <Card onClick={() => onNavigate?.("coachSettings")} padding="p-3" className="space-y-1">
         <div className="flex items-center justify-between">
           <SectionLabel className="flex items-center gap-1.5">
-            <MessageCircle size={12} /> {activeSpecialty?.label || "Coach"}
+            <MessageCircle size={11} /> {activeSpecialty?.label || "Coach"}
           </SectionLabel>
-          <ChevronRight size={16} className="text-v5-subtext" />
+          <ChevronRight size={14} className="text-v5-subtext" />
         </div>
         <div className="text-sm text-v5-text/90">
           {phase ? PHYSIQUE_PHASE_LABEL[phase] || "General Hypertrophy" : "General Hypertrophy"}
@@ -221,18 +247,18 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
         {hasFocus && <div className="text-xs text-v5-subtext">Focus: {[priorities.primary, priorities.secondary].filter(Boolean).join(", ")}</div>}
       </Card>
 
-      <div className="space-y-2">
-        <ListRow icon={BookOpen} title="What Coach Knows About You" onClick={() => onNavigate?.("coachKnowledge")} />
-        <ListRow icon={Target} title="Development Priorities" onClick={() => onNavigate?.("developmentPriorities")} />
-        <ListRow icon={SettingsIcon} title="Coach Settings" onClick={() => onNavigate?.("coachSettings")} />
-        <ListRow icon={Apple} title="Nutrition Plan" onClick={() => onNavigate?.("nutrition")} />
-        <ListRow icon={ListChecks} title="Build a Program" onClick={() => setShowScheduleBuilder(true)} />
+      <div className="space-y-1.5">
+        <CoachMenuRow icon={BookOpen} title="What Coach Knows About You" onClick={() => onNavigate?.("coachKnowledge")} />
+        <CoachMenuRow icon={Target} title="Development Priorities" onClick={() => onNavigate?.("developmentPriorities")} />
+        <CoachMenuRow icon={SettingsIcon} title="Coach Settings" onClick={() => onNavigate?.("coachSettings")} />
+        <CoachMenuRow icon={Apple} title="Nutrition Plan" onClick={() => onNavigate?.("nutrition")} />
+        <CoachMenuRow icon={ListChecks} title="Build a Program" onClick={() => setShowScheduleBuilder(true)} />
       </div>
 
       {openCommitments.length > 0 && (
-        <Card className="space-y-2.5">
+        <Card padding="p-3" className="space-y-1.5">
           <SectionLabel tone="muted">Active commitments</SectionLabel>
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {openCommitments.map((c) => {
               const progress = c.type !== "custom" ? commitmentProgress(state, c) : null;
               return (
@@ -254,15 +280,15 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
       )}
 
       {!isOnline && (
-        <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 rounded-xl px-3 py-2.5">
+        <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 rounded-xl px-3 py-2">
           <WifiOff size={13} /> You're offline — Coach needs a connection to respond.
         </div>
       )}
 
       <div className="rounded-2xl bg-v5-surface flex flex-col h-[65vh] min-h-[420px] overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
           {bubbles.length === 0 && !showThinking && !showStreaming && (
-            <div className="text-sm text-v5-subtext text-center py-6">
+            <div className="text-sm text-v5-subtext text-center py-4">
               Ask about a workout, your progress, nutrition, or what to focus on today.
             </div>
           )}
@@ -344,7 +370,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
           </div>
         )}
 
-        <div className="border-t border-white/[0.06] p-3 flex gap-2">
+        <div className="border-t border-white/[0.06] p-2.5 flex gap-2">
           <input
             type="text"
             value={input}
@@ -368,9 +394,9 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
       </div>
 
       {history.length > 0 && (
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           <SectionLabel tone="muted">Earlier Coach notes</SectionLabel>
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {history.slice(0, 10).map((h, i) => (
               <React.Fragment key={h.id}>
                 {i > 0 && <Divider />}

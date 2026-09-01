@@ -2793,14 +2793,14 @@ export default function LiftLog() {
 
 function Header() {
   return (
-    <div className="px-4 sm:px-6 pt-6 pb-4 bg-v5-bg">
-      <div className="flex items-center gap-3">
-        <img src={BREAK_LOGO} alt="B.R.E.A.K. logo" className="w-10 h-10 rounded-full object-cover ring-1 ring-v5-red/50" />
+    <div className="px-4 sm:px-6 pt-4 pb-3 bg-v5-bg">
+      <div className="flex items-center gap-2.5">
+        <img src={BREAK_LOGO} alt="B.R.E.A.K. logo" className="w-8 h-8 rounded-full object-cover ring-1 ring-v5-red/50" />
         <div>
           <div className="text-v5-text font-black tracking-wide text-sm leading-none">
             BRK <span className="text-v5-red">-</span> LIFT
           </div>
-          <div className="text-[9px] text-v5-subtext/70 tracking-[0.18em] uppercase mt-1.5">Keep the promises you make to yourself</div>
+          <div className="text-[9px] text-v5-subtext/70 tracking-[0.18em] uppercase mt-1">Keep the promises you make to yourself</div>
         </div>
       </div>
     </div>
