@@ -5,17 +5,24 @@
 // but intentionally left out of the score itself (one un-calibrated number from a phone
 // sensor shouldn't silently swing a "train hard or don't" verdict).
 
-// Higher input = better for these (1-5): sleepQuality, motivation, energy.
-// Higher input = worse for these (1-5): soreness, stress — inverted below.
+// Every subjective rating is 1-5 where higher always means better readiness (1=poor,
+// 5=excellent) as shown to the user, normalized as ((rating-1)/4)*100 so 1->0, 2->25, 3->50,
+// 4->75, 5->100 — a rating of 1 across the board must floor the score at 0, not land at 20%.
+//
+// sleepQuality/motivation/energy are stored in that same positive direction. soreness/stress
+// are stored in their original legacy direction (higher stored value = worse) so existing
+// readinessLogs entries keep scoring exactly as they always have — ReadinessCheckIn.jsx inverts
+// the displayed value/input at the UI boundary so the user only ever sees "1=poor, 5=excellent"
+// for every row, without this file or stored data needing to change direction or migrate.
 export function computeReadinessScore(inputs) {
   const { sleepQuality, sleepHours, soreness, stress, motivation, energy } = inputs;
   const scores = [];
 
-  if (sleepQuality != null) scores.push((sleepQuality / 5) * 100);
-  if (soreness != null) scores.push(((6 - soreness) / 5) * 100);
-  if (stress != null) scores.push(((6 - stress) / 5) * 100);
-  if (motivation != null) scores.push((motivation / 5) * 100);
-  if (energy != null) scores.push((energy / 5) * 100);
+  if (sleepQuality != null) scores.push(((sleepQuality - 1) / 4) * 100);
+  if (soreness != null) scores.push(((5 - soreness) / 4) * 100);
+  if (stress != null) scores.push(((5 - stress) / 4) * 100);
+  if (motivation != null) scores.push(((motivation - 1) / 4) * 100);
+  if (energy != null) scores.push(((energy - 1) / 4) * 100);
   if (sleepHours != null && sleepHours !== "") {
     // Banded rather than linear — a simple, explainable "close to 8 hours is good" curve.
     const h = Number(sleepHours);

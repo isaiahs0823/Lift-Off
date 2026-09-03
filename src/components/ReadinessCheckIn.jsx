@@ -11,31 +11,43 @@ function todayStr() {
 const BAND_TONE = { green: "success", yellow: "warn", red: "red" };
 const BAND_TEXT = { green: "text-v5-success", yellow: "text-amber-400", red: "text-v5-red" };
 
+// Every row is displayed and edited on the identical 1=poor -> 5=excellent scale. soreness and
+// stress are stored internally in their legacy "higher=worse" direction for backward
+// compatibility with existing readinessLogs entries (see readiness.js) — `invert` flips the
+// displayed value and the onChange write at this boundary only, so the user never sees or
+// enters a reversed row, while form.soreness/form.stress and the saved payload stay unchanged.
 const RATING_FIELDS = [
-  { key: "sleepQuality", label: "Sleep quality" },
-  { key: "soreness", label: "Muscle soreness" },
-  { key: "stress", label: "Stress" },
-  { key: "motivation", label: "Motivation" },
-  { key: "energy", label: "Energy" },
+  { key: "sleepQuality", label: "Sleep Quality", anchor: "Poor → Excellent" },
+  { key: "soreness", label: "Muscle Recovery", anchor: "Very sore → Fresh", invert: true },
+  { key: "stress", label: "Mental Recovery", anchor: "Stressed → Calm", invert: true },
+  { key: "motivation", label: "Motivation", anchor: "None → High" },
+  { key: "energy", label: "Energy", anchor: "Exhausted → Energized" },
 ];
 
-function RatingRow({ label, value, onChange }) {
+function invert6(v) {
+  return 6 - v;
+}
+
+function RatingRow({ label, anchor, value, onChange }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-sm text-v5-text/90">{label}</span>
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            onClick={() => onChange(n)}
-            className={`w-8 h-8 rounded-lg text-xs font-bold ${
-              value === n ? "bg-v5-red text-white" : "bg-v5-elevated text-v5-subtext hover:text-v5-text"
-            }`}
-          >
-            {n}
-          </button>
-        ))}
+    <div className="space-y-0.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-v5-text/90">{label}</span>
+        <div className="flex gap-1">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              onClick={() => onChange(n)}
+              className={`w-8 h-8 rounded-lg text-xs font-bold ${
+                value === n ? "bg-v5-red text-white" : "bg-v5-elevated text-v5-subtext hover:text-v5-text"
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
       </div>
+      {anchor && <div className="text-[10px] text-v5-subtext/50 text-right">{anchor}</div>}
     </div>
   );
 }
@@ -153,7 +165,13 @@ export default function ReadinessCheckIn({ state, updateState, compact = false, 
       <SectionLabel>Daily readiness check-in</SectionLabel>
       <div className="space-y-2.5">
         {RATING_FIELDS.map((f) => (
-          <RatingRow key={f.key} label={f.label} value={form[f.key]} onChange={(v) => setField(f.key, v)} />
+          <RatingRow
+            key={f.key}
+            label={f.label}
+            anchor={f.anchor}
+            value={f.invert ? invert6(form[f.key]) : form[f.key]}
+            onChange={(v) => setField(f.key, f.invert ? invert6(v) : v)}
+          />
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -186,6 +204,10 @@ export default function ReadinessCheckIn({ state, updateState, compact = false, 
       {previewScore != null && (
         <div className="text-xs text-v5-subtext">
           Score preview: <span className="text-v5-text font-bold">{previewScore}</span>
+          {(() => {
+            const band = readinessBand(previewScore);
+            return band ? <span className={`ml-1.5 font-bold ${BAND_TEXT[band]}`}>· {BAND_LABEL[band]}</span> : null;
+          })()}
         </div>
       )}
       <ButtonPrimary onClick={save}>Save check-in</ButtonPrimary>
