@@ -139,7 +139,7 @@ export default function CoachSpecialtySelect({ state, updateState, mode = "onboa
         <div className="flex items-center justify-between">
           <div className="text-base font-bold text-white uppercase tracking-wide">{picked.label}</div>
           <span
-            className={`shrink-0 text-[9px] uppercase tracking-widest px-1.5 py-0.5 ${
+            className={`shrink-0 text-[11px] uppercase tracking-widest px-1.5 py-0.5 ${
               picked.status === "active" ? "bg-v5-red text-white" : "border border-white/10 text-v5-subtext"
             }`}
           >

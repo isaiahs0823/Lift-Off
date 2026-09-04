@@ -70,7 +70,7 @@ function MemoryRow({ memory, updateState }) {
           </button>
         </div>
       </div>
-      <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest">
         <span className={STATUS_COLOR[memory.status]}>{STATUS_LABEL[memory.status]}</span>
         {memory.source !== "stated" && <span className="text-v5-subtext/70">{confidenceLabel(memory.evidenceCount)} confidence</span>}
         {memory.source !== "stated" && !correcting && (
@@ -133,7 +133,7 @@ export default function CoachKnowledgeScreen({ state, updateState, onNavigate, o
             {secondary.map((g) => (
               <div key={g.id} className="text-xs text-v5-subtext">{g.title}</div>
             ))}
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 flex items-center gap-1 pt-1">
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70 flex items-center gap-1 pt-1">
               Edit on Mission <ChevronRight size={10} />
             </div>
           </button>
@@ -193,7 +193,7 @@ export default function CoachKnowledgeScreen({ state, updateState, onNavigate, o
         {profile.motivation && (
           <div className="border border-white/10 bg-v5-elevated p-3 text-sm text-v5-text/90">
             {profile.motivation}
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mt-2">Private — never shared automatically</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70 mt-2">Private — never shared automatically</div>
           </div>
         )}
       </Section>

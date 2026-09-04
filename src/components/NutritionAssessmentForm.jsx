@@ -486,15 +486,15 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div>
                   <div className="text-lg font-bold text-white">{targets.protein}g</div>
-                  <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Protein</div>
+                  <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Protein</div>
                 </div>
                 <div>
                   <div className="text-lg font-bold text-white">{targets.carbs}g</div>
-                  <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Carbs</div>
+                  <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Carbs</div>
                 </div>
                 <div>
                   <div className="text-lg font-bold text-white">{targets.fat}g</div>
-                  <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Fat</div>
+                  <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Fat</div>
                 </div>
               </div>
             </div>

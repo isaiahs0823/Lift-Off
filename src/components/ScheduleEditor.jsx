@@ -47,7 +47,7 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
             <button
               key={t}
               onClick={() => setType(t)}
-              className={`flex flex-col items-center gap-1 py-2.5 border text-[10px] uppercase tracking-wide font-bold ${
+              className={`flex flex-col items-center gap-1 py-2.5 border text-[11px] uppercase tracking-wide font-bold ${
                 active ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
               }`}
             >
@@ -60,7 +60,7 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
 
       {showSource && (
         <div className="space-y-1.5">
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70">Source</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">Source</div>
           <button
             onClick={() => setSource(null)}
             disabled={!hasCurrentProgram && slot.type === "workout"}
@@ -106,7 +106,7 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
       )}
 
       <div>
-        <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Label</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">Label</label>
         <input
           type="text"
           value={slot.label}

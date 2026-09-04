@@ -34,10 +34,10 @@ function DayRow({ day, onTap }) {
       <span className="flex items-center gap-2 min-w-0">
         <span className={`w-4 shrink-0 text-center font-bold ${STATUS_COLOR[day.status]}`}>{recoveryMark || STATUS_GLYPH[day.status]}</span>
         <span className={`text-sm truncate ${day.status === "current" ? "text-white font-bold" : "text-v5-text/90"}`}>{day.label}</span>
-        {day.isRecovery && <span className="text-[9px] uppercase tracking-widest text-v5-subtext border border-white/10 px-1 py-0.5 shrink-0">Recovery</span>}
-        {day.isDeload && <span className="text-[9px] uppercase tracking-widest text-v5-red border border-v5-red/40 px-1 py-0.5 shrink-0">Deload</span>}
+        {day.isRecovery && <span className="text-[11px] uppercase tracking-widest text-v5-subtext border border-white/10 px-1 py-0.5 shrink-0">Recovery</span>}
+        {day.isDeload && <span className="text-[11px] uppercase tracking-widest text-v5-red border border-v5-red/40 px-1 py-0.5 shrink-0">Deload</span>}
         {day.status === "swapped" && (
-          <span className="text-[9px] uppercase tracking-widest text-v5-subtext border border-white/10 px-1 py-0.5 shrink-0">Swapped</span>
+          <span className="text-[11px] uppercase tracking-widest text-v5-subtext border border-white/10 px-1 py-0.5 shrink-0">Swapped</span>
         )}
       </span>
       <ChevronRight size={14} className="text-v5-subtext/40 shrink-0" />
@@ -56,7 +56,7 @@ function WeekBlock({ week, defaultOpen, onTapDay }) {
             Week {week.weekNumber}
             {week.isCurrentWeek ? " — Current" : ""}
           </span>
-          {week.isDeloadWeek && <span className="text-[9px] uppercase tracking-widest text-v5-red border border-v5-red/40 px-1.5 py-0.5">Deload</span>}
+          {week.isDeloadWeek && <span className="text-[11px] uppercase tracking-widest text-v5-red border border-v5-red/40 px-1.5 py-0.5">Deload</span>}
         </span>
         <span className="flex items-center gap-2 text-[11px] text-v5-subtext/70">
           {completedCount}/{week.days.length}
@@ -197,13 +197,13 @@ export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWork
         <div className="border border-white/10 bg-v5-elevated p-4 space-y-2">
           {timeline.programFocus?.length > 0 && (
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Program focus</div>
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Program focus</div>
               <div className="text-sm text-v5-text/90 mt-0.5">{timeline.programFocus.join(" · ")}</div>
             </div>
           )}
           {yourPriorityLabels.length > 0 && (
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Your priorities</div>
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Your priorities</div>
               <div className="text-sm text-v5-text/90 mt-0.5">{yourPriorityLabels.join(" · ")}</div>
             </div>
           )}
@@ -212,7 +212,7 @@ export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWork
 
       {(weekAdherence || totalAdherence) && (
         <div className="border border-white/10 bg-v5-elevated p-4 space-y-2">
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">This week</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">This week</div>
           {weekAdherence && (
             <>
               <div className="flex items-center justify-between text-sm">

@@ -43,7 +43,7 @@ export default function SessionRecapView({ session, state, exMap, onBack, onView
 
       {recap.alternateGym && (
         <div className="border border-white/10 bg-v5-elevated p-3 space-y-1">
-          <div className="text-[10px] uppercase tracking-widest text-v5-red font-bold">Alternate gym session</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red font-bold">Alternate gym session</div>
           {recap.alternateGym.locationLabel && <div className="text-sm text-v5-text/90">{recap.alternateGym.locationLabel}</div>}
           {recap.alternateGym.differentEquipmentCount > 0 ? (
             <div className="text-xs text-v5-subtext">
@@ -58,22 +58,22 @@ export default function SessionRecapView({ session, state, exMap, onBack, onView
 
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Exercises</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Exercises</div>
           <div className="text-lg font-bold text-white">{recap.exerciseCount}</div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Working sets</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Working sets</div>
           <div className="text-lg font-bold text-white">{recap.workingSets}</div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Volume</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Volume</div>
           <div className="text-lg font-bold text-white">{recap.totalVolume.toLocaleString()} lb</div>
         </div>
       </div>
 
       {recap.bestLift && (
         <div className="border border-white/10 bg-v5-elevated p-4 space-y-1">
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Top set</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Top set</div>
           <div className="text-base font-bold text-white">{exMap[recap.bestLift.exId]?.name || recap.bestLift.exId}</div>
           <div className="text-2xl font-bold text-white">
             {recap.bestLift.weight} × {recap.bestLift.reps}
@@ -83,7 +83,7 @@ export default function SessionRecapView({ session, state, exMap, onBack, onView
 
       {recap.wins.length > 0 && (
         <div className="border border-white/10 bg-v5-elevated p-4 space-y-2.5">
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Progression</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Progression</div>
           {recap.wins.map((w) => (
             <div key={w.exId} className="flex items-center justify-between gap-2 text-sm">
               <span className="text-v5-text/90 truncate">{w.name}</span>
@@ -95,7 +95,7 @@ export default function SessionRecapView({ session, state, exMap, onBack, onView
 
       {recap.prs.length > 0 && (
         <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-2.5">
-          <div className="text-[10px] uppercase tracking-widest text-v5-red font-bold flex items-center gap-1.5">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red font-bold flex items-center gap-1.5">
             <Award size={12} /> New PR
           </div>
           {recap.prs.map((pr, i) => (
@@ -109,7 +109,7 @@ export default function SessionRecapView({ session, state, exMap, onBack, onView
                   {prHeroLabel(pr)} · {PR_TYPE_LABEL[pr.type]}
                 </span>
                 {pr.qualityFlag && (
-                  <span className="text-[9px] uppercase tracking-widest bg-v5-elevated text-v5-text/90 px-1.5 py-0.5">
+                  <span className="text-[11px] uppercase tracking-widest bg-v5-elevated text-v5-text/90 px-1.5 py-0.5">
                     {/* Task section 7: Grind is a softer PR label ("Grind") — not presented as
                         identical evidence to a Form Breakdown/Pain PR, which reads "X flagged." */}
                     {pr.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[pr.qualityFlag]} flagged`}
@@ -123,7 +123,7 @@ export default function SessionRecapView({ session, state, exMap, onBack, onView
 
       {(recap.attention.length > 0 || recap.declines.length > 0) && (
         <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Attention</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Attention</div>
           {recap.attention.map((e) => (
             <div key={e.exId} className="space-y-0.5">
               <div className="text-sm font-bold text-white">{e.name}</div>
@@ -152,7 +152,7 @@ export default function SessionRecapView({ session, state, exMap, onBack, onView
       )}
 
       <div className="space-y-3">
-        <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Next time</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Next time</div>
         {recap.perExercise
           .filter((e) => e.nextTime)
           .map((e) => (
@@ -162,7 +162,7 @@ export default function SessionRecapView({ session, state, exMap, onBack, onView
                 {e.nextTime.weight != null ? `Try ${e.nextTime.weight} × ${e.nextTime.repsLabel}` : e.nextTime.reason}
               </div>
               {e.nextTime.weight != null && <div className="text-xs text-v5-subtext/70 mt-0.5">{e.nextTime.reason}</div>}
-              {e.equipmentLabel !== "Default Machine" && <div className="text-[10px] text-v5-subtext/70 mt-0.5">{e.equipmentLabel}</div>}
+              {e.equipmentLabel !== "Default Machine" && <div className="text-[11px] text-v5-subtext/70 mt-0.5">{e.equipmentLabel}</div>}
             </div>
           ))}
       </div>

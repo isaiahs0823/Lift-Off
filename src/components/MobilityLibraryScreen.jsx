@@ -64,7 +64,7 @@ function RoutineRow({ routine, state, onStart, onLogManual }) {
           </div>
         </div>
         {completedToday && (
-          <span className="text-[9px] uppercase tracking-widest text-green-500 flex items-center gap-1 shrink-0">
+          <span className="text-[11px] uppercase tracking-widest text-green-500 flex items-center gap-1 shrink-0">
             <Check size={10} /> Done today
           </span>
         )}
@@ -146,7 +146,7 @@ export default function MobilityLibraryScreen({ state, onSelectMovement, onStart
           <button
             key={r.label}
             onClick={() => setRegionFilter(r.label)}
-            className={`shrink-0 px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border ${
+            className={`shrink-0 px-2.5 py-1 text-[11px] uppercase tracking-widest font-bold border ${
               regionFilter === r.label ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
             }`}
           >
@@ -159,7 +159,7 @@ export default function MobilityLibraryScreen({ state, onSelectMovement, onStart
           <button
             key={t}
             onClick={() => setTypeFilter((cur) => (cur === t ? null : t))}
-            className={`shrink-0 px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border ${
+            className={`shrink-0 px-2.5 py-1 text-[11px] uppercase tracking-widest font-bold border ${
               typeFilter === t ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
             }`}
           >

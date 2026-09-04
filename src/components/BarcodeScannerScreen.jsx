@@ -191,19 +191,19 @@ export default function BarcodeScannerScreen({ state, updateState, onNavigate, o
               <div className="grid grid-cols-4 gap-2 text-center">
                 <div>
                   <div className="text-base font-bold text-white">{product.calories ?? "—"}</div>
-                  <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Calories</div>
+                  <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Calories</div>
                 </div>
                 <div>
                   <div className="text-base font-bold text-white">{product.protein ?? "—"}g</div>
-                  <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Protein</div>
+                  <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Protein</div>
                 </div>
                 <div>
                   <div className="text-base font-bold text-white">{product.carbs ?? "—"}g</div>
-                  <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Carbs</div>
+                  <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Carbs</div>
                 </div>
                 <div>
                   <div className="text-base font-bold text-white">{product.fat ?? "—"}g</div>
-                  <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Fat</div>
+                  <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Fat</div>
                 </div>
               </div>
               <label className="flex items-center gap-2 text-xs text-v5-subtext">

@@ -83,9 +83,9 @@ export function Card({ children, tone = "default", onClick, className = "", padd
 // The one big focal card per screen (Today's workout, Train's current program). Larger padding,
 // accent tone by default, room for a headline + a couple of stat lines + a CTA. Still the most
 // generous Card variant after the density pass — just not as oversized as before.
-export function HeroCard({ children, className = "", tone = "accent" }) {
+export function HeroCard({ children, className = "", tone = "accent", onClick, as }) {
   return (
-    <Card tone={tone} padding="p-4 sm:p-5" radius="rounded-2xl" className={`space-y-3 ${className}`}>
+    <Card tone={tone} padding="p-4 sm:p-5" radius="rounded-2xl" className={`space-y-3 ${className}`} onClick={onClick} as={as}>
       {children}
     </Card>
   );
@@ -150,7 +150,7 @@ export function StatTile({ value, label, className = "", valueClassName = "" }) 
   return (
     <div className={className}>
       <div className={`text-lg font-black text-v5-text tabular-nums ${valueClassName}`}>{value}</div>
-      <div className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext mt-0.5">{label}</div>
+      <div className="text-[11px] font-bold uppercase tracking-wide text-v5-subtext mt-0.5">{label}</div>
     </div>
   );
 }
@@ -160,7 +160,7 @@ export function StatTile({ value, label, className = "", valueClassName = "" }) 
 export function MetricTile({ value, label, sublabel, onClick, accent = false, className = "" }) {
   return (
     <Card onClick={onClick} padding="p-3" className={`space-y-1 ${className}`} tone={accent ? "accent" : "default"}>
-      <div className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext">{label}</div>
+      <div className="text-[11px] font-bold uppercase tracking-wide text-v5-subtext">{label}</div>
       <div className="text-xl font-black text-v5-text tabular-nums leading-none">{value}</div>
       {sublabel && <div className="text-xs text-v5-subtext">{sublabel}</div>}
     </Card>
@@ -178,7 +178,7 @@ export function Pill({ children, tone = "solid", className = "" }) {
     outline: "border border-v5-red/50 text-v5-red",
   };
   return (
-    <span className={`inline-flex items-center text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ${styles[tone]} ${className}`}>
+    <span className={`inline-flex items-center text-[11px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ${styles[tone]} ${className}`}>
       {children}
     </span>
   );
@@ -237,7 +237,7 @@ export function ActionTile({ icon: Icon, label, onClick, className = "" }) {
       <span className="w-9 h-9 rounded-full bg-v5-elevated flex items-center justify-center">
         <Icon size={16} className="text-v5-red" />
       </span>
-      <span className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext text-center leading-tight">{label}</span>
+      <span className="text-[11px] font-bold uppercase tracking-wide text-v5-subtext text-center leading-tight">{label}</span>
     </button>
   );
 }
@@ -381,7 +381,7 @@ export function LineChart({ points, height = 120, tone = "red", className = "" }
       </svg>
       <div className="flex justify-between mt-1.5">
         {axisLabels.map((p, i) => (
-          <span key={i} className="text-[9px] font-bold text-v5-subtext/60">
+          <span key={i} className="text-[11px] font-bold text-v5-subtext/60">
             {p.label}
           </span>
         ))}
@@ -405,7 +405,7 @@ export function MiniBarChart({ bars, height = 56, className = "" }) {
               className={`w-full rounded-full ${b.active ? "bg-v5-red" : "bg-v5-elevated"}`}
               style={{ height: h }}
             />
-            <span className={`text-[9px] font-bold ${b.active ? "text-v5-red" : "text-v5-subtext/60"}`}>{b.label}</span>
+            <span className={`text-[11px] font-bold ${b.active ? "text-v5-red" : "text-v5-subtext/60"}`}>{b.label}</span>
           </div>
         );
       })}

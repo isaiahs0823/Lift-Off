@@ -22,7 +22,7 @@ export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUs
       </div>
 
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1.5">Bar weight</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1.5">Bar weight</div>
         <div className="flex flex-wrap gap-1.5">
           {BAR_WEIGHT_OPTIONS.map((w) => (
             <button
@@ -56,13 +56,13 @@ export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUs
       </div>
 
       <div className="text-center border border-white/10 bg-v5-surface py-4">
-        <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70">Current load</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">Current load</div>
         <div className="text-5xl font-bold text-white tabular-nums mt-1">{total}</div>
         <div className="text-xs text-v5-subtext mt-0.5">lb · bar {barWeight} lb</div>
       </div>
 
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1.5">Tap to add a plate pair</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1.5">Tap to add a plate pair</div>
         <div className="grid grid-cols-3 gap-2">
           {PLATE_SIZES.map((size) => (
             <button
@@ -79,7 +79,7 @@ export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUs
 
       {loaded.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1.5">Per side</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1.5">Per side</div>
           <div className="space-y-1.5">
             {loaded.map(({ size, pairs }) => (
               <div key={size} className="flex items-center justify-between border border-white/10 bg-v5-surface px-3 py-2">

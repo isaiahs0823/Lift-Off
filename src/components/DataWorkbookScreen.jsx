@@ -31,7 +31,7 @@ function dateLabel(iso) {
 function StatCard({ label, value }) {
   return (
     <div className="border border-white/10 bg-v5-elevated p-3">
-      <div className="text-[10px] uppercase tracking-widest text-v5-subtext">{label}</div>
+      <div className="text-[11px] uppercase tracking-widest text-v5-subtext">{label}</div>
       <div className="text-lg font-bold text-white mt-1">{value == null ? "N/A" : value}</div>
     </div>
   );
@@ -363,15 +363,15 @@ function BodyweightTabPanel({ rows, overview }) {
       <div className="border border-white/10 bg-v5-elevated p-4">
         <div className="grid grid-cols-3 gap-2 text-center mb-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Start</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Start</div>
             <div className="text-base font-bold text-white">{overview.startingBodyweight ?? "N/A"}</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Current</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Current</div>
             <div className="text-base font-bold text-white">{overview.endingBodyweight ?? "N/A"}</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Change</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Change</div>
             <div className="text-base font-bold text-white">
               {overview.bodyweightChange != null ? `${overview.bodyweightChange > 0 ? "+" : ""}${overview.bodyweightChange}` : "N/A"}
             </div>

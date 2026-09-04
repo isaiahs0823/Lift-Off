@@ -148,7 +148,7 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
             <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Weak point focus</label>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <div className="text-[10px] text-v5-subtext/70 mb-1">Primary</div>
+                <div className="text-[11px] text-v5-subtext/70 mb-1">Primary</div>
                 <select
                   value={profile.physiquePriorities?.primary || ""}
                   onChange={(e) =>
@@ -165,7 +165,7 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
                 </select>
               </div>
               <div>
-                <div className="text-[10px] text-v5-subtext/70 mb-1">Secondary</div>
+                <div className="text-[11px] text-v5-subtext/70 mb-1">Secondary</div>
                 <select
                   value={profile.physiquePriorities?.secondary || ""}
                   onChange={(e) =>
@@ -275,7 +275,7 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
           <div className="space-y-1.5">
             <div className="text-sm font-bold text-v5-red">FAILED</div>
             <div className="text-xs text-v5-subtext">Reason: {connResult?.reason}</div>
-            {connResult?.requestId && <div className="text-[10px] text-v5-subtext/70">Error ID: {connResult.requestId}</div>}
+            {connResult?.requestId && <div className="text-[11px] text-v5-subtext/70">Error ID: {connResult.requestId}</div>}
             <button onClick={testConnection} className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red">
               Retry
             </button>

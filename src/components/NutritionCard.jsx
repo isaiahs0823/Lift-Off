@@ -54,19 +54,19 @@ export default function NutritionCard({ state, onNavigate, compact = false }) {
           <div className="text-sm font-bold text-v5-text">
             {Math.round(totals.protein)}/{targets.protein}g
           </div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Protein</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Protein</div>
         </div>
         <div>
           <div className="text-sm font-bold text-v5-text">
             {Math.round(totals.carbs)}/{targets.carbs}g
           </div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Carbs</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Carbs</div>
         </div>
         <div>
           <div className="text-sm font-bold text-v5-text">
             {Math.round(totals.fat)}/{targets.fat}g
           </div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Fat</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Fat</div>
         </div>
       </div>
       <div className="flex gap-2">

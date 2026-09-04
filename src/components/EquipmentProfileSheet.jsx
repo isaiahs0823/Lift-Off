@@ -19,7 +19,7 @@ export function AddEquipmentProfileForm({ onSave, onCancel, saveLabel = "Save" }
   return (
     <div className="border border-white/10 bg-v5-elevated p-3 space-y-2.5">
       <div>
-        <label className="block text-[10px] uppercase tracking-widest text-v5-subtext mb-1">Profile name</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1">Profile name</label>
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
@@ -29,7 +29,7 @@ export function AddEquipmentProfileForm({ onSave, onCancel, saveLabel = "Save" }
         />
       </div>
       <div>
-        <label className="block text-[10px] uppercase tracking-widest text-v5-subtext mb-1">Gym / location (optional)</label>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1">Gym / location (optional)</label>
         <input
           value={gymLabel}
           onChange={(e) => setGymLabel(e.target.value)}
@@ -118,7 +118,7 @@ export default function EquipmentProfileSheet({ exId, exName, state, updateState
                 <span className="min-w-0">
                   <span className="block text-sm text-v5-text truncate">{p.label}</span>
                   {(p.gymLabel || p.isDefault) && (
-                    <span className="block text-[10px] text-v5-subtext truncate">
+                    <span className="block text-[11px] text-v5-subtext truncate">
                       {[p.gymLabel, p.isDefault ? "Usual for this exercise" : null].filter(Boolean).join(" · ")}
                     </span>
                   )}
@@ -165,7 +165,7 @@ export default function EquipmentProfileSheet({ exId, exName, state, updateState
         >
           <span className="min-w-0">
             <span className="block text-sm font-bold text-v5-text">Different machine today</span>
-            <span className="block text-[10px] text-v5-subtext mt-0.5">One-off — won't affect saved profiles or suggestions</span>
+            <span className="block text-[11px] text-v5-subtext mt-0.5">One-off — won't affect saved profiles or suggestions</span>
           </span>
           {isTemporarySelected && <Check size={16} className="text-v5-red shrink-0" />}
         </button>

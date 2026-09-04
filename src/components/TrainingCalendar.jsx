@@ -81,7 +81,7 @@ function DayDetail({ dateKeyStr, data, exMap, onBack, scheduleDay, onViewWorkout
       {scheduleDay && scheduleDay.status !== "none" && (
         <div className="border border-white/10 bg-v5-elevated p-3 flex items-center justify-between">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Scheduled</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Scheduled</div>
             <div className="text-sm text-white font-bold">{scheduleDay.label || DAY_TYPE_LABEL[scheduleDay.type]}</div>
           </div>
           <span className={`text-xs font-bold ${CAL_GLYPH_COLOR[scheduleDay.status]}`}>{STATUS_WORD[scheduleDay.status]}</span>
@@ -208,7 +208,7 @@ export default function TrainingCalendar({ state, exMap, onViewWorkout }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-widest text-v5-subtext/70">
+      <div className="grid grid-cols-7 gap-1 text-center text-[11px] uppercase tracking-widest text-v5-subtext/70">
         {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
           <div key={i}>{d}</div>
         ))}
@@ -232,7 +232,7 @@ export default function TrainingCalendar({ state, exMap, onViewWorkout }) {
               } ${data ? "bg-v5-elevated" : ""} hover:border-v5-red/40`}
             >
               {scheduleGlyph && (
-                <span className={`absolute top-0.5 right-0.5 text-[9px] leading-none font-bold ${scheduleGlyphColor}`}>{scheduleGlyph}</span>
+                <span className={`absolute top-0.5 right-0.5 text-[11px] leading-none font-bold ${scheduleGlyphColor}`}>{scheduleGlyph}</span>
               )}
               <span className={isToday ? "text-v5-red font-bold" : "text-v5-subtext"}>{d}</span>
               {data && (
@@ -248,7 +248,7 @@ export default function TrainingCalendar({ state, exMap, onViewWorkout }) {
         })}
       </div>
 
-      <div className="flex items-center gap-4 text-[10px] text-v5-subtext">
+      <div className="flex items-center gap-4 text-[11px] text-v5-subtext">
         <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-red-600" /> Trained
         </span>
@@ -264,7 +264,7 @@ export default function TrainingCalendar({ state, exMap, onViewWorkout }) {
       </div>
 
       {scheduled && (
-        <div className="flex items-center gap-3 text-[10px] text-v5-subtext flex-wrap">
+        <div className="flex items-center gap-3 text-[11px] text-v5-subtext flex-wrap">
           <span className="flex items-center gap-1"><span className="text-green-500 font-bold">✓</span> Completed</span>
           <span className="flex items-center gap-1"><span className="text-v5-red font-bold">●</span> Scheduled</span>
           <span className="flex items-center gap-1"><span className="text-v5-subtext/40 font-bold">○</span> Upcoming</span>

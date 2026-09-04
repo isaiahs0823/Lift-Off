@@ -46,7 +46,7 @@ function MacroRow({ label, value, target }) {
         {Math.round(value)}
         {target != null && <span className="text-v5-subtext">/{target}g</span>}
       </div>
-      <div className="text-[10px] uppercase tracking-widest text-v5-subtext">{label}</div>
+      <div className="text-[11px] uppercase tracking-widest text-v5-subtext">{label}</div>
     </div>
   );
 }
@@ -119,7 +119,7 @@ function LoggedItemRow({ entry, editing, onStartEdit, onCancelEdit, onSave, onDe
           <button
             key={m}
             onClick={() => setMeal(m)}
-            className={`px-2 py-1 text-[10px] border ${meal === m ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
+            className={`px-2 py-1 text-[11px] border ${meal === m ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
           >
             {MEAL_SLOT_LABEL[m]}
           </button>
@@ -127,7 +127,7 @@ function LoggedItemRow({ entry, editing, onStartEdit, onCancelEdit, onSave, onDe
       </div>
       {canRescale && (
         <div>
-          <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Serving quantity</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">Serving quantity</label>
           <input
             type="number"
             inputMode="decimal"

@@ -63,28 +63,28 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Duration</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Duration</div>
             <div className="text-lg font-bold text-white">{formatSessionDuration(session.durationSec)}</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Working sets</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Working sets</div>
             <div className="text-lg font-bold text-white">{session.workingSets}</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Volume</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Volume</div>
             <div className="text-lg font-bold text-white">
               {session.totalVolume.toLocaleString()} lb{session.isVolumePR ? " — PR" : ""}
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Total reps</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Total reps</div>
             <div className="text-lg font-bold text-white">{session.totalReps}</div>
           </div>
         </div>
         <div className="text-sm text-v5-text/90">Exercises completed: {session.exerciseCount}</div>
         {session.mainMuscles?.length > 0 && <div className="text-sm text-v5-text/90">Muscles trained: {session.mainMuscles.join(", ")}</div>}
         {session.sessionContext?.locationMode === "alternate_gym" && (
-          <div className="text-[10px] uppercase tracking-widest text-v5-red font-bold border-t border-white/[0.06] pt-2">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red font-bold border-t border-white/[0.06] pt-2">
             Alternate gym{session.sessionContext.locationLabel ? ` — ${session.sessionContext.locationLabel}` : ""}
           </div>
         )}
@@ -130,9 +130,9 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
                 <button onClick={() => setCollapsed((c) => ({ ...c, [key]: !c[key] }))} className="w-full flex items-center justify-between text-left gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-base font-bold text-white truncate">{exMap[entry.exId]?.name || entry.exId}</span>
-                    {exPRs.length > 0 && <span className="shrink-0 text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">PR</span>}
+                    {exPRs.length > 0 && <span className="shrink-0 text-[11px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">PR</span>}
                     {(entry.equipmentProfileId || entry.equipmentContext) && (
-                      <span className="shrink-0 text-[10px] text-v5-subtext truncate">{equipmentDisplayLabel(state, entry.equipmentProfileId, entry.equipmentContext)}</span>
+                      <span className="shrink-0 text-[11px] text-v5-subtext truncate">{equipmentDisplayLabel(state, entry.equipmentProfileId, entry.equipmentContext)}</span>
                     )}
                   </div>
                   {isCollapsed ? <ChevronDown size={16} className="text-v5-subtext/70 shrink-0" /> : <ChevronUp size={16} className="text-v5-subtext/70 shrink-0" />}
@@ -146,13 +146,13 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
                           <span className="text-white flex-1">{formatSetVerbose(s)}</span>
                           {s.quality && s.quality !== "clean" && (
                             <span
-                              className="text-[10px] uppercase tracking-widest text-v5-red shrink-0"
+                              className="text-[11px] uppercase tracking-widest text-v5-red shrink-0"
                               title={s.quality === "pain" && s.pain?.bodyArea ? `${s.pain.bodyArea} — ${s.pain.severity ?? "?"}/10` : undefined}
                             >
                               {SET_QUALITY_GLYPH[s.quality]} {SET_QUALITY_LABEL[s.quality]}
                             </span>
                           )}
-                          <span className="text-[10px] uppercase tracking-widest text-v5-subtext/70 shrink-0">{SET_TYPE_LABEL[s.setType || "working"]}</span>
+                          <span className="text-[11px] uppercase tracking-widest text-v5-subtext/70 shrink-0">{SET_TYPE_LABEL[s.setType || "working"]}</span>
                         </div>
                       ))}
                     </div>
@@ -177,7 +177,7 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
                     )}
                     {note && (
                       <div className="border-t border-white/[0.06] pt-2">
-                        <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Note</div>
+                        <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">Note</div>
                         <div className="text-sm text-v5-text/90 whitespace-pre-line">{note}</div>
                       </div>
                     )}
@@ -195,7 +195,7 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
 
       {session.coachMessage && (
         <div className="border border-white/10 bg-v5-elevated p-4">
-          <div className="text-[10px] uppercase tracking-widest text-v5-red mb-1.5 flex items-center gap-1.5">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red mb-1.5 flex items-center gap-1.5">
             <MessageCircle size={11} /> Coach review
           </div>
           <div className="text-sm text-v5-text/90 whitespace-pre-line">{session.coachMessage}</div>

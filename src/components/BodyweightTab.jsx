@@ -172,7 +172,7 @@ export default function BodyweightTab({ state, updateState }) {
         <div className="text-[11px] uppercase tracking-widest text-v5-subtext">{existingToday ? "Update today's entry" : "Log today"}</div>
         <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Weight</label>
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">Weight</label>
             <input
               type="number"
               value={weight}
@@ -182,7 +182,7 @@ export default function BodyweightTab({ state, updateState }) {
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Waist</label>
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">Waist</label>
             <input
               type="number"
               value={waist}
@@ -192,7 +192,7 @@ export default function BodyweightTab({ state, updateState }) {
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Body fat %</label>
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">Body fat %</label>
             <input
               type="number"
               value={bodyFat}
@@ -222,27 +222,27 @@ export default function BodyweightTab({ state, updateState }) {
         <div className="text-[11px] uppercase tracking-widest text-v5-red">Trend</div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Current</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Current</div>
             <div className="text-2xl font-bold text-white">{fmt(latestValue(entries, "weight"))} lb</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">7-day avg</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">7-day avg</div>
             <div className="text-2xl font-bold text-white">{fmt(rollingAverage(entries, "weight", 7))} lb</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">14-day avg</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">14-day avg</div>
             <div className="text-lg text-v5-text/90">{fmt(rollingAverage(entries, "weight", 14))} lb</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Weekly rate</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Weekly rate</div>
             <div className="text-lg text-v5-text/90">{fmtDelta(weeklyRate)} lb/week</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Total change</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Total change</div>
             <div className="text-lg text-v5-text/90">{fmtDelta(totalChange(entries, "weight"))} lb</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Status</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Status</div>
             <div className="text-lg text-v5-text/90">{PACE_LABEL[pace]}</div>
           </div>
         </div>
@@ -258,12 +258,12 @@ export default function BodyweightTab({ state, updateState }) {
       {(rollingAverage(entries, "waist", 14) != null || rollingAverage(entries, "bodyFat", 14) != null) && (
         <div className="border border-white/10 bg-v5-elevated p-4 grid grid-cols-2 gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Waist (14-day avg)</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Waist (14-day avg)</div>
             <div className="text-lg font-bold text-white">{fmt(rollingAverage(entries, "waist", 14))} in</div>
             <div className="text-xs text-v5-subtext">{fmtDelta(weeklyRateOfChange(entries, "waist"))} in/week</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Body fat (14-day avg)</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Body fat (14-day avg)</div>
             <div className="text-lg font-bold text-white">{fmt(rollingAverage(entries, "bodyFat", 14))}%</div>
             <div className="text-xs text-v5-subtext">{fmtDelta(weeklyRateOfChange(entries, "bodyFat"))}%/week</div>
           </div>

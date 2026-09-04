@@ -84,7 +84,7 @@ function WeekStrip({ strip }) {
             onClick={() => setOpenIdx((idx) => (idx === i ? null : i))}
             className="flex flex-col items-center gap-1.5 py-1.5 rounded-lg hover:bg-v5-elevated"
           >
-            <span className="text-[10px] font-bold text-v5-subtext/60">{labels[i]}</span>
+            <span className="text-[11px] font-bold text-v5-subtext/60">{labels[i]}</span>
             <span className={`text-xs font-bold ${GLYPH_COLOR[day.status]}`}>{GLYPH_FOR_STATUS[day.status] || "·"}</span>
           </button>
         ))}

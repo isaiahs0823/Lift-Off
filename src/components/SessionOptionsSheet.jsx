@@ -45,7 +45,7 @@ export default function SessionOptionsSheet({ sessionContext, onChange, onBack }
           </button>
           {isAlternate && (
             <div className="px-3 pb-3">
-              <label className="block text-[10px] uppercase tracking-widest text-v5-subtext mb-1">Gym name / location (optional)</label>
+              <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1">Gym name / location (optional)</label>
               <input
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}

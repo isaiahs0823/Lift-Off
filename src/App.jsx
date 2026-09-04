@@ -47,6 +47,9 @@ import ShareCardButton from "./components/ShareCardButton.jsx";
 import TodayTab from "./components/TodayTab.jsx";
 import TrainTab from "./components/TrainTab.jsx";
 import MoreTab from "./components/MoreTab.jsx";
+import SettingsTab from "./components/SettingsTab.jsx";
+import TopUsedTab from "./components/TopUsedTab.jsx";
+import { DEFAULT_REST_DEFAULTS } from "./utils/backup.js";
 import ScheduleEditor from "./components/ScheduleEditor.jsx";
 import AthleteProfileForm from "./components/AthleteProfileForm.jsx";
 import TrainingDaysSelector from "./components/TrainingDaysSelector.jsx";
@@ -1235,11 +1238,6 @@ const HERO_PROGRAMS = [
   ...FAMILY_PROGRAMS,
 ];
 
-// Defaults for the auto-started rest timer, keyed by movement category. Compound lifts get
-// the longest rest, isolation/conditioning/superset work progressively less — overridable
-// per-category in Settings.
-const DEFAULT_REST_DEFAULTS = { compound: 150, isolation: 90, conditioning: 60, superset: 45 };
-
 function loadInitialState() {
   return {
     templates: DEFAULT_TEMPLATES,
@@ -1288,7 +1286,7 @@ function loadInitialState() {
     coachMemories: [], // Coach memory Layer 3, persisted/evolving — see src/utils/coachMemoryStore.js
     commitments: [], // see src/utils/commitments.js
     specialtyInterest: {}, // { [specialtyId]: true } — "Notify me" taps on locked Coach specialties, see src/coachSpecialties
-    coachAccess: null, // future trial/subscription scaffold, unenforced — see backupKeyDefault
+    coachAccess: null, // future trial/subscription scaffold, unenforced — see src/utils/backup.js's backupKeyDefault
     coachOnboarding: null, // { specialtySelected, specialty, confirmedAt } — see src/utils/coachOnboarding.js
     coachConversations: [], // real multi-turn AI chat threads — { id, createdAt, updatedAt, specialty, messages: [...] } — see src/utils/coachConversations.js
     // ---------------- NUTRITION ----------------
@@ -1374,105 +1372,6 @@ function migrateStaleCoachOnboarding(state) {
 // ---------- Data export / import ----------
 // Everything the user has actually created — not the built-in templates/programs, which
 // ship with the app and always come from source, never from a backup file.
-const BACKUP_DATA_KEYS = [
-  "logs",
-  "cardioLogs",
-  "customExercises",
-  "customPlans",
-  "customPrograms",
-  "currentProgram",
-  "photos",
-  "completedPrograms",
-  "settings",
-  "exerciseNotes",
-  "workoutSessions",
-  "recoverySessions",
-  "goals",
-  "bodyweightLogs",
-  "readinessLogs",
-  "coachHistory",
-  "weeklySchedule",
-  "scheduleLog",
-  "recoveryLogs",
-  "athleteProfile",
-  "coachMemories",
-  "commitments",
-  "specialtyInterest",
-  "coachAccess",
-  "coachOnboarding",
-  "coachConversations",
-  "nutritionProfile",
-  "nutritionTargets",
-  "foodLogs",
-  "savedFoods",
-  "savedMeals",
-  "favoriteFoods",
-  "nutritionMealPlan",
-  "nutritionCheckIns",
-  "nutritionCoachAdjustments",
-  "developmentPriorities",
-  "programSwapLog",
-  "equipmentProfiles",
-];
-
-// Per-key fallback when a key is missing from state entirely (older saves) — objects default
-// to {}, currentProgram/weeklySchedule/athleteProfile/coachAccess/coachOnboarding/
-// nutritionProfile/nutritionTargets/nutritionMealPlan to null, everything else (arrays) to [].
-function backupKeyDefault(key) {
-  if (
-    key === "currentProgram" ||
-    key === "weeklySchedule" ||
-    key === "athleteProfile" ||
-    key === "coachAccess" ||
-    key === "coachOnboarding" ||
-    key === "nutritionProfile" ||
-    key === "nutritionTargets" ||
-    key === "nutritionMealPlan" ||
-    key === "developmentPriorities"
-  )
-    return null;
-  if (key === "settings" || key === "exerciseNotes" || key === "specialtyInterest") return {};
-  return [];
-}
-
-function exportBackupFile(state) {
-  const payload = {
-    app: "BRK - Lift",
-    schemaVersion: 1,
-    exportedAt: new Date().toISOString(),
-    data: Object.fromEntries(BACKUP_DATA_KEYS.map((k) => [k, state[k] ?? backupKeyDefault(k)])),
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const dateStr = new Date().toISOString().slice(0, 10);
-  a.href = url;
-  a.download = `brk-lift-backup-${dateStr}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-// Returns { ok: true, data } or { ok: false, error }. Never throws.
-function parseBackupFile(text) {
-  let parsed;
-  try {
-    parsed = JSON.parse(text);
-  } catch (e) {
-    return { ok: false, error: "That file isn't valid JSON." };
-  }
-  const data = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed.data || parsed : null;
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    return { ok: false, error: "That file doesn't look like a BRK - Lift backup." };
-  }
-  const hasKnownKey = BACKUP_DATA_KEYS.some((k) => k in data);
-  if (!hasKnownKey) {
-    return { ok: false, error: "That file doesn't contain any recognizable BRK - Lift data." };
-  }
-  return { ok: true, data };
-}
-
 // Turns the raw editor rows (string inputs, possibly-empty drop rows) into the clean shape
 // saved to state.logs. A set is dropped entirely if its own weight/reps are blank; an
 // individual blank drop row is dropped without affecting the rest. drops/setType/rir/rpe are
@@ -1762,14 +1661,6 @@ function buildSessionSummary(run, allLogs, priorSessions, exMap) {
     // run that predates this. Read by workoutRecap.js's "ALTERNATE GYM SESSION" note.
     sessionContext: sanitizeSessionContext(run.sessionContext),
   };
-}
-
-function usageCounts(logs) {
-  const counts = {};
-  logs.forEach((l) => {
-    counts[l.exId] = (counts[l.exId] || 0) + 1;
-  });
-  return counts;
 }
 
 // ---------- Cardio helpers ----------
@@ -2776,7 +2667,7 @@ export default function LiftLog() {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] uppercase tracking-widest transition-colors ${
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] uppercase tracking-widest transition-colors ${
                   active ? "text-v5-red" : "text-v5-subtext/70 hover:text-v5-subtext"
                 }`}
               >
@@ -2800,7 +2691,7 @@ function Header() {
           <div className="text-v5-text font-black tracking-wide text-sm leading-none">
             BRK <span className="text-v5-red">-</span> LIFT
           </div>
-          <div className="text-[9px] text-v5-subtext/70 tracking-[0.18em] uppercase mt-1">Keep the promises you make to yourself</div>
+          <div className="text-[11px] text-v5-subtext/70 tracking-[0.18em] uppercase mt-1">Keep the promises you make to yourself</div>
         </div>
       </div>
     </div>
@@ -2970,7 +2861,7 @@ function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onB
 
       {browsing && recent.length > 0 && (
         <div className="space-y-1.5">
-          <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Recent</div>
+          <div className="text-[11px] uppercase tracking-wide text-v5-subtext">Recent</div>
           {recent.map((ex) => (
             <ResultRow key={ex.id} ex={ex} />
           ))}
@@ -3069,7 +2960,7 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
                     <button
                       key={t.value}
                       onClick={() => updateSetRow(idx, "setType", t.value)}
-                      className={`shrink-0 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide border ${
+                      className={`shrink-0 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide border ${
                         active ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
                       }`}
                     >
@@ -3230,7 +3121,7 @@ function ExerciseNotesPanel({ exId, state, updateState }) {
           ["general", "General", "Anything else worth remembering"],
         ].map(([key, label, placeholder]) => (
           <div key={key}>
-            <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">{label}</label>
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">{label}</label>
             <input
               type="text"
               value={draft[key] || ""}
@@ -3545,7 +3436,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
                 <button
                   key={opt.key ?? "all"}
                   onClick={() => setHistoryEquipFilter(opt.key)}
-                  className={`shrink-0 px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border rounded-full ${
+                  className={`shrink-0 px-2.5 py-1 text-[11px] uppercase tracking-widest font-bold border rounded-full ${
                     historyEquipFilter === opt.key ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
                   }`}
                 >
@@ -3744,7 +3635,7 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
       {currentProgramDay?.isComplete && (
         <div className="border border-v5-red/25 bg-v5-elevated px-4 py-3 space-y-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-red">Program complete</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-red">Program complete</div>
             <div className="text-base text-white mt-0.5">
               {currentProgramDay.programName} — {currentProgramDay.totalWeeks} weeks done
             </div>
@@ -3769,7 +3660,7 @@ function LogTab({ state, updateState, allExercises, exMap, onStartRun, onLoggedS
       {currentProgramDay && !currentProgramDay.isComplete && (
         <div className="border border-v5-red/25 bg-v5-elevated px-4 py-3 flex items-center justify-between">
           <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-widest text-v5-red">Current program</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-red">Current program</div>
             <div className="text-base text-white mt-0.5 truncate">
               {currentProgramDay.programName}
               {currentProgramDay.weekNumber !== null
@@ -4646,13 +4537,13 @@ function TrainingExerciseCard({
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 pt-1">
           {lastTopSet && (
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Last</div>
+              <div className="text-[11px] uppercase tracking-wide text-v5-subtext">Last</div>
               <div className="text-sm font-bold text-v5-text tabular-nums">{lastTopSet.weight} × {lastTopSet.reps}</div>
             </div>
           )}
           {suggestion.suggestion != null && (
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-wide text-v5-red">Today's target</div>
+              <div className="text-[11px] uppercase tracking-wide text-v5-red">Today's target</div>
               <div className="text-sm font-bold text-v5-text tabular-nums">{suggestion.suggestion} × {suggestion.targetReps}</div>
             </div>
           )}
@@ -4675,7 +4566,7 @@ function TrainingExerciseCard({
           onClick={() => setEquipmentSheetOpen(true)}
           className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-v5-surface text-left"
         >
-          <span className="text-[10px] uppercase tracking-wide text-v5-subtext shrink-0">Equipment</span>
+          <span className="text-[11px] uppercase tracking-wide text-v5-subtext shrink-0">Equipment</span>
           <span className="text-xs font-bold text-v5-text truncate ml-2">{equipmentDisplayLabel(state, equipmentProfileId, equipmentContext)} ▾</span>
         </button>
       )}
@@ -4704,18 +4595,18 @@ function TrainingExerciseCard({
                 }
                 setAltGymNudgeDismissed(true);
               }}
-              className="flex-1 py-2 text-[10px] uppercase tracking-widest font-bold bg-v5-red text-white rounded-md hover:opacity-90"
+              className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold bg-v5-red text-white rounded-md hover:opacity-90"
             >
               Use temporary machine
             </button>
             <button
               onClick={() => setEquipmentSheetOpen(true)}
-              className="flex-1 py-2 text-[10px] uppercase tracking-widest font-bold border border-v5-subtext/40 text-v5-subtext rounded-md hover:text-v5-text"
+              className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold border border-v5-subtext/40 text-v5-subtext rounded-md hover:text-v5-text"
             >
               Select saved profile
             </button>
           </div>
-          <button onClick={() => setAltGymNudgeDismissed(true)} className="text-[10px] text-v5-subtext/70 hover:text-v5-subtext">
+          <button onClick={() => setAltGymNudgeDismissed(true)} className="text-[11px] text-v5-subtext/70 hover:text-v5-subtext">
             Dismiss
           </button>
         </div>
@@ -4743,7 +4634,7 @@ function TrainingExerciseCard({
       {(isBucketedEquipment && !lastTopSet && overallRecentForEx.length > 0) && (
         <div className="bg-v5-surface rounded-xl px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-wide text-v5-red">No history here</div>
+            <div className="text-[11px] uppercase tracking-wide text-v5-red">No history here</div>
             <div className="text-xs text-v5-subtext mt-0.5">
               Last overall: {new Date(overallRecentForEx[0].date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
             </div>
@@ -4833,12 +4724,12 @@ function TrainingExerciseCard({
                 <span className="text-v5-subtext shrink-0">Set {i + 1}</span>
                 <span className="flex-1 text-left text-v5-text font-bold">{formatSetCompact(s)}</span>
                 {isBest && (
-                  <span className="shrink-0 text-[9px] uppercase tracking-widest font-bold bg-v5-red/15 text-v5-red px-1.5 py-0.5 rounded-full">
+                  <span className="shrink-0 text-[11px] uppercase tracking-widest font-bold bg-v5-red/15 text-v5-red px-1.5 py-0.5 rounded-full">
                     Best
                   </span>
                 )}
                 {(s.rir != null && s.rir !== "") || (s.rpe != null && s.rpe !== "") ? (
-                  <span className="text-[10px] text-v5-subtext shrink-0">
+                  <span className="text-[11px] text-v5-subtext shrink-0">
                     {s.rir != null && s.rir !== "" ? `RIR ${s.rir}` : `RPE ${s.rpe}`}
                   </span>
                 ) : null}
@@ -4861,7 +4752,7 @@ function TrainingExerciseCard({
               stays genuinely short instead of stretching to match a taller neighbor. */}
           <div className="flex items-start gap-2">
             <div className="flex-[3] min-w-0 space-y-1">
-              <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Weight</div>
+              <div className="text-[11px] uppercase tracking-wide text-v5-subtext">Weight</div>
               <div className="bg-v5-muted rounded-lg px-3 py-1.5 flex items-baseline justify-center gap-1">
                 <input
                   type="number"
@@ -4879,7 +4770,7 @@ function TrainingExerciseCard({
               <QuickLoadAdjuster weight={weight} onChange={(w) => setWeight(w)} />
             </div>
             <div className="flex-[2] min-w-0 space-y-1">
-              <div className="text-[10px] uppercase tracking-wide text-v5-subtext">Reps</div>
+              <div className="text-[11px] uppercase tracking-wide text-v5-subtext">Reps</div>
               <div className="bg-v5-muted rounded-lg px-3 py-1.5">
                 <input
                   type="number"
@@ -4898,7 +4789,7 @@ function TrainingExerciseCard({
                 fully optional: never stepped away from "" unless the athlete taps it. */}
             {!isSimple && (
               <div className="flex-[1.3] min-w-0 space-y-1">
-                <div className="text-[10px] uppercase tracking-wide text-v5-subtext text-center">{rirSystem === "rpe" ? "RPE" : "RIR"}</div>
+                <div className="text-[11px] uppercase tracking-wide text-v5-subtext text-center">{rirSystem === "rpe" ? "RPE" : "RIR"}</div>
                 <div className="bg-v5-muted rounded-lg px-1 py-1 flex flex-col items-center justify-center gap-0.5">
                   <button
                     type="button"
@@ -4933,7 +4824,7 @@ function TrainingExerciseCard({
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setPlateCalcOpen((o) => !o)}
-              className={`px-2.5 py-1 rounded-md text-[10px] uppercase tracking-wide font-bold ${
+              className={`px-2.5 py-1 rounded-md text-[11px] uppercase tracking-wide font-bold ${
                 plateCalcOpen ? "bg-v5-red/15 text-v5-red" : "text-v5-subtext hover:text-v5-text"
               }`}
             >
@@ -4941,7 +4832,7 @@ function TrainingExerciseCard({
             </button>
             <button
               onClick={() => setOptionsOpen((o) => !o)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] uppercase tracking-wide font-bold ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] uppercase tracking-wide font-bold ${
                 optionsOpen ? "bg-v5-red/15 text-v5-red" : "text-v5-subtext hover:text-v5-text"
               }`}
             >
@@ -4962,13 +4853,13 @@ function TrainingExerciseCard({
             <div className="space-y-3 pt-1">
               {!isSimple && (
                 <div>
-                  <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1.5">Set type</div>
+                  <div className="text-[11px] uppercase tracking-wide text-v5-subtext mb-1.5">Set type</div>
                   <div className="flex items-center gap-1 overflow-x-auto">
                     {SET_TYPES.map((t) => (
                       <button
                         key={t.value}
                         onClick={() => setSetType(t.value)}
-                        className={`shrink-0 px-2 py-1 text-[10px] font-bold uppercase tracking-wide rounded ${
+                        className={`shrink-0 px-2 py-1 text-[11px] font-bold uppercase tracking-wide rounded ${
                           setType === t.value ? "bg-v5-red text-white" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
                         }`}
                       >
@@ -4984,13 +4875,13 @@ function TrainingExerciseCard({
                   9: "do not create a full modal requiring multiple steps"). */}
               {!isSimple && (
                 <div>
-                  <div className="text-[10px] uppercase tracking-wide text-v5-subtext mb-1.5">Set quality</div>
+                  <div className="text-[11px] uppercase tracking-wide text-v5-subtext mb-1.5">Set quality</div>
                   <div className="flex items-center gap-1.5">
                     {SET_QUALITY_LEVELS.map((q) => (
                       <button
                         key={q}
                         onClick={() => setQuality((v) => (v === q ? null : q))}
-                        className={`flex-1 flex items-center justify-center gap-1 px-1.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded ${
+                        className={`flex-1 flex items-center justify-center gap-1 px-1.5 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded ${
                           quality === q ? "bg-v5-red text-white" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
                         }`}
                       >
@@ -5005,7 +4896,7 @@ function TrainingExerciseCard({
                           <button
                             key={area}
                             onClick={() => setPainBodyArea((v) => (v === area ? null : area))}
-                            className={`shrink-0 px-2 py-1 text-[10px] font-bold rounded ${
+                            className={`shrink-0 px-2 py-1 text-[11px] font-bold rounded ${
                               painBodyArea === area ? "bg-v5-red text-white" : "bg-v5-elevated text-v5-subtext hover:text-v5-text"
                             }`}
                           >
@@ -5014,7 +4905,7 @@ function TrainingExerciseCard({
                         ))}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] uppercase tracking-wide text-v5-subtext shrink-0">Severity</span>
+                        <span className="text-[11px] uppercase tracking-wide text-v5-subtext shrink-0">Severity</span>
                         <input
                           type="range"
                           min="1"
@@ -5090,7 +4981,7 @@ function TrainingExerciseCard({
                         <button
                           key={area}
                           onClick={() => setJointNoteArea((v) => (v === area ? null : area))}
-                          className={`shrink-0 px-2 py-1 text-[10px] font-bold rounded ${
+                          className={`shrink-0 px-2 py-1 text-[11px] font-bold rounded ${
                             jointNoteArea === area ? "bg-v5-red text-white" : "bg-v5-elevated text-v5-subtext hover:text-v5-text"
                           }`}
                         >
@@ -5099,7 +4990,7 @@ function TrainingExerciseCard({
                       ))}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase tracking-wide text-v5-subtext shrink-0">Severity</span>
+                      <span className="text-[11px] uppercase tracking-wide text-v5-subtext shrink-0">Severity</span>
                       <input
                         type="range"
                         min="1"
@@ -5276,7 +5167,7 @@ function GuidedRunView({
                         <Award size={12} /> New {isProfileScoped ? "Profile " : ""}PR
                       </SectionLabel>
                       {others.length > 0 && (
-                        <div className="text-[10px] uppercase tracking-widest text-v5-subtext">{others.length + 1} PRs</div>
+                        <div className="text-[11px] uppercase tracking-widest text-v5-subtext">{others.length + 1} PRs</div>
                       )}
                     </div>
                     <div className="text-lg font-bold text-v5-text leading-tight">{exMap[featured.exId]?.name || featured.exId}</div>
@@ -5289,7 +5180,7 @@ function GuidedRunView({
                           clean one — Grind gets a softer "Grind" tag, Form Breakdown/Pain get an
                           explicit "flagged" tag. */}
                       {pr.qualityFlag && (
-                        <span className="text-[9px] uppercase tracking-widest bg-v5-elevated text-v5-subtext px-1.5 py-0.5 rounded-full">
+                        <span className="text-[11px] uppercase tracking-widest bg-v5-elevated text-v5-subtext px-1.5 py-0.5 rounded-full">
                           {pr.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[pr.qualityFlag]} flagged`}
                         </span>
                       )}
@@ -5299,13 +5190,13 @@ function GuidedRunView({
                     </div>
                     {others.length > 0 && (
                       <div className="pt-2 mt-1 border-t border-white/[0.06] space-y-1">
-                        <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70">Other PRs</div>
+                        <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">Other PRs</div>
                         {others.map(({ exId, pr: op }) => (
                           <div key={exId} className="flex items-center justify-between text-xs text-v5-subtext gap-2">
                             <span className="truncate">
                               {exMap[exId]?.name || exId}
                               {op.qualityFlag && (
-                                <span className="ml-1.5 text-[9px] uppercase tracking-widest text-v5-subtext/70">
+                                <span className="ml-1.5 text-[11px] uppercase tracking-widest text-v5-subtext/70">
                                   ({op.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[op.qualityFlag]} flagged`})
                                 </span>
                               )}
@@ -5639,7 +5530,7 @@ function GuidedRunView({
                 honest status. "Saved" only ever reflects a write that actually succeeded (see the
                 activeRun-persist effect in LiftLog); a genuine localStorage failure surfaces as
                 "Not saved" here instead of a false "Saved". */}
-            <div className="text-[10px] uppercase tracking-wide text-v5-subtext/70 mt-0.5 flex items-center gap-2">
+            <div className="text-[11px] uppercase tracking-wide text-v5-subtext/70 mt-0.5 flex items-center gap-2">
               {persistStatus === "error" ? (
                 <span className="text-v5-red">Not saved</span>
               ) : persistStatus === "saving" ? (
@@ -5706,7 +5597,7 @@ function GuidedRunView({
           return (
             <div key={idx} className="border-t border-white/[0.06] pt-6 first:border-t-0 first:pt-0">
               {label && (
-                <div className="text-[10px] uppercase tracking-widest text-v5-red font-bold mb-1.5">{label}</div>
+                <div className="text-[11px] uppercase tracking-widest text-v5-red font-bold mb-1.5">{label}</div>
               )}
               {isEditing ? (
                 <EditLogEntryPanel
@@ -6313,7 +6204,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
           <span className="text-xs font-medium text-v5-red flex items-center gap-1.5">
             {day.label}
             {isCurrent(prog.id) && state.currentProgram.dayIndex === di && (
-              <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Next up</span>
+              <span className="text-[11px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Next up</span>
             )}
           </span>
           {isCurrent(prog.id) && state.currentProgram.dayIndex !== di && (
@@ -6383,7 +6274,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
               <span className="text-xs font-medium text-v5-red flex items-center gap-1.5">
                 {day.label}
                 {isCurrentCustom(prog.id) && state.currentProgram.dayIndex === di && (
-                  <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Next up</span>
+                  <span className="text-[11px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Next up</span>
                 )}
               </span>
               <div className="flex items-center gap-3">
@@ -6452,7 +6343,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
             if (!adherence || adherence.recovery.scheduled === 0) return null;
             return (
               <div className="border border-white/10 bg-v5-elevated px-4 py-3 space-y-1.5">
-                <div className="text-[10px] uppercase tracking-widest text-v5-subtext">
+                <div className="text-[11px] uppercase tracking-widest text-v5-subtext">
                   {prog.name.toUpperCase()} — TRAILING {adherence.windowDays} DAYS
                 </div>
                 <div className="flex items-center justify-between text-sm">
@@ -6472,7 +6363,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
           })()}
         {Object.keys(siblings).length > 1 && (
           <div className="border border-white/10 bg-v5-elevated px-4 py-3 space-y-2">
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">
               {prog.trainingDays} {prog.trainingDays === 1 ? "Day" : "Days"} / Week
             </div>
             <div className="flex gap-1.5">
@@ -6501,7 +6392,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
         )}
         {reviewCompare && (
           <div className="border border-v5-red/25 bg-v5-elevated px-4 py-3 space-y-1.5">
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70">Current → Proposed</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">Current → Proposed</div>
             <div className="text-sm text-v5-text/90">
               <span className="text-v5-subtext">{state.currentProgram?.programName || "No active program"}</span>
               {` (${reviewCompare.fromDays} days) → `}
@@ -6535,7 +6426,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
                 <span className="text-xs font-medium text-v5-red flex items-center gap-1.5">
                   {day.label}
                   {isCurrent(prog.id) && state.currentProgram.dayIndex === di && (
-                    <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Next up</span>
+                    <span className="text-[11px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Next up</span>
                   )}
                 </span>
                 <div className="flex items-center gap-3">
@@ -6814,7 +6705,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
                         {isComplete(prog.id) ? <Pill tone="inactive">Done</Pill> : isCurrent(prog.id) && <Pill>Current</Pill>}
                       </div>
                       <div className="text-[11px] text-v5-subtext line-clamp-2">{prog.tagline}</div>
-                      <div className="text-[10px] font-bold text-v5-subtext/70 flex items-center gap-2 pt-0.5">
+                      <div className="text-[11px] font-bold text-v5-subtext/70 flex items-center gap-2 pt-0.5">
                         {daysPerWeek(prog) && <span>{daysPerWeek(prog)} Days/Week</span>}
                         {prog.weeks && <span>· {prog.weeks} wks</span>}
                       </div>
@@ -7082,7 +6973,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
                 )}
                 <span className="flex-1 min-w-0 text-base text-v5-text/90 truncate">{exMap[e.exId]?.name}</span>
                 {e.group && !supersetMode && (
-                  <span className="shrink-0 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide bg-red-900/40 text-v5-red px-1.5 py-0.5">
+                  <span className="shrink-0 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide bg-red-900/40 text-v5-red px-1.5 py-0.5">
                     Superset {e.group}
                     <button onClick={() => ungroup(e.exId)} className="hover:text-white">
                       <X size={10} />
@@ -7155,44 +7046,6 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
 }
 
 // ---------------- TOP USED TAB ----------------
-function TopUsedTab({ state, exMap }) {
-  const counts = usageCounts(state.logs);
-  const ranked = Object.entries(counts)
-    .map(([exId, count]) => ({ ex: exMap[exId], count }))
-    .filter((r) => r.ex)
-    .sort((a, b) => b.count - a.count);
-
-  if (ranked.length === 0) {
-    return (
-      <div className="text-center py-16 text-v5-subtext text-sm">
-        No sessions logged yet. Log a workout and this tab tracks what you actually train most.
-      </div>
-    );
-  }
-
-  const max = ranked[0].count;
-
-  return (
-    <div className="space-y-3">
-      <p className="text-xs text-v5-subtext">Ranked by how often you've logged each lift.</p>
-      {ranked.map((r, i) => (
-        <div key={r.ex.id} className="border border-white/10 bg-v5-elevated px-4 py-3">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              {i === 0 && <Star size={12} className="text-v5-red" />}
-              <span className="text-base text-white">{r.ex.name}</span>
-            </div>
-            <span className="text-xs text-v5-subtext">{r.count}x</span>
-          </div>
-          <div className="h-1 bg-v5-surface">
-            <div className="h-1 bg-v5-red" style={{ width: `${(r.count / max) * 100}%` }} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ---------------- CATALOG TAB ----------------
 function CatalogTab({ state, updateState, allExercises }) {
   const [query, setQuery] = useState("");
@@ -7302,14 +7155,14 @@ function CatalogTab({ state, updateState, allExercises }) {
                   <div className="min-w-0 flex-1">
                     <div className="text-base text-v5-text/90 truncate">{ex.name}</div>
                     {ex.custom && (
-                      <div className="text-[10px] uppercase tracking-wider text-v5-subtext/70 mt-0.5 truncate">
+                      <div className="text-[11px] uppercase tracking-wider text-v5-subtext/70 mt-0.5 truncate">
                         {formatCustomLabel(ex)}
                         {isArchived(ex) ? " • Archived" : ""}
                       </div>
                     )}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    {!ex.custom && <span className="text-[10px] uppercase tracking-wider text-v5-subtext/70">{ex.type}</span>}
+                    {!ex.custom && <span className="text-[11px] uppercase tracking-wider text-v5-subtext/70">{ex.type}</span>}
                     {ex.custom && (
                       <button onClick={() => setEditingExercise(ex)} className="text-v5-subtext/70 hover:text-v5-red">
                         <Pencil size={13} />
@@ -7577,312 +7430,3 @@ function PhotosTab({ state, updateState }) {
   );
 }
 
-// ---------------- SETTINGS TAB ----------------
-// The only backup mechanism available, since everything lives in localStorage with no
-// server. Export/import cover every piece of user-created data — logs, cardio logs,
-// custom exercises, custom plans and programs, and which program is currently active —
-// not just workout logs.
-function notificationPermissionState() {
-  if (typeof Notification === "undefined") return "unsupported";
-  return Notification.permission; // "default" | "granted" | "denied"
-}
-
-function SettingsTab({ state, updateState, onNavigate }) {
-  const fileInputRef = useRef(null);
-  const [importMessage, setImportMessage] = useState(null); // { type: "error" | "success", text }
-  // Section 10 — tracked as real state (not read fresh every render) so requesting permission
-  // from the Enable button updates this screen immediately without needing a remount.
-  const [notifPermission, setNotifPermission] = useState(notificationPermissionState);
-  const requestRestTimerAlerts = async () => {
-    // Only ever called from this button's onClick — a direct user gesture, never on load
-    // (section 6). Browsers refuse/ignore a requestPermission() call made outside one anyway.
-    if (typeof Notification === "undefined") return;
-    try {
-      const result = await Notification.requestPermission();
-      setNotifPermission(result);
-    } catch {
-      setNotifPermission(notificationPermissionState());
-    }
-  };
-
-  const handleExport = () => {
-    exportBackupFile(state);
-    setImportMessage({ type: "success", text: "Backup downloaded." });
-  };
-
-  const handleImportClick = () => {
-    setImportMessage(null);
-    fileInputRef.current?.click();
-  };
-
-  const handleFileSelected = (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file later
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = parseBackupFile(String(reader.result));
-      if (!result.ok) {
-        setImportMessage({ type: "error", text: result.error });
-        return;
-      }
-      const confirmed = window.confirm(
-        "Importing this backup will overwrite all current data on this device — logs, cardio logs, custom exercises, custom plans and programs, and your active program. This can't be undone. Continue?"
-      );
-      if (!confirmed) return;
-
-      updateState((prev) => {
-        const next = { ...prev };
-        BACKUP_DATA_KEYS.forEach((key) => {
-          if (key in result.data) next[key] = result.data[key];
-        });
-        // hasSeenOnboarding isn't backup data (it's a local "is this device set up" flag), but
-        // a deliberate restore is never a fresh install — without this, importing real history
-        // into a blank browser profile would still show the welcome screen until the next
-        // full page reload triggers the same retroactive check loadInitialState() runs.
-        next.hasSeenOnboarding = true;
-        return next;
-      });
-      setImportMessage({ type: "success", text: "Backup restored." });
-    };
-    reader.onerror = () => setImportMessage({ type: "error", text: "Couldn't read that file." });
-    reader.readAsText(file);
-  };
-
-  const counts = {
-    logs: (state.logs || []).length,
-    cardioLogs: (state.cardioLogs || []).length,
-    customExercises: (state.customExercises || []).length,
-    customPlans: (state.customPlans || []).length,
-    customPrograms: (state.customPrograms || []).length,
-    photos: (state.photos || []).length,
-    completedPrograms: (state.completedPrograms || []).length,
-    goals: (state.goals || []).length,
-    bodyweightLogs: (state.bodyweightLogs || []).length,
-  };
-
-  const settings = { rirSystem: "rir", restDefaults: DEFAULT_REST_DEFAULTS, barWeight: 45, ...(state.settings || {}) };
-  const updateSettings = (patch) => updateState((prev) => ({ ...prev, settings: { ...(prev.settings || {}), ...patch } }));
-  const updateRestDefault = (category, val) =>
-    updateSettings({ restDefaults: { ...(settings.restDefaults || DEFAULT_REST_DEFAULTS), [category]: Number(val) || 0 } });
-
-  return (
-    <div className="space-y-6">
-      <div className="border border-white/10 bg-v5-elevated p-4 space-y-4">
-        <div className="text-[11px] uppercase tracking-widest text-v5-red">Training</div>
-
-        <div>
-          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Effort tracking</label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => updateSettings({ rirSystem: "rir" })}
-              className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
-                settings.rirSystem !== "rpe" ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
-              }`}
-            >
-              RIR
-            </button>
-            <button
-              onClick={() => updateSettings({ rirSystem: "rpe" })}
-              className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold border ${
-                settings.rirSystem === "rpe" ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
-              }`}
-            >
-              RPE
-            </button>
-          </div>
-          <p className="text-xs text-v5-subtext/70 mt-1.5">Reps in reserve (0–5+) or rate of perceived exertion (6–10), logged per set.</p>
-        </div>
-
-        <div>
-          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Rest timer defaults (seconds)</label>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              ["compound", "Compound"],
-              ["isolation", "Isolation"],
-              ["conditioning", "Conditioning"],
-              ["superset", "Superset"],
-            ].map(([key, label]) => (
-              <div key={key}>
-                <div className="text-[10px] text-v5-subtext/70 mb-1">{label}</div>
-                <input
-                  type="number"
-                  value={(settings.restDefaults || DEFAULT_REST_DEFAULTS)[key]}
-                  onChange={(e) => updateRestDefault(key, e.target.value)}
-                  className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Barbell weight</label>
-          <div className="flex gap-2 items-center">
-            {[45, 35].map((w) => (
-              <button
-                key={w}
-                onClick={() => updateSettings({ barWeight: w })}
-                className={`px-4 py-2 text-xs font-bold border ${
-                  settings.barWeight === w ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
-                }`}
-              >
-                {w} lb
-              </button>
-            ))}
-            <input
-              type="number"
-              value={settings.barWeight}
-              onChange={(e) => updateSettings({ barWeight: Number(e.target.value) || 0 })}
-              placeholder="Custom"
-              className="w-24 bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-white/10 bg-v5-elevated p-4 space-y-4">
-        <div className="text-[11px] uppercase tracking-widest text-v5-red">Rest Timer Alerts</div>
-
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm text-v5-text/90">Rest timer sound</div>
-            <div className="text-xs text-v5-subtext/70">Plays a beep when rest ends, while BRK is open.</div>
-          </div>
-          <div className="flex gap-1.5 shrink-0 ml-3">
-            <button
-              onClick={() => updateSettings({ restTimerSound: true })}
-              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerSound !== false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
-            >
-              ON
-            </button>
-            <button
-              onClick={() => updateSettings({ restTimerSound: false })}
-              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerSound === false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
-            >
-              OFF
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-v5-text/90">Vibration</div>
-          <div className="flex gap-1.5 shrink-0 ml-3">
-            <button
-              onClick={() => updateSettings({ restTimerVibration: true })}
-              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerVibration !== false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
-            >
-              ON
-            </button>
-            <button
-              onClick={() => updateSettings({ restTimerVibration: false })}
-              className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerVibration === false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
-            >
-              OFF
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-v5-text/90">Background alerts</div>
-            {notifPermission === "granted" && (
-              <div className="flex gap-1.5 shrink-0 ml-3">
-                <button
-                  onClick={() => updateSettings({ restTimerBackgroundAlerts: true })}
-                  className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerBackgroundAlerts !== false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
-                >
-                  ON
-                </button>
-                <button
-                  onClick={() => updateSettings({ restTimerBackgroundAlerts: false })}
-                  className={`px-3 py-1.5 text-[11px] font-bold border ${settings.restTimerBackgroundAlerts === false ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
-                >
-                  OFF
-                </button>
-              </div>
-            )}
-          </div>
-          {notifPermission === "default" && (
-            <div className="mt-2 space-y-2">
-              <p className="text-xs text-v5-subtext">BRK can notify you when your rest timer ends while your phone is locked or you're using another app.</p>
-              <button onClick={requestRestTimerAlerts} className="px-4 py-2 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90">
-                Enable
-              </button>
-            </div>
-          )}
-          {notifPermission === "denied" && <p className="text-xs text-v5-subtext/70 mt-1">OFF — Notification permission denied</p>}
-          {notifPermission === "unsupported" && <p className="text-xs text-v5-subtext/70 mt-1">Not supported in this browser. Foreground sound still works.</p>}
-        </div>
-      </div>
-
-      <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
-        <div className="text-[11px] uppercase tracking-widest text-v5-red">Data &amp; Privacy</div>
-        <button
-          onClick={() => onNavigate?.("dataWorkbook")}
-          className="w-full flex items-center justify-between border border-white/10 p-3 hover:border-v5-red/40"
-        >
-          <div className="text-left flex items-center gap-3">
-            <FileSpreadsheet size={18} className="text-v5-subtext shrink-0" />
-            <div>
-              <div className="text-sm font-bold text-white">My Data Workbook</div>
-              <div className="text-xs text-v5-subtext mt-0.5">Review, filter, and export the fitness data BRK has collected.</div>
-            </div>
-          </div>
-          <ChevronRight size={18} className="text-v5-subtext/70 shrink-0" />
-        </button>
-      </div>
-
-      <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-4">
-        <div>
-          <div className="text-[11px] uppercase tracking-widest text-v5-red">Data backup</div>
-          <p className="text-xs text-v5-subtext mt-1">
-            Everything is stored on this device only — there's no account or server. Export a backup before
-            switching phones or clearing browser data, and import it to restore.
-          </p>
-        </div>
-
-        <div className="text-xs text-v5-subtext space-y-1">
-          <div>{counts.logs} lift logs</div>
-          <div>{counts.cardioLogs} run / conditioning logs</div>
-          <div>{counts.customExercises} custom exercises</div>
-          <div>{counts.customPlans} custom plans</div>
-          <div>{counts.customPrograms} custom programs</div>
-          <div>{counts.photos} progress photos</div>
-          <div>{counts.completedPrograms} completed programs</div>
-          <div>{counts.goals} goals</div>
-          <div>{counts.bodyweightLogs} bodyweight entries</div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-2">
-          <button
-            onClick={handleExport}
-            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90 flex items-center justify-center gap-1.5"
-          >
-            <Download size={14} /> Export data
-          </button>
-          <button
-            onClick={handleImportClick}
-            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-text/90 hover:border-v5-red/40 flex items-center justify-center gap-1.5"
-          >
-            <Upload size={14} /> Import data
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json,.json"
-            onChange={handleFileSelected}
-            className="hidden"
-          />
-        </div>
-
-        {importMessage && (
-          <div className={`text-xs ${importMessage.type === "error" ? "text-v5-red" : "text-green-500"}`}>
-            {importMessage.text}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}

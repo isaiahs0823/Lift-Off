@@ -163,8 +163,11 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
         <div className={focus && recentPRs.length > 0 ? "grid grid-cols-2 gap-3" : "space-y-3"}>
           {focus && (
             <Card className="flex items-center gap-2.5">
-              <div className="shrink-0 relative w-10 h-16 overflow-hidden rounded-lg bg-v5-elevated flex items-center justify-center">
-                <MuscleBodyOutline exercise={{ muscle: focus.muscle }} size={44} />
+              {/* Anatomy figure given real visual weight here rather than a clipped sliver —
+                  Muscle Focus is exactly the context BRK's illustrated anatomy system exists
+                  for, so it earns more presence than the icon-sized treatment it had before. */}
+              <div className="shrink-0 relative w-14 h-24 rounded-lg bg-v5-elevated flex items-center justify-center">
+                <MuscleBodyOutline exercise={{ muscle: focus.muscle }} size={48} />
               </div>
               <div className="min-w-0">
                 <SectionLabel tone="muted">Muscle focus</SectionLabel>

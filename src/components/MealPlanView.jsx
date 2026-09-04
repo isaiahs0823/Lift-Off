@@ -72,7 +72,7 @@ function MealCard({ meal, profile, onSwap, onDontHave }) {
             <div className="text-v5-text/90">
               {item.name} <span className="text-v5-subtext/70">— {item.servingDesc}</span>
             </div>
-            <button onClick={() => setSwapItem(swapItem === item.name ? null : item.name)} className="text-[10px] uppercase tracking-widest text-v5-red hover:text-v5-red shrink-0 ml-2">
+            <button onClick={() => setSwapItem(swapItem === item.name ? null : item.name)} className="text-[11px] uppercase tracking-widest text-v5-red hover:text-v5-red shrink-0 ml-2">
               Swap
             </button>
           </div>

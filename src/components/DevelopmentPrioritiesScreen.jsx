@@ -55,7 +55,7 @@ function MuscleRow({ muscleId, label, isMoving, onTapRow, onPickLevel, showLevel
           {isMoving && <Check size={14} className="text-v5-red shrink-0" />}
           {label}
         </span>
-        {isMoving && <span className="text-[10px] uppercase tracking-widest text-v5-red">Tap a spot to place</span>}
+        {isMoving && <span className="text-[11px] uppercase tracking-widest text-v5-red">Tap a spot to place</span>}
       </button>
       <div className="px-3 pb-2.5 flex items-center gap-1.5 flex-wrap">
         <button
@@ -63,7 +63,7 @@ function MuscleRow({ muscleId, label, isMoving, onTapRow, onPickLevel, showLevel
             e.stopPropagation();
             onToggleLevelPicker(muscleId);
           }}
-          className="px-2 py-1 text-[10px] uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
+          className="px-2 py-1 text-[11px] uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
         >
           {PRIORITY_LEVEL_LABEL[currentLevel]} ▾
         </button>
@@ -75,7 +75,7 @@ function MuscleRow({ muscleId, label, isMoving, onTapRow, onPickLevel, showLevel
                 e.stopPropagation();
                 onPickLevel(muscleId, l);
               }}
-              className="px-2 py-1 text-[10px] uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30"
+              className="px-2 py-1 text-[11px] uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30"
             >
               Move to {PRIORITY_LEVEL_LABEL[l]}
             </button>
@@ -111,7 +111,7 @@ function Section({ level, muscleIds, movingId, movingLevel, levelPickerFor, onTa
       {movingId && movingLevel === level && (
         <button
           onClick={() => onPlaceAtEnd(level)}
-          className="w-full py-2 text-[10px] uppercase tracking-widest text-v5-subtext/70 border border-dashed border-white/10 hover:border-v5-red/40 hover:text-v5-subtext"
+          className="w-full py-2 text-[11px] uppercase tracking-widest text-v5-subtext/70 border border-dashed border-white/10 hover:border-v5-red/40 hover:text-v5-subtext"
         >
           Place at end of {PRIORITY_LEVEL_LABEL[level]}
         </button>

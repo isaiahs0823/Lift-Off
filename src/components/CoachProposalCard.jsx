@@ -36,7 +36,7 @@ function CommitmentProposal({ proposal, updateState, onResolve }) {
 
   return (
     <div className="mt-2 rounded-xl bg-v5-elevated ring-1 ring-v5-red/20 p-3 space-y-2">
-      <div className="text-[10px] uppercase tracking-widest text-v5-red">Proposed commitment</div>
+      <div className="text-[11px] uppercase tracking-widest text-v5-red">Proposed commitment</div>
       <div className="text-sm text-white font-bold">{proposal.text}</div>
       <div className="flex gap-2 pt-1">
         <button onClick={accept} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-red text-white hover:opacity-90">
@@ -64,17 +64,17 @@ function NutritionProposal({ proposal, updateState, onResolve }) {
 
   return (
     <div className="mt-2 rounded-xl bg-v5-elevated ring-1 ring-v5-red/20 p-3 space-y-3">
-      <div className="text-[10px] uppercase tracking-widest text-v5-red">Proposed nutrition target change</div>
+      <div className="text-[11px] uppercase tracking-widest text-v5-red">Proposed nutrition target change</div>
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Current</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">Current</div>
           <div className="text-white font-bold">{proposal.fromCalories} kcal</div>
           <div className="text-v5-subtext text-xs">
             {proposal.fromMacros.protein}P · {proposal.fromMacros.carbs}C · {proposal.fromMacros.fat}F
           </div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Proposed</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">Proposed</div>
           <div className="text-white font-bold">{proposal.toCalories} kcal</div>
           <div className="text-v5-subtext text-xs">
             {proposal.toMacros.protein}P · {proposal.toMacros.carbs}C · {proposal.toMacros.fat}F
@@ -82,13 +82,13 @@ function NutritionProposal({ proposal, updateState, onResolve }) {
         </div>
       </div>
       <div className="text-xs text-v5-subtext">
-        <span className="text-v5-subtext/70 uppercase tracking-widest text-[10px]">Why — </span>
+        <span className="text-v5-subtext/70 uppercase tracking-widest text-[11px]">Why — </span>
         {proposal.reason}
       </div>
 
       {modifying ? (
         <div className="space-y-2">
-          <label className="block text-[10px] uppercase tracking-widest text-v5-subtext/70">Calories</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext/70">Calories</label>
           <input
             type="number"
             inputMode="decimal"
@@ -181,7 +181,7 @@ function ProgramProposal({ proposal, updateState, exMap, allExercises, onResolve
   if (stage === "startDate") {
     return (
       <div className="mt-2 rounded-xl bg-v5-elevated ring-1 ring-v5-red/20 p-3 space-y-3">
-        <div className="text-[10px] uppercase tracking-widest text-v5-red">When do you want to start?</div>
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">When do you want to start?</div>
         <div className="space-y-2">
           {[
             ["today", "Start Today"],
@@ -220,7 +220,7 @@ function ProgramProposal({ proposal, updateState, exMap, allExercises, onResolve
 
   return (
     <div className="mt-2 rounded-xl bg-v5-elevated ring-1 ring-v5-red/20 p-3 space-y-3">
-      <div className="text-[10px] uppercase tracking-widest text-v5-red">Proposed program</div>
+      <div className="text-[11px] uppercase tracking-widest text-v5-red">Proposed program</div>
       <div className="text-sm text-white font-bold">{proposal.name}</div>
       {proposal.tagline && <div className="text-xs text-v5-subtext">{proposal.tagline}</div>}
       {proposal.scheduleWarning && <div className="text-xs text-amber-500 border border-amber-900/40 bg-amber-950/20 px-2 py-1.5">{proposal.scheduleWarning}</div>}
@@ -232,7 +232,7 @@ function ProgramProposal({ proposal, updateState, exMap, allExercises, onResolve
             <div key={day.id} className="rounded-lg bg-v5-muted/40 px-2.5 py-2">
               <div className="flex justify-between items-baseline gap-2">
                 <div className="text-xs font-bold text-white">{day.label}</div>
-                <div className="text-[10px] text-v5-subtext whitespace-nowrap">
+                <div className="text-[11px] text-v5-subtext whitespace-nowrap">
                   {(day.exercises || []).length} exercises · {workingSets} working sets
                 </div>
               </div>
@@ -250,7 +250,7 @@ function ProgramProposal({ proposal, updateState, exMap, allExercises, onResolve
 
       {proposal.plannedVolume && (
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70 mb-1">Weekly volume</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">Weekly volume</div>
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-v5-subtext">
             {Object.entries(proposal.plannedVolume).map(([muscle, sets]) => (
               <div key={muscle}>
@@ -263,7 +263,7 @@ function ProgramProposal({ proposal, updateState, exMap, allExercises, onResolve
 
       {proposal.reasoning && (
         <div className="text-xs text-v5-subtext">
-          <span className="text-v5-subtext/70 uppercase tracking-widest text-[10px]">Why — </span>
+          <span className="text-v5-subtext/70 uppercase tracking-widest text-[11px]">Why — </span>
           {proposal.reasoning}
         </div>
       )}

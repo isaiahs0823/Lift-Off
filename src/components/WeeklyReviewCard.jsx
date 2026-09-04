@@ -45,7 +45,7 @@ export default function WeeklyReviewCard({ state, exMap }) {
 
       {scheduleAdherence && (
         <div className="border border-white/[0.06] bg-v5-surface p-3 space-y-1.5">
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Weekly plan</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Weekly plan</div>
           {scheduleAdherence.lifting.scheduled > 0 && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-v5-subtext">Lifting</span>
@@ -81,27 +81,27 @@ export default function WeeklyReviewCard({ state, exMap }) {
 
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Training</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Training</div>
           <div className="text-white font-bold">
             {review.sessionsCompleted}
             {review.plannedSessions != null ? `/${review.plannedSessions}` : ""} sessions
           </div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Bodyweight</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Bodyweight</div>
           <div className="text-white font-bold">{fmtDelta(review.weightTrend)} lb avg</div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Strength</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Strength</div>
           <div className="text-white font-bold">{STRENGTH_LABEL[review.strengthTrend]}</div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">PRs</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">PRs</div>
           <div className="text-white font-bold">{review.prCount}</div>
         </div>
         {review.cardioTarget != null && (
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Conditioning</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Conditioning</div>
             <div className="text-white font-bold">
               {review.cardioCompleted}/{review.cardioTarget} completed
             </div>
@@ -109,7 +109,7 @@ export default function WeeklyReviewCard({ state, exMap }) {
         )}
         {review.avgReadiness != null && (
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Avg readiness</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Avg readiness</div>
             <div className="text-white font-bold">{review.avgReadiness}</div>
           </div>
         )}
@@ -130,7 +130,7 @@ export default function WeeklyReviewCard({ state, exMap }) {
 
       {muscleEntries.length > 0 && (
         <div className="border-t border-white/[0.06] pt-3">
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext mb-1.5">Muscle progression</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Muscle progression</div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1">
             {muscleEntries.map(([muscle, trend]) => {
               const Icon = TREND_ICON[trend];
@@ -146,7 +146,7 @@ export default function WeeklyReviewCard({ state, exMap }) {
       )}
 
       <div className="border-t border-white/[0.06] pt-3">
-        <div className="text-[10px] uppercase tracking-widest text-v5-red mb-1 flex items-center gap-1.5">
+        <div className="text-[11px] uppercase tracking-widest text-v5-red mb-1 flex items-center gap-1.5">
           <MessageCircle size={11} /> Coach
         </div>
         <div className="text-sm text-v5-text/90">{generateWeeklyReview(review, scheduleAdherence).message}</div>

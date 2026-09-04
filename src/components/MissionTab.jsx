@@ -7,6 +7,7 @@ import { computeAdherence } from "../utils/adherence.js";
 import WeeklyReviewCard from "./WeeklyReviewCard.jsx";
 import ShareCardButton from "./ShareCardButton.jsx";
 import { buildGoalShareCard } from "../utils/shareCard.js";
+import { ScreenHeader, SectionLabel, Card, HeroCard, ButtonText, StatTile, ListRow, ProgressBar, Divider, EmptyState } from "./ui/Kit.jsx";
 
 function unitLabel(goal) {
   return goal.units ? ` ${goal.units}` : "";
@@ -17,8 +18,8 @@ function fmtVal(v) {
 }
 
 const STATUS_COLOR = {
-  ahead: "text-green-500",
-  on_track: "text-green-500",
+  ahead: "text-v5-success",
+  on_track: "text-v5-success",
   behind: "text-v5-red",
   no_data: "text-v5-subtext",
 };
@@ -43,79 +44,55 @@ function GoalCard({ goal, state, onOpen, primary }) {
     const pace = currentPaceFromHistory(history);
     const required = requiredPace(g);
     return (
-      <div onClick={onOpen} className="w-full text-left border border-v5-red/25 bg-v5-elevated p-4 space-y-3 hover:border-v5-red/60 cursor-pointer">
+      <HeroCard as="div" onClick={onOpen}>
         <div className="flex items-center justify-between">
-          <div className="text-[11px] uppercase tracking-widest text-v5-red">Mission</div>
+          <SectionLabel>Mission</SectionLabel>
           <div className={`text-[11px] uppercase tracking-widest font-bold ${STATUS_COLOR[status]}`}>{GOAL_STATUS_LABEL[status]}</div>
         </div>
-        <div className="text-2xl font-bold text-white">{g.title}</div>
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Current</div>
-            <div className="text-lg font-bold text-white">
-              {fmtVal(g.currentValue)}
-              {unitLabel(g)}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Target</div>
-            <div className="text-lg font-bold text-white">
-              {fmtVal(g.targetValue)}
-              {unitLabel(g)}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Start</div>
-            <div className="text-sm text-v5-text/90">
-              {fmtVal(g.startValue)}
-              {unitLabel(g)}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Days remaining</div>
-            <div className="text-sm text-v5-text/90">{days != null ? Math.max(0, days) : "No date set"}</div>
-          </div>
+        <div className="text-2xl font-black text-v5-text">{g.title}</div>
+        <div className="grid grid-cols-2 gap-3">
+          <StatTile value={`${fmtVal(g.currentValue)}${unitLabel(g)}`} label="Current" />
+          <StatTile value={`${fmtVal(g.targetValue)}${unitLabel(g)}`} label="Target" />
+          <StatTile value={`${fmtVal(g.startValue)}${unitLabel(g)}`} label="Start" valueClassName="text-sm" />
+          <StatTile value={days != null ? Math.max(0, days) : "No date"} label="Days remaining" valueClassName="text-sm" />
         </div>
         <div>
-          <div className="h-2 bg-v5-surface border border-white/10 overflow-hidden">
-            <div className="h-full bg-v5-red" style={{ width: `${pct}%` }} />
-          </div>
+          <ProgressBar pct={pct} />
           <div className="text-xs text-v5-subtext mt-1">{pct}% complete</div>
         </div>
-        <div className="grid grid-cols-2 gap-3 text-xs text-v5-subtext border-t border-white/[0.06] pt-3">
+        <Divider />
+        <div className="grid grid-cols-2 gap-3 text-xs text-v5-subtext">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70">Current pace</div>
-            <div>{pace != null ? `${pace >= 0 ? "+" : ""}${pace.toFixed(1)}${unitLabel(g)}/week` : "Collecting data"}</div>
+            <SectionLabel tone="muted">Current pace</SectionLabel>
+            <div className="mt-0.5">{pace != null ? `${pace >= 0 ? "+" : ""}${pace.toFixed(1)}${unitLabel(g)}/week` : "Collecting data"}</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70">Required pace</div>
-            <div>{required != null ? `${required >= 0 ? "+" : ""}${required.toFixed(1)}${unitLabel(g)}/week` : "—"}</div>
+            <SectionLabel tone="muted">Required pace</SectionLabel>
+            <div className="mt-0.5">{required != null ? `${required >= 0 ? "+" : ""}${required.toFixed(1)}${unitLabel(g)}/week` : "—"}</div>
           </div>
         </div>
         <div onClick={(e) => e.stopPropagation()}>
           <ShareCardButton buildDataUrl={() => buildGoalShareCard(g, pct)} filename="brk-lift-goal.png" />
         </div>
-      </div>
+      </HeroCard>
     );
   }
 
   return (
-    <button onClick={onOpen} className="w-full text-left border border-white/10 bg-v5-elevated p-3 hover:border-white/10">
+    <Card onClick={onOpen} className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-sm font-bold text-white truncate">{g.title}</div>
+          <div className="text-sm font-bold text-v5-text truncate">{g.title}</div>
           <div className="text-xs text-v5-subtext mt-0.5">
             {fmtVal(g.currentValue)}
             {unitLabel(g)} → {fmtVal(g.targetValue)}
             {unitLabel(g)}
           </div>
         </div>
-        <div className={`shrink-0 text-[10px] uppercase tracking-widest font-bold ${STATUS_COLOR[status]}`}>{GOAL_STATUS_LABEL[status]}</div>
+        <div className={`shrink-0 text-[11px] uppercase tracking-widest font-bold ${STATUS_COLOR[status]}`}>{GOAL_STATUS_LABEL[status]}</div>
       </div>
-      <div className="h-1.5 bg-v5-surface border border-white/10 overflow-hidden mt-2">
-        <div className="h-full bg-v5-red" style={{ width: `${pct}%` }} />
-      </div>
-    </button>
+      <ProgressBar pct={pct} />
+    </Card>
   );
 }
 
@@ -123,19 +100,14 @@ function AdherenceCard({ state }) {
   const weekly = computeAdherence(state, 7);
   const monthly = computeAdherence(state, 30);
   return (
-    <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
-      <div className="text-[11px] uppercase tracking-widest text-v5-red">Adherence</div>
+    <Card className="space-y-3">
+      <SectionLabel>Adherence</SectionLabel>
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">This week</div>
-          <div className="text-3xl font-bold text-white">{weekly.overall}%</div>
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-v5-subtext">This month</div>
-          <div className="text-3xl font-bold text-white">{monthly.overall}%</div>
-        </div>
+        <StatTile value={`${weekly.overall}%`} label="This week" valueClassName="text-3xl" />
+        <StatTile value={`${monthly.overall}%`} label="This month" valueClassName="text-3xl" />
       </div>
-      <div className="space-y-1.5 text-xs text-v5-subtext border-t border-white/[0.06] pt-3">
+      <Divider />
+      <div className="space-y-1.5 text-xs text-v5-subtext">
         <div className="flex items-center justify-between">
           <span>Strength ({weekly.strengthDays}/{weekly.plannedSessions} planned this week)</span>
           <span className="text-v5-text/90">{weekly.strengthPct}%</span>
@@ -151,7 +123,7 @@ function AdherenceCard({ state }) {
           <span className="text-v5-text/90">{weekly.checkinPct}%</span>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -215,31 +187,26 @@ export default function MissionTab({ state, updateState, allExercises, exMap }) 
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[11px] uppercase tracking-widest text-v5-red">Mission</div>
-          <div className="text-xl font-bold text-white mt-1">What am I trying to become</div>
-        </div>
-        <button
-          onClick={() => setView({ kind: "new" })}
-          className="shrink-0 text-xs uppercase tracking-widest text-v5-red hover:text-v5-red flex items-center gap-1"
-        >
-          <Plus size={14} /> New goal
-        </button>
-      </div>
+    <div className="space-y-5">
+      <ScreenHeader
+        eyebrow="Mission"
+        title="What am I trying to become"
+        right={
+          <ButtonText onClick={() => setView({ kind: "new" })} icon={Plus}>
+            New goal
+          </ButtonText>
+        }
+      />
 
       {primary ? (
         <GoalCard goal={primary} state={state} primary onOpen={() => setView({ kind: "edit", id: primary.id })} />
       ) : (
-        <div className="border border-white/10 bg-v5-elevated p-4 text-sm text-v5-subtext">
-          No primary goal set. Add one — this is the thing everything else here points at.
-        </div>
+        <EmptyState title="No primary goal set" body="Add one — this is the thing everything else here points at." />
       )}
 
       {secondary.length > 0 && (
         <div className="space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Secondary goals</div>
+          <SectionLabel tone="muted">Secondary goals</SectionLabel>
           {secondary.map((g) => (
             <GoalCard key={g.id} goal={g} state={state} onOpen={() => setView({ kind: "edit", id: g.id })} />
           ))}
@@ -252,22 +219,31 @@ export default function MissionTab({ state, updateState, allExercises, exMap }) 
 
       {inactiveGoals.length > 0 && (
         <div className="space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Paused / completed</div>
+          <SectionLabel tone="muted">Paused / completed</SectionLabel>
           {inactiveGoals.map((g) => (
-            <div key={g.id} className="flex items-center justify-between border border-white/10 bg-v5-elevated p-3">
-              <button onClick={() => setView({ kind: "edit", id: g.id })} className="text-left min-w-0">
-                <div className="text-sm text-v5-text/90 truncate">{g.title}</div>
-                <div className="text-[10px] uppercase tracking-widest text-v5-subtext/70">{g.status}</div>
-              </button>
-              <div className="shrink-0 flex items-center gap-2">
-                {g.status === "paused" && (
-                  <button onClick={() => setGoalStatus(g.id, "active")} className="text-v5-subtext hover:text-v5-red p-1" title="Resume">
-                    <Play size={14} />
-                  </button>
-                )}
-                {g.status === "completed" && <Check size={14} className="text-green-500" />}
-              </div>
-            </div>
+            <ListRow
+              key={g.id}
+              onClick={() => setView({ kind: "edit", id: g.id })}
+              title={g.title}
+              subtitle={g.status}
+              right={
+                <div className="shrink-0 flex items-center gap-2">
+                  {g.status === "paused" && (
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setGoalStatus(g.id, "active");
+                      }}
+                      className="text-v5-subtext hover:text-v5-red p-1"
+                      title="Resume"
+                    >
+                      <Play size={14} />
+                    </span>
+                  )}
+                  {g.status === "completed" && <Check size={14} className="text-v5-success" />}
+                </div>
+              }
+            />
           ))}
         </div>
       )}

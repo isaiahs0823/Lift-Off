@@ -70,7 +70,7 @@ function FilterChips({ value, onChange }) {
         <button
           key={f}
           onClick={() => onChange(value === f ? null : f)}
-          className={`shrink-0 px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border ${
+          className={`shrink-0 px-2.5 py-1 text-[11px] uppercase tracking-widest font-bold border ${
             value === f ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
           }`}
         >
@@ -105,16 +105,16 @@ function WorkoutRow({ row, exMap, onClick, showPlannedBadges, subLabel }) {
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         {showPlannedBadges && row.isToday && !row.isPlanned && (
-          <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Swapped for today</span>
+          <span className="text-[11px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Swapped for today</span>
         )}
         {showPlannedBadges && row.isToday && row.isPlanned && (
-          <span className="text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Planned</span>
+          <span className="text-[11px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">Planned</span>
         )}
         {showPlannedBadges && !row.isToday && row.isPlanned && (
-          <span className="text-[9px] uppercase tracking-widest border border-white/10 text-v5-subtext px-1.5 py-0.5">Originally planned</span>
+          <span className="text-[11px] uppercase tracking-widest border border-white/10 text-v5-subtext px-1.5 py-0.5">Originally planned</span>
         )}
         {row.completedSession && (
-          <span className="text-[9px] uppercase tracking-widest text-green-500 flex items-center gap-1">
+          <span className="text-[11px] uppercase tracking-widest text-green-500 flex items-center gap-1">
             <Check size={10} /> Completed {new Date(row.completedSession.finishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
           </span>
         )}
@@ -268,7 +268,7 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
               setFilter(null);
               setOpenGroupId(null);
             }}
-            className={`shrink-0 px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold border ${
+            className={`shrink-0 px-3 py-1.5 text-[11px] uppercase tracking-widest font-bold border ${
               tabView === t.id ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
             }`}
           >

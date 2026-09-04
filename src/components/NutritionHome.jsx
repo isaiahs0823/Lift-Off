@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ChevronRight, Settings as SettingsIcon } from "lucide-react";
+import { Settings as SettingsIcon } from "lucide-react";
 import { hasNutritionProfile, resolveNutritionProfile, dailyTotals, todayDateKey, CONTROL_LEVEL_LABEL } from "../utils/nutrition.js";
 import { currentBodyweightLbs, macroCalorieCheck } from "../utils/nutritionMath.js";
 import { rollingNutritionAdherence } from "../utils/nutritionAdherence.js";
@@ -7,6 +7,7 @@ import { diagnoseNutrition, generateAdjustmentProposal, applyAdjustment } from "
 import { nutritionPhaseFraming } from "../coachSpecialties/bodybuilding.js";
 import NutritionAssessmentForm from "./NutritionAssessmentForm.jsx";
 import NutritionAdjustmentCard from "./NutritionAdjustmentCard.jsx";
+import { ScreenHeader, SectionLabel, Card, HeroCard, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, ListRow, Divider } from "./ui/Kit.jsx";
 
 // Coach's "Nutrition Plan" destination (section 1/42). Gates to the conversational assessment
 // exactly once, the same pattern CoachTab.jsx uses for Athlete Profile — after that, this is
@@ -34,99 +35,89 @@ export default function NutritionHome({ state, updateState, onNavigate, onAskCoa
   const bbPhaseFraming = state.athleteProfile?.coachSpecialty === "bodybuilding" ? nutritionPhaseFraming(state.athleteProfile?.physiquePhase) : null;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[11px] uppercase tracking-widest text-v5-red">Coach</div>
-          <div className="text-xl font-bold text-white mt-1">Nutrition Plan</div>
-        </div>
-        <button onClick={() => setShowAssessment(true)} className="text-v5-subtext hover:text-v5-red p-1" title="Edit nutrition assessment">
-          <SettingsIcon size={18} />
-        </button>
-      </div>
+    <div className="space-y-5">
+      <ScreenHeader
+        eyebrow="Coach"
+        title="Nutrition Plan"
+        right={
+          <button onClick={() => setShowAssessment(true)} className="text-v5-subtext hover:text-v5-red p-1" title="Edit nutrition assessment">
+            <SettingsIcon size={18} />
+          </button>
+        }
+      />
 
       {!targets ? (
-        <div className="border border-amber-900/40 bg-v5-elevated p-4 text-sm text-amber-500">
-          I couldn't calculate real numbers yet — I need age, sex, height, and a logged bodyweight entry. Log a bodyweight in Progress, then revisit the assessment.
-        </div>
+        <Card className="border border-amber-900/40">
+          <span className="text-sm text-amber-500">
+            I couldn't calculate real numbers yet — I need age, sex, height, and a logged bodyweight entry. Log a bodyweight in Progress, then revisit
+            the assessment.
+          </span>
+        </Card>
       ) : (
         <>
           {bbPhaseFraming && <div className="text-xs text-v5-subtext -mb-2">{bbPhaseFraming.text}</div>}
-          <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-3">
+
+          <HeroCard>
             <div className="flex items-center justify-between">
-              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Today</div>
+              <SectionLabel>Today</SectionLabel>
               <div className="text-sm text-v5-subtext">Goal: {CONTROL_LEVEL_LABEL[profile.controlLevel] || "Flexible"}</div>
             </div>
-            <div className="text-2xl font-bold text-white">
+            <div className="text-2xl font-black text-v5-text">
               {Math.round(totals.calories).toLocaleString()} <span className="text-base font-normal text-v5-subtext">/ {targets.calories.toLocaleString()} kcal</span>
             </div>
             <div className="grid grid-cols-3 gap-3 text-center">
-              <div>
-                <div className="text-lg font-bold text-white">
-                  {Math.round(totals.protein)}<span className="text-sm text-v5-subtext">/{targets.protein}g</span>
-                </div>
-                <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Protein</div>
-              </div>
-              <div>
-                <div className="text-lg font-bold text-white">
-                  {Math.round(totals.carbs)}<span className="text-sm text-v5-subtext">/{targets.carbs}g</span>
-                </div>
-                <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Carbs</div>
-              </div>
-              <div>
-                <div className="text-lg font-bold text-white">
-                  {Math.round(totals.fat)}<span className="text-sm text-v5-subtext">/{targets.fat}g</span>
-                </div>
-                <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Fat</div>
-              </div>
+              <StatTile value={<>{Math.round(totals.protein)}<span className="text-sm text-v5-subtext">/{targets.protein}g</span></>} label="Protein" className="mx-auto" />
+              <StatTile value={<>{Math.round(totals.carbs)}<span className="text-sm text-v5-subtext">/{targets.carbs}g</span></>} label="Carbs" className="mx-auto" />
+              <StatTile value={<>{Math.round(totals.fat)}<span className="text-sm text-v5-subtext">/{targets.fat}g</span></>} label="Fat" className="mx-auto" />
             </div>
             <div className="flex gap-2">
-              <button onClick={() => onNavigate("nutritionLog")} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90">
+              <ButtonPrimary onClick={() => onNavigate("nutritionLog")} className="flex-1">
                 Log Food
-              </button>
-              <button onClick={() => onNavigate("nutritionScan")} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red hover:text-v5-red">
+              </ButtonPrimary>
+              <ButtonSecondary onClick={() => onNavigate("nutritionScan")} className="flex-1">
                 Scan Food
-              </button>
+              </ButtonSecondary>
             </div>
             {onAskCoach && (
-              <button onClick={onAskCoach} className="w-full py-2 text-[11px] uppercase tracking-widest font-bold text-v5-subtext hover:text-v5-red">
+              <ButtonText tone="muted" onClick={onAskCoach} className="w-full py-1 justify-center">
                 Ask Coach
-              </button>
+              </ButtonText>
             )}
-          </div>
+          </HeroCard>
 
-          <div className="border border-white/10 bg-v5-elevated p-4 space-y-2">
+          <Card className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Estimated maintenance</div>
+              <SectionLabel tone="muted">Estimated maintenance</SectionLabel>
               <div className="text-sm text-v5-text/90">{targets.estimatedMaintenance.toLocaleString()} kcal/day</div>
             </div>
             <div className="text-[11px] text-v5-subtext/70">
               Treated as an estimate — refined from your actual bodyweight trend and adherence over time, not fixed.
             </div>
-            <button onClick={() => setShowWhy((s) => !s)} className="text-[11px] uppercase tracking-widest text-v5-red hover:text-v5-red">
-              {showWhy ? "Hide the math" : "Why these numbers?"}
-            </button>
+            <ButtonText onClick={() => setShowWhy((s) => !s)}>{showWhy ? "Hide the math" : "Why these numbers?"}</ButtonText>
             {showWhy && weightLbs && (
-              <div className="text-xs text-v5-subtext space-y-1 pt-1 border-t border-white/[0.06]">
-                <div>Bodyweight used: {weightLbs} lb</div>
-                <div>Method: Mifflin-St Jeor resting energy + activity estimate</div>
-                <div>Goal adjustment applied for {profile.primaryGoal?.replace("_", " ") || "maintenance"}</div>
-                {macroCheck && <div>Macro calories reconcile within {Math.abs(macroCheck.diff)} kcal of target</div>}
-              </div>
+              <>
+                <Divider />
+                <div className="text-xs text-v5-subtext space-y-1">
+                  <div>Bodyweight used: {weightLbs} lb</div>
+                  <div>Method: Mifflin-St Jeor resting energy + activity estimate</div>
+                  <div>Goal adjustment applied for {profile.primaryGoal?.replace("_", " ") || "maintenance"}</div>
+                  {macroCheck && <div>Macro calories reconcile within {Math.abs(macroCheck.diff)} kcal of target</div>}
+                </div>
+              </>
             )}
-          </div>
+          </Card>
 
-          <div className="border border-white/10 bg-v5-elevated p-4 space-y-1">
+          <Card className="space-y-1">
             <div className="flex items-center justify-between">
-              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">7-day nutrition adherence</div>
-              <div className="text-lg font-bold text-white">{adherence.pct != null ? `${adherence.pct}%` : "—"}</div>
+              <SectionLabel tone="muted">7-day nutrition adherence</SectionLabel>
+              <div className="text-lg font-bold text-v5-text">{adherence.pct != null ? `${adherence.pct}%` : "—"}</div>
             </div>
             {adherence.loggedDays > 0 && (
               <div className="text-xs text-v5-subtext">
                 {adherence.onPlanDays} of {adherence.loggedDays} logged days on plan · avg {adherence.avgCalories} kcal, {adherence.avgProtein}g protein
               </div>
             )}
-          </div>
+          </Card>
 
           {diagnosis && diagnosis.kind === "target_needs_adjustment" && !adjustmentResolved ? (
             <NutritionAdjustmentCard
@@ -139,28 +130,17 @@ export default function NutritionHome({ state, updateState, onNavigate, onAskCoa
             />
           ) : (
             diagnosis && (
-              <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-1">
-                <div className="text-[11px] uppercase tracking-widest text-v5-red">Coach</div>
+              <Card tone="accent" className="space-y-1">
+                <SectionLabel>Coach</SectionLabel>
                 <div className="text-sm text-v5-text/90 whitespace-pre-line">{diagnosis.message}</div>
-              </div>
+              </Card>
             )
           )}
 
-          <div className="border border-white/10 divide-y divide-neutral-900">
-            {profile.controlLevel === "full_plan" && (
-              <button onClick={() => onNavigate("nutritionMealPlan")} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-v5-elevated">
-                <span className="text-sm text-v5-text/90">Meal Plan</span>
-                <ChevronRight size={16} className="text-v5-subtext/70" />
-              </button>
-            )}
-            <button onClick={() => onNavigate("nutritionCheckIn")} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-v5-elevated">
-              <span className="text-sm text-v5-text/90">Weekly Check-In</span>
-              <ChevronRight size={16} className="text-v5-subtext/70" />
-            </button>
-            <button onClick={() => onNavigate("nutritionLog")} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-v5-elevated">
-              <span className="text-sm text-v5-text/90">Food Log</span>
-              <ChevronRight size={16} className="text-v5-subtext/70" />
-            </button>
+          <div className="space-y-2">
+            {profile.controlLevel === "full_plan" && <ListRow title="Meal Plan" onClick={() => onNavigate("nutritionMealPlan")} />}
+            <ListRow title="Weekly Check-In" onClick={() => onNavigate("nutritionCheckIn")} />
+            <ListRow title="Food Log" onClick={() => onNavigate("nutritionLog")} />
           </div>
         </>
       )}

@@ -20,7 +20,7 @@ function FoodResultRow({ food, favorited, onSelect, onToggleFavorite }) {
   return (
     <div className="w-full border border-white/10 bg-v5-elevated p-3 flex items-center gap-2 hover:border-v5-red">
       <button onClick={() => onSelect(food)} className="flex-1 min-w-0 text-left">
-        {food.brand && <div className="text-[10px] uppercase tracking-widest text-v5-subtext truncate">{food.brand}</div>}
+        {food.brand && <div className="text-[11px] uppercase tracking-widest text-v5-subtext truncate">{food.brand}</div>}
         <div className="text-sm text-white font-bold truncate">{food.name}</div>
         <div className="text-xs text-v5-subtext truncate">
           {food.servingDesc || "1 serving"}

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff, ListChecks, Sparkles, AlertCircle, Target, MessageCircle } from "lucide-react";
+import { BookOpen, Settings as SettingsIcon, ChevronRight, Apple, Send, RotateCcw, WifiOff, ListChecks, Sparkles, AlertCircle, Target, MessageCircle, Wrench } from "lucide-react";
 import { ButtonPrimary, Pill, Divider, ActionTile } from "./ui/Kit.jsx";
+import { SlideInPanel } from "./SlideInPanel.jsx";
 import { syncCoachMemory } from "../utils/coachMemory.js";
 import { hasProfile, coachKnowledgeLevel, KNOWLEDGE_LEVEL_LABEL, KNOWLEDGE_LEVEL_DESC, PHYSIQUE_PHASE_LABEL } from "../utils/athleteProfile.js";
 import { resolveDueCommitments, commitmentOutcomeMessage, commitmentProgress } from "../utils/commitments.js";
@@ -29,7 +30,7 @@ import {
 // visual-scale reduction is real and not fighting the shared primitive's fixed 11px.
 function MiniLabel({ children, tone = "red", className = "" }) {
   return (
-    <div className={`text-[10px] font-bold uppercase tracking-[0.14em] ${tone === "red" ? "text-v5-red" : "text-v5-subtext"} ${className}`}>
+    <div className={`text-[11px] font-bold uppercase tracking-[0.14em] ${tone === "red" ? "text-v5-red" : "text-v5-subtext"} ${className}`}>
       {children}
     </div>
   );
@@ -52,6 +53,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
   const [showOnboarding, setShowOnboarding] = useState(!hasProfile(state));
   const [showSpecialtySelect, setShowSpecialtySelect] = useState(!resolveCoachOnboarding(state).specialtySelected);
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
+  const [showCoachTools, setShowCoachTools] = useState(false);
 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -61,7 +63,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
   const [errorStatus, setErrorStatus] = useState(null);
   const [isOnline, setIsOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   const abortRef = useRef(null);
-  const bottomRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
@@ -106,8 +108,13 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
   const coachingStyle = state.athleteProfile?.coachingStyle || "balanced";
   const { conversation } = getActiveConversation(state, specialty);
 
+  // Container-scoped scroll, not scrollIntoView() — scrollIntoView walks up and can drag the
+  // *page* viewport along with it (a visible jerk/jump on iOS Safari and installed PWAs,
+  // especially with the on-screen keyboard open). Setting scrollTop directly on the chat's own
+  // scroll container keeps the motion contained to the chat panel, never the outer page.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
+    const el = messagesContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [conversation.messages.length, streamingText]);
 
   const runTurn = async (convoWithUserMessage) => {
@@ -197,6 +204,19 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
       />
     );
   }
+  if (showCoachTools) {
+    return (
+      <SlideInPanel title="Coach Tools" subtitle="Knowledge, priorities, nutrition, program, settings" onBack={() => setShowCoachTools(false)}>
+        <div className="grid grid-cols-2 gap-2">
+          <ActionTile icon={BookOpen} label="Knowledge" onClick={() => onNavigate?.("coachKnowledge")} />
+          <ActionTile icon={Target} label="Priorities" onClick={() => onNavigate?.("developmentPriorities")} />
+          <ActionTile icon={Apple} label="Nutrition" onClick={() => onNavigate?.("nutrition")} />
+          <ActionTile icon={ListChecks} label="Program" onClick={() => setShowScheduleBuilder(true)} />
+          <ActionTile icon={SettingsIcon} label="Settings" onClick={() => onNavigate?.("coachSettings")} />
+        </div>
+      </SlideInPanel>
+    );
+  }
 
   const activeSpecialty = getSpecialty(specialty);
   const phase = state.athleteProfile?.physiquePhase;
@@ -215,7 +235,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
         <MiniLabel>Coach</MiniLabel>
         <div className="flex items-baseline justify-between gap-2 mt-0.5">
           <div className="text-lg font-black text-v5-text tracking-tight">BRK Coach</div>
-          <div className="text-[9px] font-bold uppercase tracking-wide text-v5-subtext/70 shrink-0" title={KNOWLEDGE_LEVEL_DESC[knowledgeLevel]}>
+          <div className="text-[11px] font-bold uppercase tracking-wide text-v5-subtext/70 shrink-0" title={KNOWLEDGE_LEVEL_DESC[knowledgeLevel]}>
             {KNOWLEDGE_LEVEL_LABEL[knowledgeLevel]}
           </div>
         </div>
@@ -225,7 +245,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
           hero: smaller radius, smaller padding, smaller type than before. */}
       <button onClick={() => onNavigate?.("coachSettings")} className="w-full text-left bg-v5-surface rounded-xl p-2.5 space-y-0.5">
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-v5-red">
+          <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.14em] text-v5-red">
             <MessageCircle size={10} /> {activeSpecialty?.label || "Coach"}
           </span>
           <ChevronRight size={13} className="text-v5-subtext" />
@@ -233,22 +253,22 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
         <div className="text-xs text-v5-text/90">
           {phase ? PHYSIQUE_PHASE_LABEL[phase] || "General Hypertrophy" : "General Hypertrophy"}
         </div>
-        {hasFocus && <div className="text-[10px] text-v5-subtext">Focus: {[priorities.primary, priorities.secondary].filter(Boolean).join(", ")}</div>}
+        {hasFocus && <div className="text-[11px] text-v5-subtext">Focus: {[priorities.primary, priorities.secondary].filter(Boolean).join(", ")}</div>}
       </button>
 
-      {/* Coach Tools consolidated into one compact grid instead of five stacked full-width
-          rows (task section 9) — Coach should read as "brief + conversation" first, with these
-          management destinations one glance below, not competing with the chat for space. */}
-      <div>
-        <MiniLabel tone="muted" className="mb-1.5">Coach tools</MiniLabel>
-        <div className="grid grid-cols-2 gap-2">
-          <ActionTile icon={BookOpen} label="Knowledge" onClick={() => onNavigate?.("coachKnowledge")} />
-          <ActionTile icon={Target} label="Priorities" onClick={() => onNavigate?.("developmentPriorities")} />
-          <ActionTile icon={Apple} label="Nutrition" onClick={() => onNavigate?.("nutrition")} />
-          <ActionTile icon={ListChecks} label="Program" onClick={() => setShowScheduleBuilder(true)} />
-          <ActionTile icon={SettingsIcon} label="Settings" onClick={() => onNavigate?.("coachSettings")} />
-        </div>
-      </div>
+      {/* Coach Tools collapsed to one tap target instead of an always-open grid — Coach should
+          read as "brief + conversation" first, with chat appearing right after the context
+          card. Knowledge/Priorities/Nutrition/Program/Settings are unchanged, just one level of
+          progressive disclosure deeper (a sheet, opened above), not gone. */}
+      <button
+        onClick={() => setShowCoachTools(true)}
+        className="w-full flex items-center justify-between bg-v5-surface rounded-xl px-2.5 py-2"
+      >
+        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-v5-subtext">
+          <Wrench size={11} /> Coach Tools
+        </span>
+        <ChevronRight size={14} className="text-v5-subtext" />
+      </button>
 
       {openCommitments.length > 0 && (
         <div className="bg-v5-surface rounded-xl p-2.5 space-y-1">
@@ -259,7 +279,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
               return (
                 <div key={c.id} className="text-xs text-v5-text/90 flex items-center justify-between gap-2">
                   <span className="truncate">{c.text} — {c.period === "next_week" ? "next week" : "this week"}</span>
-                  {progress != null && <span className="text-v5-subtext text-[10px] shrink-0 tabular-nums">{progress}/{c.target}</span>}
+                  {progress != null && <span className="text-v5-subtext text-[11px] shrink-0 tabular-nums">{progress}/{c.target}</span>}
                 </div>
               );
             })}
@@ -281,7 +301,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
       )}
 
       <div className="rounded-xl bg-v5-surface flex flex-col h-[65vh] min-h-[420px] overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 space-y-2.5">
           {bubbles.length === 0 && !showThinking && !showStreaming && (
             <div className="text-xs text-v5-subtext text-center py-3">
               Ask about a workout, your progress, nutrition, or what to focus on today.
@@ -326,7 +346,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
                 <div className="text-xs text-v5-subtext max-w-xs mx-auto">
                   Personalized coaching built around your training, readiness, nutrition, and progress is being prepared for beta.
                 </div>
-                {errorRequestId && <div className="text-[9px] text-v5-subtext/50 pt-1">Ref: {errorRequestId}</div>}
+                {errorRequestId && <div className="text-[11px] text-v5-subtext/50 pt-1">Ref: {errorRequestId}</div>}
               </div>
             </div>
           )}
@@ -339,15 +359,14 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
                 <div className="text-xs text-v5-subtext">Your training data is safe. Try again shortly.</div>
                 <button
                   onClick={retry}
-                  className="mx-auto flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-v5-red hover:opacity-80 pt-1"
+                  className="mx-auto flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-v5-red hover:opacity-80 pt-1"
                 >
                   <RotateCcw size={11} /> Retry
                 </button>
-                {errorRequestId && <div className="text-[9px] text-v5-subtext/50">Ref: {errorRequestId}</div>}
+                {errorRequestId && <div className="text-[11px] text-v5-subtext/50">Ref: {errorRequestId}</div>}
               </div>
             </div>
           )}
-          <div ref={bottomRef} />
         </div>
 
         {bubbles.length === 0 && (
@@ -357,7 +376,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
                 key={q}
                 onClick={() => send(q)}
                 disabled={sending || !isOnline || errorStatus === 503}
-                className="px-2 py-1 rounded-full text-[10px] bg-v5-elevated text-v5-subtext hover:text-v5-red disabled:opacity-40"
+                className="px-2 py-1 rounded-full text-[11px] bg-v5-elevated text-v5-subtext hover:text-v5-red disabled:opacity-40"
               >
                 {q}
               </button>
@@ -396,7 +415,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
               <React.Fragment key={h.id}>
                 {i > 0 && <Divider />}
                 <div>
-                  <div className="text-[10px] text-v5-subtext/70">
+                  <div className="text-[11px] text-v5-subtext/70">
                     {new Date(h.date).toLocaleString()}
                     {h.question ? ` — ${h.question}` : ""}
                   </div>

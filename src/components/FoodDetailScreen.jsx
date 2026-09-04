@@ -8,7 +8,7 @@ function MacroValue({ label, value, unit = "g" }) {
   return (
     <div className="text-center">
       <div className="text-lg font-bold text-white">{value == null ? "—" : `${Math.round(value * 10) / 10}${unit === "g" ? "" : unit}`}</div>
-      <div className="text-[10px] uppercase tracking-widest text-v5-subtext">{label}</div>
+      <div className="text-[11px] uppercase tracking-widest text-v5-subtext">{label}</div>
     </div>
   );
 }

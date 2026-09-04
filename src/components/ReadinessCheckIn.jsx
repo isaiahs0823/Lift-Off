@@ -47,7 +47,7 @@ function RatingRow({ label, anchor, value, onChange }) {
           ))}
         </div>
       </div>
-      {anchor && <div className="text-[10px] text-v5-subtext/50 text-right">{anchor}</div>}
+      {anchor && <div className="text-[11px] text-v5-subtext/50 text-right">{anchor}</div>}
     </div>
   );
 }
@@ -176,7 +176,7 @@ export default function ReadinessCheckIn({ state, updateState, compact = false, 
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-[10px] uppercase tracking-widest text-v5-subtext mb-1">Sleep hours (optional)</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1">Sleep hours (optional)</label>
           <input
             type="number"
             value={form.sleepHours}
@@ -185,7 +185,7 @@ export default function ReadinessCheckIn({ state, updateState, compact = false, 
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase tracking-widest text-v5-subtext mb-1">Resting HR (optional)</label>
+          <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1">Resting HR (optional)</label>
           <input
             type="number"
             value={form.restingHR}

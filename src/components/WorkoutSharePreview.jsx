@@ -67,7 +67,7 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] shrink-0">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-red font-bold">Share Workout</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-red font-bold">Share Workout</div>
             <div className="text-sm text-v5-subtext">{session.planName}</div>
           </div>
           <button onClick={onClose} className="p-1 text-v5-subtext hover:text-v5-red">
@@ -92,7 +92,7 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
 
           {/* Template picker */}
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext mb-1.5">Style</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Style</div>
             <div className="grid grid-cols-3 gap-1.5">
               {SHARE_TEMPLATES.map((t) => (
                 <button
@@ -110,7 +110,7 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
 
           {/* Size picker */}
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-v5-subtext mb-1.5">Export Size</div>
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Export Size</div>
             <div className="grid grid-cols-3 gap-1.5">
               {SHARE_SIZES.map((s) => (
                 <button
@@ -121,7 +121,7 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
                   }`}
                 >
                   <div className="text-[11px] font-bold uppercase tracking-wide">{s.label}</div>
-                  <div className="text-[10px] text-v5-subtext">{s.ratio}</div>
+                  <div className="text-[11px] text-v5-subtext">{s.ratio}</div>
                 </button>
               ))}
             </div>
@@ -131,8 +131,8 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
           {showFeaturedPicker && featurable.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Featured Lift</div>
-                <button onClick={() => setPickerOpen((o) => !o)} className="text-[10px] uppercase tracking-widest text-v5-red hover:text-v5-red">
+                <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Featured Lift</div>
+                <button onClick={() => setPickerOpen((o) => !o)} className="text-[11px] uppercase tracking-widest text-v5-red hover:text-v5-red">
                   {pickerOpen ? "Close" : "Change"}
                 </button>
               </div>
@@ -147,7 +147,7 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
                 {featuredOverride && (
                   <button
                     onClick={() => setFeaturedOverride(null)}
-                    className="shrink-0 text-[10px] uppercase tracking-widest text-v5-subtext hover:text-v5-red"
+                    className="shrink-0 text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red"
                   >
                     Reset
                   </button>
@@ -167,7 +167,7 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
                       <div className="min-w-0">
                         <div className="text-sm text-white flex items-center gap-1.5 min-w-0">
                           <span className="truncate min-w-0">{lift.name}</span>
-                          {lift.isPR && <span className="shrink-0 text-[9px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">PR</span>}
+                          {lift.isPR && <span className="shrink-0 text-[11px] uppercase tracking-widest bg-v5-red text-white px-1.5 py-0.5">PR</span>}
                         </div>
                         <div className="text-xs text-v5-subtext">
                           {lift.weight} × {lift.reps}

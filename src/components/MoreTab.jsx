@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays, HeartPulse } from "lucide-react";
+import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays, HeartPulse, ShieldCheck } from "lucide-react";
 import { MORE_CARD_CONTENT } from "../utils/breakBrandContent.js";
 import { ScreenHeader, SectionLabel, Card, ListRow, ButtonPrimary, ButtonSecondary } from "./ui/Kit.jsx";
 
@@ -55,6 +55,25 @@ function TrainingDetailToggle({ state, updateState }) {
   );
 }
 
+// Non-alarming reminder that this is still a local-first app — no account, no cloud sync yet —
+// surfaced where a user would actually look for it rather than buried a screen deeper. Routes
+// straight to the real export/import flow already built into Settings rather than duplicating
+// it or faking a "back up" action here.
+function DataSafetyCard({ onNavigate }) {
+  return (
+    <Card className="space-y-2">
+      <div className="flex items-center gap-2">
+        <ShieldCheck size={15} className="text-v5-subtext shrink-0" />
+        <SectionLabel tone="muted">Data safety</SectionLabel>
+      </div>
+      <p className="text-xs text-v5-subtext">Your training data is currently stored on this device only. Export a backup before switching phones or clearing browser data.</p>
+      <ButtonSecondary size="sm" onClick={() => onNavigate("settings")} fullWidth={false}>
+        Back up data
+      </ButtonSecondary>
+    </Card>
+  );
+}
+
 export default function MoreTab({ state, updateState, onNavigate }) {
   return (
     <div className="space-y-4">
@@ -65,6 +84,8 @@ export default function MoreTab({ state, updateState, onNavigate }) {
           <ListRow key={item.id} icon={item.icon} title={item.label} subtitle={item.desc} onClick={() => onNavigate(item.id)} />
         ))}
       </div>
+
+      <DataSafetyCard onNavigate={onNavigate} />
 
       <TrainingDetailToggle state={state} updateState={updateState} />
 

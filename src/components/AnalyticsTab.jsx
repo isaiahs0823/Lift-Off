@@ -32,29 +32,29 @@ function ExerciseAnalyticsCard({ exId, exMap, state }) {
         <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Best set</div>
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Best set</div>
               <div className="text-white font-bold">{stats.bestSet ? `${stats.bestSet.weight} × ${stats.bestSet.reps}` : "—"}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Est. 1RM</div>
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Est. 1RM</div>
               <div className="text-white font-bold">{stats.estimatedOneRM} lb</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Recent working weight</div>
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Recent working weight</div>
               <div className="text-white font-bold">{stats.recentWorkingWeight ?? "—"} lb</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Volume trend</div>
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Volume trend</div>
               <div className={`font-bold flex items-center gap-1 ${TREND_COLOR[stats.volumeTrend]}`}>
                 {TrendIcon && <TrendIcon size={14} />} {TREND_LABEL[stats.volumeTrend]}
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Avg RIR</div>
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Avg RIR</div>
               <div className="text-white font-bold">{stats.avgRir ?? "—"}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-v5-subtext">Frequency</div>
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Frequency</div>
               <div className="text-white font-bold">{stats.frequencyPerWeek}/week</div>
             </div>
           </div>
@@ -63,7 +63,7 @@ function ExerciseAnalyticsCard({ exId, exMap, state }) {
           </div>
           {stats.prHistory.length > 0 && (
             <div className="border-t border-white/[0.06] pt-3">
-              <div className="text-[10px] uppercase tracking-widest text-v5-subtext mb-1.5">PR history</div>
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">PR history</div>
               <div className="space-y-1">
                 {stats.prHistory.map((pr, i) => (
                   <div key={i} className="flex items-center justify-between text-xs">
