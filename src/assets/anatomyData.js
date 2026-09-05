@@ -237,3 +237,34 @@ export const BACK_PARTS = {
     "M1340.07 814.35c-2.7.82-4.99-1.16-5.54-3.71q-5.06-23.49-9.82-47.47a.77.76-10.7 01.62-.9l7.52-1.38q.59-.11.73.47c2.08 8.53 3.26 19.85 4.22 25.75q2.09 12.92 3.19 21.14.34 2.54-.33 5.46a.86.84 88.4 01-.59.64z"
   ]
 };
+
+// Which illustrated muscle-group slugs light up for a given {view, zone}. Shared by
+// MuscleBodyOutline.jsx (in-app UI) and workoutShareCard.js (canvas-drawn share cards) so both
+// consumers of this asset agree on exactly which shapes highlight for a given zone — single
+// source of truth rather than two maps that could drift apart.
+export const FRONT_ZONE_SLUGS = {
+  chest: ["chest"],
+  back: ["trapezius"],
+  shoulders: ["deltoids"],
+  biceps: ["biceps"],
+  triceps: ["triceps"],
+  forearms: ["forearm"],
+  abs: ["abs", "obliques"],
+  quads: ["quadriceps"],
+  hamstrings: [],
+  glutes: [],
+  calves: ["calves"],
+};
+export const BACK_ZONE_SLUGS = {
+  chest: [],
+  back: ["trapezius", "upper-back", "lower-back"],
+  shoulders: ["deltoids"],
+  biceps: [],
+  triceps: ["triceps"],
+  forearms: ["forearm"],
+  abs: [],
+  quads: [],
+  hamstrings: ["hamstring"],
+  glutes: ["gluteal"],
+  calves: ["calves"],
+};

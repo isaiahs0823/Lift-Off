@@ -1,14 +1,33 @@
-// ---------------- WORKOUT SHARE CARDS (v2) ----------------
+// ---------------- WORKOUT SHARE CARDS (v3 — premium redesign) ----------------
 // Premium, canvas-drawn branded BRK share cards for a completed workout session. Three
 // templates (Performance / Minimal Story / Full Recap) each rendered at three export sizes
-// (9:16 Story, 4:5 Post, 1:1 Square). Pure canvas, no image/charting dependency — same approach
-// as the original utils/shareCard.js, but the hero of every layout here is the athlete's best
-// PERFORMANCE (a lift: weight × reps), never the clock. See pickFeaturedLift() below for how
-// that lift is chosen, and WorkoutSharePreview.jsx for the UI that drives this.
+// (9:16 Story, 4:5 Post, 1:1 Square). Pure canvas, no image/charting dependency.
+//
+// v3 moves the card from "clean but forgettable" to "premium, bold, social-ready" without
+// copying any literal reference imagery: stronger hierarchy (workout title now dominates, not
+// the clock), a cohesive stat strip instead of scattered numbers, numbered exercise rows with a
+// real PR treatment, and — replacing generic athlete photography entirely — BRK's own
+// MuscleBodyOutline anatomy system rendered directly onto the canvas as a muted watermark with
+// the session's trained muscle group lit up in BRK red. See drawAnatomyWatermark() below.
 
 import { countedSets, topSetOf } from "./progression.js";
-import { featuredAndOtherPRs, sessionPRCount, PR_TYPE_LABEL, prDeltaLabel } from "./prSummary.js";
+import { featuredAndOtherPRs, sessionPRCount, PR_TYPE_LABEL } from "./prSummary.js";
 import { formatSessionDuration } from "./workoutSets.js";
+import { getMuscleDisplay } from "./muscleDisplay.js";
+import {
+  VIEW_BOX_FRONT,
+  VIEW_BOX_BACK,
+  OUTLINE_FRONT,
+  OUTLINE_BACK,
+  HEAD_FRONT,
+  HAIR_FRONT,
+  HEAD_BACK,
+  HAIR_BACK,
+  FRONT_PARTS,
+  BACK_PARTS,
+  FRONT_ZONE_SLUGS,
+  BACK_ZONE_SLUGS,
+} from "../assets/anatomyData.js";
 
 export const SHARE_TEMPLATES = [
   { id: "performance", label: "Performance", blurb: "Hero lift, key stats, PR badges" },
@@ -24,17 +43,26 @@ export const SHARE_SIZES = [
 
 const FONT = "system-ui, -apple-system, 'Helvetica Neue', sans-serif";
 const COLOR = {
-  bgTop: "#181818",
-  bgBottom: "#0a0a0a",
-  glow: "rgba(220, 38, 38, 0.16)",
-  panel: "rgba(255,255,255,0.04)",
-  panelBorder: "rgba(255,255,255,0.09)",
+  bgTop: "#1a1a1a",
+  bgBottom: "#080808",
+  glow: "rgba(220, 38, 38, 0.20)",
+  panel: "rgba(255,255,255,0.045)",
+  panelStrong: "rgba(255,255,255,0.07)",
+  panelBorder: "rgba(255,255,255,0.10)",
+  prPanel: "rgba(220,38,38,0.09)",
+  prBorder: "rgba(239,68,68,0.55)",
   red: "#ef4444",
   redDeep: "#b91c1c",
   white: "#f7f7f7",
   gray: "#a3a3a3",
   dimGray: "#707070",
   green: "#22c55e",
+  // Anatomy watermark — deliberately dimmer than the in-app MuscleBodyOutline colors (this is a
+  // background signature element sitting behind/beside real data, never the primary focus).
+  muscleBody: "#34363b",
+  muscleOutline: "#1b1c1f",
+  muscleHead: "#2c2e33",
+  muscleHair: "#1b1c1f",
 };
 
 function estimateOneRM(weight, reps) {
@@ -75,8 +103,11 @@ function truncateToWidth(ctx, text, maxWidth) {
   return t + "…";
 }
 
-// Center-aligned word wrap. Returns the number of lines drawn.
-function wrapCentered(ctx, text, cx, y, maxWidth, lineHeight, maxLines = 3) {
+// Word-wraps `text` within maxWidth, drawing left/center-aligned depending on `align`. `anchorX`
+// is the left edge when align === "left", or the horizontal center when align === "center" —
+// same convention ctx.textAlign itself uses, so callers don't need to think about it twice.
+// Returns the number of lines drawn.
+function wrapAligned(ctx, text, anchorX, y, maxWidth, lineHeight, maxLines = 3, align = "center") {
   const words = text.split(" ");
   const lines = [];
   let line = "";
@@ -92,8 +123,13 @@ function wrapCentered(ctx, text, cx, y, maxWidth, lineHeight, maxLines = 3) {
   lines.push(line);
   const clipped = lines.slice(0, maxLines);
   if (lines.length > maxLines) clipped[maxLines - 1] = truncateToWidth(ctx, clipped[maxLines - 1] + "…", maxWidth);
-  clipped.forEach((l, i) => ctx.fillText(l, cx, y + i * lineHeight));
+  ctx.textAlign = align;
+  clipped.forEach((l, i) => ctx.fillText(l, anchorX, y + i * lineHeight));
   return clipped.length;
+}
+
+function wrapCentered(ctx, text, cx, y, maxWidth, lineHeight, maxLines = 3) {
+  return wrapAligned(ctx, text, cx, y, maxWidth, lineHeight, maxLines, "center");
 }
 
 function background(ctx, W, H, glowY) {
@@ -105,10 +141,20 @@ function background(ctx, W, H, glowY) {
 
   // Soft red glow behind the hero — the one "premium" lighting cue that separates this from a
   // flat receipt, kept subtle so it never competes with the numbers on top of it.
-  const glow = ctx.createRadialGradient(W / 2, glowY, 0, W / 2, glowY, W * 0.62);
+  const glow = ctx.createRadialGradient(W * 0.62, glowY, 0, W * 0.62, glowY, W * 0.75);
   glow.addColorStop(0, COLOR.glow);
   glow.addColorStop(1, "rgba(220,38,38,0)");
   ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  // Restrained vignette at the very top/bottom edges — the "subtle depth" cue the flat original
+  // was missing, without any literal grain/noise texture that would read as generated/Canva-ish.
+  const vignette = ctx.createLinearGradient(0, 0, 0, H);
+  vignette.addColorStop(0, "rgba(0,0,0,0.28)");
+  vignette.addColorStop(0.12, "rgba(0,0,0,0)");
+  vignette.addColorStop(0.88, "rgba(0,0,0,0)");
+  vignette.addColorStop(1, "rgba(0,0,0,0.32)");
+  ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, W, H);
 }
 
@@ -164,20 +210,22 @@ function drawBadge(ctx, cx, y, text, { fontSize = 24, padX = 18, padY = 10, fill
   return w;
 }
 
-function statTile(ctx, cx, y, value, label, { valueSize = 40, labelSize = 18 } = {}) {
-  ctx.textAlign = "center";
+function drawBadgeInline(ctx, x, y, text, k = 1) {
+  const fontSize = Math.max(12, Math.round(16 * k));
+  ctx.font = `800 ${fontSize}px ${FONT}`;
+  const w = ctx.measureText(text).width + 18;
+  const h = fontSize + 14;
+  ctx.fillStyle = COLOR.red;
+  roundRect(ctx, x, y, w, h, h / 2);
+  ctx.fill();
   ctx.fillStyle = COLOR.white;
-  ctx.font = `800 ${valueSize}px ${FONT}`;
-  ctx.fillText(value, cx, y);
-  ctx.fillStyle = COLOR.gray;
-  ctx.font = `700 ${labelSize}px ${FONT}`;
-  ctx.fillText(label.toUpperCase(), cx, y + labelSize + 12);
+  ctx.textAlign = "left";
+  ctx.fillText(text, x + 9, y + h / 2 + fontSize * 0.35);
+  return w;
 }
 
 // A reusable 1x1-ish offscreen context used only to MEASURE how tall a body block will render
 // (font metrics don't depend on canvas size) before drawing it for real — see centerBody() below.
-// Actually drawing to it is harmless (invisible, clipped, never throws); reusing one instance
-// avoids allocating a canvas on every share-card render.
 let _scratchCtx = null;
 function scratchContext() {
   if (!_scratchCtx) {
@@ -193,7 +241,7 @@ function scratchContext() {
 // then runs it again for real on `ctx`, nudged down so the block sits vertically centered in the
 // space between `startY` and `footerTopY` instead of always hugging the top — this is what keeps
 // every template free of the large dead space a short session (few PRs, one exercise) would
-// otherwise leave above the footer, per the "avoid empty dead space" design rule.
+// otherwise leave above the footer.
 function centerBody(ctx, startY, footerTopY, bodyFn) {
   const measuredEnd = bodyFn(scratchContext(), startY);
   const contentHeight = measuredEnd - startY;
@@ -202,13 +250,117 @@ function centerBody(ctx, startY, footerTopY, bodyFn) {
   bodyFn(ctx, startY + offset);
 }
 
-function divider(ctx, W, y, opacity = 0.12) {
+function divider(ctx, W, y, opacity = 0.12, widthPct = 0.76) {
   ctx.strokeStyle = `rgba(255,255,255,${opacity})`;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(W * 0.12, y);
-  ctx.lineTo(W * 0.88, y);
+  ctx.moveTo(W * (0.5 - widthPct / 2), y);
+  ctx.lineTo(W * (0.5 + widthPct / 2), y);
   ctx.stroke();
+}
+
+// Short centered accent rule under the hero title — a restrained "premium divider" cue instead
+// of a full-width line, per the brand rule that red is an accent, never a flood.
+function accentRule(ctx, cx, y, width = 64) {
+  ctx.strokeStyle = COLOR.red;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(cx - width / 2, y);
+  ctx.lineTo(cx + width / 2, y);
+  ctx.stroke();
+}
+
+// ---------------- anatomy watermark ----------------
+
+function parseViewBox(vb) {
+  const [minX, minY, w, h] = vb.split(" ").map(Number);
+  return { minX, minY, w, h };
+}
+
+// BRK's real illustrated anatomy system (src/assets/anatomyData.js — the same data
+// MuscleBodyOutline.jsx renders in-app), drawn directly onto the canvas as the share card's
+// visual signature. This replaces generic athlete photography entirely: no stock imagery, no
+// fabricated body. The session's dominant trained muscle group (session.mainMuscles[0], already
+// computed by buildSessionSummary — never invented here) lights up in BRK red; everything else
+// stays a muted charcoal watermark, low enough contrast to sit behind real data without
+// competing with it. `zone === "full"` (a catch-all/conditioning day, or missing muscle data on
+// an old session) intentionally skips the red highlight — lighting up the entire figure red
+// would flood the card with color the brand rule explicitly reserves for accents.
+function drawAnatomyWatermark(ctx, { centerX, topY, height, muscleCategory, bodyAlpha = 0.4, redAlpha = 0.92 }) {
+  const { view, zone } = getMuscleDisplay({ muscle: muscleCategory });
+  const isBack = view === "back";
+  const vb = parseViewBox(isBack ? VIEW_BOX_BACK : VIEW_BOX_FRONT);
+  const parts = isBack ? BACK_PARTS : FRONT_PARTS;
+  const zoneSlugs = isBack ? BACK_ZONE_SLUGS : FRONT_ZONE_SLUGS;
+  const activeSlugs = zone !== "full" ? zoneSlugs[zone] || [] : [];
+
+  const scale = height / vb.h;
+  const width = vb.w * scale;
+
+  ctx.save();
+  ctx.translate(centerX - width / 2, topY);
+  ctx.scale(scale, scale);
+  ctx.translate(-vb.minX, -vb.minY);
+
+  ctx.globalAlpha = bodyAlpha;
+  ctx.fillStyle = COLOR.muscleOutline;
+  ctx.fill(new Path2D(isBack ? OUTLINE_BACK : OUTLINE_FRONT));
+
+  Object.entries(parts).forEach(([slug, ds]) => {
+    if (activeSlugs.includes(slug)) return;
+    ds.forEach((d) => {
+      ctx.fillStyle = COLOR.muscleBody;
+      ctx.fill(new Path2D(d));
+    });
+  });
+
+  ctx.fillStyle = COLOR.muscleHair;
+  ctx.fill(new Path2D(isBack ? HAIR_BACK : HAIR_FRONT));
+  ctx.fillStyle = COLOR.muscleHead;
+  ctx.fill(new Path2D(isBack ? HEAD_BACK : HEAD_FRONT));
+
+  if (activeSlugs.length > 0) {
+    ctx.globalAlpha = redAlpha;
+    // Local-space gradient (pre-scale coordinates) so it reads correctly regardless of the
+    // transform above — same top/bottom red gradient MuscleBodyOutline uses in-app.
+    const redGrad = ctx.createLinearGradient(0, vb.minY, 0, vb.minY + vb.h);
+    redGrad.addColorStop(0, "#e6474e");
+    redGrad.addColorStop(1, "#9e141b");
+    Object.entries(parts).forEach(([slug, ds]) => {
+      if (!activeSlugs.includes(slug)) return;
+      ds.forEach((d) => {
+        ctx.fillStyle = redGrad;
+        ctx.fill(new Path2D(d));
+      });
+    });
+  }
+
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+// ---------------- data-driven copy helpers ----------------
+
+// "BACK DAY" / "LEGS DAY" — never fabricated: pulled straight from session.mainMuscles, the same
+// field Progress/Coach already use, computed once by buildSessionSummary from what was actually
+// logged. null when the session predates that field or was pure conditioning.
+function dayLabel(session) {
+  const m = session.mainMuscles?.[0];
+  return m ? `${m.toUpperCase()} DAY` : null;
+}
+
+// One short, data-driven session statement (task: never fake motivational copy) — PRs first
+// (the strongest real claim), then the featured lift, then total volume as the last resort so a
+// session with genuinely no PRs and no standout lift still gets a real, honest line.
+function performanceLine(session, featured) {
+  const prCount = sessionPRCount(session);
+  if (prCount > 0) return `${prCount} PR${prCount > 1 ? "s" : ""} · ${session.workingSets ?? 0} working sets`;
+  if (featured?.weight != null) return `Best performance: ${featured.name} ${featured.weight} × ${featured.reps}`;
+  if (session.totalVolume) {
+    const muscle = session.mainMuscles?.[0];
+    return `${muscle ? `${muscle} volume` : "Session volume"}: ${session.totalVolume.toLocaleString()} lb`;
+  }
+  return null;
 }
 
 // ---------------- featured-lift selection ----------------
@@ -321,144 +473,270 @@ export function listFeaturableLifts(session, exMap) {
     .filter(Boolean);
 }
 
-function progressionSummaryLine(session) {
-  const prCount = sessionPRCount(session);
-  const bits = [];
-  if (prCount > 0) bits.push(`${prCount} New PR${prCount > 1 ? "s" : ""}`);
-  if (session.isVolumePR) bits.push("Session Volume PR");
-  return bits.length > 0 ? bits.join("  ·  ") : null;
-}
-
 function heroTypeLabel(pr) {
   if (!pr) return null;
   return PR_TYPE_LABEL[pr.type] || "PR";
 }
 
+// ---------------- shared: stat strip ----------------
+
+// ONE cohesive panel (task section 5: "one cohesive stat strip is better" than individual
+// cards) — a layered surface with thin vertical separators between up to 4 columns, a small red
+// accent dot per column, and a strong value/label pair. Used by both Performance and Recap so
+// the two templates' stats always look like the same design system.
+function drawStatStrip(ctx, { x, y, width, stats, k }) {
+  const h = sz(126, k, 82);
+  ctx.fillStyle = COLOR.panelStrong;
+  roundRect(ctx, x, y, width, h, 20);
+  ctx.fill();
+  ctx.strokeStyle = COLOR.panelBorder;
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, y, width, h, 20);
+  ctx.stroke();
+
+  const n = stats.length;
+  const colW = width / n;
+  stats.forEach((s, i) => {
+    const cx = x + colW * i + colW / 2;
+    ctx.beginPath();
+    ctx.fillStyle = COLOR.red;
+    ctx.arc(cx, y + h * 0.24, sz(4.5, k, 3), 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = COLOR.white;
+    ctx.font = `800 ${sz(36, k, 23)}px ${FONT}`;
+    ctx.fillText(s.value, cx, y + h * 0.62);
+    ctx.fillStyle = COLOR.gray;
+    ctx.font = `700 ${sz(15, k, 11)}px ${FONT}`;
+    ctx.fillText(s.label.toUpperCase(), cx, y + h * 0.87);
+
+    if (i < n - 1) {
+      ctx.strokeStyle = COLOR.panelBorder;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + colW * (i + 1), y + h * 0.24);
+      ctx.lineTo(x + colW * (i + 1), y + h * 0.8);
+      ctx.stroke();
+    }
+  });
+
+  return h;
+}
+
+// ---------------- shared: numbered exercise rows ----------------
+
+// Numbered, PR-aware exercise rows (task section 7) shared by Performance's compact breakdown
+// and Recap's full breakdown — a PR row gets a red-tinted panel + border + badge + red value
+// (task section 6: "PR = special," never flooding ordinary rows with red).
+function drawExerciseRows(ctx, { x, y, width, rows, rowH, k, exMap, prsByExId }) {
+  const gap = sz(14, k, 6);
+  rows.forEach((entry, i) => {
+    const counted = countedSets(entry.sets);
+    const top = counted.length > 0 ? topSetOf(entry.sets) : entry.sets?.[0];
+    const exPRs = prsByExId.get(entry.exId) || [];
+    const isPR = exPRs.length > 0;
+    const rowY = y + i * rowH;
+    const h = rowH - gap;
+
+    ctx.fillStyle = isPR ? COLOR.prPanel : i % 2 === 0 ? COLOR.panel : "rgba(255,255,255,0.015)";
+    roundRect(ctx, x, rowY, width, h, 14);
+    ctx.fill();
+    if (isPR) {
+      ctx.strokeStyle = COLOR.prBorder;
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, x, rowY, width, h, 14);
+      ctx.stroke();
+    }
+
+    const numW = sz(54, k, 34);
+    const padX = sz(22, k, 14);
+    ctx.textAlign = "left";
+    ctx.fillStyle = isPR ? COLOR.red : COLOR.dimGray;
+    ctx.font = `800 ${sz(21, k, 14)}px ${FONT}`;
+    ctx.fillText(String(i + 1).padStart(2, "0"), x + padX, rowY + h / 2 + sz(7, k, 5));
+
+    ctx.fillStyle = COLOR.white;
+    ctx.font = `700 ${sz(25, k, 16)}px ${FONT}`;
+    const badgeReserve = isPR ? sz(68, k, 44) : 0;
+    const name = truncateToWidth(ctx, exMap?.[entry.exId]?.name || entry.exId, width - numW - sz(200, k, 130) - badgeReserve);
+    ctx.fillText(name, x + padX + numW, rowY + h / 2 + sz(8, k, 5));
+    const nameWidth = ctx.measureText(name).width;
+
+    if (isPR) {
+      drawBadgeInline(ctx, x + padX + numW + nameWidth + sz(14, k, 8), rowY + h / 2 - sz(15, k, 11), "PR", k);
+    }
+
+    ctx.textAlign = "right";
+    ctx.fillStyle = isPR ? COLOR.red : COLOR.gray;
+    ctx.font = `800 ${sz(25, k, 16)}px ${FONT}`;
+    const setText = top ? `${top.weight} × ${top.reps}` : "—";
+    ctx.fillText(setText, x + width - padX, rowY + h / 2 + sz(8, k, 5));
+    ctx.textAlign = "center";
+  });
+  return rows.length * rowH;
+}
+
+// Three-tier density scale keyed off the actual export height rather than a single "compact"
+// boolean — Square (1080px tall) has meaningfully less room than Post (1350px), and a two-tier
+// system that was tuned against Post/Story silently overflowed into the footer on Square (every
+// gap and font was simply too tall to fit). `k` scales every subsequent gap/font down from the
+// Story-tuned base numbers; `maxRows` bounds the exercise breakdown separately since a row count
+// is discrete, not something that can be scaled continuously.
+function sizeScale(H) {
+  if (H <= 1100) return { k: 0.6, maxRows: 3 };
+  if (H <= 1500) return { k: 0.78, maxRows: 4 };
+  return { k: 1, maxRows: 6 };
+}
+
+// Scales `base` by `k`, never going below `floor` — keeps Square legible instead of shrinking
+// proportionally into unreadable text.
+function sz(base, k, floor) {
+  return Math.max(floor, Math.round(base * k));
+}
+
+function buildPrsByExId(session) {
+  const map = new Map();
+  (session.prs || []).forEach((pr) => {
+    if (!map.has(pr.exId)) map.set(pr.exId, []);
+    map.get(pr.exId).push(pr);
+  });
+  return map;
+}
+
 // ---------------- template: PERFORMANCE CARD ----------------
+// The premium hero share (task section 15): BRK header -> workout title + anatomy visual ->
+// best lift/PR callout -> stat strip -> exercise breakdown -> BRK footer. This is the template
+// meant to make someone stop scrolling — everything else (Minimal, Recap) is deliberately lower-
+// key by comparison.
 
-function drawPerformanceCard(ctx, W, H, session, exMap, featured, prList) {
-  // Square (1080) AND Post (1350) both use the trimmed layout — Post has more room than
-  // Square, so centerBody's centering just spreads it out further, but the full "story" set of
-  // content (2 PR highlights, taller hero) only reliably fits within Story's 1920 height without
-  // overflowing into the footer.
-  const compact = H <= 1500;
-  const mid = compact ? 0.42 : 0.36;
-  background(ctx, W, H, H * mid);
+function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
+  const { k, maxRows } = sizeScale(H);
+  const heroTop = H * 0.12;
+  background(ctx, W, H, heroTop + sz(210, k, 130));
 
-  const headerY = H * 0.075;
-  wordmark(ctx, W, headerY, compact ? 42 : 48);
-  divider(ctx, W, headerY + (compact ? 34 : 46));
+  const headerY = H * 0.065;
+  wordmark(ctx, W, headerY, sz(36, k, 24));
+  ctx.textAlign = "center";
+  ctx.fillStyle = COLOR.dimGray;
+  ctx.font = `700 ${sz(17, k, 13)}px ${FONT}`;
+  ctx.fillText("SESSION COMPLETE", W / 2, headerY + sz(34, k, 22));
 
-  const bodyStartY = headerY + (compact ? 90 : 130);
-  const footerTopY = H - (compact ? 150 : 210);
+  // ---- anatomy watermark: right-aligned, partially cropped, sitting behind the hero title ----
+  drawAnatomyWatermark(ctx, {
+    centerX: W * 0.92,
+    topY: heroTop - sz(20, k, 8),
+    height: H * (k < 1 ? 0.34 : 0.3),
+    muscleCategory: session.mainMuscles?.[0],
+  });
 
-  const maxHighlights = compact ? 1 : 2;
-  const summaryLine = progressionSummaryLine(session);
+  const bodyStartY = headerY + sz(84, k, 50);
+  const footerTopY = H - sz(210, k, 118);
+  const summaryLine = performanceLine(session, featured);
+  const day = dayLabel(session);
+  const prsByExId = buildPrsByExId(session);
+  const rows = (session.entries || []).slice(0, maxRows);
 
   function body(c, startY) {
     let y = startY;
-    c.textAlign = "center";
-    c.fillStyle = COLOR.red;
-    c.font = `800 ${compact ? 24 : 30}px ${FONT}`;
-    c.fillText((session.planName || "Workout").toUpperCase(), W / 2, y);
-    y += compact ? 56 : 74;
+    const titleX = W * 0.08;
+    const titleMaxW = W * 0.64;
 
-    // ---- hero: the best PERFORMANCE, never the clock ----
+    // ---- hero: workout title dominates (task section 11: title first, never the clock) ----
+    const titleSize = fitFontSize(c, session.planName || "Workout", titleMaxW, "900", sz(68, k, 34), 26);
+    c.fillStyle = COLOR.white;
+    const titleLines = wrapAligned(c, session.planName || "Workout", titleX, y + titleSize * 0.82, titleMaxW, titleSize * 1.04, 2, "left");
+    y += titleSize * 0.82 + (titleLines - 1) * titleSize * 1.04 + sz(22, k, 12);
+
     c.fillStyle = COLOR.gray;
-    c.font = `700 ${compact ? 20 : 24}px ${FONT}`;
-    c.fillText(featured?.isPR ? "NEW PR" : "TOP PERFORMANCE", W / 2, y);
-    y += compact ? 44 : 56;
+    c.font = `700 ${sz(24, k, 16)}px ${FONT}`;
+    c.textAlign = "left";
+    const subtitle = day ? `${formatSessionDuration(session.durationSec).toUpperCase()} · ${day}` : formatSessionDuration(session.durationSec).toUpperCase();
+    c.fillText(subtitle, titleX, y);
+    y += sz(50, k, 30);
+
+    accentRule(c, titleX + 32, y, sz(64, k, 44));
+    c.textAlign = "left";
+    y += sz(58, k, 32);
+    c.textAlign = "center";
+
+    // ---- best performance / PR callout (secondary hierarchy, centered) ----
+    c.fillStyle = COLOR.red;
+    c.font = `700 ${sz(21, k, 15)}px ${FONT}`;
+    c.fillText(featured?.isPR ? "NEW PR" : "BEST PERFORMANCE", W / 2, y);
+    y += sz(50, k, 30);
 
     if (featured) {
-      const nameSize = fitFontSize(c, featured.name, W * 0.82, "800", compact ? 44 : 54, 26);
+      const nameSize = fitFontSize(c, featured.name, W * 0.82, "800", sz(42, k, 20), 18);
       c.fillStyle = COLOR.white;
       c.textAlign = "center";
       const lines = wrapCentered(c, featured.name, W / 2, y, W * 0.82, nameSize * 1.08, 2);
-      y += lines * nameSize * 1.08 + (compact ? 14 : 22);
+      y += lines * nameSize * 1.08 + sz(18, k, 10);
 
       c.fillStyle = COLOR.white;
-      const heroSize = compact ? 118 : 156;
+      const heroSize = sz(116, k, 60);
       c.font = `900 ${heroSize}px ${FONT}`;
       const heroText = featured.weight != null ? `${featured.weight} × ${featured.reps}` : "—";
       c.fillText(heroText, W / 2, y + heroSize * 0.78);
-      y += heroSize * 0.78 + (compact ? 26 : 40);
+      y += heroSize * 0.78 + sz(32, k, 16);
 
       if (featured.isPR) {
-        drawBadge(c, W / 2, y, `PR — ${heroTypeLabel(featured.pr) || "New Record"}`, { fontSize: compact ? 20 : 24 });
-        y += compact ? 58 : 68;
+        drawBadge(c, W / 2, y, `PR — ${heroTypeLabel(featured.pr) || "New Record"}`, { fontSize: sz(22, k, 15) });
+        y += sz(64, k, 34);
       } else {
-        c.fillStyle = COLOR.gray;
-        c.font = `700 ${compact ? 18 : 22}px ${FONT}`;
-        const subtitle = featured.source === "compound" ? "STRONGEST LIFT" : featured.source === "bestSet" ? "MOST IMPRESSIVE SET" : "TOP SET";
-        c.fillText(subtitle, W / 2, y);
-        y += compact ? 46 : 58;
+        y += sz(10, k, 6);
       }
     } else {
       c.fillStyle = COLOR.white;
-      c.font = `800 ${compact ? 40 : 54}px ${FONT}`;
-      c.fillText("Workout logged", W / 2, y + 40);
-      y += compact ? 90 : 120;
+      c.font = `800 ${sz(46, k, 26)}px ${FONT}`;
+      c.fillText("Workout logged", W / 2, y + sz(36, k, 22));
+      y += sz(100, k, 56);
     }
 
-    y += compact ? 10 : 24;
-    divider(c, W, y);
-    y += compact ? 50 : 70;
+    // ---- stat strip ----
+    y += sz(28, k, 14);
+    const stripW = W * 0.86;
+    const stripX = W / 2 - stripW / 2;
+    const prCount = sessionPRCount(session);
+    const stats = [
+      { value: formatSessionDuration(session.durationSec), label: "Duration" },
+      { value: String(session.workingSets ?? 0), label: "Sets" },
+      { value: (session.totalVolume ?? 0).toLocaleString(), label: "Volume" },
+      { value: String(prCount), label: "PR" },
+    ];
+    const stripH = drawStatStrip(c, { x: stripX, y, width: stripW, stats, k });
+    y += stripH + sz(36, k, 18);
 
-    // ---- key stats row ----
-    const statY = y;
-    const cols = [W * 0.22, W * 0.5, W * 0.78];
-    statTile(c, cols[0], statY, formatSessionDuration(session.durationSec), "Duration", { valueSize: compact ? 30 : 38, labelSize: compact ? 15 : 18 });
-    statTile(c, cols[1], statY, String(session.workingSets ?? 0), "Working Sets", { valueSize: compact ? 30 : 38, labelSize: compact ? 15 : 18 });
-    statTile(c, cols[2], statY, `${(session.totalVolume ?? 0).toLocaleString()}`, "Lb Volume", { valueSize: compact ? 30 : 38, labelSize: compact ? 15 : 18 });
-    y = statY + (compact ? 60 : 80);
-
-    // ---- PR highlights (up to 2 full-size, 1 when compact) ----
-    if (prList.length > 0) {
-      y += compact ? 30 : 46;
-      divider(c, W, y);
-      y += compact ? 36 : 44;
-      c.fillStyle = COLOR.red;
-      c.font = `800 ${compact ? 18 : 20}px ${FONT}`;
-      c.fillText("PR HIGHLIGHTS", W / 2, y);
-      y += compact ? 40 : 50;
-      const panelW = W * 0.78;
-      const panelX = W / 2 - panelW / 2;
-      const panelH = compact ? 78 : 92;
-      prList.slice(0, maxHighlights).forEach(({ exId, pr }) => {
-        c.fillStyle = COLOR.panel;
-        roundRect(c, panelX, y, panelW, panelH, 16);
-        c.fill();
-        c.strokeStyle = COLOR.panelBorder;
-        c.lineWidth = 1;
-        roundRect(c, panelX, y, panelW, panelH, 16);
-        c.stroke();
-
-        c.textAlign = "left";
-        c.fillStyle = COLOR.white;
-        c.font = `800 ${compact ? 22 : 26}px ${FONT}`;
-        const exName = truncateToWidth(c, exMap?.[exId]?.name || exId, panelW - 220);
-        c.fillText(exName, panelX + 28, y + panelH * 0.42);
-        c.fillStyle = COLOR.gray;
-        c.font = `600 ${compact ? 15 : 18}px ${FONT}`;
-        c.fillText(PR_TYPE_LABEL[pr.type] || "PR", panelX + 28, y + panelH * 0.74);
-
-        c.textAlign = "right";
-        c.fillStyle = COLOR.green;
-        c.font = `800 ${compact ? 22 : 26}px ${FONT}`;
-        c.fillText(prDeltaLabel(pr), panelX + panelW - 26, y + panelH * 0.56);
-        c.textAlign = "center";
-
-        y += panelH + (compact ? 16 : 20);
-      });
-    }
-
-    // ---- progression summary ----
+    // ---- one data-driven performance line ----
     if (summaryLine) {
-      y += compact ? 6 : 10;
       c.fillStyle = COLOR.red;
-      c.font = `800 ${compact ? 20 : 24}px ${FONT}`;
+      c.font = `800 ${sz(20, k, 14)}px ${FONT}`;
       c.fillText(summaryLine.toUpperCase(), W / 2, y);
-      y += compact ? 4 : 6;
+      y += sz(42, k, 22);
+    }
+
+    // ---- exercise breakdown ----
+    if (rows.length > 0) {
+      y += sz(20, k, 10);
+      divider(c, W, y);
+      y += sz(44, k, 24);
+      c.fillStyle = COLOR.gray;
+      c.font = `800 ${sz(18, k, 13)}px ${FONT}`;
+      c.fillText("EXERCISE BREAKDOWN", W / 2, y);
+      y += sz(42, k, 22);
+
+      const rowH = sz(88, k, 56);
+      const rowW = W * 0.86;
+      const rowX = W / 2 - rowW / 2;
+      y += drawExerciseRows(c, { x: rowX, y, width: rowW, rows, rowH, k, exMap, prsByExId });
+
+      const remaining = (session.entries || []).length - rows.length;
+      if (remaining > 0) {
+        c.fillStyle = COLOR.dimGray;
+        c.font = `600 ${sz(18, k, 13)}px ${FONT}`;
+        c.fillText(`+ ${remaining} more exercise${remaining === 1 ? "" : "s"}`, W / 2, y + sz(36, k, 20));
+        y += sz(54, k, 30);
+      }
     }
 
     return y;
@@ -466,11 +744,13 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured, prList) {
 
   centerBody(ctx, bodyStartY, footerTopY, body);
 
-  wordmark(ctx, W, H - (compact ? 96 : 130), compact ? 26 : 30);
-  footerTagline(ctx, W, H, compact ? 16 : 20);
+  wordmark(ctx, W, H - sz(130, k, 74), sz(30, k, 20));
+  footerTagline(ctx, W, H, sz(20, k, 14));
 }
 
 // ---------------- template: MINIMAL STORY CARD ----------------
+// Genuinely minimal (task section 16) — workout title, best lift, key stats, a small anatomy
+// visual, BRK footer. None of Performance's stat strip/exercise breakdown complexity.
 
 function drawMinimalCard(ctx, W, H, session, featured) {
   const compact = H <= 1500;
@@ -478,6 +758,17 @@ function drawMinimalCard(ctx, W, H, session, featured) {
 
   const bodyStartY = H * (compact ? 0.14 : 0.12);
   const footerTopY = H - (compact ? 130 : 170);
+
+  // Small, quiet anatomy watermark — present as the brand signature but never competing with
+  // the big numbers, per "keep Minimal Story genuinely minimal."
+  drawAnatomyWatermark(ctx, {
+    centerX: W * 0.85,
+    topY: bodyStartY,
+    height: compact ? H * 0.16 : H * 0.15,
+    muscleCategory: session.mainMuscles?.[0],
+    bodyAlpha: 0.28,
+    redAlpha: 0.7,
+  });
 
   function body(c, startY) {
     let y = startY;
@@ -527,27 +818,33 @@ function drawMinimalCard(ctx, W, H, session, featured) {
 }
 
 // ---------------- template: FULL SESSION RECAP CARD ----------------
+// All key stats, up to 6 exercises with PR badges, an optional progression-vs-last-time line
+// (task section 17), and the anatomy graphic — organized, not overloaded.
 
-function drawRecapCard(ctx, W, H, session, exMap, prList) {
-  const compact = H <= 1500;
-  background(ctx, W, H, H * 0.22);
+function drawRecapCard(ctx, W, H, session, exMap) {
+  const { k, maxRows } = sizeScale(H);
+  background(ctx, W, H, H * 0.24);
 
-  const headerY = H * 0.065;
-  wordmark(ctx, W, headerY, compact ? 38 : 44);
+  const headerY = H * 0.06;
+  wordmark(ctx, W, headerY, sz(40, k, 26));
 
-  const bodyStartY = headerY + (compact ? 56 : 70);
-  const footerTopY = H - (compact ? 150 : 190);
+  drawAnatomyWatermark(ctx, {
+    centerX: W * 0.9,
+    topY: headerY + sz(40, k, 20),
+    height: H * (k < 1 ? 0.22 : 0.2),
+    muscleCategory: session.mainMuscles?.[0],
+    bodyAlpha: 0.3,
+    redAlpha: 0.78,
+  });
+
+  const bodyStartY = headerY + sz(70, k, 42);
+  const footerTopY = H - sz(190, k, 110);
 
   const prCount = sessionPRCount(session);
   const entries = session.entries || [];
-  const maxRows = compact ? 4 : 6;
   const rows = entries.slice(0, maxRows);
-  const prsByExId = new Map();
-  (session.prs || []).forEach((pr) => {
-    if (!prsByExId.has(pr.exId)) prsByExId.set(pr.exId, []);
-    prsByExId.get(pr.exId).push(pr);
-  });
-  const rowH = compact ? 78 : 96;
+  const prsByExId = buildPrsByExId(session);
+  const rowH = sz(96, k, 58);
   const panelW = W * 0.86;
   const panelX = W / 2 - panelW / 2;
 
@@ -555,81 +852,61 @@ function drawRecapCard(ctx, W, H, session, exMap, prList) {
     let y = startY;
     c.textAlign = "center";
     c.fillStyle = COLOR.white;
-    const titleSize = fitFontSize(c, session.planName || "Workout", W * 0.86, "800", compact ? 40 : 50, 26);
-    const titleLines = wrapCentered(c, session.planName || "Workout", W / 2, y + titleSize * 0.8, W * 0.86, titleSize * 1.05, 2);
-    y += titleSize * 0.8 + (titleLines - 1) * titleSize * 1.05 + (compact ? 42 : 56);
+    const titleSize = fitFontSize(c, session.planName || "Workout", W * 0.7, "800", sz(50, k, 28), 24);
+    const titleLines = wrapCentered(c, session.planName || "Workout", W / 2, y + titleSize * 0.8, W * 0.7, titleSize * 1.05, 2);
+    y += titleSize * 0.8 + (titleLines - 1) * titleSize * 1.05 + sz(40, k, 22);
+
+    // ---- optional progression-vs-last-time line — only when real prior-session data exists ----
+    if (session.perfDeltaPct != null) {
+      const up = session.perfDeltaPct >= 0;
+      c.fillStyle = up ? COLOR.green : COLOR.gray;
+      c.font = `700 ${sz(21, k, 14)}px ${FONT}`;
+      c.fillText(`${up ? "+" : ""}${session.perfDeltaPct}% volume vs last ${session.planName}`, W / 2, y);
+      y += sz(42, k, 24);
+    }
 
     divider(c, W, y);
-    y += compact ? 44 : 60;
+    y += sz(54, k, 30);
 
-    const statCols = prCount > 0 ? [W * 0.15, W * 0.4, W * 0.65, W * 0.87] : [W * 0.2, W * 0.5, W * 0.8];
-    const statVals = prCount > 0
-      ? [
-          [formatSessionDuration(session.durationSec), "Duration"],
-          [String(session.workingSets ?? 0), "Sets"],
-          [`${(session.totalVolume ?? 0).toLocaleString()}`, "Volume"],
-          [String(prCount), "PRs"],
-        ]
-      : [
-          [formatSessionDuration(session.durationSec), "Duration"],
-          [String(session.workingSets ?? 0), "Working Sets"],
-          [`${(session.totalVolume ?? 0).toLocaleString()}`, "Lb Volume"],
-        ];
-    statVals.forEach(([val, label], i) => statTile(c, statCols[i], y, val, label, { valueSize: compact ? 28 : 34, labelSize: compact ? 14 : 16 }));
-    y += compact ? 56 : 72;
+    const stripW = W * 0.86;
+    const stripX = W / 2 - stripW / 2;
+    const stats =
+      prCount > 0
+        ? [
+            { value: formatSessionDuration(session.durationSec), label: "Duration" },
+            { value: String(session.workingSets ?? 0), label: "Sets" },
+            { value: (session.totalVolume ?? 0).toLocaleString(), label: "Volume" },
+            { value: String(prCount), label: "PRs" },
+          ]
+        : [
+            { value: formatSessionDuration(session.durationSec), label: "Duration" },
+            { value: String(session.workingSets ?? 0), label: "Working Sets" },
+            { value: (session.totalVolume ?? 0).toLocaleString(), label: "Lb Volume" },
+          ];
+    const stripH = drawStatStrip(c, { x: stripX, y, width: stripW, stats, k });
+    y += stripH;
 
-    y += compact ? 30 : 46;
+    y += sz(46, k, 24);
     divider(c, W, y);
-    y += compact ? 40 : 54;
+    y += sz(54, k, 30);
 
-    c.fillStyle = COLOR.red;
-    c.font = `800 ${compact ? 18 : 22}px ${FONT}`;
+    c.fillStyle = COLOR.gray;
+    c.font = `800 ${sz(18, k, 13)}px ${FONT}`;
     c.fillText("SESSION BREAKDOWN", W / 2, y);
-    y += compact ? 40 : 54;
+    y += sz(46, k, 26);
 
     if (rows.length === 0) {
       c.fillStyle = COLOR.gray;
-      c.font = `600 24px ${FONT}`;
-      c.fillText("Detailed exercise data isn't available for this session.", W / 2, y + 40);
-      y += 90;
+      c.font = `600 ${sz(24, k, 17)}px ${FONT}`;
+      c.fillText("Detailed exercise data isn't available for this session.", W / 2, y + sz(40, k, 24));
+      y += sz(90, k, 54);
     } else {
-      rows.forEach((entry, i) => {
-        const counted = countedSets(entry.sets);
-        const top = counted.length > 0 ? topSetOf(entry.sets) : entry.sets?.[0];
-        const exPRs = prsByExId.get(entry.exId) || [];
-        const rowY = y + i * rowH;
-
-        c.fillStyle = i % 2 === 0 ? COLOR.panel : "rgba(255,255,255,0.01)";
-        roundRect(c, panelX, rowY, panelW, rowH - 12, 14);
-        c.fill();
-
-        // PR badge (when present) is reserved its own space to the right, BEFORE the exercise
-        // name is truncated, so the two never overlap regardless of name length.
-        const badgeReserve = exPRs.length > 0 ? 70 : 0;
-        c.textAlign = "left";
-        c.fillStyle = COLOR.white;
-        c.font = `700 ${compact ? 24 : 28}px ${FONT}`;
-        const name = truncateToWidth(c, exMap?.[entry.exId]?.name || entry.exId, panelW - 300 - badgeReserve);
-        const nameWidth = c.measureText(name).width;
-        c.fillText(name, panelX + 26, rowY + (rowH - 12) / 2 + 10);
-
-        if (exPRs.length > 0) {
-          drawBadgeInline(c, panelX + 26 + nameWidth + 14, rowY + (rowH - 12) / 2 - 15, "PR");
-        }
-
-        c.textAlign = "right";
-        c.fillStyle = exPRs.length > 0 ? COLOR.red : COLOR.gray;
-        c.font = `800 ${compact ? 24 : 28}px ${FONT}`;
-        const setText = top ? `${top.weight} × ${top.reps}` : "—";
-        c.fillText(setText, panelX + panelW - 26, rowY + (rowH - 12) / 2 + 10);
-        c.textAlign = "center";
-      });
-      y += rows.length * rowH;
+      y += drawExerciseRows(c, { x: panelX, y, width: panelW, rows, rowH, k, exMap, prsByExId });
       if (entries.length > rows.length) {
         c.fillStyle = COLOR.dimGray;
-        c.font = `600 20px ${FONT}`;
-        c.fillText(`+ ${entries.length - rows.length} more exercise${entries.length - rows.length === 1 ? "" : "s"}`, W / 2, y + 10);
-        y += 40;
+        c.font = `600 ${sz(20, k, 14)}px ${FONT}`;
+        c.fillText(`+ ${entries.length - rows.length} more exercise${entries.length - rows.length === 1 ? "" : "s"}`, W / 2, y + sz(10, k, 6));
+        y += sz(40, k, 22);
       }
     }
 
@@ -638,20 +915,8 @@ function drawRecapCard(ctx, W, H, session, exMap, prList) {
 
   centerBody(ctx, bodyStartY, footerTopY, body);
 
-  wordmark(ctx, W, H - (compact ? 92 : 120), compact ? 26 : 30);
-  footerTagline(ctx, W, H, compact ? 16 : 20);
-}
-
-function drawBadgeInline(ctx, x, y, text) {
-  ctx.font = `800 16px ${FONT}`;
-  const w = ctx.measureText(text).width + 18;
-  const h = 30;
-  ctx.fillStyle = COLOR.red;
-  roundRect(ctx, x, y, w, h, h / 2);
-  ctx.fill();
-  ctx.fillStyle = COLOR.white;
-  ctx.textAlign = "left";
-  ctx.fillText(text, x + 9, y + h / 2 + 6);
+  wordmark(ctx, W, H - sz(120, k, 68), sz(30, k, 20));
+  footerTagline(ctx, W, H, sz(20, k, 14));
 }
 
 // ---------------- entry point ----------------
@@ -672,15 +937,13 @@ export function renderWorkoutShareCard({ session, exMap, template = "performance
   const ctx = canvas.getContext("2d");
 
   const featured = featuredLift || pickFeaturedLift(session, exMap);
-  const { featured: featuredPR, others } = featuredAndOtherPRs(session);
-  const prList = [featuredPR, ...others].filter(Boolean);
 
   if (template === "minimal") {
     drawMinimalCard(ctx, size.width, size.height, session, featured);
   } else if (template === "recap") {
-    drawRecapCard(ctx, size.width, size.height, session, exMap, prList);
+    drawRecapCard(ctx, size.width, size.height, session, exMap);
   } else {
-    drawPerformanceCard(ctx, size.width, size.height, session, exMap, featured, prList);
+    drawPerformanceCard(ctx, size.width, size.height, session, exMap, featured);
   }
 
   return canvas.toDataURL("image/png");

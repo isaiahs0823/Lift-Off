@@ -11,6 +11,8 @@ import {
   HAIR_BACK,
   FRONT_PARTS,
   BACK_PARTS,
+  FRONT_ZONE_SLUGS,
+  BACK_ZONE_SLUGS,
 } from "../assets/anatomyData.js";
 
 // A real anatomical figure (full-body outline + individually-shaped muscle groups, adapted from
@@ -27,36 +29,6 @@ const RED_BOTTOM = "#9e141b";
 const SEAM = "#101113";
 const HEAD_FILL = "#5e6269";
 const HAIR_FILL = "#2b2d31";
-
-// Which illustrated muscle-group slugs light up for a given {view, zone}. Several zones only ever
-// occur with one view under getMuscleDisplay's current rules (e.g. "chest" is always front), but
-// every combination is mapped so the component never silently no-ops on an unexpected pairing.
-const FRONT_ZONE_SLUGS = {
-  chest: ["chest"],
-  back: ["trapezius"],
-  shoulders: ["deltoids"],
-  biceps: ["biceps"],
-  triceps: ["triceps"],
-  forearms: ["forearm"],
-  abs: ["abs", "obliques"],
-  quads: ["quadriceps"],
-  hamstrings: [],
-  glutes: [],
-  calves: ["calves"],
-};
-const BACK_ZONE_SLUGS = {
-  chest: [],
-  back: ["trapezius", "upper-back", "lower-back"],
-  shoulders: ["deltoids"],
-  biceps: [],
-  triceps: ["triceps"],
-  forearms: ["forearm"],
-  abs: [],
-  quads: [],
-  hamstrings: ["hamstring"],
-  glutes: ["gluteal"],
-  calves: ["calves"],
-};
 
 // Explicit size hierarchy (task: "avoid hard-coding random pixel values across many files") —
 // every call site should pass one of these names rather than inventing its own number.
