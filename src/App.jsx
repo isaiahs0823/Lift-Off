@@ -49,6 +49,7 @@ import TrainTab from "./components/TrainTab.jsx";
 import MoreTab from "./components/MoreTab.jsx";
 import SettingsTab from "./components/SettingsTab.jsx";
 import TopUsedTab from "./components/TopUsedTab.jsx";
+import StandaloneRestTimer from "./components/StandaloneRestTimer.jsx";
 import { DEFAULT_REST_DEFAULTS } from "./utils/backup.js";
 import ScheduleEditor from "./components/ScheduleEditor.jsx";
 import AthleteProfileForm from "./components/AthleteProfileForm.jsx";
@@ -2448,6 +2449,7 @@ export default function LiftLog() {
                 onNavigate={setTab}
               />
             )}
+            {tab === "restTimer" && <StandaloneRestTimer onBack={() => setTab("train")} />}
             {tab === "startWorkout" && (
               <StartWorkoutChoice
                 state={state}
