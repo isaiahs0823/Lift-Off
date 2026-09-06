@@ -162,19 +162,28 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
       {(focus || recentPRs.length > 0) && (
         <div className={focus && recentPRs.length > 0 ? "grid grid-cols-2 gap-3" : "space-y-3"}>
           {focus && (
-            <Card className="flex items-center gap-2.5">
-              {/* Anatomy figure given real visual weight here rather than a clipped sliver —
-                  Muscle Focus is exactly the context BRK's illustrated anatomy system exists
-                  for, so it earns more presence than the icon-sized treatment it had before. */}
-              <div className="shrink-0 relative w-14 h-24 rounded-lg bg-v5-elevated flex items-center justify-center">
-                <MuscleBodyOutline exercise={{ muscle: focus.muscle }} size={48} />
+            // Visual-evolution task, priority 3: "Muscle Focus" is meant to become a more
+            // distinctive BRK feature — a bigger anatomy figure, "MOST TRAINED" framing, and the
+            // week's real training volume underneath, while staying inside the same paired-card
+            // grid as Recent PRs (task section 5: "keep it compact enough for mobile" — this is
+            // not a full-width poster).
+            <Card className="relative overflow-hidden flex items-center gap-2.5">
+              <div className="absolute inset-0 bg-gradient-to-br from-v5-red/[0.07] to-transparent pointer-events-none" />
+              <div className="shrink-0 relative w-16 h-28 rounded-lg bg-v5-elevated flex items-center justify-center">
+                <MuscleBodyOutline exercise={{ muscle: focus.muscle }} size={56} />
               </div>
-              <div className="min-w-0">
-                <SectionLabel tone="muted">Muscle focus</SectionLabel>
-                <div className="text-sm font-black text-v5-text mt-0.5 truncate">{focus.muscle}</div>
+              <div className="relative min-w-0">
+                <SectionLabel tone="muted">Most trained</SectionLabel>
+                <div className="text-base font-black text-v5-text mt-0.5 truncate uppercase tracking-tight">{focus.muscle}</div>
                 <div className="text-[11px] text-v5-subtext mt-0.5">
                   {focus.count}/{focus.of} sessions
                 </div>
+                {totalVolume > 0 && (
+                  <div className="text-[11px] text-v5-subtext mt-1.5 pt-1.5 border-t border-white/[0.06]">
+                    Weekly volume<br />
+                    <span className="text-v5-text font-bold">{totalVolume.toLocaleString()} lb</span>
+                  </div>
+                )}
               </div>
             </Card>
           )}

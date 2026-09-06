@@ -34,6 +34,9 @@ import {
   FileSpreadsheet,
   ChevronUp,
   ChevronDown,
+  Clock,
+  Layers,
+  BarChart3,
 } from "lucide-react";
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
@@ -3558,13 +3561,18 @@ function PRCallout({ exMap, exId, prs, state, onDismiss }) {
   const isProfileScoped = headline?.scope === "profile";
   const profileLabel = isProfileScoped && state ? equipmentDisplayLabel(state, headline.equipmentProfileId, null) : null;
   return (
-    <div className="border border-v5-red bg-v5-red/30 p-4 space-y-2 relative">
+    // PR moments (visual-evolution task, section 3) — a PR should feel special: gradient wash
+    // instead of a flat fill, rounded corners matching the rest of BRK's card language, and one
+    // brief settle-in pulse on the label rather than a static banner. Reserved for an actual
+    // detected PR (this component only ever renders when one fired) — never applied to a normal
+    // logged set.
+    <div className="rounded-xl border border-v5-red/50 bg-gradient-to-b from-v5-red/25 to-v5-red/10 p-4 space-y-2 relative">
       {onDismiss && (
         <button onClick={onDismiss} className="absolute top-2 right-2 text-v5-subtext hover:text-white">
           <X size={14} />
         </button>
       )}
-      <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-v5-red">
+      <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-v5-red animate-pr-pulse">
         <Award size={14} /> New {isProfileScoped ? "Profile " : ""}PR
       </div>
       <div className="text-lg font-bold text-white truncate pr-6">{exMap[exId]?.name || exId}</div>
@@ -5149,106 +5157,154 @@ function GuidedRunView({
     const recap = summary ? buildWorkoutRecap({ session: summary, logs: state.logs || [], exMap, state }) : null;
     return (
       <div className="space-y-5">
-        <ScreenHeader eyebrow={run.planName} title="Session complete" />
+        {/* Visual-evolution task, priority 1: this is the app's one deliberately dramatic
+            surface — "the strongest visual moment inside the app," per the task's own words —
+            everything else on this screen (recap, rating, share, exercise list just below)
+            keeps the same clean card language as the rest of BRK. Eyebrow/title order is
+            flipped from the old layout (was eyebrow=planName / title="Session complete") so the
+            workout's own name gets the hierarchy, matching the reference's "SESSION COMPLETE"
+            eyebrow -> big workout title structure. */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-[#1c1d20] via-v5-bg to-v5-bg p-5 pt-6">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(210,38,46,0.18),transparent_65%)] pointer-events-none" />
+          {/* Anatomy-as-brand-signature (task section 2): the session's actual most-trained
+              muscle group, not a decorative figure — real data, never fabricated. Faint and
+              cropped to the corner so it never competes with the title or PR value on top of it. */}
+          {summary?.mainMuscles?.length > 0 && (
+            <div className="absolute -right-6 top-2 opacity-[0.13] pointer-events-none animate-hero-fade">
+              <MuscleBodyOutline exercise={{ muscle: summary.mainMuscles[0] }} size={130} />
+            </div>
+          )}
+          <div className="relative space-y-0.5">
+            <SectionLabel>Session complete</SectionLabel>
+            <div className="text-[26px] leading-[1.05] font-black text-v5-text tracking-tight mt-0.5 max-w-[78%]">{run.planName}</div>
+          </div>
+
+          {summary && (
+            <div className="relative mt-4 space-y-3.5">
+              {(() => {
+                const { featured, others } = featuredAndOtherPRs(summary);
+                if (featured) {
+                  const pr = featured.pr;
+                  // "New Profile PR" whenever this record only holds on the specific machine it
+                  // was logged on, not across every machine ever used for this exercise — see
+                  // PRCallout's identical scope check (task section 12).
+                  const isProfileScoped = pr.scope === "profile";
+                  const profileLabel = isProfileScoped ? equipmentDisplayLabel(state, pr.equipmentProfileId, null) : null;
+                  return (
+                    <div className="space-y-2 pb-3.5 border-b border-white/[0.07] text-center animate-hero-fade">
+                      {/* PR moments (task section 3): the one place in the app allowed a bigger,
+                          centered, red-flanked treatment — "NEW PR" label with thin rules either
+                          side, then the hero performance value itself, large and bold. Reserved
+                          for an actual detected PR; a plain best-lift below stays modest. */}
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="h-px flex-1 bg-v5-red/40" />
+                        <div className="text-[11px] font-black uppercase tracking-[0.2em] text-v5-red flex items-center gap-1 shrink-0 animate-pr-pulse">
+                          <Award size={12} /> New {isProfileScoped ? "Profile " : ""}PR
+                        </div>
+                        <div className="h-px flex-1 bg-v5-red/40" />
+                      </div>
+                      <div className="text-base font-bold text-v5-text leading-tight truncate">{exMap[featured.exId]?.name || featured.exId}</div>
+                      {profileLabel && <div className="text-xs text-v5-subtext">{profileLabel}</div>}
+                      <div className="text-[42px] leading-none font-black text-v5-text tabular-nums">{prHeroLabel(pr)}</div>
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap pt-0.5">
+                        <Pill tone="outline">{PR_TYPE_LABEL[pr.type]}</Pill>
+                        {others.length > 0 && (
+                          <span className="text-[11px] uppercase tracking-widest text-v5-subtext">{others.length + 1} PRs</span>
+                        )}
+                        {/* Task section 7: the most prominent PR surface in the app must not present
+                            a Pain/Form Breakdown-flagged PR as identical, unqualified evidence to a
+                            clean one — Grind gets a softer "Grind" tag, Form Breakdown/Pain get an
+                            explicit "flagged" tag. */}
+                        {pr.qualityFlag && (
+                          <span className="text-[11px] uppercase tracking-widest bg-v5-elevated text-v5-subtext px-1.5 py-0.5 rounded-full">
+                            {pr.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[pr.qualityFlag]} flagged`}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-v5-subtext">
+                        Previous: {prPreviousLabel(pr)} <span className="text-v5-success font-bold">{prDeltaLabel(pr)}</span>
+                      </div>
+                      {others.length > 0 && (
+                        <div className="pt-2 mt-1 border-t border-white/[0.06] space-y-1 text-left">
+                          <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">Other PRs</div>
+                          {others.map(({ exId, pr: op }) => (
+                            <div key={exId} className="flex items-center justify-between text-xs text-v5-subtext gap-2">
+                              <span className="truncate">
+                                {exMap[exId]?.name || exId}
+                                {op.qualityFlag && (
+                                  <span className="ml-1.5 text-[11px] uppercase tracking-widest text-v5-subtext/70">
+                                    ({op.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[op.qualityFlag]} flagged`})
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-v5-success font-bold shrink-0 ml-2">{prDeltaLabel(op)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                if (summary.bestLift) {
+                  return (
+                    <div className="space-y-1 pb-3.5 border-b border-white/[0.07] text-center">
+                      <SectionLabel tone="muted">Best lift</SectionLabel>
+                      <div className="text-base font-bold text-v5-text leading-tight">{exMap[summary.bestLift.exId]?.name || summary.bestLift.exId}</div>
+                      <div className="text-3xl font-black text-v5-text leading-tight">
+                        {summary.bestLift.weight} × {summary.bestLift.reps}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Stat strip (task section 1's suggested structure: duration | sets | volume |
+                  PRs) — the same real numbers the old 2x2 grid showed, restyled as a divided
+                  strip with red icons. Total reps moves to the small line below rather than
+                  being dropped, so no real data disappears in this pass. */}
+              <div className="grid grid-cols-4 divide-x divide-white/[0.07]">
+                {[
+                  { icon: Clock, value: formatSessionDuration(summary.durationSec), label: "Duration" },
+                  { icon: Layers, value: summary.workingSets, label: "Sets" },
+                  { icon: BarChart3, value: summary.totalVolume.toLocaleString(), label: "Volume" },
+                  { icon: Award, value: sessionPRCount(summary), label: sessionPRCount(summary) === 1 ? "PR" : "PRs" },
+                ].map(({ icon: Icon, value, label }) => (
+                  <div key={label} className="flex flex-col items-center gap-1 px-1 text-center min-w-0">
+                    <Icon size={13} className="text-v5-red shrink-0" />
+                    <div className="text-sm font-black text-v5-text tabular-nums leading-none truncate max-w-full">{value}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext">{label}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-center text-[11px] text-v5-subtext">
+                {summary.totalReps} total reps
+                {summary.isVolumePR && <span className="text-v5-success font-bold"> · Volume PR</span>}
+              </div>
+
+              {summary.perfDeltaPct != null && (
+                <div className="text-sm text-v5-text/90 text-center">
+                  Performance vs last {summary.planName}:{" "}
+                  <span className={summary.perfDeltaPct >= 0 ? "text-v5-success font-bold" : "text-v5-red font-bold"}>
+                    {summary.perfDeltaPct >= 0 ? "+" : ""}
+                    {summary.perfDeltaPct}%
+                  </span>
+                </div>
+              )}
+              {summary.avgRir != null && (
+                <div className="text-sm text-v5-text/90 text-center">
+                  Average {rirSystem === "rpe" ? "RPE" : "RIR"}: {rirSystem === "rpe" ? Math.round((10 - summary.avgRir) * 10) / 10 : summary.avgRir}
+                </div>
+              )}
+              {summary.mainMuscles.length > 0 && (
+                <div className="text-sm text-v5-text/90 text-center">Main muscles trained: {summary.mainMuscles.join(", ")}</div>
+              )}
+            </div>
+          )}
+        </div>
 
         {summary && (
           <Card tone="accent" padding="p-5" className="space-y-3">
-            {(() => {
-              const { featured, others } = featuredAndOtherPRs(summary);
-              if (featured) {
-                const pr = featured.pr;
-                // "New Profile PR" whenever this record only holds on the specific machine it
-                // was logged on, not across every machine ever used for this exercise — see
-                // PRCallout's identical scope check (task section 12).
-                const isProfileScoped = pr.scope === "profile";
-                const profileLabel = isProfileScoped ? equipmentDisplayLabel(state, pr.equipmentProfileId, null) : null;
-                return (
-                  <div className="space-y-1.5 pb-3 border-b border-white/[0.06]">
-                    <div className="flex items-center justify-between">
-                      <SectionLabel className="flex items-center gap-1.5">
-                        <Award size={12} /> New {isProfileScoped ? "Profile " : ""}PR
-                      </SectionLabel>
-                      {others.length > 0 && (
-                        <div className="text-[11px] uppercase tracking-widest text-v5-subtext">{others.length + 1} PRs</div>
-                      )}
-                    </div>
-                    <div className="text-lg font-bold text-v5-text leading-tight">{exMap[featured.exId]?.name || featured.exId}</div>
-                    {profileLabel && <div className="text-xs text-v5-subtext">{profileLabel}</div>}
-                    <div className="text-3xl font-black text-v5-text leading-tight">{prHeroLabel(pr)}</div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <div className="text-[11px] uppercase tracking-widest text-v5-red font-bold">{PR_TYPE_LABEL[pr.type]}</div>
-                      {/* Task section 7: the most prominent PR surface in the app must not present
-                          a Pain/Form Breakdown-flagged PR as identical, unqualified evidence to a
-                          clean one — Grind gets a softer "Grind" tag, Form Breakdown/Pain get an
-                          explicit "flagged" tag. */}
-                      {pr.qualityFlag && (
-                        <span className="text-[11px] uppercase tracking-widest bg-v5-elevated text-v5-subtext px-1.5 py-0.5 rounded-full">
-                          {pr.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[pr.qualityFlag]} flagged`}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-v5-subtext">
-                      Previous: {prPreviousLabel(pr)} <span className="text-v5-success font-bold">{prDeltaLabel(pr)}</span>
-                    </div>
-                    {others.length > 0 && (
-                      <div className="pt-2 mt-1 border-t border-white/[0.06] space-y-1">
-                        <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">Other PRs</div>
-                        {others.map(({ exId, pr: op }) => (
-                          <div key={exId} className="flex items-center justify-between text-xs text-v5-subtext gap-2">
-                            <span className="truncate">
-                              {exMap[exId]?.name || exId}
-                              {op.qualityFlag && (
-                                <span className="ml-1.5 text-[11px] uppercase tracking-widest text-v5-subtext/70">
-                                  ({op.qualityFlag === "grind" ? SET_QUALITY_LABEL.grind : `${SET_QUALITY_LABEL[op.qualityFlag]} flagged`})
-                                </span>
-                              )}
-                            </span>
-                            <span className="text-v5-success font-bold shrink-0 ml-2">{prDeltaLabel(op)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-              if (summary.bestLift) {
-                return (
-                  <div className="space-y-1 pb-3 border-b border-white/[0.06]">
-                    <SectionLabel tone="muted">Best lift</SectionLabel>
-                    <div className="text-lg font-bold text-v5-text leading-tight">{exMap[summary.bestLift.exId]?.name || summary.bestLift.exId}</div>
-                    <div className="text-2xl font-black text-v5-text leading-tight">
-                      {summary.bestLift.weight} × {summary.bestLift.reps}
-                    </div>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-
-            <div className="grid grid-cols-2 gap-3">
-              <StatTile label="Duration" value={formatSessionDuration(summary.durationSec)} />
-              <StatTile label="Working sets" value={summary.workingSets} />
-              <StatTile label="Volume" value={`${summary.totalVolume.toLocaleString()} lb${summary.isVolumePR ? " — PR" : ""}`} />
-              <StatTile label="Total reps" value={summary.totalReps} />
-            </div>
-
-            {summary.perfDeltaPct != null && (
-              <div className="text-sm text-v5-text/90">
-                Performance vs last {summary.planName}:{" "}
-                <span className={summary.perfDeltaPct >= 0 ? "text-v5-success font-bold" : "text-v5-red font-bold"}>
-                  {summary.perfDeltaPct >= 0 ? "+" : ""}
-                  {summary.perfDeltaPct}%
-                </span>
-              </div>
-            )}
-            {summary.avgRir != null && (
-              <div className="text-sm text-v5-text/90">
-                Average {rirSystem === "rpe" ? "RPE" : "RIR"}: {rirSystem === "rpe" ? Math.round((10 - summary.avgRir) * 10) / 10 : summary.avgRir}
-              </div>
-            )}
-            {summary.mainMuscles.length > 0 && (
-              <div className="text-sm text-v5-text/90">Main muscles trained: {summary.mainMuscles.join(", ")}</div>
-            )}
 
             {/* Auto Post-Workout Recap additions (task Part 1) — progression per exercise,
                 joint/pain + set-quality attention, and next-time targets, all computed by the
@@ -5341,8 +5397,13 @@ function GuidedRunView({
               </div>
             </div>
 
+            {/* Visual-evolution task, priority 5: the share preview modal already renders the
+                redesigned canvas share card (WorkoutSharePreview.jsx / workoutShareCard.js) — a
+                dark gradient + anatomy watermark + stat strip, the same brand family as the hero
+                above. This CTA just gives that action the weight the reference gives "Share
+                Result," instead of a quiet text link, so the two surfaces feel like one family. */}
             <div className="border-t border-white/[0.06] pt-3">
-              <ButtonText tone="muted" icon={Share2} onClick={() => setSharePreviewOpen(true)}>Share</ButtonText>
+              <ButtonPrimary size="lg" icon={Share2} onClick={() => setSharePreviewOpen(true)}>Share Result</ButtonPrimary>
             </div>
           </Card>
         )}
@@ -5382,14 +5443,22 @@ function GuidedRunView({
                   const hasPR = prExIds.has(entry.exId);
                   const isBaseline = !hasPR && !priorExIds.has(entry.exId);
                   return (
-                    <Card key={entry.id || i} padding="px-4 py-3">
+                    <Card
+                      key={entry.id || i}
+                      padding="px-4 py-3"
+                      // PR moments (task section 3) — a PR-setting exercise in this breakdown
+                      // gets a red edge and its own tone so it visually stands out from every
+                      // other ordinary row, matching the reference's highlighted PR row. Never
+                      // applied to a normal set/exercise.
+                      className={hasPR ? "ring-1 ring-v5-red/40 bg-gradient-to-r from-v5-red/[0.08] to-transparent" : ""}
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-bold text-v5-text flex items-center gap-1.5 min-w-0">
                           <span className="truncate">{exMap[entry.exId]?.name || entry.exId}</span>
                           {hasPR && <Pill className="shrink-0">PR</Pill>}
                           {isBaseline && <Pill tone="inactive" className="shrink-0">Baseline</Pill>}
                         </span>
-                        <span className="text-xs text-v5-subtext shrink-0">Target {entry.targetReps}</span>
+                        <span className={`text-xs shrink-0 ${hasPR ? "text-v5-red font-bold" : "text-v5-subtext"}`}>Target {entry.targetReps}</span>
                       </div>
                       <div className="text-xs text-v5-subtext mt-1">{entry.sets.map(formatSetCompact).join(", ")}</div>
                     </Card>

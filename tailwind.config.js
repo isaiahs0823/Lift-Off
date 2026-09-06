@@ -40,9 +40,23 @@ export default {
           "0%, 100%": { backgroundColor: "#202020" },
           "50%": { backgroundColor: "rgba(220, 38, 38, 0.45)" },
         },
+        // Subtle-only motion for BRK's "high-emotion moment" surfaces (workout completion hero,
+        // PR callouts) — a brief settle-in, never a loop or a flashy transition (visual-evolution
+        // task section 10: "PR badge brief pulse/fade-in; completion hero fade-in. No excessive
+        // motion/particles/flashing").
+        heroFadeIn: {
+          "0%": { opacity: "0", transform: "translateY(6px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        prPulse: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.6" },
+        },
       },
       animation: {
         "rest-flash": "restFlash 0.5s ease-in-out 4",
+        "hero-fade": "heroFadeIn 0.5s ease-out both",
+        "pr-pulse": "prPulse 1.4s ease-in-out 2",
       },
     },
   },

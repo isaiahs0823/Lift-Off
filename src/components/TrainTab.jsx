@@ -4,6 +4,7 @@ import { resolveTodayWorkout } from "../utils/programSchedule.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
+import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
 import { ScreenHeader, SectionLabel, HeroCard, ButtonPrimary, ButtonText, StatTile, Pill, ActionTile } from "./ui/Kit.jsx";
 
 // Never auto-discards on age — a workout logged right up to midnight, or one left open for
@@ -65,27 +66,38 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
       ((currentDraft.weight !== "" && currentDraft.weight !== 0 && currentDraft.weight != null) ||
         (currentDraft.reps !== "" && currentDraft.reps !== 0 && currentDraft.reps != null));
     const currentExName = currentIdx >= 0 ? exMap[activeRun.swaps?.[currentIdx] ?? activeRun.exercises[currentIdx].exId]?.name : null;
+    const leadExercise = exMap[activeRun.swaps?.[0] ?? activeRun.exercises[0]?.exId];
 
     return (
       <div className="space-y-4">
         <ScreenHeader eyebrow="Train" title="Resume workout" />
 
-        <HeroCard>
-          <div>
-            <div className="text-xl font-black text-v5-text">{activeRun.planName}</div>
-            <div className="text-sm text-v5-subtext">Started {elapsedLabel(activeRun.startedAt)}</div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <StatTile label="Exercises" value={`${completedExercises}${totalExercises ? ` / ${totalExercises}` : ""}`} />
-            <StatTile label="Completed sets" value={completedSets} />
-          </div>
-          {hasUnsavedSet && (
-            <div className="text-xs text-v5-red font-bold">
-              Unsaved set restored{currentExName ? ` — ${currentExName}` : ""}
+        {/* Visual-evolution task, priority 4: a subtle anatomy watermark + a touch more title
+            weight — same treatment as Train's "Current program" card below — without turning
+            this into a full poster; the resume CTA/stats stay exactly as they were. */}
+        <HeroCard className="relative overflow-hidden">
+          {leadExercise && (
+            <div className="absolute -right-4 -bottom-2 opacity-[0.12] pointer-events-none">
+              <MuscleBodyOutline exercise={leadExercise} size={78} />
             </div>
           )}
-          <ButtonPrimary size="lg" onClick={onResumeWorkout}>Resume workout</ButtonPrimary>
-          <ButtonText tone="muted" onClick={onDiscardWorkout} className="w-full py-1">Discard workout</ButtonText>
+          <div className="relative space-y-3">
+            <div>
+              <div className="text-2xl font-black text-v5-text">{activeRun.planName}</div>
+              <div className="text-sm text-v5-subtext">Started {elapsedLabel(activeRun.startedAt)}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <StatTile label="Exercises" value={`${completedExercises}${totalExercises ? ` / ${totalExercises}` : ""}`} />
+              <StatTile label="Completed sets" value={completedSets} />
+            </div>
+            {hasUnsavedSet && (
+              <div className="text-xs text-v5-red font-bold">
+                Unsaved set restored{currentExName ? ` — ${currentExName}` : ""}
+              </div>
+            )}
+            <ButtonPrimary size="lg" onClick={onResumeWorkout}>Resume workout</ButtonPrimary>
+            <ButtonText tone="muted" onClick={onDiscardWorkout} className="w-full py-1">Discard workout</ButtonText>
+          </div>
         </HeroCard>
       </div>
     );
@@ -96,7 +108,16 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
       <ScreenHeader eyebrow="Train" title="Choose your workout" />
 
       {programDay && !programDay.isComplete && (
-        <HeroCard>
+        // Visual-evolution task, priority 4: a subtle anatomy watermark of the day's lead
+        // exercise, same low-opacity corner treatment as Resume workout above — the swap/preview/
+        // start logic below is completely untouched, this card still behaves like a normal card.
+        <HeroCard className="relative overflow-hidden">
+          {exMap[programDay.plan?.exercises?.[0]?.exId] && (
+            <div className="absolute -right-4 -bottom-2 opacity-[0.12] pointer-events-none">
+              <MuscleBodyOutline exercise={exMap[programDay.plan.exercises[0].exId]} size={78} />
+            </div>
+          )}
+          <div className="relative space-y-3">
           <div className="flex items-center justify-between gap-2">
             <SectionLabel>Current program</SectionLabel>
             <ButtonText tone="muted" icon={RefreshCw} onClick={() => setSwapOpen(true)} aria-label="Swap workout">
@@ -106,7 +127,7 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
           {/* The headline always names the ACTUAL active program (from currentProgram itself,
               not today's resolved workout) — an outside-program override must never make this
               card read as if the active program changed; see resolveTodayWorkout's isOutsideProgram. */}
-          <div className="text-xl font-black text-v5-text">{state.currentProgram?.programName}</div>
+          <div className="text-2xl font-black text-v5-text">{state.currentProgram?.programName}</div>
           {programDay.isRecoveryDay ? (
             <div className="text-sm text-v5-subtext">
               {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
@@ -187,6 +208,7 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
           <ButtonText tone="muted" icon={Map} onClick={() => onNavigate("programTimeline")} className="pt-1">
             Program Timeline
           </ButtonText>
+          </div>
         </HeroCard>
       )}
 
