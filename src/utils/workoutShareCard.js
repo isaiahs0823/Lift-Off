@@ -156,6 +156,23 @@ function background(ctx, W, H, glowY) {
   vignette.addColorStop(1, "rgba(0,0,0,0.32)");
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, W, H);
+
+  // Premium framing pass (follow-up task: "stronger card framing," "subtle red highlight
+  // lines") — a barely-there red hairline at the very top edge, and a soft inset border, so the
+  // card reads as a designed asset rather than a plain screenshot even before any content
+  // renders. Both stay far below anything that would compete with the hero content.
+  const hairline = ctx.createLinearGradient(W * 0.22, 0, W * 0.78, 0);
+  hairline.addColorStop(0, "rgba(239,68,68,0)");
+  hairline.addColorStop(0.5, "rgba(239,68,68,0.55)");
+  hairline.addColorStop(1, "rgba(239,68,68,0)");
+  ctx.fillStyle = hairline;
+  ctx.fillRect(W * 0.22, 0, W * 0.56, 3);
+
+  const inset = Math.round(W * 0.022);
+  ctx.strokeStyle = "rgba(255,255,255,0.055)";
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, inset, inset, W - inset * 2, H - inset * 2, 28);
+  ctx.stroke();
 }
 
 function wordmark(ctx, W, y, size = 40) {
@@ -179,11 +196,14 @@ function wordmark(ctx, W, y, size = 40) {
   ctx.textAlign = "center";
 }
 
-function footerTagline(ctx, W, H, size = 22) {
+// `extraPad` (follow-up task: "Instagram Story format... margins are safe") lifts the footer
+// further off the very bottom edge on Story-sized exports specifically, so BRK's own branding
+// never lands inside the reply-bar zone Instagram reserves at the bottom of a Story.
+function footerTagline(ctx, W, H, size = 22, extraPad = 0) {
   ctx.textAlign = "center";
   ctx.fillStyle = COLOR.dimGray;
   ctx.font = `700 ${size}px ${FONT}`;
-  ctx.fillText("KEEP THE PROMISES YOU MAKE TO YOURSELF", W / 2, H - size * 2.1);
+  ctx.fillText("KEEP THE PROMISES YOU MAKE TO YOURSELF", W / 2, H - size * 2.1 - extraPad);
 }
 
 // A small red badge, e.g. "PR" or "+15 LB". Returns the badge's rendered width.
@@ -352,10 +372,16 @@ function dayLabel(session) {
 // One short, data-driven session statement (task: never fake motivational copy) — PRs first
 // (the strongest real claim), then the featured lift, then total volume as the last resort so a
 // session with genuinely no PRs and no standout lift still gets a real, honest line.
-function performanceLine(session, featured) {
+// Only ever called by Performance, which already renders `featured` as its own big hero block
+// above this line — so a "Best performance: name weight x reps" restatement here would just be
+// the exact same fact twice on one card. That branch is intentionally skipped: PR count is new
+// information (the hero shows the single best PR, this says how many happened), and total
+// volume-by-muscle is a genuinely different framing of the number than the stat strip's raw
+// volume figure — the only case with truly nothing new to add is a no-PR, no-volume session,
+// which correctly yields no chip at all.
+function performanceLine(session) {
   const prCount = sessionPRCount(session);
   if (prCount > 0) return `${prCount} PR${prCount > 1 ? "s" : ""} · ${session.workingSets ?? 0} working sets`;
-  if (featured?.weight != null) return `Best performance: ${featured.name} ${featured.weight} × ${featured.reps}`;
   if (session.totalVolume) {
     const muscle = session.mainMuscles?.[0];
     return `${muscle ? `${muscle} volume` : "Session volume"}: ${session.totalVolume.toLocaleString()} lb`;
@@ -630,9 +656,13 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
     muscleCategory: session.mainMuscles?.[0],
   });
 
+  // Extra bottom breathing room specifically at Story height (k only ever reaches 1 for the
+  // 1920-tall export) — Instagram reserves roughly the bottom ~200px of a Story for its own
+  // reply-bar UI, so BRK's footer needs real clearance there that Post/Square don't need.
+  const storyPad = k === 1 ? 46 : 0;
   const bodyStartY = headerY + sz(84, k, 50);
-  const footerTopY = H - sz(210, k, 118);
-  const summaryLine = performanceLine(session, featured);
+  const footerTopY = H - sz(210, k, 118) - storyPad;
+  const summaryLine = performanceLine(session);
   const day = dayLabel(session);
   const prsByExId = buildPrsByExId(session);
   const rows = (session.entries || []).slice(0, maxRows);
@@ -646,7 +676,9 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
     const titleSize = fitFontSize(c, session.planName || "Workout", titleMaxW, "900", sz(68, k, 34), 26);
     c.fillStyle = COLOR.white;
     const titleLines = wrapAligned(c, session.planName || "Workout", titleX, y + titleSize * 0.82, titleMaxW, titleSize * 1.04, 2, "left");
-    y += titleSize * 0.82 + (titleLines - 1) * titleSize * 1.04 + sz(22, k, 12);
+    // Floor raised from 12->20 (found during QA on Square, where a long title's descenders
+    // were visually colliding with the subtitle line right below it at the smallest k tier).
+    y += titleSize * 0.82 + (titleLines - 1) * titleSize * 1.04 + sz(26, k, 20);
 
     c.fillStyle = COLOR.gray;
     c.font = `700 ${sz(24, k, 16)}px ${FONT}`;
@@ -673,8 +705,18 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
       const lines = wrapCentered(c, featured.name, W / 2, y, W * 0.82, nameSize * 1.08, 2);
       y += lines * nameSize * 1.08 + sz(18, k, 10);
 
-      c.fillStyle = COLOR.white;
+      // Soft spotlight directly behind the hero value (follow-up task: "soft spotlighting
+      // behind content") — a second, tighter glow than the page-wide one in background(), so the
+      // single biggest number on the card reads as intentionally lit rather than flat white text.
       const heroSize = sz(116, k, 60);
+      const spotlightY = y + heroSize * 0.4;
+      const spotlight = c.createRadialGradient(W / 2, spotlightY, 0, W / 2, spotlightY, W * 0.4);
+      spotlight.addColorStop(0, featured.isPR ? "rgba(239,68,68,0.16)" : "rgba(255,255,255,0.07)");
+      spotlight.addColorStop(1, "rgba(239,68,68,0)");
+      c.fillStyle = spotlight;
+      c.fillRect(0, spotlightY - W * 0.4, W, W * 0.8);
+
+      c.fillStyle = COLOR.white;
       c.font = `900 ${heroSize}px ${FONT}`;
       const heroText = featured.weight != null ? `${featured.weight} × ${featured.reps}` : "—";
       c.fillText(heroText, W / 2, y + heroSize * 0.78);
@@ -707,12 +749,27 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
     const stripH = drawStatStrip(c, { x: stripX, y, width: stripW, stats, k });
     y += stripH + sz(36, k, 18);
 
-    // ---- one data-driven performance line ----
+    // ---- one data-driven performance line, as a quiet pill chip rather than bare text
+    //      (follow-up task's optional "subtle '2 PRs today' callout") ----
     if (summaryLine) {
-      c.fillStyle = COLOR.red;
+      const chipText = summaryLine.toUpperCase();
       c.font = `800 ${sz(20, k, 14)}px ${FONT}`;
-      c.fillText(summaryLine.toUpperCase(), W / 2, y);
-      y += sz(42, k, 22);
+      const chipPadX = sz(22, k, 14);
+      const chipH = sz(44, k, 30);
+      const chipW = c.measureText(chipText).width + chipPadX * 2;
+      const chipX = W / 2 - chipW / 2;
+      const chipY = y - chipH * 0.7;
+      c.fillStyle = "rgba(220,38,46,0.10)";
+      roundRect(c, chipX, chipY, chipW, chipH, chipH / 2);
+      c.fill();
+      c.strokeStyle = "rgba(239,68,68,0.4)";
+      c.lineWidth = 1.5;
+      roundRect(c, chipX, chipY, chipW, chipH, chipH / 2);
+      c.stroke();
+      c.fillStyle = COLOR.red;
+      c.textAlign = "center";
+      c.fillText(chipText, W / 2, y);
+      y += sz(52, k, 28);
     }
 
     // ---- exercise breakdown ----
@@ -744,8 +801,8 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
 
   centerBody(ctx, bodyStartY, footerTopY, body);
 
-  wordmark(ctx, W, H - sz(130, k, 74), sz(30, k, 20));
-  footerTagline(ctx, W, H, sz(20, k, 14));
+  wordmark(ctx, W, H - sz(130, k, 74) - storyPad, sz(30, k, 20));
+  footerTagline(ctx, W, H, sz(20, k, 14), storyPad);
 }
 
 // ---------------- template: MINIMAL STORY CARD ----------------
@@ -756,8 +813,11 @@ function drawMinimalCard(ctx, W, H, session, featured) {
   const compact = H <= 1500;
   background(ctx, W, H, H * 0.46);
 
+  // Extra bottom clearance on Story height only (follow-up task: keep BRK's footer out of
+  // Instagram's reserved bottom reply-bar zone) — Post/Square aren't posted as Stories.
+  const storyPad = compact ? 0 : 46;
   const bodyStartY = H * (compact ? 0.14 : 0.12);
-  const footerTopY = H - (compact ? 130 : 170);
+  const footerTopY = H - (compact ? 130 : 170) - storyPad;
 
   // Small, quiet anatomy watermark — present as the brand signature but never competing with
   // the big numbers, per "keep Minimal Story genuinely minimal."
@@ -813,8 +873,8 @@ function drawMinimalCard(ctx, W, H, session, featured) {
 
   centerBody(ctx, bodyStartY, footerTopY, body);
 
-  wordmark(ctx, W, H - (compact ? 90 : 120), compact ? 30 : 36);
-  footerTagline(ctx, W, H, compact ? 15 : 18);
+  wordmark(ctx, W, H - (compact ? 90 : 120) - storyPad, compact ? 30 : 36);
+  footerTagline(ctx, W, H, compact ? 15 : 18, storyPad);
 }
 
 // ---------------- template: FULL SESSION RECAP CARD ----------------
@@ -837,8 +897,9 @@ function drawRecapCard(ctx, W, H, session, exMap) {
     redAlpha: 0.78,
   });
 
+  const storyPad = k === 1 ? 46 : 0;
   const bodyStartY = headerY + sz(70, k, 42);
-  const footerTopY = H - sz(190, k, 110);
+  const footerTopY = H - sz(190, k, 110) - storyPad;
 
   const prCount = sessionPRCount(session);
   const entries = session.entries || [];
@@ -915,8 +976,8 @@ function drawRecapCard(ctx, W, H, session, exMap) {
 
   centerBody(ctx, bodyStartY, footerTopY, body);
 
-  wordmark(ctx, W, H - sz(120, k, 68), sz(30, k, 20));
-  footerTagline(ctx, W, H, sz(20, k, 14));
+  wordmark(ctx, W, H - sz(120, k, 68) - storyPad, sz(30, k, 20));
+  footerTagline(ctx, W, H, sz(20, k, 14), storyPad);
 }
 
 // ---------------- entry point ----------------
