@@ -642,7 +642,7 @@ function drawStatStrip(ctx, { x, y, width, stats, k }) {
 // Numbered, PR-aware exercise rows (task section 7) shared by Performance's compact breakdown
 // and Recap's full breakdown — a PR row gets a red-tinted panel + border + badge + red value
 // (task section 6: "PR = special," never flooding ordinary rows with red).
-function drawExerciseRows(ctx, { x, y, width, rows, rowH, k, exMap, prsByExId }) {
+function drawExerciseRows(ctx, { x, y, width, rows, rowH, k, exMap, prsByExId, showPrevious = false }) {
   const gap = sz(14, k, 6);
   rows.forEach((entry, i) => {
     const counted = countedSets(entry.sets);
@@ -651,6 +651,13 @@ function drawExerciseRows(ctx, { x, y, width, rows, rowH, k, exMap, prsByExId })
     const isPR = exPRs.length > 0;
     const rowY = y + i * rowH;
     const h = rowH - gap;
+    // Performance (showPrevious=true) reserves room for a real "Previous: X (+Y)" line on the PR
+    // row (task follow-up: "repeat prior-performance detail in the PR row") by centering the main
+    // content a little higher than dead-center; Recap never passes this, so its rows are
+    // unaffected. Only the PR row actually draws the second line — other rows just get a touch
+    // more breathing room above/below, which reads as intentional, not empty.
+    const willShowPrev = showPrevious && isPR && exPRs[0]?.type === "weight" && exPRs[0]?.prev != null;
+    const midY = willShowPrev ? rowY + h * 0.4 : rowY + h / 2;
 
     ctx.fillStyle = isPR ? COLOR.prPanel : i % 2 === 0 ? COLOR.panel : "rgba(255,255,255,0.015)";
     roundRect(ctx, x, rowY, width, h, 14);
@@ -667,24 +674,44 @@ function drawExerciseRows(ctx, { x, y, width, rows, rowH, k, exMap, prsByExId })
     ctx.textAlign = "left";
     ctx.fillStyle = isPR ? COLOR.red : COLOR.dimGray;
     ctx.font = `800 ${sz(21, k, 14)}px ${FONT}`;
-    ctx.fillText(String(i + 1).padStart(2, "0"), x + padX, rowY + h / 2 + sz(7, k, 5));
+    ctx.fillText(String(i + 1).padStart(2, "0"), x + padX, midY + sz(7, k, 5));
 
     ctx.fillStyle = COLOR.white;
     ctx.font = `700 ${sz(25, k, 16)}px ${FONT}`;
     const badgeReserve = isPR ? sz(68, k, 44) : 0;
     const name = truncateToWidth(ctx, exMap?.[entry.exId]?.name || entry.exId, width - numW - sz(200, k, 130) - badgeReserve);
-    ctx.fillText(name, x + padX + numW, rowY + h / 2 + sz(8, k, 5));
+    ctx.fillText(name, x + padX + numW, midY + sz(8, k, 5));
     const nameWidth = ctx.measureText(name).width;
 
     if (isPR) {
-      drawBadgeInline(ctx, x + padX + numW + nameWidth + sz(14, k, 8), rowY + h / 2 - sz(15, k, 11), "PR", k);
+      drawBadgeInline(ctx, x + padX + numW + nameWidth + sz(14, k, 8), midY - sz(15, k, 11), "PR", k);
     }
 
     ctx.textAlign = "right";
     ctx.fillStyle = isPR ? COLOR.red : COLOR.gray;
     ctx.font = `800 ${sz(25, k, 16)}px ${FONT}`;
     const setText = top ? `${top.weight} × ${top.reps}` : "—";
-    ctx.fillText(setText, x + width - padX, rowY + h / 2 + sz(8, k, 5));
+    ctx.fillText(setText, x + width - padX, midY + sz(8, k, 5));
+
+    if (willShowPrev) {
+      const pr = exPRs[0];
+      const grayPart = `Previous: ${pr.prev} lb `;
+      const deltaPart = `(+${Math.round((pr.weight - pr.prev) * 10) / 10} lb)`;
+      const subSize = sz(15, k, 11);
+      const subY = rowY + h * 0.76;
+      ctx.font = `700 ${subSize}px ${FONT}`;
+      const grayW = ctx.measureText(grayPart).width;
+      ctx.font = `800 ${subSize}px ${FONT}`;
+      const deltaW = ctx.measureText(deltaPart).width;
+      const startX = x + width - padX - (grayW + deltaW);
+      ctx.textAlign = "left";
+      ctx.font = `700 ${subSize}px ${FONT}`;
+      ctx.fillStyle = COLOR.gray;
+      ctx.fillText(grayPart, startX, subY);
+      ctx.font = `800 ${subSize}px ${FONT}`;
+      ctx.fillStyle = COLOR.green;
+      ctx.fillText(deltaPart, startX + grayW, subY);
+    }
     ctx.textAlign = "center";
   });
   return rows.length * rowH;
@@ -876,6 +903,25 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
   const heroPanelX = W / 2 - heroPanelW / 2;
   drawHeroPanel(ctx, heroPanelX, heroPanelY, heroPanelW, heroPanelH, isPR);
 
+  // ---- decorative side copy, left of the panel (follow-up polish: fills the otherwise-empty
+  // strip left of the hero panel, mirroring the top-right triplet's tiny/low-contrast/secondary
+  // treatment — static brand voice, never workout data, never fighting the panel for attention).
+  const sideLeftSize = sz(13, k, 10);
+  const sideLeftLineH = sideLeftSize * 1.9;
+  const sideLeftLines = ["SAME WORK.", "HIGHER STANDARDS."];
+  const sideLeftY = heroPanelY + heroPanelH / 2 - ((sideLeftLines.length - 1) * sideLeftLineH) / 2;
+  const sideLeftX = leftX;
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(154,160,166,0.6)";
+  ctx.font = `700 ${sideLeftSize}px ${FONT}`;
+  sideLeftLines.forEach((line, i) => ctx.fillText(line, sideLeftX, sideLeftY + i * sideLeftLineH));
+  ctx.strokeStyle = "rgba(239,68,68,0.45)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(sideLeftX - sz(14, k, 10), sideLeftY - sideLeftSize * 0.7);
+  ctx.lineTo(sideLeftX - sz(14, k, 10), sideLeftY + (sideLeftLines.length - 1) * sideLeftLineH + sideLeftSize * 0.3);
+  ctx.stroke();
+
   ctx.textAlign = "center";
   let hy = heroPanelY + heroPanelH * 0.16;
   const labelText = isPR ? "NEW PR" : "BEST SET";
@@ -988,7 +1034,7 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
   // the 0.655H target, but never allowed to sit closer than a safe gap after the comparison line
   // actually ends — the fixed fraction alone overlapped the comparison strip at the Square tier,
   // where stat-strip/gap floors don't compress as fast as H itself does. ----
-  const topSetsY = Math.max(H * 0.655, (hasComparison ? cmpY : stripY + stripH) + sz(46, k, 34));
+  const topSetsY = Math.max(H * 0.655, (hasComparison ? cmpY : stripY + stripH) + sz(46, k, 28));
   const prsByExId = buildPrsByExId(session);
   const entries = session.entries || [];
   const rows = entries.slice(0, 4);
@@ -997,23 +1043,25 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
   ctx.font = `800 ${sz(19, k, 14)}px ${FONT}`;
   ctx.fillText("TOP SETS", leftX, topSetsY);
   if (entries.length > 0) {
+    // Brand-driven tagline (follow-up polish) in place of the plain "N exercises · N sets" — that
+    // count is already shown in the stat strip above, so this line can afford to be voice instead
+    // of a repeated number.
     ctx.textAlign = "right";
     ctx.fillStyle = COLOR.dimGray;
     ctx.font = `700 ${sz(15, k, 11)}px ${FONT}`;
-    ctx.fillText(
-      `${entries.length} EXERCISE${entries.length === 1 ? "" : "S"} · ${session.workingSets ?? 0} WORKING SETS`,
-      rightEdge,
-      topSetsY,
-    );
+    ctx.fillText("CONSISTENT EFFORT. REAL PROGRESS.", rightEdge, topSetsY);
   }
   ctx.textAlign = "center";
 
   if (rows.length > 0) {
     const rowY = topSetsY + sz(28, k, 18);
-    const rowH = sz(84, k, 54);
+    // Bumped from 84 (a bit taller than Recap's rows) — the PR row now carries a real second
+    // line ("Previous: X lb (+Y lb)"), so every row needs enough room for it even though only
+    // the PR row actually draws it.
+    const rowH = sz(94, k, 52);
     const rowW = W * 0.86;
     const rowX = W / 2 - rowW / 2;
-    const rowsBottom = rowY + drawExerciseRows(ctx, { x: rowX, y: rowY, width: rowW, rows, rowH, k, exMap, prsByExId });
+    const rowsBottom = rowY + drawExerciseRows(ctx, { x: rowX, y: rowY, width: rowW, rows, rowH, k, exMap, prsByExId, showPrevious: true });
 
     const remaining = entries.length - rows.length;
     if (remaining > 0) {
@@ -1024,8 +1072,26 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
   }
 
   // ---- BRK footer — fixed zone 5, with Story-height safe-margin clearance ----
-  wordmark(ctx, W, H - sz(130, k, 74) - storyPad, sz(30, k, 20));
+  const footerWordmarkY = H - sz(120, k, 66) - storyPad;
+  wordmark(ctx, W, footerWordmarkY, sz(30, k, 20));
   footerTagline(ctx, W, H, sz(20, k, 14), storyPad);
+
+  // ---- decorative footer-flanking copy (follow-up polish) — mirrors the reference's two small
+  // taglines either side of the centered wordmark. Vertically centered ON the wordmark's own row
+  // (not a separate line above it) so it never needs its own dedicated vertical space — that
+  // extra space is exactly what overlapped the "+more exercises" line at the Square tier's
+  // tighter budget. Same tiny/low-contrast/secondary treatment as every other decorative line
+  // here; purely static brand voice, no workout data. ----
+  const footerSideSize = sz(12, k, 9);
+  const footerSideLineH = footerSideSize * 1.85;
+  const footerSideY = footerWordmarkY - footerSideLineH * 0.55;
+  ctx.fillStyle = "rgba(154,160,166,0.55)";
+  ctx.font = `700 ${footerSideSize}px ${FONT}`;
+  ctx.textAlign = "left";
+  ["HARDER TODAY", "BRIGHTER TOMORROW"].forEach((line, i) => ctx.fillText(line, leftX, footerSideY + i * footerSideLineH));
+  ctx.textAlign = "right";
+  ["BUILD STRONGER", "MOVE FURTHER"].forEach((line, i) => ctx.fillText(line, rightEdge, footerSideY + i * footerSideLineH));
+  ctx.textAlign = "center";
 }
 
 // ---------------- template: MINIMAL STORY CARD ----------------
