@@ -5166,17 +5166,39 @@ function GuidedRunView({
             eyebrow -> big workout title structure. */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-[#1c1d20] via-v5-bg to-v5-bg p-5 pt-6">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(210,38,46,0.18),transparent_65%)] pointer-events-none" />
+          {/* Restrained grain (task's follow-up round, section 10) — a barely-there SVG
+              turbulence tile, not an image asset, so the gradient doesn't read as flat/plasticky.
+              Kept extremely low-opacity — this is depth, not a texture effect. */}
+          <div
+            className="absolute inset-0 opacity-[0.035] mix-blend-overlay pointer-events-none"
+            style={{
+              backgroundImage:
+                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+            }}
+          />
           {/* Anatomy-as-brand-signature (task section 2): the session's actual most-trained
               muscle group, not a decorative figure — real data, never fabricated. Faint and
-              cropped to the corner so it never competes with the title or PR value on top of it. */}
+              cropped to the corner so it never competes with the title or PR value on top of it.
+              Sized down from the first pass per follow-up feedback ("anatomy is slightly too
+              dominant... reduce by roughly 10-15%") — title and featured performance stay the
+              strongest focal points. */}
           {summary?.mainMuscles?.length > 0 && (
-            <div className="absolute -right-6 top-2 opacity-[0.13] pointer-events-none animate-hero-fade">
-              <MuscleBodyOutline exercise={{ muscle: summary.mainMuscles[0] }} size={130} />
+            <div className="absolute -right-6 top-2 opacity-[0.11] pointer-events-none animate-hero-fade">
+              <MuscleBodyOutline exercise={{ muscle: summary.mainMuscles[0] }} size={112} />
             </div>
           )}
           <div className="relative space-y-0.5">
             <SectionLabel>Session complete</SectionLabel>
             <div className="text-[26px] leading-[1.05] font-black text-v5-text tracking-tight mt-0.5 max-w-[78%]">{run.planName}</div>
+            {/* Subline (follow-up task section 1's structure: "duration · muscle group / session
+                type") — both values are real fields already computed elsewhere (formatSessionDuration,
+                buildSessionSummary's mainMuscles), nothing new invented for display. */}
+            {summary && (
+              <div className="text-xs font-bold uppercase tracking-wide text-v5-subtext/80">
+                {formatSessionDuration(summary.durationSec)}
+                {summary.mainMuscles.length > 0 ? ` · ${summary.mainMuscles.join(", ")}` : ""}
+              </div>
+            )}
           </div>
 
           {summary && (
@@ -5248,7 +5270,11 @@ function GuidedRunView({
                 if (summary.bestLift) {
                   return (
                     <div className="space-y-1 pb-3.5 border-b border-white/[0.07] text-center">
-                      <SectionLabel tone="muted">Best lift</SectionLabel>
+                      {/* Featured-performance priority (follow-up task section 3): PR > best set
+                          > calmer highlight. This branch only ever renders when there's no PR —
+                          deliberately calmer (no red, no pill, smaller number) than the PR block
+                          above so the two states are never visually confused. */}
+                      <SectionLabel tone="muted">Best set</SectionLabel>
                       <div className="text-base font-bold text-v5-text leading-tight">{exMap[summary.bestLift.exId]?.name || summary.bestLift.exId}</div>
                       <div className="text-3xl font-black text-v5-text leading-tight">
                         {summary.bestLift.weight} × {summary.bestLift.reps}
@@ -5259,27 +5285,29 @@ function GuidedRunView({
                 return null;
               })()}
 
-              {/* Stat strip (task section 1's suggested structure: duration | sets | volume |
-                  PRs) — the same real numbers the old 2x2 grid showed, restyled as a divided
-                  strip with red icons. Total reps moves to the small line below rather than
-                  being dropped, so no real data disappears in this pass. */}
-              <div className="grid grid-cols-4 divide-x divide-white/[0.07]">
-                {[
-                  { icon: Clock, value: formatSessionDuration(summary.durationSec), label: "Duration" },
-                  { icon: Layers, value: summary.workingSets, label: "Sets" },
-                  { icon: BarChart3, value: summary.totalVolume.toLocaleString(), label: "Volume" },
-                  { icon: Award, value: sessionPRCount(summary), label: sessionPRCount(summary) === 1 ? "PR" : "PRs" },
-                ].map(({ icon: Icon, value, label }) => (
-                  <div key={label} className="flex flex-col items-center gap-1 px-1 text-center min-w-0">
-                    <Icon size={13} className="text-v5-red shrink-0" />
-                    <div className="text-sm font-black text-v5-text tabular-nums leading-none truncate max-w-full">{value}</div>
-                    <div className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext">{label}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="text-center text-[11px] text-v5-subtext">
-                {summary.totalReps} total reps
-                {summary.isVolumePR && <span className="text-v5-success font-bold"> · Volume PR</span>}
+              {/* Stat strip (follow-up task section 6): one cohesive dark layered surface, not
+                  four separate cards — a subtly recessed panel sitting on top of the hero
+                  gradient, with restrained (not glowing) red icon accents. Same real numbers the
+                  original 2x2 grid showed. */}
+              <div className="rounded-xl bg-black/20 py-3">
+                <div className="grid grid-cols-4 divide-x divide-white/[0.07]">
+                  {[
+                    { icon: Clock, value: formatSessionDuration(summary.durationSec), label: "Duration" },
+                    { icon: Layers, value: summary.workingSets, label: "Sets" },
+                    { icon: BarChart3, value: summary.totalVolume.toLocaleString(), label: "Volume" },
+                    { icon: Award, value: sessionPRCount(summary), label: sessionPRCount(summary) === 1 ? "PR" : "PRs" },
+                  ].map(({ icon: Icon, value, label }) => (
+                    <div key={label} className="flex flex-col items-center gap-1 px-1 text-center min-w-0">
+                      <Icon size={13} className="text-v5-red shrink-0" />
+                      <div className="text-sm font-black text-v5-text tabular-nums leading-none truncate max-w-full">{value}</div>
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext">{label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-center text-[11px] text-v5-subtext mt-2.5">
+                  {summary.totalReps} total reps
+                  {summary.isVolumePR && <span className="text-v5-success font-bold"> · Volume PR</span>}
+                </div>
               </div>
 
               {summary.perfDeltaPct != null && (
@@ -5295,9 +5323,6 @@ function GuidedRunView({
                 <div className="text-sm text-v5-text/90 text-center">
                   Average {rirSystem === "rpe" ? "RPE" : "RIR"}: {rirSystem === "rpe" ? Math.round((10 - summary.avgRir) * 10) / 10 : summary.avgRir}
                 </div>
-              )}
-              {summary.mainMuscles.length > 0 && (
-                <div className="text-sm text-v5-text/90 text-center">Main muscles trained: {summary.mainMuscles.join(", ")}</div>
               )}
             </div>
           )}
@@ -5442,6 +5467,11 @@ function GuidedRunView({
                 {run.sessionEntries.map(({ entry }, i) => {
                   const hasPR = prExIds.has(entry.exId);
                   const isBaseline = !hasPR && !priorExIds.has(entry.exId);
+                  // Compact/premium breakdown (follow-up task section 7): numbered rows, the
+                  // exercise's actual top set on the right (same formatSetCompact/topSetOf the
+                  // rest of the app already uses — no new formatting logic), full set-by-set
+                  // detail kept underneath rather than dropped.
+                  const top = entry.sets.length > 0 ? topSetOf(entry.sets) : null;
                   return (
                     <Card
                       key={entry.id || i}
@@ -5454,13 +5484,20 @@ function GuidedRunView({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-bold text-v5-text flex items-center gap-1.5 min-w-0">
+                          <span className="text-v5-subtext/60 font-black shrink-0 tabular-nums">{String(i + 1).padStart(2, "0")}</span>
                           <span className="truncate">{exMap[entry.exId]?.name || entry.exId}</span>
-                          {hasPR && <Pill className="shrink-0">PR</Pill>}
+                          {hasPR && (
+                            <Pill className="shrink-0 flex items-center gap-1">
+                              <Award size={10} /> PR
+                            </Pill>
+                          )}
                           {isBaseline && <Pill tone="inactive" className="shrink-0">Baseline</Pill>}
                         </span>
-                        <span className={`text-xs shrink-0 ${hasPR ? "text-v5-red font-bold" : "text-v5-subtext"}`}>Target {entry.targetReps}</span>
+                        <span className={`text-sm font-black tabular-nums shrink-0 ${hasPR ? "text-v5-red" : "text-v5-text"}`}>
+                          {top ? formatSetCompact(top) : `Target ${entry.targetReps}`}
+                        </span>
                       </div>
-                      <div className="text-xs text-v5-subtext mt-1">{entry.sets.map(formatSetCompact).join(", ")}</div>
+                      <div className="text-xs text-v5-subtext mt-1 pl-[26px]">{entry.sets.map(formatSetCompact).join(", ")}</div>
                     </Card>
                   );
                 })}
