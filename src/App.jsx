@@ -1381,6 +1381,25 @@ function migrateStaleCoachOnboarding(state) {
 // individual blank drop row is dropped without affecting the rest. drops/setType/rir/rpe are
 // omitted from the result whenever they'd carry only a default/empty value, keeping old and
 // new saved entries structurally identical wherever nothing new was actually used.
+// Converts one saved/confirmed set (numeric weight/reps, drops as {weight,reps} numbers) into
+// the string-valued row shape SetRowsEditor/cleanSetsInput expect — the single conversion used
+// everywhere a set gets reopened for editing (EditLogEntryPanel's whole-entry editor and
+// TrainingExerciseCard's single-set editor), so both stay byte-identical in what fields they
+// expose and neither can drift into silently dropping one (e.g. quality/pain) that the other
+// still preserves.
+function toEditableSetRow(s) {
+  return {
+    weight: String(s.weight),
+    reps: String(s.reps),
+    drops: (s.drops || []).map((d) => ({ weight: String(d.weight), reps: String(d.reps) })),
+    setType: s.setType || "working",
+    rir: s.rir != null ? String(s.rir) : "",
+    rpe: s.rpe != null ? String(s.rpe) : "",
+    quality: s.quality ?? null,
+    pain: s.pain ?? null,
+  };
+}
+
 function cleanSetsInput(sets) {
   return sets
     .filter((s) => s.weight !== "" && s.reps !== "")
@@ -2901,7 +2920,11 @@ function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onB
 // Shared by the standalone logger's "Today's sets" and the edit panel's "Sets" — each set
 // row can carry its own nested drops array, added/removed independently of the set itself.
 // Row shape while editing: { weight: string, reps: string, drops: [{weight, reps}, ...] }.
-function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
+// `allowAddRemove` (default true, unchanged behavior for the existing whole-entry editors) hides
+// Add set/Duplicate/per-row delete — used by TrainingExerciseCard's single-set editor, where the
+// task is correcting one already-confirmed set in place, never adding, cloning, or removing rows
+// (that would change set count/order, which section 6 explicitly rules out for this flow).
+function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false, allowAddRemove = true }) {
   const updateSetRow = (idx, field, val) => onChange(sets.map((row, i) => (i === idx ? { ...row, [field]: val } : row)));
   const addSetRow = () => onChange([...sets, { weight: "", reps: "", drops: [], setType: "working", rir: "", rpe: "" }]);
   const removeSetRow = (idx) => onChange(sets.filter((_, i) => i !== idx));
@@ -2920,6 +2943,13 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
   const removeDropRow = (idx, dIdx) =>
     onChange(sets.map((row, i) => (i === idx ? { ...row, drops: row.drops.filter((_, di) => di !== dIdx) } : row)));
 
+  // Input safety (task: "prevent accidental concatenation... 4 becomes 54 because an existing
+  // value wasn't properly selected/replaced") — every numeric field in this editor selects its
+  // full current value on focus, so tapping in and typing a replacement digit overwrites instead
+  // of appending. Applies equally to weight/reps/RIR-RPE/drop fields, in both the multi-set
+  // editors (history, custom logger) and the single-set editor (TrainingExerciseCard).
+  const selectOnFocus = (e) => e.target.select();
+
   return (
     <div className="space-y-3">
       {sets.map((row, idx) => (
@@ -2932,6 +2962,7 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
               placeholder="Weight"
               value={row.weight}
               onChange={(e) => updateSetRow(idx, "weight", e.target.value)}
+              onFocus={selectOnFocus}
               className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
             />
             <input
@@ -2940,22 +2971,25 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
               placeholder="Reps"
               value={row.reps}
               onChange={(e) => updateSetRow(idx, "reps", e.target.value)}
+              onFocus={selectOnFocus}
               className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-base focus:outline-none focus:border-v5-red"
             />
-            {sets.length > 1 && (
+            {allowAddRemove && sets.length > 1 && (
               <button onClick={() => removeSetRow(idx)} className="text-v5-subtext/70 hover:text-v5-red p-1">
                 <Trash2 size={14} />
               </button>
             )}
           </div>
-          <div className="flex items-center gap-1.5 pl-7 overflow-x-auto">
-            <button
-              onClick={() => duplicateSetRow(idx)}
-              className="shrink-0 flex items-center gap-1 px-2 py-1 text-[11px] font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
-            >
-              <Copy size={10} /> Duplicate
-            </button>
-          </div>
+          {allowAddRemove && (
+            <div className="flex items-center gap-1.5 pl-7 overflow-x-auto">
+              <button
+                onClick={() => duplicateSetRow(idx)}
+                className="shrink-0 flex items-center gap-1 px-2 py-1 text-[11px] font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
+              >
+                <Copy size={10} /> Duplicate
+              </button>
+            </div>
+          )}
           {!simple && (
             <>
               <div className="flex items-center gap-1 pl-7 overflow-x-auto">
@@ -2978,6 +3012,7 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
                   placeholder={rirSystem === "rpe" ? "RPE" : "RIR"}
                   value={rirSystem === "rpe" ? row.rpe ?? "" : row.rir ?? ""}
                   onChange={(e) => updateSetRow(idx, rirSystem === "rpe" ? "rpe" : "rir", e.target.value)}
+                  onFocus={selectOnFocus}
                   className="shrink-0 w-14 bg-v5-elevated border border-white/10 text-v5-text px-1.5 py-0.5 text-[11px] text-center focus:outline-none focus:border-v5-red"
                 />
               </div>
@@ -2989,6 +3024,7 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
                     placeholder="Drop weight"
                     value={drop.weight}
                     onChange={(e) => updateDropRow(idx, dIdx, "weight", e.target.value)}
+                    onFocus={selectOnFocus}
                     className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
                   />
                   <input
@@ -2996,6 +3032,7 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
                     placeholder="Drop reps"
                     value={drop.reps}
                     onChange={(e) => updateDropRow(idx, dIdx, "reps", e.target.value)}
+                    onFocus={selectOnFocus}
                     className="flex-1 min-w-0 bg-v5-elevated border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
                   />
                   <button onClick={() => removeDropRow(idx, dIdx)} className="text-v5-subtext/70 hover:text-v5-red p-1">
@@ -3010,9 +3047,11 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
           )}
         </div>
       ))}
-      <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-v5-subtext hover:text-v5-red">
-        <Plus size={12} /> Add set
-      </button>
+      {allowAddRemove && (
+        <button onClick={() => addSetRow()} className="flex items-center gap-1 text-xs text-v5-subtext hover:text-v5-red">
+          <Plus size={12} /> Add set
+        </button>
+      )}
     </div>
   );
 }
@@ -3022,21 +3061,7 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false }) {
 // target reps) or deleted outright. Edits flow back through the same state.logs array, so
 // suggestNext recomputes automatically off the corrected numbers.
 function EditLogEntryPanel({ entry, exMap, onBack, onSave, onDelete, rirSystem = "rir", simple = false }) {
-  const [sets, setSets] = useState(
-    entry.sets.map((s) => ({
-      weight: String(s.weight),
-      reps: String(s.reps),
-      drops: (s.drops || []).map((d) => ({ weight: String(d.weight), reps: String(d.reps) })),
-      setType: s.setType || "working",
-      rir: s.rir != null ? String(s.rir) : "",
-      rpe: s.rpe != null ? String(s.rpe) : "",
-      // Not editable from this panel (see TrainingExerciseCard for where quality/pain are set)
-      // — carried through unchanged so editing weight/reps here can never silently wipe an
-      // existing quality/pain flag off a set.
-      quality: s.quality ?? null,
-      pain: s.pain ?? null,
-    }))
-  );
+  const [sets, setSets] = useState(entry.sets.map(toEditableSetRow));
   const [targetReps, setTargetReps] = useState(String(entry.targetReps));
 
   const canSave = sets.some((s) => s.weight !== "" && s.reps !== "");
@@ -4250,9 +4275,13 @@ function TrainingExerciseCard({
   const [reasonOpen, setReasonOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [addingExtra, setAddingExtra] = useState(false);
+  // Full single-set editor (task: "a saved set can contain a drop set, but once saved there is
+  // no obvious way to edit the drop-set values") — editSetRow holds the SetRowsEditor-shaped row
+  // (weight/reps/drops/setType/rir/rpe as strings) for whichever confirmed set is being
+  // corrected, reusing the exact same editor EditLogEntryPanel already uses for finished history,
+  // so drops/RIR/set type are editable here too instead of just weight/reps.
   const [editingSetIndex, setEditingSetIndex] = useState(null);
-  const [editWeight, setEditWeight] = useState("");
-  const [editReps, setEditReps] = useState("");
+  const [editSetRow, setEditSetRow] = useState(null);
 
   // ---------------- ACTIVE WORKOUT DRAFT AUTOSAVE ----------------
   // Continuously mirrors this exercise's in-progress state (confirmed-but-not-yet-exercise-
@@ -4380,23 +4409,35 @@ function TrainingExerciseCard({
   const hasNotes = !!(notesSaved && (notesSaved.general || notesSaved.machine || notesSaved.cue));
   const optionsHasContent = (!isSimple && (rirVal !== "" || setType !== "working" || drops.length > 0)) || hasNotes || !!quality || !!jointNoteArea;
 
-  // Mid-exercise correction (a fat-fingered weight/reps entry shouldn't have to wait until the
-  // whole workout is finished and edited from history) — edits the already-confirmed set in
-  // place, preserving its rir/rpe/setType/drops, before it's ever written to state.logs.
+  // Mid-exercise correction (a fat-fingered weight/reps entry — or a mis-typed drop set —
+  // shouldn't have to wait until the whole workout is finished and edited from history) — edits
+  // the already-confirmed set IN PLACE (same index, same position in confirmedSets), before it's
+  // ever written to state.logs. Since finishExercise() reads confirmedSets fresh at the moment
+  // it's called, any correction made here is automatically what gets saved to the log entry and
+  // run through detectPRs — no separate PR/derived-data recompute needed for this path.
   const startEditSet = (i) => {
     setEditingSetIndex(i);
-    setEditWeight(String(confirmedSets[i].weight));
-    setEditReps(String(confirmedSets[i].reps));
+    setEditSetRow(toEditableSetRow(confirmedSets[i]));
   };
-  const cancelEditSet = () => setEditingSetIndex(null);
-  const saveEditSet = () => {
-    if (editWeight === "" || editReps === "") return;
-    const i = editingSetIndex;
-    setConfirmedSets((prev) => {
-      const merged = cleanSetsInput([{ ...prev[i], weight: editWeight, reps: editReps }])[0];
-      return prev.map((s, idx) => (idx === i ? merged : s));
-    });
+  const cancelEditSet = () => {
     setEditingSetIndex(null);
+    setEditSetRow(null);
+  };
+  const saveEditSet = () => {
+    if (!editSetRow || editSetRow.weight === "" || editSetRow.reps === "") return;
+    const i = editingSetIndex;
+    const cleaned = cleanSetsInput([editSetRow])[0];
+    if (!cleaned) return;
+    setConfirmedSets((prev) => prev.map((s, idx) => (idx === i ? cleaned : s)));
+    setEditingSetIndex(null);
+    setEditSetRow(null);
+  };
+  const deleteEditSet = () => {
+    if (!window.confirm("Delete this set? This can't be undone.")) return;
+    const i = editingSetIndex;
+    setConfirmedSets((prev) => prev.filter((_, idx) => idx !== i));
+    setEditingSetIndex(null);
+    setEditSetRow(null);
   };
 
   const saveSet = () => {
@@ -4698,29 +4739,44 @@ function TrainingExerciseCard({
               confirmedSets.length > 1 &&
               confirmedSets.every((other, j) => j === i || s.weight > other.weight || (s.weight === other.weight && s.reps >= other.reps));
             return editingSetIndex === i ? (
-              <div key={i} className="flex items-center gap-2 text-sm bg-v5-elevated rounded-lg p-2">
-                <span className="text-v5-subtext shrink-0">Set {i + 1}:</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={editWeight}
-                  onChange={(e) => setEditWeight(e.target.value)}
-                  className="w-16 bg-v5-muted rounded text-v5-text text-center px-1 py-1 focus:outline-none focus:ring-1 focus:ring-v5-red"
+              // Full set editor, not just weight/reps (task: "allow any saved set to be edited
+              // after logging, including all attached drop-set data") — same SetRowsEditor
+              // EditLogEntryPanel uses for finished history, scoped to this one row with
+              // add/remove-row controls hidden (editing must never add, duplicate, reorder, or
+              // move a set — only correct the one already there).
+              <div key={i} className="bg-v5-elevated rounded-lg p-3 space-y-3">
+                <div className="text-xs font-bold uppercase tracking-widest text-v5-subtext">Edit set {i + 1}</div>
+                <SetRowsEditor
+                  sets={[editSetRow]}
+                  onChange={(rows) => setEditSetRow(rows[0])}
+                  rirSystem={rirSystem}
+                  simple={isSimple}
+                  allowAddRemove={false}
                 />
-                <span className="text-v5-subtext text-xs">lb x</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={editReps}
-                  onChange={(e) => setEditReps(e.target.value)}
-                  className="w-14 bg-v5-muted rounded text-v5-text text-center px-1 py-1 focus:outline-none focus:ring-1 focus:ring-v5-red"
-                />
-                <span className="text-v5-subtext text-xs">reps</span>
-                <button onClick={saveEditSet} className="ml-auto shrink-0 text-v5-success hover:opacity-80 p-1">
-                  <Check size={16} />
-                </button>
-                <button onClick={cancelEditSet} className="shrink-0 text-v5-subtext hover:text-v5-red p-1">
-                  <X size={16} />
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={saveEditSet}
+                    disabled={editSetRow.weight === "" || editSetRow.reps === ""}
+                    className={`flex-1 py-2.5 text-xs uppercase tracking-widest font-bold rounded-lg ${
+                      editSetRow.weight !== "" && editSetRow.reps !== ""
+                        ? "bg-v5-red text-white hover:opacity-90"
+                        : "bg-v5-muted text-v5-subtext/40 cursor-not-allowed"
+                    }`}
+                  >
+                    Save changes
+                  </button>
+                  <button
+                    onClick={cancelEditSet}
+                    className="px-4 py-2.5 text-xs uppercase tracking-widest font-bold rounded-lg bg-v5-muted text-v5-subtext hover:text-v5-text"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <button
+                  onClick={deleteEditSet}
+                  className="w-full py-2 text-xs uppercase tracking-widest font-bold rounded-lg border border-white/10 text-v5-subtext hover:text-v5-red hover:border-v5-red/25 flex items-center justify-center gap-1.5"
+                >
+                  <Trash2 size={13} /> Delete set
                 </button>
               </div>
             ) : (
@@ -4769,6 +4825,7 @@ function TrainingExerciseCard({
                   inputMode="decimal"
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   placeholder="0"
                   className="min-w-0 flex-1 bg-transparent text-3xl font-bold text-v5-text text-center focus:outline-none placeholder:text-v5-subtext/40"
                 />
@@ -4787,6 +4844,7 @@ function TrainingExerciseCard({
                   inputMode="numeric"
                   value={reps}
                   onChange={(e) => setReps(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   placeholder="0"
                   className="w-full bg-transparent text-3xl font-bold text-v5-text text-center focus:outline-none placeholder:text-v5-subtext/40"
                 />
@@ -4947,6 +5005,7 @@ function TrainingExerciseCard({
                         placeholder="Drop weight"
                         value={d.weight}
                         onChange={(e) => setDrops((ds) => ds.map((x, i) => (i === di ? { ...x, weight: e.target.value } : x)))}
+                        onFocus={(e) => e.target.select()}
                         className="flex-1 min-w-0 bg-v5-muted rounded-lg text-v5-text px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-v5-red"
                       />
                       <input
@@ -4954,6 +5013,7 @@ function TrainingExerciseCard({
                         placeholder="Drop reps"
                         value={d.reps}
                         onChange={(e) => setDrops((ds) => ds.map((x, i) => (i === di ? { ...x, reps: e.target.value } : x)))}
+                        onFocus={(e) => e.target.select()}
                         className="flex-1 min-w-0 bg-v5-muted rounded-lg text-v5-text px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-v5-red"
                       />
                       <button onClick={() => setDrops((ds) => ds.filter((_, i) => i !== di))} className="text-v5-subtext hover:text-v5-red p-1">
@@ -5721,6 +5781,18 @@ function GuidedRunView({
                       logs: prev.logs.map((l) => (l.id === entry.id ? updatedEntry : l)),
                     }));
                     onEditEntry(idx, updatedEntry);
+                    // PR safety (task section 5): a correction can turn a false PR into an
+                    // ordinary set, or an ordinary set into a genuine new PR — recompute against
+                    // every other log (this entry's own stale pre-edit copy excluded) rather than
+                    // trusting whatever prByIndex[idx] was left holding from the original save.
+                    const prs = detectPRs(currentExId, updatedEntry, state.logs.filter((l) => l.id !== entry.id));
+                    setPrByIndex((m) => {
+                      if (prs.length > 0) return { ...m, [idx]: prs };
+                      if (!(idx in m)) return m;
+                      const next = { ...m };
+                      delete next[idx];
+                      return next;
+                    });
                     setEditingIdx(null);
                   }}
                   onDelete={() => {
