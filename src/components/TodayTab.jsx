@@ -454,7 +454,9 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
                 </div>
               )}
               {completedSession && onViewWorkout && (
-                <ButtonSecondary onClick={() => onViewWorkout(completedSession.id)}>View Workout</ButtonSecondary>
+                <ButtonSecondary size="sm" fullWidth={false} onClick={() => onViewWorkout(completedSession.id)}>
+                  View Workout
+                </ButtonSecondary>
               )}
               <ButtonPrimary size="lg" onClick={() => (run ? startScheduled(todaySchedule.source) : onNavigate("cardio"))}>
                 {todaySchedule.status === "completed" ? "Log another session" : "Start conditioning"}
@@ -505,7 +507,9 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
                   </div>
                 )}
                 {completedSession && onViewWorkout && (
-                  <ButtonPrimary onClick={() => onViewWorkout(completedSession.id)}>View Workout</ButtonPrimary>
+                  <ButtonSecondary size="sm" fullWidth={false} onClick={() => onViewWorkout(completedSession.id)}>
+                    View Workout
+                  </ButtonSecondary>
                 )}
               </HeroCard>
             );
@@ -624,7 +628,9 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
           ) : todayPlan && programDay.completedToday ? (
             // Today's own workout is the whole story once it's done — no invitation to start
             // tomorrow's, and no dominant CTA at all (that's what read as "started the next
-            // workout"). A small "Next lift" link is the only nod to what's coming up.
+            // workout"). View Workout reopens the completed session record itself (compact,
+            // secondary — never more visually loud than the workout title above it); "Next lift"
+            // stays the only nod to what's coming up next.
             (() => {
               const completedSession = findTodaysSessionForPlan(state.workoutSessions, todayPlan.name);
               return (
@@ -639,7 +645,9 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
                     </div>
                   )}
                   {completedSession && onViewWorkout && (
-                    <ButtonPrimary onClick={() => onViewWorkout(completedSession.id)}>View Workout</ButtonPrimary>
+                    <ButtonSecondary size="sm" fullWidth={false} onClick={() => onViewWorkout(completedSession.id)}>
+                      View Workout
+                    </ButtonSecondary>
                   )}
                   {programDay.nextDayLabel && (
                     <ButtonText tone="muted" onClick={() => onNavigate("train")} className="pt-1">
