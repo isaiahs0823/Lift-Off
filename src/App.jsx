@@ -115,6 +115,7 @@ import FoodDetailScreen from "./components/FoodDetailScreen.jsx";
 import { todayDateKey } from "./utils/nutrition.js";
 import { SET_TYPES, isWarmup, countedSets, formatSetCompact, rirRpeSuffix, formatSetVerbose, formatSessionDuration } from "./utils/workoutSets.js";
 import WorkoutHistoryDetail from "./components/WorkoutHistoryDetail.jsx";
+import WorkoutNotesSection from "./components/WorkoutNotesSection.jsx";
 import { findMostRecentSessionForPlan } from "./utils/workoutHistory.js";
 import { buildPRShareCard } from "./utils/shareCard.js";
 import WorkoutSharePreview from "./components/WorkoutSharePreview.jsx";
@@ -2277,6 +2278,15 @@ export default function LiftLog() {
       workoutSessions: (prev.workoutSessions || []).map((s) => (s.id === sessionId ? { ...s, rating } : s)),
     }));
   };
+  // Session-level free-text note (see WorkoutNotesSection.jsx) — a flat field on the session
+  // record, same shape as `rating` above, editable from both the just-finished Session Complete
+  // screen and Workout History's detail view so a note written on either surface shows on both.
+  const setSessionNote = (sessionId, note) => {
+    updateState((prev) => ({
+      ...prev,
+      workoutSessions: (prev.workoutSessions || []).map((s) => (s.id === sessionId ? { ...s, note } : s)),
+    }));
+  };
   const restartCurrentProgram = () => {
     updateState((prev) =>
       prev.currentProgram
@@ -2391,6 +2401,7 @@ export default function LiftLog() {
             onReopen={reopenRun}
             onLoggedSet={bumpRestTimer}
             onRate={rateSession}
+            onSetNote={setSessionNote}
             onAskCoach={() => {
               if (activeRun?.summaryId) {
                 setPendingCoachContext({ type: "workout", sessionId: activeRun.summaryId, label: activeRun.planName });
@@ -2435,6 +2446,7 @@ export default function LiftLog() {
                 exMap={exMap}
                 onBack={() => setTab("today")}
                 onViewRecap={viewRecap}
+                onSetNote={setSessionNote}
                 onAskCoach={(session) => {
                   setPendingCoachContext({ type: "workout", sessionId: session.id, label: session.planName });
                   setTab("coach");
@@ -5154,6 +5166,7 @@ function GuidedRunView({
   onReopen,
   onLoggedSet,
   onRate,
+  onSetNote,
   onAskCoach,
   onViewWorkout,
   onRename,
@@ -5470,6 +5483,11 @@ function GuidedRunView({
                 )}
               </div>
             )}
+
+            {/* Session-level free-text note (task: "add visible workout notes") — placed right
+                before rating/share so a coach glancing at (or screenshotting) this card sees what
+                the athlete did and what they said about it together, per the task's own framing. */}
+            <WorkoutNotesSection session={summary} onSave={(note) => onSetNote(summary.id, note)} />
 
             <div>
               <SectionLabel tone="muted" className="mb-1.5">Rate this session</SectionLabel>

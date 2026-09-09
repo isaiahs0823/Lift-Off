@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Award, MessageCircle, Share2 } from "lucide-rea
 import { formatSetVerbose, formatSessionDuration, SET_TYPE_LABEL } from "../utils/workoutSets.js";
 import { featuredAndOtherPRs, sessionPRCount, PR_TYPE_LABEL, prDeltaLabel, prHeroLabel } from "../utils/prSummary.js";
 import WorkoutSharePreview from "./WorkoutSharePreview.jsx";
+import WorkoutNotesSection from "./WorkoutNotesSection.jsx";
 import { equipmentDisplayLabel } from "../utils/equipmentProfiles.js";
 import { SET_QUALITY_GLYPH, SET_QUALITY_LABEL } from "../utils/workoutQuality.js";
 import { FileText } from "lucide-react";
@@ -18,7 +19,7 @@ function fmtTime(iso) {
 // supposed to be — what actually happened"). Every entry point (Today, Program day list,
 // Training Calendar, Session Complete) opens this exact component with a session object looked
 // up by its stable id — there is deliberately only one implementation of this screen.
-export default function WorkoutHistoryDetail({ session, state, exMap, onBack, onAskCoach, onViewRecap }) {
+export default function WorkoutHistoryDetail({ session, state, exMap, onBack, onAskCoach, onViewRecap, onSetNote }) {
   const [collapsed, setCollapsed] = useState({});
   const [sharePreviewOpen, setSharePreviewOpen] = useState(false);
 
@@ -192,6 +193,11 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
           Detailed set-by-set data isn't available for this session — it was completed before this feature was added. The totals above are still accurate.
         </div>
       )}
+
+      {/* Session-level note (task: "add visible workout notes") — after the exercise breakdown,
+          before Coach review, same as the just-finished Session Complete screen, so reopening this
+          exact session from Today/History/Calendar/Session Complete always shows the same note. */}
+      <WorkoutNotesSection session={session} onSave={onSetNote ? (note) => onSetNote(session.id, note) : undefined} boxed />
 
       {session.coachMessage && (
         <div className="border border-white/10 bg-v5-elevated p-4">
