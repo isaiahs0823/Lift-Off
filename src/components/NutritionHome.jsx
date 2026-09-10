@@ -1,13 +1,14 @@
 import React, { useState } from "react";
-import { Settings as SettingsIcon } from "lucide-react";
+import { Settings as SettingsIcon, Apple } from "lucide-react";
 import { hasNutritionProfile, resolveNutritionProfile, dailyTotals, todayDateKey, CONTROL_LEVEL_LABEL } from "../utils/nutrition.js";
-import { currentBodyweightLbs, macroCalorieCheck } from "../utils/nutritionMath.js";
+import { currentBodyweightLbs, macroCalorieCheck, missingNutritionFields, formatMissingFieldsList } from "../utils/nutritionMath.js";
 import { rollingNutritionAdherence } from "../utils/nutritionAdherence.js";
 import { diagnoseNutrition, generateAdjustmentProposal, applyAdjustment } from "../services/nutritionCoachService.js";
 import { nutritionPhaseFraming } from "../coachSpecialties/bodybuilding.js";
 import NutritionAssessmentForm from "./NutritionAssessmentForm.jsx";
+import NutritionQuickWeightCapture from "./NutritionQuickWeightCapture.jsx";
 import NutritionAdjustmentCard from "./NutritionAdjustmentCard.jsx";
-import { ScreenHeader, SectionLabel, Card, HeroCard, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, ListRow, Divider } from "./ui/Kit.jsx";
+import { ScreenHeader, SectionLabel, Card, HeroCard, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, ListRow, Divider, EmptyState } from "./ui/Kit.jsx";
 
 // Coach's "Nutrition Plan" destination (section 1/42). Gates to the conversational assessment
 // exactly once, the same pattern CoachTab.jsx uses for Athlete Profile — after that, this is
@@ -47,12 +48,31 @@ export default function NutritionHome({ state, updateState, onNavigate, onAskCoa
       />
 
       {!targets ? (
-        <Card className="border border-amber-900/40">
-          <span className="text-sm text-amber-500">
-            I couldn't calculate real numbers yet — I need age, sex, height, and a logged bodyweight entry. Log a bodyweight in Progress, then revisit
-            the assessment.
-          </span>
-        </Card>
+        (() => {
+          const missing = missingNutritionFields(profile, weightLbs);
+          // The one field newer to the assessment than everything else it asks for — an athlete
+          // who already has age/height on file just needs that single number, not a re-run of
+          // the whole multi-step assessment (section 7: existing-user fallback).
+          const onlyMissingWeight = missing.length === 1 && missing[0].key === "weight";
+          return onlyMissingWeight ? (
+            <NutritionQuickWeightCapture state={state} updateState={updateState} />
+          ) : (
+            <EmptyState
+              icon={Apple}
+              title="Setup isn't finished yet"
+              body={
+                missing.length
+                  ? `We still need ${formatMissingFieldsList(missing)} to calculate your targets.`
+                  : "Your targets need to be recalculated — reopen the assessment to refresh them."
+              }
+              action={
+                <ButtonPrimary onClick={() => setShowAssessment(true)} fullWidth={false}>
+                  Complete Assessment
+                </ButtonPrimary>
+              }
+            />
+          );
+        })()
       ) : (
         <>
           {bbPhaseFraming && <div className="text-xs text-v5-subtext -mb-2">{bbPhaseFraming.text}</div>}

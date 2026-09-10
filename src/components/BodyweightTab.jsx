@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Trash2 } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
-import { rollingAverage, weeklyRateOfChange, totalChange, latestValue, paceClassification, PACE_LABEL } from "../utils/bodyweightMath.js";
+import { rollingAverage, weeklyRateOfChange, totalChange, latestValue, paceClassification, PACE_LABEL, upsertBodyweightEntry } from "../utils/bodyweightMath.js";
 import { requiredPace, projectedCompletionDate } from "../utils/goalMath.js";
 import { goalHistory, resolveGoalCurrentValue } from "../utils/goalData.js";
 
@@ -103,21 +103,16 @@ export default function BodyweightTab({ state, updateState }) {
 
   const saveToday = () => {
     if (!canSave) return;
-    updateState((prev) => {
-      const list = prev.bodyweightLogs || [];
-      const todayEntry = list.find((e) => e.date.slice(0, 10) === todayStr());
-      const fields = {
-        weight: weight !== "" ? Number(weight) : todayEntry?.weight ?? null,
-        waist: waist !== "" ? Number(waist) : todayEntry?.waist ?? null,
-        bodyFat: bodyFat !== "" ? Number(bodyFat) : todayEntry?.bodyFat ?? null,
-        notes: notes.trim() || todayEntry?.notes || "",
-      };
-      if (todayEntry) {
-        return { ...prev, bodyweightLogs: list.map((e) => (e.id === todayEntry.id ? { ...e, ...fields } : e)) };
-      }
-      const entry = { id: `bw_${Date.now()}`, date: new Date().toISOString(), ...fields };
-      return { ...prev, bodyweightLogs: [entry, ...list], hasSeenOnboarding: true };
-    });
+    updateState((prev) => ({
+      ...prev,
+      bodyweightLogs: upsertBodyweightEntry(prev.bodyweightLogs || [], {
+        weight: weight !== "" ? Number(weight) : undefined,
+        waist: waist !== "" ? Number(waist) : undefined,
+        bodyFat: bodyFat !== "" ? Number(bodyFat) : undefined,
+        notes: notes.trim() || undefined,
+      }),
+      hasSeenOnboarding: true,
+    }));
     setWeight("");
     setWaist("");
     setBodyFat("");

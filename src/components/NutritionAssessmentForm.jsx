@@ -22,7 +22,14 @@ import {
   RECENT_WEIGHT_TREND_OPTIONS,
   RECENT_WEIGHT_TREND_LABEL,
 } from "../utils/nutrition.js";
-import { calculateNutritionTargets, currentBodyweightLbs } from "../utils/nutritionMath.js";
+import {
+  currentBodyweightLbs,
+  calculateNutritionTargets,
+  buildNutritionAssessmentPatch,
+  missingNutritionFields,
+  formatMissingFieldsList,
+} from "../utils/nutritionMath.js";
+import { upsertBodyweightEntry, isValidBodyweightLb, BODYWEIGHT_MIN_LB, BODYWEIGHT_MAX_LB } from "../utils/bodyweightMath.js";
 
 function TagList({ items, onAdd, onRemove, placeholder }) {
   const [draft, setDraft] = useState("");
@@ -63,12 +70,12 @@ function TagList({ items, onAdd, onRemove, placeholder }) {
   );
 }
 
-function Field({ label, hint, children }) {
+function Field({ label, hint, hintTone = "muted", children }) {
   return (
     <div>
       <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-v5-subtext/70 mt-1">{hint}</p>}
+      {hint && <p className={`text-[11px] mt-1 ${hintTone === "error" ? "text-v5-red" : "text-v5-subtext/70"}`}>{hint}</p>}
     </div>
   );
 }
@@ -101,12 +108,17 @@ function ChipGroup({ options, value, labelMap, onChange, columns = 2 }) {
 // (section 3, "the most important question") before Coach ever proposes a number.
 export default function NutritionAssessmentForm({ state, updateState, onDone }) {
   const existing = resolveNutritionProfile(state);
-  const weightLbs = currentBodyweightLbs(state);
+  // The athlete's last logged bodyweight, if any — prefilled below so the assessment never asks
+  // for something BRK already knows, and used as the fallback whenever the bodyweight field is
+  // left blank (an older profile finishing the assessment without retyping a still-accurate
+  // number, for instance).
+  const loggedWeightLbs = currentBodyweightLbs(state);
 
   const [step, setStep] = useState(0);
   const [age, setAge] = useState(existing.age ?? "");
   const [sex, setSex] = useState(existing.sex);
   const [heightIn, setHeightIn] = useState(existing.heightIn ?? "");
+  const [bodyweight, setBodyweight] = useState(loggedWeightLbs != null ? String(loggedWeightLbs) : "");
   const [goalWeight, setGoalWeight] = useState(existing.goalWeight ?? "");
   const [bodyFatPct, setBodyFatPct] = useState(existing.bodyFatPct ?? "");
   const [primaryGoal, setPrimaryGoal] = useState(existing.primaryGoal);
@@ -193,28 +205,29 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
 
   const [generatedTargets, setGeneratedTargets] = useState(null);
 
+  const bodyweightNum = bodyweight !== "" ? Number(bodyweight) : null;
+  const bodyweightError = bodyweightNum != null && !isValidBodyweightLb(bodyweightNum);
+  // Only a value the athlete actually typed here — invalid entries never get saved or fed into
+  // the calculation, and an untouched/cleared field falls back to whatever's already logged
+  // (weightForCalc below) rather than silently writing nothing meaningful.
+  const enteredWeightLbs = bodyweightNum != null && !bodyweightError ? bodyweightNum : null;
+  const weightForCalc = enteredWeightLbs ?? loggedWeightLbs;
+
   const finishAssessment = () => {
     const profile = buildProfile();
-    const targets = calculateNutritionTargets(profile, weightLbs);
+    // One source of truth for weight (nutrition.js's framing): only touch bodyweightLogs when
+    // there's a real new reading to record — no prior entry at all, or the athlete actually
+    // changed the number from what was prefilled. Leaving it untouched when unedited avoids
+    // fabricating a same-value "re-weigh" on a day the athlete never actually stepped on a scale
+    // via this screen. upsertBodyweightEntry then guarantees that write lands on today's entry
+    // (creating or merging into it) rather than ever duplicating a same-day row.
+    const shouldLogWeight = enteredWeightLbs != null && (loggedWeightLbs == null || enteredWeightLbs !== loggedWeightLbs);
+    const targets = calculateNutritionTargets(profile, weightForCalc);
     updateState((prev) => ({
       ...prev,
-      nutritionProfile: {
-        ...profile,
-        onboardedAt: prev.nutritionProfile?.onboardedAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      nutritionTargets: targets
-        ? {
-            ...targets,
-            createdAt: prev.nutritionTargets?.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            sameDailyTargets: true,
-            history: [
-              ...(prev.nutritionTargets?.history || []),
-              { date: new Date().toISOString(), calories: targets.calories, protein: targets.protein, carbs: targets.carbs, fat: targets.fat, reason: "Initial assessment" },
-            ],
-          }
-        : prev.nutritionTargets,
+      ...buildNutritionAssessmentPatch(prev, profile, weightForCalc, "Initial assessment"),
+      bodyweightLogs: shouldLogWeight ? upsertBodyweightEntry(prev.bodyweightLogs || [], { weight: enteredWeightLbs }) : prev.bodyweightLogs,
+      hasSeenOnboarding: shouldLogWeight ? true : prev.hasSeenOnboarding,
     }));
     setGeneratedTargets(targets);
     setStep(steps.length); // move to results screen
@@ -226,26 +239,48 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
       body: (
         <div className="space-y-4">
           <p className="text-sm text-v5-subtext">Before I give you numbers, I need to understand how you actually live.</p>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Age">
-              <TextInput type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="e.g. 29" />
-            </Field>
-            <Field label="Height (in)">
-              <TextInput type="number" value={heightIn} onChange={(e) => setHeightIn(e.target.value)} placeholder="e.g. 70" />
-            </Field>
-          </div>
           <Field label="Sex" hint="Used only for the resting-energy calculation.">
             <ChipGroup options={["male", "female", "unspecified"]} value={sex} labelMap={{ male: "Male", female: "Female", unspecified: "Prefer not to say" }} onChange={setSex} columns={3} />
           </Field>
-          {!weightLbs && (
-            <p className="text-xs text-amber-500">No bodyweight logged yet — log a bodyweight entry in Progress so Coach can calculate real numbers.</p>
-          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Age">
+              <TextInput type="number" inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value)} placeholder="e.g. 29" />
+            </Field>
+            <Field label="Height (in)">
+              <TextInput type="number" inputMode="numeric" value={heightIn} onChange={(e) => setHeightIn(e.target.value)} placeholder="e.g. 70" />
+            </Field>
+          </div>
+          <Field
+            label="Current bodyweight (lb)"
+            hintTone={bodyweightError ? "error" : "muted"}
+            hint={
+              bodyweightError
+                ? `Enter a weight between ${BODYWEIGHT_MIN_LB} and ${BODYWEIGHT_MAX_LB} lb.`
+                : loggedWeightLbs != null
+                ? "Pulled from your last Progress entry — edit if it's changed."
+                : "We'll save this as your starting bodyweight in Progress."
+            }
+          >
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              min={BODYWEIGHT_MIN_LB}
+              max={BODYWEIGHT_MAX_LB}
+              value={bodyweight}
+              onChange={(e) => setBodyweight(e.target.value)}
+              placeholder="e.g. 217"
+              className={`w-full bg-v5-elevated border text-v5-text px-3 py-2.5 text-sm focus:outline-none focus:border-v5-red ${
+                bodyweightError ? "border-v5-red" : "border-white/10"
+              }`}
+            />
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Goal weight" hint="Optional">
-              <TextInput type="number" value={goalWeight} onChange={(e) => setGoalWeight(e.target.value)} placeholder="lbs" />
+              <TextInput type="number" inputMode="decimal" value={goalWeight} onChange={(e) => setGoalWeight(e.target.value)} placeholder="lbs" />
             </Field>
             <Field label="Body fat %" hint="Optional, estimate is fine">
-              <TextInput type="number" value={bodyFatPct} onChange={(e) => setBodyFatPct(e.target.value)} placeholder="e.g. 18" />
+              <TextInput type="number" inputMode="decimal" value={bodyFatPct} onChange={(e) => setBodyFatPct(e.target.value)} placeholder="e.g. 18" />
             </Field>
           </div>
         </div>
@@ -466,9 +501,17 @@ export default function NutritionAssessmentForm({ state, updateState, onDone }) 
           <div className="text-xl font-bold text-white mt-1">Here's where I'd start</div>
         </div>
         {!targets ? (
-          <p className="text-sm text-amber-500">
-            I need at least age, sex, height, and a logged bodyweight entry to calculate real numbers. Log a bodyweight in Progress, then update this in Nutrition Settings.
-          </p>
+          <div className="space-y-3">
+            <p className="text-sm text-amber-500">
+              I still need {formatMissingFieldsList(missingNutritionFields(buildProfile(), weightForCalc))} to calculate real numbers.
+            </p>
+            <button
+              onClick={() => setStep(0)}
+              className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-v5-red/40 text-v5-red hover:bg-v5-red/10"
+            >
+              Back to About You
+            </button>
+          </div>
         ) : (
           <>
             <p className="text-sm text-v5-subtext">

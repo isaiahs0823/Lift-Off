@@ -89,3 +89,36 @@ export const PACE_LABEL = {
   on_pace: "On pace",
   slow: "Behind pace",
 };
+
+// Sanity bounds for a bodyweight entry, in pounds — rejects obvious typos/impossible values
+// (a stray extra digit, a negative sign) at every entry point without pretending to know a
+// real physiological range.
+export const BODYWEIGHT_MIN_LB = 50;
+export const BODYWEIGHT_MAX_LB = 700;
+
+export function isValidBodyweightLb(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= BODYWEIGHT_MIN_LB && value <= BODYWEIGHT_MAX_LB;
+}
+
+// One write path for "today's bodyweight entry," shared by every screen that can log
+// bodyweight (Progress's Bodyweight tab, Nutrition's assessment) so there is exactly one rule
+// for what "today's entry" means: update it in place if it already exists, otherwise create it.
+// This is what keeps a same-day save from ever producing two rows for one day, regardless of
+// which screen the save came from. `fields` only touches the keys it provides — an omitted key
+// falls back to today's existing value (if any) so a partial save (e.g. just waist) never nulls
+// out a value entered earlier today from another screen.
+export function upsertBodyweightEntry(entries, fields = {}, { date = new Date() } = {}) {
+  const dateStr = date.toISOString().slice(0, 10);
+  const list = entries || [];
+  const todayEntry = list.find((e) => e.date.slice(0, 10) === dateStr);
+  const merged = {
+    weight: fields.weight !== undefined ? fields.weight : todayEntry?.weight ?? null,
+    waist: fields.waist !== undefined ? fields.waist : todayEntry?.waist ?? null,
+    bodyFat: fields.bodyFat !== undefined ? fields.bodyFat : todayEntry?.bodyFat ?? null,
+    notes: fields.notes !== undefined ? fields.notes : todayEntry?.notes || "",
+  };
+  if (todayEntry) {
+    return list.map((e) => (e.id === todayEntry.id ? { ...e, ...merged } : e));
+  }
+  return [{ id: `bw_${Date.now()}`, date: date.toISOString(), ...merged }, ...list];
+}

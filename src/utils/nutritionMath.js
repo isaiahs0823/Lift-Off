@@ -115,3 +115,54 @@ export function macroCalorieCheck(targets) {
 export function currentBodyweightLbs(state) {
   return latestValue(state.bodyweightLogs || [], "weight");
 }
+
+// The exact set of inputs calculateNutritionTargets actually needs (sex is read but never
+// blocks the calculation — estimateBMR silently uses the male offset when it's missing, per its
+// own comment) — used to tell a stalled assessment apart from a genuinely incomplete one, and to
+// name specifically what's still missing instead of a generic "I need more info" dead end.
+export function missingNutritionFields(profile, weightLbs) {
+  const missing = [];
+  if (!profile?.age) missing.push({ key: "age", label: "your age" });
+  if (!profile?.heightIn) missing.push({ key: "heightIn", label: "your height" });
+  if (!weightLbs) missing.push({ key: "weight", label: "your current bodyweight" });
+  return missing;
+}
+
+// "your height" / "your age and your height" / "your age, your height, and your current
+// bodyweight" — a plain-English list for the missing-data copy, singular through 3+ items.
+export function formatMissingFieldsList(missing) {
+  const labels = (missing || []).map((m) => m.label);
+  if (labels.length === 0) return "";
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}
+
+// One save path for "assessment produced a profile + (maybe) targets," shared by the full
+// multi-step assessment and the one-field quick-capture flow (existing users who onboarded
+// before bodyweight was part of the assessment) so both go through identical target/history
+// bookkeeping. Returns the patch to spread into updateState's `prev`; never touches foodLogs —
+// recalculating targets is never retroactive to what was already logged (nutrition spec section
+// 26 — targets change going forward, history stays what actually happened).
+export function buildNutritionAssessmentPatch(prev, profile, weightLbs, reason) {
+  const targets = calculateNutritionTargets(profile, weightLbs);
+  return {
+    nutritionProfile: {
+      ...profile,
+      onboardedAt: prev.nutritionProfile?.onboardedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    nutritionTargets: targets
+      ? {
+          ...targets,
+          createdAt: prev.nutritionTargets?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          sameDailyTargets: true,
+          history: [
+            ...(prev.nutritionTargets?.history || []),
+            { date: new Date().toISOString(), calories: targets.calories, protein: targets.protein, carbs: targets.carbs, fat: targets.fat, reason },
+          ],
+        }
+      : prev.nutritionTargets,
+  };
+}
