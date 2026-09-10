@@ -50,3 +50,55 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* ---------------- MOBILE DENSITY PASS ---------------- */
+/* On a real phone, BRK's "generous" spacing tier (Tailwind's 4/5/6-step padding and gaps) reads
+   as too much air per screen — more scrolling, less content above the fold, a more "zoomed in"
+   feel than a polished native fitness app. Rather than hand-editing space-y-5/p-4/p-5/etc. in
+   every screen file (hundreds of call sites across Kit.jsx's shared primitives and every screen),
+   this steps each of those utility classes down exactly one notch on Tailwind's own spacing
+   scale — e.g. what used to render as p-4 (1rem) now renders as p-3.5 (0.875rem) — but ONLY
+   below the `sm` breakpoint. 639px (not 640px) is deliberate: Tailwind's own `sm:` variants
+   activate at `min-width: 640px`, so this cutoff and that one meet without a 1px overlap where
+   both could apply. Above it, every one of these classes keeps its exact original Tailwind
+   value — this rule doesn't exist there at all. `!important` is deliberate, same justification
+   as the input font-size fix above: guaranteed to win the cascade over the plain utility class
+   it's overriding, regardless of source order.
+   Deliberately NOT included: space-y-4, p-3, and anything smaller — those show up inside form
+   field stacks and Active Workout's weight/reps/RIR controls, which stay untouched by this pass
+   (see GuidedRunView / NutritionAssessmentForm / foodEntryForms.jsx) rather than risk cramping
+   the screens where touch precision matters most. */
+@media (max-width: 639px) {
+  .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1.25rem !important; /* space-y-5's value */
+    margin-bottom: 0 !important;
+  }
+  .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem !important; /* space-y-4's value */
+    margin-bottom: 0 !important;
+  }
+  .p-6 {
+    padding: 1.25rem !important; /* p-5's value */
+  }
+  .p-5 {
+    padding: 1rem !important; /* p-4's value */
+  }
+  .p-4 {
+    padding: 0.875rem !important; /* p-3.5's value */
+  }
+  .p-3\.5 {
+    padding: 0.75rem !important; /* p-3's value */
+  }
+  .py-6 {
+    padding-top: 1.25rem !important;
+    padding-bottom: 1.25rem !important;
+  }
+  .py-5 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+  .py-4 {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+  }
+}

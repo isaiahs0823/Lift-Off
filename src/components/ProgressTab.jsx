@@ -119,7 +119,7 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
         </div>
         {currentWeight != null ? (
           <>
-            <div className="text-3xl font-black text-v5-text">
+            <div className="text-2xl sm:text-3xl font-black text-v5-text">
               {fmt1(currentWeight)} <span className="text-sm font-normal text-v5-subtext">lb</span>
             </div>
             <div className="text-xs text-v5-subtext">

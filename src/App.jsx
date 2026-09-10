@@ -2702,14 +2702,19 @@ export default function LiftLog() {
       </div>
 
       {!runOnScreen && (
-        <div className="fixed bottom-0 left-0 right-0 z-20 flex bg-v5-surface border-t border-white/[0.06]">
+        // py-2 (mobile) still clears a ~53px tap target with the icon+label+gap included — well
+        // above the 44px minimum — while trimming the excess a full py-2.5 leaves on a phone;
+        // sm: restores the original size for tablet/desktop. pb-[...] adds the iPhone home-
+        // indicator safe area on top of the tab's own padding rather than instead of it, so the
+        // tap target itself never shrinks on notched devices, only the empty margin below it does.
+        <div className="fixed bottom-0 left-0 right-0 z-20 flex bg-v5-surface border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]">
           {TOP_TABS.map((t) => {
             const active = (SECTION_OF[tab] || tab) === t.id;
             return (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] uppercase tracking-widest transition-colors ${
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 sm:py-2.5 text-[11px] uppercase tracking-widest transition-colors ${
                   active ? "text-v5-red" : "text-v5-subtext/70 hover:text-v5-subtext"
                 }`}
               >
@@ -2726,14 +2731,14 @@ export default function LiftLog() {
 
 function Header() {
   return (
-    <div className="px-4 sm:px-6 pt-3 pb-2 bg-v5-bg">
-      <div className="flex items-center gap-2">
+    <div className="px-4 sm:px-6 pt-2 pb-1.5 sm:pt-3 sm:pb-2 bg-v5-bg">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         <img src={BREAK_LOGO} alt="B.R.E.A.K. logo" className="w-7 h-7 rounded-full object-cover ring-1 ring-v5-red/50" />
         <div>
           <div className="text-v5-text font-black tracking-wide text-sm leading-none">
             BRK <span className="text-v5-red">-</span> LIFT
           </div>
-          <div className="text-[11px] text-v5-subtext/70 tracking-[0.18em] uppercase mt-1">Keep the promises you make to yourself</div>
+          <div className="text-[11px] text-v5-subtext/70 tracking-[0.18em] uppercase mt-0.5 sm:mt-1">Keep the promises you make to yourself</div>
         </div>
       </div>
     </div>

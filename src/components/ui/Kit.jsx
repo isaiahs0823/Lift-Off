@@ -35,14 +35,17 @@ export function SectionLabel({ children, tone = "red", className = "" }) {
 // same way.
 export function ScreenHeader({ eyebrow, title, subtitle, right, className = "" }) {
   return (
-    <div className={`flex items-start justify-between gap-3 ${className}`}>
+    <div className={`flex items-start justify-between gap-2 sm:gap-3 ${className}`}>
       <div className="min-w-0">
         {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
         {/* No truncate here — a screen title is short-lived, single-line text in the common
             case, but "Browse everything" next to a "Create plan" action showed why hard
             truncation is the wrong default: it clipped to "Browse everyth…" for no reason.
-            Wrapping to a second line reads fine and never loses words. */}
-        <div className="text-xl font-black text-v5-text tracking-tight mt-0.5">{title}</div>
+            Wrapping to a second line reads fine and never loses words.
+            text-lg on mobile (18px, comfortably above the ~13px supporting-text floor) is still
+            an obvious page title next to SectionLabel's 11px eyebrow — sm: restores the original
+            text-xl for tablet/desktop. */}
+        <div className="text-lg sm:text-xl font-black text-v5-text tracking-tight mt-0.5">{title}</div>
         {subtitle && <div className="text-sm text-v5-subtext mt-0.5">{subtitle}</div>}
       </div>
       {right && <div className="shrink-0">{right}</div>}
@@ -85,7 +88,7 @@ export function Card({ children, tone = "default", onClick, className = "", padd
 // generous Card variant after the density pass — just not as oversized as before.
 export function HeroCard({ children, className = "", tone = "accent", onClick, as }) {
   return (
-    <Card tone={tone} padding="p-4 sm:p-5" radius="rounded-2xl" className={`space-y-3 ${className}`} onClick={onClick} as={as}>
+    <Card tone={tone} padding="p-4 sm:p-5" radius="rounded-2xl" className={`space-y-2.5 sm:space-y-3 ${className}`} onClick={onClick} as={as}>
       {children}
     </Card>
   );
@@ -159,9 +162,9 @@ export function StatTile({ value, label, className = "", valueClassName = "" }) 
 // card surface, optionally tappable to drill in.
 export function MetricTile({ value, label, sublabel, onClick, accent = false, className = "" }) {
   return (
-    <Card onClick={onClick} padding="p-3" className={`space-y-1 ${className}`} tone={accent ? "accent" : "default"}>
+    <Card onClick={onClick} padding="p-2.5 sm:p-3" className={`space-y-1 ${className}`} tone={accent ? "accent" : "default"}>
       <div className="text-[11px] font-bold uppercase tracking-wide text-v5-subtext">{label}</div>
-      <div className="text-xl font-black text-v5-text tabular-nums leading-none">{value}</div>
+      <div className="text-lg sm:text-xl font-black text-v5-text tabular-nums leading-none">{value}</div>
       {sublabel && <div className="text-xs text-v5-subtext">{sublabel}</div>}
     </Card>
   );
@@ -220,7 +223,7 @@ export function ProgressBar({ pct, className = "", trackClassName = "", barClass
 // action. Replaces ad-hoc "text-v5-subtext, no border" empty text scattered around the app.
 export function EmptyState({ icon: Icon, title, body, action, className = "" }) {
   return (
-    <div className={`text-center py-8 px-4 ${className}`}>
+    <div className={`text-center py-6 px-4 sm:py-8 ${className}`}>
       {Icon && <Icon size={22} className="text-v5-subtext/50 mx-auto mb-2" />}
       {title && <div className="text-sm font-bold text-v5-text">{title}</div>}
       {body && <div className="text-xs text-v5-subtext mt-1 max-w-xs mx-auto">{body}</div>}
@@ -281,9 +284,9 @@ export function PhotoHero({ exercise, eyebrow, title, meta, children, className 
         <MuscleBodyOutline exercise={exercise} size={190} />
       </div>
       <div className="absolute inset-0 bg-gradient-to-r from-v5-surface via-v5-surface/55 to-transparent pointer-events-none" />
-      <div className="relative space-y-3">
+      <div className="relative space-y-2.5 sm:space-y-3">
         {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
-        {title && <div className="text-[26px] leading-[1.1] font-black text-v5-text tracking-tight">{title}</div>}
+        {title && <div className="text-[22px] sm:text-[26px] leading-[1.1] font-black text-v5-text tracking-tight">{title}</div>}
         {meta}
         {children}
       </div>
