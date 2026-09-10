@@ -158,46 +158,92 @@ function buildMeal(label, time, macroShare, profile, { includeVeg = false, mealT
   return { id: `meal_${label.toLowerCase().replace(/\s+/g, "_")}`, label, time, items, totals: sumTotals(items) };
 }
 
-// Section 8: builds a full day's meals from targets + preferences/schedule. Adds a
-// Pre-Workout slot ahead of the athlete's stated training time when one is known, matching
-// the spec's own worked example (Meal 1, Meal 2, Pre-Workout, Dinner).
-export function generateMealPlan(profile, targets) {
-  if (!targets) return null;
+// Shared by generateMealPlan and mealMacroDistribution — which slots exist (Breakfast/Lunch/
+// Dinner/Snacks, plus a Pre-Workout slot inserted ahead of Dinner when the athlete's stated a
+// training time), what fraction of the day's targets each one gets, and in what order. Kept in
+// one place so the curated-food plan and the pure-numbers summary can never disagree about the
+// day's structure, only about how each slot's share gets filled.
+function buildMealSlots(profile) {
   const mealCount = Math.max(3, Math.min(5, profile.mealsPerDayPreference || 3));
   const hasPreWorkout = !!profile.trainingTime;
-
   const preWorkoutFrac = hasPreWorkout ? 0.1 : 0;
   const mainFrac = (1 - preWorkoutFrac) / mealCount;
 
   const mainLabels = ["Breakfast", "Lunch", "Dinner", "Snack 1", "Snack 2"].slice(0, mealCount);
   const mainTimes = ["7:00 AM", "12:00 PM", "7:00 PM", "3:00 PM", "9:00 PM"].slice(0, mealCount);
-  const mainMealTypes = { Breakfast: "breakfast" };
-
-  const meals = mainLabels.map((label, i) =>
-    buildMeal(label, mainTimes[i], { calories: targets.calories * mainFrac, protein: targets.protein * mainFrac, carbs: targets.carbs * mainFrac, fat: targets.fat * mainFrac }, profile, {
-      includeVeg: label === "Lunch" || label === "Dinner",
-      mealType: mainMealTypes[label] || "main",
-      // Distinct rotation per slot (skipping Breakfast's own index) so Lunch/Dinner/Snacks
-      // don't all land on the same protein+carb pairing.
-      rotation: i,
-    })
-  );
+  const slots = mainLabels.map((label, i) => ({ label, time: mainTimes[i], frac: mainFrac, mealType: label === "Breakfast" ? "breakfast" : "main", rotation: i }));
 
   if (hasPreWorkout) {
-    const preWorkoutMeal = buildMeal(
-      "Pre-Workout",
-      profile.trainingTime,
-      { calories: targets.calories * preWorkoutFrac, protein: targets.protein * preWorkoutFrac, carbs: targets.carbs * preWorkoutFrac, fat: targets.fat * preWorkoutFrac },
-      profile,
-      { mealType: "preworkout" }
-    );
-    // Insert before Dinner if there's one, otherwise append.
-    const dinnerIdx = meals.findIndex((m) => m.label === "Dinner");
-    if (dinnerIdx >= 0) meals.splice(dinnerIdx, 0, preWorkoutMeal);
-    else meals.push(preWorkoutMeal);
+    const preWorkoutSlot = { label: "Pre-Workout", time: profile.trainingTime, frac: preWorkoutFrac, mealType: "preworkout", rotation: 0 };
+    const dinnerIdx = slots.findIndex((s) => s.label === "Dinner");
+    if (dinnerIdx >= 0) slots.splice(dinnerIdx, 0, preWorkoutSlot);
+    else slots.push(preWorkoutSlot);
   }
+  return slots;
+}
 
+// Section 8: builds a full day's meals from targets + preferences/schedule — real, curated foods
+// with real serving sizes (spec sections 1-4, 9-11, 15-18's "a plan a person will actually cook
+// and eat matters more than one that's numerically perfect on paper"). Because each item's
+// serving multiplier is rounded to a 0.5x step, per-meal totals can land a bit off the exact
+// slot share — see mealMacroDistribution below for the exact-reconciling numeric split used by
+// the home screen's "Meal Structure" summary.
+export function generateMealPlan(profile, targets) {
+  if (!targets) return null;
+  const meals = buildMealSlots(profile).map((slot) =>
+    buildMeal(slot.label, slot.time, { calories: targets.calories * slot.frac, protein: targets.protein * slot.frac, carbs: targets.carbs * slot.frac, fat: targets.fat * slot.frac }, profile, {
+      includeVeg: slot.label === "Lunch" || slot.label === "Dinner",
+      mealType: slot.mealType,
+      rotation: slot.rotation,
+    })
+  );
   return { meals, generatedAt: new Date().toISOString() };
+}
+
+// A pure numeric meal-macro split — no food items, so unlike generateMealPlan it always
+// reconciles exactly to the real daily targets: each slot gets its rounded share except the
+// last, which absorbs whatever rounding remainder is left so the meals sum to precisely the
+// target rather than drifting off it. Used for the "Meal Structure" home summary; the curated
+// "Recommended Meal Plan" (generateMealPlan, above) is the place for concrete example foods.
+export function mealMacroDistribution(profile, targets) {
+  if (!targets) return null;
+  const slots = buildMealSlots(profile);
+  let remaining = { calories: targets.calories, protein: targets.protein, carbs: targets.carbs, fat: targets.fat };
+
+  const meals = slots.map((slot, i) => {
+    const isLast = i === slots.length - 1;
+    const share = isLast
+      ? remaining
+      : {
+          calories: Math.round(targets.calories * slot.frac),
+          protein: Math.round(targets.protein * slot.frac),
+          carbs: Math.round(targets.carbs * slot.frac),
+          fat: Math.round(targets.fat * slot.frac),
+        };
+    remaining = {
+      calories: remaining.calories - share.calories,
+      protein: remaining.protein - share.protein,
+      carbs: remaining.carbs - share.carbs,
+      fat: remaining.fat - share.fat,
+    };
+    return { label: slot.label, time: slot.time, ...share };
+  });
+
+  return { meals };
+}
+
+// v1 "Food Guidance" section — practical protein/carb/fat source lists for the athlete to build
+// their own meals around when they're not using the full recommended meal plan. Pulled straight
+// from the same curated FOOD_DB every other meal-planning feature uses (never a live database
+// lookup), filtered through the athlete's stated restrictions/allergies exactly like
+// availableFoods already does. `limit` keeps each list to a readable handful rather than dumping
+// the entire catalog.
+export function foodGuidanceCategories(profile, limit = 6) {
+  return {
+    protein: availableFoods("protein", profile).slice(0, limit).map((f) => f.name),
+    carb: availableFoods("carb", profile).slice(0, limit).map((f) => f.name),
+    fat: availableFoods("fat", profile).slice(0, limit).map((f) => f.name),
+  };
 }
 
 // Section 9 — SWAP FOOD: keeps the replacement in the same category (protein/carb/fat/veg) so

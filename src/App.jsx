@@ -112,6 +112,7 @@ import BarcodeScannerScreen from "./components/BarcodeScannerScreen.jsx";
 import NutritionLabelScannerScreen from "./components/NutritionLabelScannerScreen.jsx";
 import AddFoodScreen from "./components/AddFoodScreen.jsx";
 import FoodDetailScreen from "./components/FoodDetailScreen.jsx";
+import { NUTRITION_FOOD_LOGGING_ENABLED } from "./utils/nutritionFeatureFlags.js";
 import { todayDateKey } from "./utils/nutrition.js";
 import { SET_TYPES, isWarmup, countedSets, formatSetCompact, rirRpeSuffix, formatSetVerbose, formatSessionDuration } from "./utils/workoutSets.js";
 import WorkoutHistoryDetail from "./components/WorkoutHistoryDetail.jsx";
@@ -2547,7 +2548,12 @@ export default function LiftLog() {
                 }}
               />
             )}
-            {tab === "nutritionLog" && (
+            {/* Food search/barcode/detailed logging routes are v1-hidden behind
+                NUTRITION_FOOD_LOGGING_ENABLED (see nutritionFeatureFlags.js) — every entry point
+                that used to set `tab` to one of these is gated the same way, so in practice `tab`
+                can never land on them while the flag is off. Kept guarded here too so flipping
+                the flag back on is the only step needed to restore the whole flow. */}
+            {NUTRITION_FOOD_LOGGING_ENABLED && tab === "nutritionLog" && (
               <FoodLogScreen
                 state={state}
                 updateState={updateState}
@@ -2561,7 +2567,7 @@ export default function LiftLog() {
                 }}
               />
             )}
-            {tab === "foodSearch" && (
+            {NUTRITION_FOOD_LOGGING_ENABLED && tab === "foodSearch" && (
               <AddFoodScreen
                 state={state}
                 updateState={updateState}
@@ -2576,7 +2582,7 @@ export default function LiftLog() {
                 }}
               />
             )}
-            {tab === "foodDetail" && (
+            {NUTRITION_FOOD_LOGGING_ENABLED && tab === "foodDetail" && (
               <FoodDetailScreen
                 state={state}
                 updateState={updateState}
@@ -2588,8 +2594,8 @@ export default function LiftLog() {
             )}
             {tab === "nutritionMealPlan" && <MealPlanView state={state} updateState={updateState} onBack={() => setTab("nutrition")} />}
             {tab === "nutritionCheckIn" && <NutritionCheckInScreen state={state} updateState={updateState} onBack={() => setTab("nutrition")} />}
-            {tab === "nutritionScan" && <ScanFoodChooser onNavigate={setTab} />}
-            {tab === "nutritionScanBarcode" && (
+            {NUTRITION_FOOD_LOGGING_ENABLED && tab === "nutritionScan" && <ScanFoodChooser onNavigate={setTab} />}
+            {NUTRITION_FOOD_LOGGING_ENABLED && tab === "nutritionScanBarcode" && (
               <BarcodeScannerScreen
                 state={state}
                 updateState={updateState}
@@ -2601,7 +2607,7 @@ export default function LiftLog() {
                 onManualEntry={() => setTab("nutritionLog")}
               />
             )}
-            {tab === "nutritionScanLabel" && (
+            {NUTRITION_FOOD_LOGGING_ENABLED && tab === "nutritionScanLabel" && (
               <NutritionLabelScannerScreen
                 updateState={updateState}
                 onNavigate={(next) => {
