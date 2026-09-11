@@ -70,9 +70,10 @@ const CARD_TONE = {
 
 // Base card shell. Pass `onClick` to make it an interactive button (adds hover feedback and a
 // pointer cursor) — omit it for a static content card. `radius` defaults to the standard
-// non-hero corner (rounded-xl) — HeroCard below overrides it to stay slightly more rounded, per
-// the density pass's "hero cards may stay slightly larger/rounder" rule.
-export function Card({ children, tone = "default", onClick, className = "", padding = "p-3.5", radius = "rounded-xl", as }) {
+// non-hero corner — rounded-lg on mobile, rounded-xl from `sm:` up — HeroCard below overrides it
+// to stay slightly more rounded at every size, per the density pass's "hero cards stay generous,
+// utility cards go tighter/more native" rule (section 9 of the mobile density pass).
+export function Card({ children, tone = "default", onClick, className = "", padding = "p-3.5", radius = "rounded-lg sm:rounded-xl", as }) {
   const base = `${padding} ${radius} text-left transition-colors ${CARD_TONE[tone] || CARD_TONE.default}`;
   const interactive = onClick ? "w-full hover:bg-v5-elevated active:opacity-90" : "";
   const Comp = as || (onClick ? "button" : "div");
@@ -192,10 +193,10 @@ export function Pill({ children, tone = "solid", className = "" }) {
 // trailing chevron with custom content (a Pill, a delta) when needed.
 export function ListRow({ icon: Icon, title, subtitle, onClick, right, tone = "default", className = "" }) {
   return (
-    <Card onClick={onClick} tone={tone} className={`flex items-center justify-between gap-2.5 ${className}`}>
-      <div className="flex items-center gap-2.5 min-w-0">
+    <Card onClick={onClick} tone={tone} className={`flex items-center justify-between gap-2 sm:gap-2.5 ${className}`}>
+      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
         {Icon && (
-          <span className="shrink-0 w-8 h-8 rounded-full bg-v5-elevated flex items-center justify-center">
+          <span className="shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-v5-elevated flex items-center justify-center">
             <Icon size={14} className="text-v5-subtext" />
           </span>
         )}
@@ -236,12 +237,42 @@ export function EmptyState({ icon: Icon, title, body, action, className = "" }) 
 // than a full ListRow/Button for a grid of 3-4 short actions.
 export function ActionTile({ icon: Icon, label, onClick, className = "" }) {
   return (
-    <button onClick={onClick} className={`flex flex-col items-center gap-1.5 py-2.5 rounded-xl bg-v5-surface hover:bg-v5-elevated ${className}`}>
-      <span className="w-9 h-9 rounded-full bg-v5-elevated flex items-center justify-center">
+    <button onClick={onClick} className={`flex flex-col items-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl bg-v5-surface hover:bg-v5-elevated ${className}`}>
+      <span className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-v5-elevated flex items-center justify-center">
         <Icon size={16} className="text-v5-red" />
       </span>
       <span className="text-[11px] font-bold uppercase tracking-wide text-v5-subtext text-center leading-tight">{label}</span>
     </button>
+  );
+}
+
+// Compact in-screen segmented control for splitting one long primary screen into a few grouped
+// views (Progress's Overview/Body/Performance, Nutrition's Plan/Meals/Settings) — an information-
+// architecture tool, never a second navigation layer: it doesn't touch the bottom nav, never
+// changes the screen's own ScreenHeader/title, and switching segments is just a state flip in the
+// parent (no route change, no remount of data-fetching), so nothing is lost switching back and
+// forth. `tabs`: [{ value, label }]. Deliberately no icons/badges — plain short labels keep every
+// segment legible at 375px even with 3 tabs.
+export function SegmentedTabs({ tabs, value, onChange, className = "" }) {
+  return (
+    <div className={`flex gap-1 bg-v5-surface rounded-lg p-1 ${className}`} role="tablist">
+      {tabs.map((t) => {
+        const active = t.value === value;
+        return (
+          <button
+            key={t.value}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.value)}
+            className={`flex-1 py-2 rounded-md text-[11px] font-bold uppercase tracking-wide transition-colors ${
+              active ? "bg-v5-red text-white" : "text-v5-subtext hover:text-v5-text"
+            }`}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

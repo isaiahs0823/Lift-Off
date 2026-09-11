@@ -4,7 +4,7 @@ import BodyweightTab from "./BodyweightTab.jsx";
 import TrainingCalendar from "./TrainingCalendar.jsx";
 import AnalyticsTab from "./AnalyticsTab.jsx";
 import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
-import { ScreenHeader, SectionLabel, Card, MetricTile, ProgressBar, ListRow, RingGauge, MiniBarChart, LineChart, PeriodSelect } from "./ui/Kit.jsx";
+import { ScreenHeader, SectionLabel, Card, MetricTile, ProgressBar, ListRow, RingGauge, MiniBarChart, LineChart, PeriodSelect, SegmentedTabs } from "./ui/Kit.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue } from "../utils/goalData.js";
 import { goalProgressPct } from "../utils/goalMath.js";
@@ -55,13 +55,21 @@ function topRecentMuscle(sessions) {
   return { muscle, count, of: recent.length };
 }
 
-// Visual-first landing: bodyweight snapshot, mission progress, recent PRs, and photo
-// thumbnails up front — the things worth glancing at daily. Calendar and Analytics (which
-// already houses per-exercise "performance" drill-down) are one tap away instead of competing
-// for the same default screen via a segmented control. Adherence and Weekly Review stay on the
-// Mission screen where they already live, alongside the goal they're measuring progress on.
+const PROGRESS_TABS = [
+  { value: "overview", label: "Overview" },
+  { value: "body", label: "Body" },
+  { value: "performance", label: "Performance" },
+];
+
+// Split into three grouped views (mobile density/IA pass, section 21) rather than one long
+// stack: OVERVIEW is the daily-glance snapshot (key stats, muscle focus, recent PRs, adherence,
+// mission); BODY is bodyweight/photos; PERFORMANCE is volume plus the Calendar/Analytics
+// drill-ins (which already house the deeper PR history/per-exercise stats). Calendar and
+// Analytics remain one tap away rather than fully inlined — they're their own screens with their
+// own real depth, not content that would fit compactly in a tab.
 function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
   const [period, setPeriod] = useState("month");
+  const [tab, setTab] = useState("overview");
   const entries = state.bodyweightLogs || [];
   const currentWeight = latestValue(entries, "weight");
   const avg7 = rollingAverage(entries, "weight", 7);
@@ -94,6 +102,28 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
   const totalVolume = volumeBars.reduce((s, b) => s + b.value, 0);
   const focus = topRecentMuscle(sessions);
 
+  const bodyweightTrendCard = (
+    <Card onClick={() => onDrillDown("body")} className="space-y-2.5">
+      <div className="flex items-center justify-between">
+        <SectionLabel>Bodyweight trend</SectionLabel>
+        <ChevronRight size={16} className="text-v5-subtext" />
+      </div>
+      {currentWeight != null ? (
+        <>
+          <div className="text-2xl sm:text-3xl font-black text-v5-text">
+            {fmt1(currentWeight)} <span className="text-sm font-normal text-v5-subtext">lb</span>
+          </div>
+          <div className="text-xs text-v5-subtext">
+            7-day avg {fmt1(avg7)} · {weeklyChange != null ? `${weeklyChange >= 0 ? "+" : ""}${fmt1(weeklyChange)} lb/wk` : "—"}
+          </div>
+          <LineChart points={chartPoints} height={120} />
+        </>
+      ) : (
+        <div className="text-sm text-v5-subtext">No entries yet — log your weight to see a trend here.</div>
+      )}
+    </Card>
+  );
+
   return (
     <div className="space-y-4">
       <ScreenHeader
@@ -102,40 +132,129 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
         right={<PeriodSelect value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />}
       />
 
-      {/* Top metric row — compact tiles, never the focal point themselves (mockup section 8). */}
-      <div className="grid grid-cols-3 gap-2.5">
-        <MetricTile label="Bodyweight" value={currentWeight != null ? fmt1(currentWeight) : "—"} sublabel={currentWeight != null ? "lb" : undefined} />
-        <MetricTile label="Workouts" value={periodSessions.length} sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label} />
-        <MetricTile label="PRs" value={prsInPeriod} sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label} accent={prsInPeriod > 0} />
-      </div>
+      <SegmentedTabs tabs={PROGRESS_TABS} value={tab} onChange={setTab} />
 
-      {/* ONE strong, wide primary trend — bodyweight is the metric with the most consistent
-          real data across the app, so it's the chart that earns the dominant slot rather than
-          splitting attention across several tiny ones. */}
-      <Card onClick={() => onDrillDown("body")} className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <SectionLabel>Bodyweight trend</SectionLabel>
-          <ChevronRight size={16} className="text-v5-subtext" />
-        </div>
-        {currentWeight != null ? (
-          <>
-            <div className="text-2xl sm:text-3xl font-black text-v5-text">
-              {fmt1(currentWeight)} <span className="text-sm font-normal text-v5-subtext">lb</span>
-            </div>
-            <div className="text-xs text-v5-subtext">
-              7-day avg {fmt1(avg7)} · {weeklyChange != null ? `${weeklyChange >= 0 ? "+" : ""}${fmt1(weeklyChange)} lb/wk` : "—"}
-            </div>
-            <LineChart points={chartPoints} height={120} />
-          </>
-        ) : (
-          <div className="text-sm text-v5-subtext">No entries yet — log your weight to see a trend here.</div>
-        )}
-      </Card>
+      {tab === "overview" && (
+        <>
+          {/* Top metric row — compact tiles, never the focal point themselves (mockup section 8). */}
+          <div className="grid grid-cols-3 gap-2.5">
+            <MetricTile label="Bodyweight" value={currentWeight != null ? fmt1(currentWeight) : "—"} sublabel={currentWeight != null ? "lb" : undefined} />
+            <MetricTile label="Workouts" value={periodSessions.length} sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label} />
+            <MetricTile label="PRs" value={prsInPeriod} sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label} accent={prsInPeriod > 0} />
+          </div>
 
-      {/* Paired second row — weekly volume next to adherence, matching the mockup's balanced
-          two-card layout instead of bundling both metrics into one crowded card. */}
-      {(sessions.length > 0 || adherence?.overall != null) && (
-        <div className={sessions.length > 0 && adherence?.overall != null ? "grid grid-cols-2 gap-3" : "space-y-3"}>
+          {/* Paired row — Muscle Focus next to Recent PRs (task section 10's balanced two-card
+              layout). Falls back to a single stacked column if only one of the two has data. */}
+          {(focus || recentPRs.length > 0) && (
+            <div className={focus && recentPRs.length > 0 ? "grid grid-cols-2 gap-3" : "space-y-3"}>
+              {focus && (
+                // Visual-evolution task, priority 3: "Muscle Focus" is meant to become a more
+                // distinctive BRK feature — a bigger anatomy figure, "MOST TRAINED" framing, and
+                // the week's real training volume underneath, while staying inside the same
+                // paired-card grid as Recent PRs (keep it compact enough for mobile).
+                <Card className="relative overflow-hidden flex items-center gap-2.5">
+                  <div className="absolute inset-0 bg-gradient-to-br from-v5-red/[0.07] to-transparent pointer-events-none" />
+                  <div className="shrink-0 relative w-16 h-28 rounded-lg bg-v5-elevated flex items-center justify-center">
+                    <MuscleBodyOutline exercise={{ muscle: focus.muscle }} size={56} />
+                  </div>
+                  <div className="relative min-w-0">
+                    <SectionLabel tone="muted">Most trained</SectionLabel>
+                    <div className="text-base font-black text-v5-text mt-0.5 truncate uppercase tracking-tight">{focus.muscle}</div>
+                    <div className="text-[11px] text-v5-subtext mt-0.5">
+                      {focus.count}/{focus.of} sessions
+                    </div>
+                    {totalVolume > 0 && (
+                      <div className="text-[11px] text-v5-subtext mt-1.5 pt-1.5 border-t border-white/[0.06]">
+                        Weekly volume<br />
+                        <span className="text-v5-text font-bold">{totalVolume.toLocaleString()} lb</span>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+              {recentPRs.length > 0 && (
+                <Card className="space-y-1.5">
+                  <SectionLabel tone="muted" className="flex items-center gap-1.5">
+                    <Award size={11} className="text-v5-red" /> Recent PRs
+                  </SectionLabel>
+                  <div className="space-y-1">
+                    {recentPRs.slice(0, focus ? 2 : 3).map((pr, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <span className="text-v5-subtext truncate">{exMap[pr.exId]?.name || pr.exId}</span>
+                        <span className="text-v5-text font-bold shrink-0 ml-2 tabular-nums">{pr.weight != null ? `${pr.weight} × ${pr.reps}` : `${pr.value} lb`}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {adherence?.overall != null &&
+            (() => {
+              const totalScheduled = adherence.lifting.scheduled + adherence.conditioning.scheduled + adherence.recovery.scheduled;
+              const totalCompleted = adherence.lifting.completed + adherence.conditioning.completed + adherence.recovery.completed;
+              return (
+                <Card className="flex items-center justify-between gap-3">
+                  <div>
+                    <SectionLabel tone="muted">Adherence</SectionLabel>
+                    <div className="text-[11px] text-v5-subtext mt-0.5">
+                      {totalCompleted}/{totalScheduled} scheduled sessions
+                    </div>
+                  </div>
+                  <RingGauge pct={adherence.overall} value={`${adherence.overall}%`} size={56} strokeWidth={6} />
+                </Card>
+              );
+            })()}
+
+          {primaryGoal && (
+            <Card onClick={() => onNavigate("mission")}>
+              <div className="flex items-center justify-between mb-2">
+                <SectionLabel tone="muted">Mission</SectionLabel>
+                <ChevronRight size={16} className="text-v5-subtext" />
+              </div>
+              <div className="text-base font-bold text-v5-text truncate">{primaryGoal.title}</div>
+              <ProgressBar pct={missionPct} className="mt-2.5" />
+              <div className="text-xs text-v5-subtext mt-1.5">{missionPct}% complete</div>
+            </Card>
+          )}
+
+          {/* Unconditional — the goal-gated Mission card above only appears with an active goal,
+              but weekly review/adherence (including the weekly schedule breakdown) is useful
+              with or without one, so it needs a way in that doesn't depend on having a goal set. */}
+          <ListRow icon={ClipboardCheck} title="Weekly review" subtitle="Adherence, streak, and goals" onClick={() => onNavigate("mission")} />
+        </>
+      )}
+
+      {tab === "body" && (
+        <>
+          {/* ONE strong, wide primary trend — bodyweight is the metric with the most consistent
+              real data across the app, so it's the chart that earns the dominant slot rather
+              than splitting attention across several tiny ones. */}
+          {bodyweightTrendCard}
+
+          {recentPhotos.length > 0 && (
+            <Card onClick={() => onNavigate("photos")} className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <SectionLabel tone="muted">Progress photos</SectionLabel>
+                <ChevronRight size={16} className="text-v5-subtext" />
+              </div>
+              <div className="flex gap-2">
+                {recentPhotos.map((p) => (
+                  <img key={p.id} src={p.dataUrl} alt="" className="w-16 h-16 rounded-lg object-cover" />
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {recentPhotos.length === 0 && (
+            <ListRow icon={Calendar} title="Progress photos" subtitle="Add photos to track visual change over time" onClick={() => onNavigate("photos")} />
+          )}
+        </>
+      )}
+
+      {tab === "performance" && (
+        <>
           {sessions.length > 0 && (
             <Card className="space-y-2.5">
               <SectionLabel tone="muted">Weekly volume</SectionLabel>
@@ -143,103 +262,13 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
               <MiniBarChart bars={volumeBars} height={44} />
             </Card>
           )}
-          {adherence?.overall != null && (() => {
-            const totalScheduled = adherence.lifting.scheduled + adherence.conditioning.scheduled + adherence.recovery.scheduled;
-            const totalCompleted = adherence.lifting.completed + adherence.conditioning.completed + adherence.recovery.completed;
-            return (
-              <Card className="flex flex-col justify-between space-y-2.5">
-                <SectionLabel tone="muted">Adherence</SectionLabel>
-                <RingGauge pct={adherence.overall} value={`${adherence.overall}%`} size={64} strokeWidth={6} sublabel={`${totalCompleted}/${totalScheduled} sessions`} />
-              </Card>
-            );
-          })()}
-        </div>
-      )}
-
-      {/* Second paired row — Muscle Focus next to Recent PRs, matching the Weekly Volume /
-          Adherence pattern above instead of each getting its own full-width card (task section
-          10). Falls back to a single stacked column if only one of the two has data. */}
-      {(focus || recentPRs.length > 0) && (
-        <div className={focus && recentPRs.length > 0 ? "grid grid-cols-2 gap-3" : "space-y-3"}>
-          {focus && (
-            // Visual-evolution task, priority 3: "Muscle Focus" is meant to become a more
-            // distinctive BRK feature — a bigger anatomy figure, "MOST TRAINED" framing, and the
-            // week's real training volume underneath, while staying inside the same paired-card
-            // grid as Recent PRs (task section 5: "keep it compact enough for mobile" — this is
-            // not a full-width poster).
-            <Card className="relative overflow-hidden flex items-center gap-2.5">
-              <div className="absolute inset-0 bg-gradient-to-br from-v5-red/[0.07] to-transparent pointer-events-none" />
-              <div className="shrink-0 relative w-16 h-28 rounded-lg bg-v5-elevated flex items-center justify-center">
-                <MuscleBodyOutline exercise={{ muscle: focus.muscle }} size={56} />
-              </div>
-              <div className="relative min-w-0">
-                <SectionLabel tone="muted">Most trained</SectionLabel>
-                <div className="text-base font-black text-v5-text mt-0.5 truncate uppercase tracking-tight">{focus.muscle}</div>
-                <div className="text-[11px] text-v5-subtext mt-0.5">
-                  {focus.count}/{focus.of} sessions
-                </div>
-                {totalVolume > 0 && (
-                  <div className="text-[11px] text-v5-subtext mt-1.5 pt-1.5 border-t border-white/[0.06]">
-                    Weekly volume<br />
-                    <span className="text-v5-text font-bold">{totalVolume.toLocaleString()} lb</span>
-                  </div>
-                )}
-              </div>
-            </Card>
-          )}
-          {recentPRs.length > 0 && (
-            <Card className="space-y-1.5">
-              <SectionLabel tone="muted" className="flex items-center gap-1.5">
-                <Award size={11} className="text-v5-red" /> Recent PRs
-              </SectionLabel>
-              <div className="space-y-1">
-                {recentPRs.slice(0, focus ? 2 : 3).map((pr, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs">
-                    <span className="text-v5-subtext truncate">{exMap[pr.exId]?.name || pr.exId}</span>
-                    <span className="text-v5-text font-bold shrink-0 ml-2 tabular-nums">{pr.weight != null ? `${pr.weight} × ${pr.reps}` : `${pr.value} lb`}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {primaryGoal && (
-        <Card onClick={() => onNavigate("mission")}>
-          <div className="flex items-center justify-between mb-2">
-            <SectionLabel tone="muted">Mission</SectionLabel>
-            <ChevronRight size={16} className="text-v5-subtext" />
-          </div>
-          <div className="text-base font-bold text-v5-text truncate">{primaryGoal.title}</div>
-          <ProgressBar pct={missionPct} className="mt-2.5" />
-          <div className="text-xs text-v5-subtext mt-1.5">{missionPct}% complete</div>
-        </Card>
-      )}
-
-      {recentPhotos.length > 0 && (
-        <Card onClick={() => onNavigate("photos")} className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <SectionLabel tone="muted">Progress photos</SectionLabel>
-            <ChevronRight size={16} className="text-v5-subtext" />
-          </div>
-          <div className="flex gap-2">
-            {recentPhotos.map((p) => (
-              <img key={p.id} src={p.dataUrl} alt="" className="w-16 h-16 rounded-lg object-cover" />
+          <div className="space-y-2">
+            {DRILL_DOWNS.map((d) => (
+              <ListRow key={d.id} icon={d.icon} title={d.label} subtitle={d.desc} onClick={() => onDrillDown(d.id)} />
             ))}
           </div>
-        </Card>
+        </>
       )}
-
-      <div className="space-y-2">
-        {/* Unconditional — the goal-gated Mission card above only appears with an active goal,
-            but weekly review/adherence (including the weekly schedule breakdown) is useful
-            with or without one, so it needs a way in that doesn't depend on having a goal set. */}
-        <ListRow icon={ClipboardCheck} title="Weekly review" subtitle="Adherence, streak, and goals" onClick={() => onNavigate("mission")} />
-        {DRILL_DOWNS.map((d) => (
-          <ListRow key={d.id} icon={d.icon} title={d.label} subtitle={d.desc} onClick={() => onDrillDown(d.id)} />
-        ))}
-      </div>
     </div>
   );
 }
