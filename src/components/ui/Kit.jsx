@@ -306,18 +306,20 @@ export function PeriodSelect({ value, onChange, options, className = "" }) {
 // with BRK's illustrated anatomy figure set large and glowing at the trailing edge, eyebrow/
 // title/meta up top, CTA anchored at the bottom. Stands in for licensed athlete photography
 // (which this app doesn't have and won't fabricate) while still giving the hero real visual
-// weight instead of reading as "text on a card." Used for Today's workout, Active Workout's
-// current-exercise card, and Programs' featured program.
-export function PhotoHero({ exercise, eyebrow, title, meta, children, className = "" }) {
+// weight instead of reading as "text on a card." Used for Today's workout and Programs' featured
+// program at full size; Active Workout's current-exercise card (which repeats once per exercise,
+// not once per day) uses `compact` — mobile-only tighter padding/title, sm: matches the default
+// hero exactly so desktop is identical either way (mobile density/composition pass, section 7).
+export function PhotoHero({ exercise, eyebrow, title, meta, children, className = "", compact = false }) {
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-v5-red/25 via-v5-elevated to-v5-surface p-5 sm:p-6 ${className}`}>
+    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-v5-red/25 via-v5-elevated to-v5-surface ${compact ? "p-3.5" : "p-5"} sm:p-6 ${className}`}>
       <div className="absolute -right-8 -bottom-10 opacity-95 pointer-events-none">
         <MuscleBodyOutline exercise={exercise} size={190} />
       </div>
       <div className="absolute inset-0 bg-gradient-to-r from-v5-surface via-v5-surface/55 to-transparent pointer-events-none" />
-      <div className="relative space-y-2.5 sm:space-y-3">
+      <div className={`relative ${compact ? "space-y-1.5" : "space-y-2.5"} sm:space-y-3`}>
         {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
-        {title && <div className="text-[22px] sm:text-[26px] leading-[1.1] font-black text-v5-text tracking-tight">{title}</div>}
+        {title && <div className={`${compact ? "text-lg" : "text-[22px]"} sm:text-[26px] leading-[1.1] font-black text-v5-text tracking-tight`}>{title}</div>}
         {meta}
         {children}
       </div>

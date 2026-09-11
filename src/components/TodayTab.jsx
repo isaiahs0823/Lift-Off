@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown, Target } from "lucide-react";
+import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown, Target, Flame } from "lucide-react";
 import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
 import NutritionCard from "./NutritionCard.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
 import { SlideInPanel } from "./SlideInPanel.jsx";
-import { SectionLabel, Card, HeroCard, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, Pill, ActionTile, ListRow, LineChart } from "./ui/Kit.jsx";
+import { SectionLabel, Card, HeroCard, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, Pill, ActionTile, ListRow, RingGauge, LineChart } from "./ui/Kit.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue, goalHistory } from "../utils/goalData.js";
 import { goalProgressPct, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
@@ -13,7 +13,7 @@ import { findTodaysSessionForPlan } from "../utils/workoutHistory.js";
 import { formatSessionDuration } from "../utils/workoutSets.js";
 import { buildCoachContext } from "../utils/coachContext.js";
 import { generateTodaySnapshot } from "../services/coachService.js";
-import { computeReadinessScore, readinessBand, BAND_LABEL } from "../utils/readiness.js";
+import { computeReadinessScore, readinessBand, BAND_LABEL, READINESS_SHORT } from "../utils/readiness.js";
 import { syncCoachMemory } from "../utils/coachMemory.js";
 import {
   hasSchedule,
@@ -27,6 +27,7 @@ import {
   buildMovePatch,
   buildDoTodayPatch,
   computeScheduleAdherence,
+  computeScheduleStreak,
   DAY_TYPE_LABEL,
 } from "../utils/weeklySchedule.js";
 
@@ -75,14 +76,14 @@ function WeekStrip({ strip }) {
   const [openIdx, setOpenIdx] = useState(null);
   const labels = ["M", "T", "W", "T", "F", "S", "S"];
   return (
-    <Card padding="p-4">
-      <SectionLabel tone="muted" className="mb-2.5">This week</SectionLabel>
+    <Card>
+      <SectionLabel tone="muted" className="mb-2">This week</SectionLabel>
       <div className="grid grid-cols-7 gap-1 text-center">
         {strip.map((day, i) => (
           <button
             key={i}
             onClick={() => setOpenIdx((idx) => (idx === i ? null : i))}
-            className="flex flex-col items-center gap-1.5 py-1.5 rounded-lg hover:bg-v5-elevated"
+            className="flex flex-col items-center gap-1 py-1 rounded-lg hover:bg-v5-elevated"
           >
             <span className="text-[11px] font-bold text-v5-subtext/60">{labels[i]}</span>
             <span className={`text-xs font-bold ${GLYPH_COLOR[day.status]}`}>{GLYPH_FOR_STATUS[day.status] || "·"}</span>
@@ -236,9 +237,83 @@ function RecoveryLogCard({ label, state, updateState }) {
   );
 }
 
-// Paired with Readiness in a 2-column row (mockup section 5) — current number, a short trend
-// line, and a small sparkline built from the athlete's own recent bodyweight logs. Real data
-// only: with fewer than 2 points there's nothing to trend, so it falls back to just the number.
+// ---------------- COMPACT SUMMARY ROW ----------------
+// Section 5 of the mobile composition pass: Readiness, Bodyweight, and (when there's a real
+// weekly schedule to measure it against) Streak as three small tiles in one row instead of each
+// being its own full-width card. This is a real layout change, not a padding tweak — on phone,
+// ReadinessCheckIn's `compact` mode was previously still a full-width stacked card (see the now-
+// removed md:grid-cols-2 comment); these tiles read Today's own already-computed `readiness`/
+// `streak` values directly rather than wrapping ReadinessCheckIn, so they can go as narrow as a
+// 1/3-width column without needing a second "ultra-compact" mode on that shared component.
+const BAND_RING_TONE = { green: "success", yellow: "warn", red: "red" };
+
+function CompactReadinessTile({ readiness, onOpen }) {
+  return (
+    <Card onClick={onOpen} padding="p-2.5" className="flex flex-col items-center gap-1 text-center">
+      <SectionLabel tone="muted">Readiness</SectionLabel>
+      {readiness ? (
+        <>
+          <RingGauge pct={readiness.score} value={readiness.score} tone={BAND_RING_TONE[readiness.band] || "red"} size={40} strokeWidth={5} />
+          <div className="text-[11px] text-v5-subtext leading-tight">{READINESS_SHORT[readiness.band]}</div>
+        </>
+      ) : (
+        <>
+          <div className="text-lg font-black text-v5-subtext/40 leading-none py-1.5">—</div>
+          <div className="text-[11px] text-v5-red font-bold">Check in</div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function CompactBodyweightTile({ currentWeight, weeklyChange, onOpen }) {
+  const trendUp = weeklyChange != null && weeklyChange > 0;
+  const trendDown = weeklyChange != null && weeklyChange < 0;
+  return (
+    <Card onClick={onOpen} padding="p-2.5" className="flex flex-col items-center justify-center gap-1 text-center">
+      <SectionLabel tone="muted">Bodyweight</SectionLabel>
+      {currentWeight != null ? (
+        <>
+          <div className="text-lg font-black text-v5-text tabular-nums leading-none py-1.5">
+            {fmt1(currentWeight)} <span className="text-[11px] font-normal text-v5-subtext">lb</span>
+          </div>
+          {weeklyChange != null ? (
+            <div className={`flex items-center gap-0.5 text-[11px] font-bold ${trendUp ? "text-v5-success" : trendDown ? "text-v5-red" : "text-v5-subtext"}`}>
+              {trendUp ? <TrendingUp size={11} /> : trendDown ? <TrendingDown size={11} /> : null}
+              {fmt1(Math.abs(weeklyChange))}/wk
+            </div>
+          ) : (
+            <div className="text-[11px] text-v5-subtext">—</div>
+          )}
+        </>
+      ) : (
+        <>
+          <Scale size={18} className="text-v5-subtext/60 my-1" />
+          <div className="text-[11px] text-v5-subtext">Log weight</div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function CompactStreakTile({ streak, onOpen }) {
+  return (
+    <Card onClick={onOpen} padding="p-2.5" className="flex flex-col items-center justify-center gap-1 text-center">
+      <SectionLabel tone="muted">Streak</SectionLabel>
+      <div className="flex items-center gap-1 text-lg font-black text-v5-text leading-none py-1.5">
+        <Flame size={15} className={streak > 0 ? "text-v5-red" : "text-v5-subtext/40"} />
+        {streak}
+      </div>
+      <div className="text-[11px] text-v5-subtext">{streak === 1 ? "day" : "days"} on plan</div>
+    </Card>
+  );
+}
+
+// Desktop/tablet (sm: and up) keeps the original pre-mobile-pass layout exactly — a 2-column
+// row of the full ReadinessCheckIn(compact) summary card and this richer Bodyweight card with
+// its own trend sparkline — rather than the tighter 3-tile mobile row above, per the mobile
+// composition pass's "desktop remains unchanged" rule (this is a real layout difference, not
+// just spacing, so it's gated by breakpoint rather than restyled in place).
 function BodyweightCard({ state, currentWeight, avg7, weeklyChange, onNavigate }) {
   const entries = (state.bodyweightLogs || [])
     .slice()
@@ -351,6 +426,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
   const missedEntry = scheduleOn ? getMissedEntry(state) : null;
   const weekStrip = scheduleOn ? getWeekStrip(state) : null;
   const readiness = todayReadiness(state);
+  const streak = scheduleOn ? computeScheduleStreak(state) : 0;
   const [dismissedPrompt, setDismissedPrompt] = useState(false);
 
   // Rolling mode's "today" only advances once resolved — safe to call every mount, it's a
@@ -550,9 +626,15 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
           eyebrow="Today's workout"
           title={todayPlan.name}
           meta={
-            <div className="flex items-center gap-4 text-xs font-bold text-v5-subtext">
+            // "Last completed" folded into the same meta row instead of its own stacked line
+            // below (mobile composition pass, section 7) — only in the common case where
+            // there's no swap/outside-program message competing for that line's space.
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-v5-subtext">
               <span className="flex items-center gap-1.5"><Dumbbell size={13} className="text-v5-red" /> {todayPlan.exercises.length} exercises</span>
               <span className="flex items-center gap-1.5"><Timer size={13} className="text-v5-red" /> Est. {estimateMinutes(todayPlan)} min</span>
+              {lastCompletedDaysAgo != null && !programDay.isSwapped && !programDay.isOutsideProgram && (
+                <span className="font-normal text-v5-subtext/70">Last: {lastCompletedDaysAgo === 0 ? "today" : `${lastCompletedDaysAgo}d ago`}</span>
+              )}
             </div>
           }
         >
@@ -571,9 +653,6 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
           ) : (
             programDay.isSwapped &&
             programDay.plannedDayLabel && <div className="text-xs text-v5-subtext/70">Originally planned: {programDay.plannedDayLabel}</div>
-          )}
-          {lastCompletedDaysAgo != null && (
-            <div className="text-xs text-v5-subtext/70">Last completed {lastCompletedDaysAgo === 0 ? "today" : `${lastCompletedDaysAgo} day${lastCompletedDaysAgo === 1 ? "" : "s"} ago`}</div>
           )}
           <div className="flex gap-2">
             {programDay.isSwapped && (
@@ -677,12 +756,21 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         <SetupSchedulePrompt onSetup={() => onNavigate("schedule")} onLater={() => setDismissedPrompt(true)} />
       )}
 
-      {/* Readiness and Bodyweight stack full-width on mobile — a real 2-column row only works
-          for the ring-gauge summary/prompt states; the full readiness check-in form (5 rating
-          rows + optional fields) needs its own full-width card or its buttons collide/clip
-          against the Bodyweight column. Two columns only ever return at md+ (tablet), where a
-          half-width form has real room; on every phone width this is always a single column. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+      {/* Three compact tiles in one row instead of two full-width stacked cards — mobile only
+          (mobile composition pass, section 2/5). The readiness check-in form itself (5 rating
+          rows) still gets a dedicated sheet (setReadinessSheetOpen); the glance-state here is
+          just a ring/score, which fits a 1/3-width column fine. Streak only earns a column when
+          there's a real weekly schedule to measure it against (computeScheduleStreak is always 0
+          without one — showing it anyway would be a dead "0 days" tile); otherwise Readiness/
+          Bodyweight split the row in half instead of thirds. sm: and up render the original
+          layout below instead (unchanged desktop/tablet experience — section 12/18/31). */}
+      <div className={`sm:hidden grid ${scheduleOn ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
+        <CompactReadinessTile readiness={readiness} onOpen={() => setReadinessSheetOpen(true)} />
+        <CompactBodyweightTile currentWeight={currentWeight} weeklyChange={weeklyChange} onOpen={() => onNavigate("progress")} />
+        {scheduleOn && <CompactStreakTile streak={streak} onOpen={() => onNavigate("mission")} />}
+      </div>
+
+      <div className="hidden sm:grid sm:grid-cols-2 gap-3 items-start">
         <ReadinessCheckIn state={state} updateState={updateState} compact onOpenFull={() => setReadinessSheetOpen(true)} />
         {currentWeight != null ? (
           <BodyweightCard state={state} currentWeight={currentWeight} avg7={avg7} weeklyChange={weeklyChange} onNavigate={onNavigate} />

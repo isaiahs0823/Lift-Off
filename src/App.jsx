@@ -4603,12 +4603,16 @@ function TrainingExerciseCard({
         exercise={exMap[exId]}
         eyebrow={totalExercises ? `Exercise ${(exIndex ?? 0) + 1} of ${totalExercises}` : undefined}
         title={exMap[exId]?.name || exId}
-        className="pb-4"
+        compact
+        className="pb-3 sm:pb-4"
       >
-        {exMap[exId]?.muscle && (
-          <div className="text-xs text-v5-subtext">Targets: {exMap[exId].muscle}</div>
-        )}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 pt-1">
+        {/* Target muscle folded into the same row as Last/Today's target instead of its own
+            stacked line (mobile composition pass, section 3 — "shorter exercise hero") — this
+            card repeats once per exercise, so every row it saves compounds across a workout. */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          {exMap[exId]?.muscle && (
+            <div className="min-w-0 text-xs text-v5-subtext self-end pb-0.5">Targets: {exMap[exId].muscle}</div>
+          )}
           {lastTopSet && (
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wide text-v5-subtext">Last</div>

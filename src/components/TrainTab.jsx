@@ -83,7 +83,7 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
           )}
           <div className="relative space-y-3">
             <div>
-              <div className="text-2xl font-black text-v5-text">{activeRun.planName}</div>
+              <div className="text-xl sm:text-2xl font-black text-v5-text">{activeRun.planName}</div>
               <div className="text-sm text-v5-subtext">Started {elapsedLabel(activeRun.startedAt)}</div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -127,7 +127,7 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
           {/* The headline always names the ACTUAL active program (from currentProgram itself,
               not today's resolved workout) — an outside-program override must never make this
               card read as if the active program changed; see resolveTodayWorkout's isOutsideProgram. */}
-          <div className="text-2xl font-black text-v5-text">{state.currentProgram?.programName}</div>
+          <div className="text-xl sm:text-2xl font-black text-v5-text">{state.currentProgram?.programName}</div>
           {programDay.isRecoveryDay ? (
             <div className="text-sm text-v5-subtext">
               {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
