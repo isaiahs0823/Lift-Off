@@ -1,7 +1,14 @@
 // ---------------- WORKOUT SHARE CARDS (v3 — premium redesign) ----------------
-// Premium, canvas-drawn branded BRK share cards for a completed workout session. Three
-// templates (Performance / Minimal Story / Full Recap) each rendered at three export sizes
-// (9:16 Story, 4:5 Post, 1:1 Square). Pure canvas, no image/charting dependency.
+// Premium, canvas-drawn branded BRK share cards for a completed workout session. Two social
+// poster templates — Performance and Minimal Story — each rendered at three export sizes (9:16
+// Story, 4:5 Post, 1:1 Square). Pure canvas, no image/charting dependency.
+//
+// Full Recap (task: "BRK FULL RECAP REBUILD") is deliberately NOT a third poster template here —
+// it's a categorically different thing (the complete workout record, not a curated social
+// highlight) and lives in its own full-screen scrollable component, FullWorkoutRecap.jsx, backed
+// by utils/fullRecap.js's data/plaintext builders. Its own image export, renderFullRecapImage
+// below, is a tall document sized to its real content rather than one of SHARE_SIZES' fixed
+// aspect ratios — see that function's own comment.
 //
 // v3 moves the card from "clean but forgettable" to "premium, bold, social-ready" without
 // copying any literal reference imagery: stronger hierarchy (workout title now dominates, not
@@ -11,7 +18,7 @@
 // the session's trained muscle group lit up in BRK red. See drawAnatomyWatermark() below.
 
 import { countedSets, topSetOf } from "./progression.js";
-import { featuredAndOtherPRs, sessionPRCount, PR_TYPE_LABEL } from "./prSummary.js";
+import { featuredAndOtherPRs, sessionPRCount, PR_TYPE_LABEL, prDeltaLabel, prPreviousLabel } from "./prSummary.js";
 import { formatSessionDuration } from "./workoutSets.js";
 import { getMuscleDisplay } from "./muscleDisplay.js";
 import {
@@ -32,7 +39,6 @@ import {
 export const SHARE_TEMPLATES = [
   { id: "performance", label: "Performance", blurb: "Hero lift, key stats, PR badges" },
   { id: "minimal", label: "Minimal Story", blurb: "Big number, clean and sparse" },
-  { id: "recap", label: "Full Recap", blurb: "Exercise-by-exercise summary" },
 ];
 
 export const SHARE_SIZES = [
@@ -1166,107 +1172,327 @@ function drawMinimalCard(ctx, W, H, session, featured) {
   footerTagline(ctx, W, H, compact ? 15 : 18, storyPad);
 }
 
-// ---------------- template: FULL SESSION RECAP CARD ----------------
-// All key stats, up to 6 exercises with PR badges, an optional progression-vs-last-time line
-// (task section 17), and the anatomy graphic — organized, not overloaded.
+// ---------------- FULL RECAP — complete workout record (tall document image) ----------------
+// Rebuilt (task: "BRK FULL RECAP REBUILD — turn it into the complete workout record"). This is
+// NOT a social poster and is deliberately never drawn at one of SHARE_SIZES' fixed heights — the
+// canvas height is measured from real content (every exercise, every set, warm-ups, drop
+// sequences, PRs, equipment, notes, comparison, Coach summary) and only then allocated, so a
+// 12-exercise session is simply a taller image rather than losing exercises to a row cap. Width
+// stays 1080 (same as every other export) for a legible, consistent line length.
+//
+// Two-pass render: `drawFullRecapDoc` runs once against a throwaway scratch context purely to
+// measure the real height its own content needs (font metrics don't depend on canvas size — same
+// trick `centerBody` above already relies on), then runs again for real once the canvas is sized
+// to fit. No content is ever cropped or capped to make it fit a guessed height.
+import { buildFullRecapData } from "./fullRecap.js";
 
-function drawRecapCard(ctx, W, H, session, exMap) {
-  const { k, maxRows } = sizeScale(H);
-  background(ctx, W, H, H * 0.24);
+const RECAP_DOC = {
+  marginX: 0.07,
+  lineGap: 1.32,
+};
 
-  const headerY = H * 0.06;
-  wordmark(ctx, W, headerY, sz(40, k, 26));
+function recapSectionLabel(ctx, x, y, text, color = COLOR.gray) {
+  ctx.textAlign = "left";
+  ctx.fillStyle = color;
+  ctx.font = `800 21px ${FONT}`;
+  ctx.fillText(text, x, y);
+}
 
-  drawAnatomyWatermark(ctx, {
-    centerX: W * 0.9,
-    topY: headerY + sz(40, k, 20),
-    height: H * (k < 1 ? 0.22 : 0.2),
-    muscleCategory: session.mainMuscles?.[0],
-    bodyAlpha: 0.3,
-    redAlpha: 0.78,
-  });
+// One logged set as a document row: type/index on the left, weight x reps + RIR/quality/PR
+// badges on the right side of the same line, drop sequences as their own indented arrow lines
+// directly beneath (task section 4 — never flattened into one fake set).
+function drawRecapSetRow(ctx, { x, width, y, row }) {
+  const isWarm = row.isWarmup;
+  ctx.textAlign = "left";
+  ctx.fillStyle = isWarm ? COLOR.dimGray : COLOR.gray;
+  ctx.font = `700 16px ${FONT}`;
+  ctx.fillText(isWarm ? "WARM" : `#${row.index}`, x, y);
 
-  const storyPad = k === 1 ? 46 : 0;
-  const bodyStartY = headerY + sz(70, k, 42);
-  const footerTopY = H - sz(190, k, 110) - storyPad;
+  ctx.fillStyle = isWarm ? COLOR.gray : COLOR.white;
+  ctx.font = `800 24px ${FONT}`;
+  const setText = `${row.weight} × ${row.reps}`;
+  ctx.fillText(setText, x + 66, y);
+  let cursorX = x + 66 + ctx.measureText(setText).width + 18;
 
-  const prCount = sessionPRCount(session);
-  const entries = session.entries || [];
-  const rows = entries.slice(0, maxRows);
-  const prsByExId = buildPrsByExId(session);
-  const rowH = sz(96, k, 58);
-  const panelW = W * 0.86;
-  const panelX = W / 2 - panelW / 2;
-
-  function body(c, startY) {
-    let y = startY;
-    c.textAlign = "center";
-    c.fillStyle = COLOR.white;
-    const titleSize = fitFontSize(c, session.planName || "Workout", W * 0.7, "800", sz(50, k, 28), 24);
-    const titleLines = wrapCentered(c, session.planName || "Workout", W / 2, y + titleSize * 0.8, W * 0.7, titleSize * 1.05, 2);
-    y += titleSize * 0.8 + (titleLines - 1) * titleSize * 1.05 + sz(40, k, 22);
-
-    // ---- optional progression-vs-last-time line — only when real prior-session data exists ----
-    if (session.perfDeltaPct != null) {
-      const up = session.perfDeltaPct >= 0;
-      c.fillStyle = up ? COLOR.green : COLOR.gray;
-      c.font = `700 ${sz(21, k, 14)}px ${FONT}`;
-      c.fillText(`${up ? "+" : ""}${session.perfDeltaPct}% volume vs last ${session.planName}`, W / 2, y);
-      y += sz(42, k, 24);
-    }
-
-    divider(c, W, y);
-    y += sz(54, k, 30);
-
-    const stripW = W * 0.86;
-    const stripX = W / 2 - stripW / 2;
-    const stats =
-      prCount > 0
-        ? [
-            { value: formatSessionDuration(session.durationSec), label: "Duration" },
-            { value: String(session.workingSets ?? 0), label: "Sets" },
-            { value: (session.totalVolume ?? 0).toLocaleString(), label: "Volume" },
-            { value: String(prCount), label: "PRs" },
-          ]
-        : [
-            { value: formatSessionDuration(session.durationSec), label: "Duration" },
-            { value: String(session.workingSets ?? 0), label: "Working Sets" },
-            { value: (session.totalVolume ?? 0).toLocaleString(), label: "Lb Volume" },
-          ];
-    const stripH = drawStatStrip(c, { x: stripX, y, width: stripW, stats, k });
-    y += stripH;
-
-    y += sz(46, k, 24);
-    divider(c, W, y);
-    y += sz(54, k, 30);
-
-    c.fillStyle = COLOR.gray;
-    c.font = `800 ${sz(18, k, 13)}px ${FONT}`;
-    c.fillText("SESSION BREAKDOWN", W / 2, y);
-    y += sz(46, k, 26);
-
-    if (rows.length === 0) {
-      c.fillStyle = COLOR.gray;
-      c.font = `600 ${sz(24, k, 17)}px ${FONT}`;
-      c.fillText("Detailed exercise data isn't available for this session.", W / 2, y + sz(40, k, 24));
-      y += sz(90, k, 54);
-    } else {
-      y += drawExerciseRows(c, { x: panelX, y, width: panelW, rows, rowH, k, exMap, prsByExId });
-      if (entries.length > rows.length) {
-        c.fillStyle = COLOR.dimGray;
-        c.font = `600 ${sz(20, k, 14)}px ${FONT}`;
-        c.fillText(`+ ${entries.length - rows.length} more exercise${entries.length - rows.length === 1 ? "" : "s"}`, W / 2, y + sz(10, k, 6));
-        y += sz(40, k, 22);
-      }
-    }
-
-    return y;
+  if (row.rir != null || row.rpe != null) {
+    ctx.fillStyle = COLOR.gray;
+    ctx.font = `700 16px ${FONT}`;
+    const t = row.rir != null ? `RIR ${row.rir}` : `RPE ${row.rpe}`;
+    ctx.fillText(t, cursorX, y);
+    cursorX += ctx.measureText(t).width + 16;
+  }
+  if (row.setType !== "working" && row.setType !== "warmup") {
+    cursorX += drawBadgeInline(ctx, cursorX, y - 20, row.setTypeLabel.toUpperCase()) + 10;
+  }
+  if (row.qualityLabel) {
+    cursorX += drawBadgeInline(ctx, cursorX, y - 20, row.qualityLabel.toUpperCase()) + 10;
+  }
+  if (row.prs.length > 0) {
+    cursorX += drawBadgeInline(ctx, cursorX, y - 20, "PR") + 10;
   }
 
-  centerBody(ctx, bodyStartY, footerTopY, body);
+  let cy = y + 28;
+  row.drops.forEach((d) => {
+    ctx.fillStyle = COLOR.dimGray;
+    ctx.font = `700 18px ${FONT}`;
+    ctx.fillText("→", x + 66, cy);
+    ctx.fillStyle = COLOR.white;
+    ctx.font = `700 19px ${FONT}`;
+    ctx.fillText(`${d.weight} × ${d.reps}`, x + 96, cy);
+    cy += 30;
+  });
+  return cy;
+}
 
-  wordmark(ctx, W, H - sz(120, k, 68) - storyPad, sz(30, k, 20));
-  footerTagline(ctx, W, H, sz(20, k, 14), storyPad);
+// One complete exercise block: name/equipment/target, every set (warm-up then working), a PR
+// callout when this exercise produced one, joint note, and the compact derived-totals line.
+function drawRecapExercise(ctx, { x, width, y, ex, index }) {
+  let cy = y;
+  const hasPR = ex.prs.length > 0;
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = hasPR ? COLOR.red : COLOR.dimGray;
+  ctx.font = `800 20px ${FONT}`;
+  ctx.fillText(String(index + 1).padStart(2, "0"), x, cy);
+
+  ctx.fillStyle = COLOR.white;
+  const nameSize = fitFontSize(ctx, ex.name, width - 56 - (hasPR ? 70 : 0), "800", 27, 18);
+  ctx.font = `800 ${nameSize}px ${FONT}`;
+  const name = truncateToWidth(ctx, ex.name, width - 56 - (hasPR ? 70 : 0));
+  ctx.fillText(name, x + 46, cy);
+  if (hasPR) drawBadgeInline(ctx, x + 46 + ctx.measureText(name).width + 14, cy - 20, "PR");
+  cy += 30;
+
+  if (ex.equipmentLabel || ex.targetReps != null) {
+    ctx.fillStyle = COLOR.gray;
+    ctx.font = `700 16px ${FONT}`;
+    const meta = [ex.equipmentLabel, ex.targetReps != null ? `Target: ${ex.targetReps} reps` : null].filter(Boolean).join("   ·   ");
+    ctx.fillText(meta, x + 46, cy);
+    cy += 26;
+  }
+  cy += 10;
+
+  ctx.strokeStyle = COLOR.panelBorder;
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, cy, width, 1, 0);
+  ctx.stroke();
+  cy += 20;
+
+  ex.setRows.forEach((row) => {
+    cy = drawRecapSetRow(ctx, { x, width, y: cy, row });
+    cy += 14;
+  });
+
+  if (ex.prs.length > 0) {
+    ex.prs.forEach((pr) => {
+      ctx.fillStyle = COLOR.red;
+      ctx.font = `700 16px ${FONT}`;
+      ctx.fillText(`${PR_TYPE_LABEL[pr.type]} — previous ${prPreviousLabel(pr)} (${prDeltaLabel(pr)})`, x + 46, cy);
+      cy += 26;
+    });
+  }
+  if (ex.jointNote) {
+    ctx.fillStyle = COLOR.red;
+    ctx.font = `700 16px ${FONT}`;
+    const area = ex.jointNote.bodyArea ? `${ex.jointNote.bodyArea} discomfort` : "Discomfort noted";
+    const sev = ex.jointNote.severity != null ? `: ${ex.jointNote.severity}/10` : "";
+    ctx.fillText(`${area}${sev}`, x + 46, cy);
+    cy += 26;
+  }
+
+  if (ex.workingSetCount > 0) {
+    cy += 6;
+    ctx.fillStyle = COLOR.gray;
+    ctx.font = `700 16px ${FONT}`;
+    const bits = [
+      `${ex.workingSetCount} WORKING SET${ex.workingSetCount === 1 ? "" : "S"}`,
+      `${ex.workingReps} REPS`,
+      `${ex.volume.toLocaleString()} LB`,
+      ex.bestSet ? `BEST ${ex.bestSet.weight} × ${ex.bestSet.reps}` : null,
+    ]
+      .filter(Boolean)
+      .join("   ·   ");
+    ctx.fillText(bits, x + 46, cy);
+    cy += 20;
+  }
+
+  return cy + 34;
+}
+
+function drawFullRecapDoc(ctx, W, data) {
+  const leftX = W * RECAP_DOC.marginX;
+  const rightEdge = W - W * RECAP_DOC.marginX;
+  const contentW = rightEdge - leftX;
+  let y = 76;
+
+  wordmark(ctx, W, y, 36, "left", leftX);
+  y += 46;
+  ctx.textAlign = "left";
+  ctx.fillStyle = COLOR.red;
+  ctx.font = `800 16px ${FONT}`;
+  ctx.fillText("FULL WORKOUT RECAP", leftX, y);
+  y += 44;
+
+  ctx.fillStyle = COLOR.white;
+  const titleSize = fitFontSize(ctx, data.planName, contentW, "900", 48, 26);
+  ctx.font = `900 ${titleSize}px ${FONT}`;
+  const titleLines = wrapAligned(ctx, data.planName, leftX, y, contentW, titleSize * 1.05, 2, "left");
+  y += (titleLines - 1) * titleSize * 1.05 + 40;
+
+  ctx.fillStyle = COLOR.gray;
+  ctx.font = `700 18px ${FONT}`;
+  const dateLabel = data.finishedAt ? new Date(data.finishedAt).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }) : null;
+  ctx.fillText([dateLabel, data.durationLabel].filter(Boolean).join("   ·   "), leftX, y);
+  y += 50;
+
+  divider(ctx, W, y, 0.12, 1);
+  y += 44;
+
+  recapSectionLabel(ctx, leftX, y, "SESSION SUMMARY");
+  y += 30;
+  const stats = [
+    { value: data.durationLabel, label: "Duration" },
+    { value: String(data.workingSets), label: "Working Sets" },
+    ...(data.warmupSets > 0 ? [{ value: String(data.warmupSets), label: "Warm-up" }] : []),
+    { value: String(data.totalReps), label: "Total Reps" },
+    { value: data.totalVolume.toLocaleString(), label: "Volume" },
+    { value: String(data.prCount), label: "PRs" },
+  ];
+  const stripH = drawStatStrip(ctx, { x: leftX, y, width: contentW, stats: stats.slice(0, 4), k: 1 });
+  y += stripH + 16;
+  if (stats.length > 4) {
+    const stripH2 = drawStatStrip(ctx, { x: leftX, y, width: contentW, stats: stats.slice(4), k: 1 });
+    y += stripH2 + 16;
+  }
+  ctx.textAlign = "left"; // drawStatStrip leaves textAlign at "center" — every left-aligned line below depends on this
+  if (data.mainMuscles.length > 0) {
+    ctx.fillStyle = COLOR.gray;
+    ctx.font = `700 17px ${FONT}`;
+    ctx.fillText(`Muscles trained: ${data.mainMuscles.join(", ")}`, leftX, y + 14);
+    y += 40;
+  }
+  y += 20;
+
+  if (data.readiness || data.alternateGym) {
+    divider(ctx, W, y, 0.12, 1);
+    y += 40;
+    recapSectionLabel(ctx, leftX, y, "SESSION CONTEXT");
+    y += 32;
+    if (data.readiness) {
+      ctx.fillStyle = COLOR.white;
+      ctx.font = `700 18px ${FONT}`;
+      ctx.fillText(`Readiness: ${data.readiness.score}/100 (${data.readiness.bandLabel})`, leftX, y);
+      y += 30;
+    }
+    if (data.alternateGym) {
+      ctx.fillStyle = COLOR.red;
+      ctx.font = `700 18px ${FONT}`;
+      ctx.fillText(`Alternate gym${data.alternateGym.locationLabel ? ` — ${data.alternateGym.locationLabel}` : ""}`, leftX, y);
+      y += 30;
+    }
+    y += 14;
+  }
+
+  if (data.prSummary.length > 0) {
+    divider(ctx, W, y, 0.12, 1);
+    y += 44;
+    recapSectionLabel(ctx, leftX, y, `${data.prCount} PR${data.prCount === 1 ? "" : "S"}`, COLOR.red);
+    y += 34;
+    data.prSummary.forEach((p) => {
+      ctx.fillStyle = COLOR.white;
+      ctx.font = `800 19px ${FONT}`;
+      ctx.fillText(p.name, leftX, y);
+      ctx.textAlign = "right";
+      ctx.fillStyle = COLOR.green;
+      ctx.font = `800 17px ${FONT}`;
+      ctx.fillText(p.deltaLabel, rightEdge, y);
+      ctx.textAlign = "left";
+      ctx.fillStyle = COLOR.gray;
+      ctx.font = `700 15px ${FONT}`;
+      ctx.fillText(`${p.heroLabel} · ${p.typeLabel}`, leftX, y + 22);
+      y += 48;
+    });
+    y += 8;
+  }
+
+  divider(ctx, W, y, 0.12, 1);
+  y += 44;
+  recapSectionLabel(ctx, leftX, y, "COMPLETE EXERCISE BREAKDOWN");
+  y += 38;
+
+  data.exercises.forEach((ex, i) => {
+    y = drawRecapExercise(ctx, { x: leftX, width: contentW, y, ex, index: i });
+  });
+
+  if (data.note) {
+    divider(ctx, W, y, 0.12, 1);
+    y += 40;
+    recapSectionLabel(ctx, leftX, y, "WORKOUT NOTES");
+    y += 30;
+    ctx.fillStyle = COLOR.white;
+    ctx.font = `600 19px ${FONT}`;
+    const noteLines = wrapAligned(ctx, data.note, leftX, y, contentW, 27, 8, "left");
+    y += noteLines * 27 + 24;
+  }
+
+  if (data.comparison) {
+    divider(ctx, W, y, 0.12, 1);
+    y += 40;
+    recapSectionLabel(ctx, leftX, y, `VS LAST ${data.comparison.planName.toUpperCase()}`);
+    y += 32;
+    const bits = [
+      data.comparison.deltaVolumePct != null ? `Volume ${data.comparison.deltaVolumePct >= 0 ? "+" : ""}${data.comparison.deltaVolumePct}%` : null,
+      data.comparison.deltaWorkingSets != null ? `Sets ${data.comparison.deltaWorkingSets >= 0 ? "+" : ""}${data.comparison.deltaWorkingSets}` : null,
+      data.comparison.deltaTotalReps != null ? `Reps ${data.comparison.deltaTotalReps >= 0 ? "+" : ""}${data.comparison.deltaTotalReps}` : null,
+      `${data.comparison.prCount} PR${data.comparison.prCount === 1 ? "" : "s"}`,
+    ]
+      .filter(Boolean)
+      .join("   ·   ");
+    ctx.fillStyle = COLOR.white;
+    ctx.font = `700 18px ${FONT}`;
+    ctx.fillText(bits, leftX, y);
+    y += 40;
+  }
+
+  if (data.coachMessage) {
+    divider(ctx, W, y, 0.12, 1);
+    y += 40;
+    recapSectionLabel(ctx, leftX, y, "BRK COACH", COLOR.red);
+    y += 30;
+    ctx.fillStyle = COLOR.white;
+    ctx.font = `600 19px ${FONT}`;
+    const coachLines = wrapAligned(ctx, data.coachMessage, leftX, y, contentW, 27, 10, "left");
+    y += coachLines * 27 + 24;
+  }
+
+  y += 30;
+  wordmark(ctx, W, y, 30);
+  y += 20;
+  ctx.textAlign = "center";
+  ctx.fillStyle = COLOR.dimGray;
+  ctx.font = `700 16px ${FONT}`;
+  ctx.fillText("KEEP THE PROMISES YOU MAKE TO YOURSELF", W / 2, y + 20);
+  y += 70;
+
+  return y;
+}
+
+// Full Recap's own export path — deliberately NOT part of renderWorkoutShareCard's
+// template/sizeId system below, since it has neither a fixed template style choice nor one of
+// SHARE_SIZES' fixed aspect ratios (task section 14: "does not need to fit inside a square").
+export function renderFullRecapImage({ session, exMap, state }) {
+  const data = buildFullRecapData({ session, state, exMap });
+  if (!data) return null;
+  const W = 1080;
+  const measuredH = drawFullRecapDoc(scratchContext(), W, data);
+  const H = Math.ceil(measuredH + 40);
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  background(ctx, W, H, H * 0.1);
+  drawFullRecapDoc(ctx, W, data);
+  return canvas.toDataURL("image/png");
 }
 
 // ---------------- entry point ----------------
@@ -1290,8 +1516,6 @@ export function renderWorkoutShareCard({ session, exMap, template = "performance
 
   if (template === "minimal") {
     drawMinimalCard(ctx, size.width, size.height, session, featured);
-  } else if (template === "recap") {
-    drawRecapCard(ctx, size.width, size.height, session, exMap);
   } else {
     drawPerformanceCard(ctx, size.width, size.height, session, exMap, featured);
   }

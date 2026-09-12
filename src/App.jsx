@@ -5527,7 +5527,7 @@ function GuidedRunView({
         )}
 
         {sharePreviewOpen && summary && (
-          <WorkoutSharePreview session={summary} exMap={exMap} onClose={() => setSharePreviewOpen(false)} />
+          <WorkoutSharePreview session={summary} exMap={exMap} state={state} onClose={() => setSharePreviewOpen(false)} />
         )}
 
         {summary && onViewWorkout && (

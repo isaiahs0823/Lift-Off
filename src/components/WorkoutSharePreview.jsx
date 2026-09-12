@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Share2, Download, X, Check } from "lucide-react";
+import { Share2, Download, X, Check, FileText } from "lucide-react";
 import {
   SHARE_TEMPLATES,
   SHARE_SIZES,
@@ -7,6 +7,16 @@ import {
   listFeaturableLifts,
   renderWorkoutShareCard,
 } from "../utils/workoutShareCard.js";
+import FullWorkoutRecap from "./FullWorkoutRecap.jsx";
+
+// Full Recap sits in the same "Style" row as the two social poster templates for muscle-memory
+// continuity, but it isn't a template of this preview's canvas/size system at all (task: "Full
+// Recap is not another social poster" — no fixed export size, no featured-lift curation, no
+// square/story/post constraint). Selecting it never sets `template`; it opens FullWorkoutRecap's
+// own full-screen scrollable record instead. Kept as a plain UI-only entry appended to
+// SHARE_TEMPLATES here rather than added to that exported list, so nothing else that reads
+// SHARE_TEMPLATES (renderWorkoutShareCard's dispatch, any other consumer) needs to know about it.
+const STYLE_OPTIONS = [...SHARE_TEMPLATES, { id: "recap", label: "Full Recap", blurb: "Every exercise, every set — complete record" }];
 
 // Full share preview flow for a completed workout (task: "Redesign the workout share/export
 // feature"). Opened from a single "Share" button on Session Complete and Workout History Detail
@@ -16,9 +26,10 @@ import {
 // Renders are on-demand canvas draws (cheap — a few ms), recomputed whenever template/size/
 // featured lift changes, so the preview always reflects the current selection with no separate
 // "confirm" step before the image is ready to save/share.
-export default function WorkoutSharePreview({ session, exMap, onClose }) {
+export default function WorkoutSharePreview({ session, exMap, state, onClose }) {
   const [template, setTemplate] = useState("performance");
   const [sizeId, setSizeId] = useState("story");
+  const [fullRecapOpen, setFullRecapOpen] = useState(false);
   const autoFeatured = useMemo(() => pickFeaturedLift(session, exMap), [session, exMap]);
   const [featuredOverride, setFeaturedOverride] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -57,7 +68,14 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
     a.remove();
   };
 
-  const showFeaturedPicker = template !== "recap";
+  // Full Recap opens its own full-screen overlay (see fullRecapOpen below) instead of using this
+  // component's canvas preview at all, so the featured-lift override only ever applies to the two
+  // real canvas templates.
+  const showFeaturedPicker = true;
+
+  if (fullRecapOpen) {
+    return <FullWorkoutRecap session={session} state={state} exMap={exMap} onClose={() => setFullRecapOpen(false)} />;
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 flex items-end sm:items-center justify-center" onClick={onClose}>
@@ -90,19 +108,25 @@ export default function WorkoutSharePreview({ session, exMap, onClose }) {
             )}
           </div>
 
-          {/* Template picker */}
+          {/* Style picker — Full Recap is a navigation action (opens its own full-screen record),
+              not a canvas template selection; see STYLE_OPTIONS' comment above. */}
           <div>
             <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Style</div>
             <div className="grid grid-cols-3 gap-1.5">
-              {SHARE_TEMPLATES.map((t) => (
+              {STYLE_OPTIONS.map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => setTemplate(t.id)}
+                  onClick={() => (t.id === "recap" ? setFullRecapOpen(true) : setTemplate(t.id))}
                   className={`py-2.5 px-1.5 text-center border ${
-                    template === t.id ? "border-v5-red bg-v5-red/20 text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
+                    template === t.id && t.id !== "recap"
+                      ? "border-v5-red bg-v5-red/20 text-white"
+                      : "border-white/10 text-v5-subtext hover:border-v5-red/40"
                   }`}
                 >
-                  <div className="text-[11px] font-bold uppercase tracking-wide">{t.label}</div>
+                  <div className="text-[11px] font-bold uppercase tracking-wide flex items-center justify-center gap-1">
+                    {t.id === "recap" && <FileText size={11} />}
+                    {t.label}
+                  </div>
                 </button>
               ))}
             </div>

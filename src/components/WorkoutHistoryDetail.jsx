@@ -217,7 +217,7 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
         </button>
       </div>
 
-      {sharePreviewOpen && <WorkoutSharePreview session={session} exMap={exMap} onClose={() => setSharePreviewOpen(false)} />}
+      {sharePreviewOpen && <WorkoutSharePreview session={session} exMap={exMap} state={state} onClose={() => setSharePreviewOpen(false)} />}
 
       {onAskCoach && (
         <button
