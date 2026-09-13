@@ -1402,9 +1402,14 @@ function toEditableSetRow(s) {
   };
 }
 
+// A set with 0 (or non-numeric) reps is never a real completed set — BRK has no "logged but
+// attempted zero reps" model today, so a set that never actually happened must never survive
+// into workout history, wherever it's saved from (active in-progress logging, the standalone Log
+// tab, or editing a finished entry). This is the one place that decision is made — every save
+// path below routes through here rather than re-deriving its own reps>0 check.
 function cleanSetsInput(sets) {
   return sets
-    .filter((s) => s.weight !== "" && s.reps !== "")
+    .filter((s) => s.weight !== "" && s.reps !== "" && Number(s.reps) > 0)
     .map((s) => {
       const cleanDrops = (s.drops || [])
         .filter((d) => d.weight !== "" && d.reps !== "")
@@ -4298,6 +4303,18 @@ function TrainingExerciseCard({
   const [reasonOpen, setReasonOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [addingExtra, setAddingExtra] = useState(false);
+  // Bug fix: "programmed set count must not hard-lock the athlete" — Save Set previously only
+  // blocked on an EMPTY weight/reps field, so decrementing the reps stepper to 0 (e.g. an athlete
+  // trying to "skip" a set they didn't want to do) silently saved a fake 0-rep working set into
+  // history instead of showing why it can't be saved. This message is the visible half of that
+  // fix; cleanSetsInput (shared by every save path) is the actual enforcement.
+  const [saveSetError, setSaveSetError] = useState(null);
+  const [editSetError, setEditSetError] = useState(null);
+  // Clear a shown validation message the instant the athlete actually changes the value it was
+  // about, regardless of which control changed it (stepper, direct input, Use Suggested,
+  // Duplicate Last) — a stale "enter at least 1 rep" left on screen after they've already fixed
+  // it would read as broken.
+  useEffect(() => setSaveSetError(null), [weight, reps]);
   // Full single-set editor (task: "a saved set can contain a drop set, but once saved there is
   // no obvious way to edit the drop-set values") — editSetRow holds the SetRowsEditor-shaped row
   // (weight/reps/drops/setType/rir/rpe as strings) for whichever confirmed set is being
@@ -4305,6 +4322,7 @@ function TrainingExerciseCard({
   // so drops/RIR/set type are editable here too instead of just weight/reps.
   const [editingSetIndex, setEditingSetIndex] = useState(null);
   const [editSetRow, setEditSetRow] = useState(null);
+  useEffect(() => setEditSetError(null), [editSetRow]);
 
   // ---------------- ACTIVE WORKOUT DRAFT AUTOSAVE ----------------
   // Continuously mirrors this exercise's in-progress state (confirmed-but-not-yet-exercise-
@@ -4450,7 +4468,14 @@ function TrainingExerciseCard({
     if (!editSetRow || editSetRow.weight === "" || editSetRow.reps === "") return;
     const i = editingSetIndex;
     const cleaned = cleanSetsInput([editSetRow])[0];
-    if (!cleaned) return;
+    if (!cleaned) {
+      // Reps <=0 is the only way cleanSetsInput drops a row that had both fields filled in —
+      // never silently discard the edit, tell the athlete why nothing happened (task: "delete
+      // this set instead" is the correct move here, not saving a fake attempt).
+      setEditSetError("Enter at least 1 rep, or delete this set instead.");
+      return;
+    }
+    setEditSetError(null);
     setConfirmedSets((prev) => prev.map((s, idx) => (idx === i ? cleaned : s)));
     setEditingSetIndex(null);
     setEditSetRow(null);
@@ -4461,6 +4486,7 @@ function TrainingExerciseCard({
     setConfirmedSets((prev) => prev.filter((_, idx) => idx !== i));
     setEditingSetIndex(null);
     setEditSetRow(null);
+    setEditSetError(null);
   };
 
   const saveSet = () => {
@@ -4476,6 +4502,13 @@ function TrainingExerciseCard({
       pain: quality === "pain" ? sanitizePainInfo({ bodyArea: painBodyArea, severity: painSeverity, note: painNote }) : null,
     };
     const cleaned = cleanSetsInput([raw])[0];
+    if (!cleaned) {
+      // weight/reps were both non-empty but reps resolved to 0 — most commonly the reps stepper
+      // decremented to 0 while trying to "skip" this set. Show why, don't fake a completed set.
+      setSaveSetError("Enter at least 1 rep, or skip this set.");
+      return;
+    }
+    setSaveSetError(null);
     setConfirmedSets((prev) => [...prev, cleaned]);
     onSetSaved?.({ weight, reps });
     setRirVal("");
@@ -4492,7 +4525,12 @@ function TrainingExerciseCard({
   };
 
   const finishExercise = () => {
-    if (confirmedSets.length === 0) return;
+    // Defensive safety net (task: "sanitize activeRun/session data... even if UI state gets into
+    // a strange condition") — confirmedSets should never actually contain a 0-rep placeholder
+    // now that saveSet/saveEditSet both route through cleanSetsInput, but a finished exercise
+    // must never persist one regardless of how it got there.
+    const validSets = confirmedSets.filter((s) => Number(s.reps) > 0);
+    if (validSets.length === 0) return;
     // Cancel any still-pending debounced draft flush for whatever was mid-typed in an abandoned
     // extra set — the athlete just chose to finish without it, so it must not resurrect as a
     // stale draft the next time this exercise slot is reopened (see the unmount flush effect
@@ -4506,8 +4544,8 @@ function TrainingExerciseCard({
       id: `log_${Date.now()}`,
       exId,
       date: new Date().toISOString(),
-      sets: confirmedSets,
-      targetReps: Number(reps) || confirmedSets[0].reps,
+      sets: validSets,
+      targetReps: Number(reps) || validSets[0].reps,
       // Whatever equipment context was selected when this exercise was finished (task section
       // 8) — omitted entirely for "Default Machine" so an entry logged with no equipment
       // engagement at all is byte-identical to every entry BRK has ever saved.
@@ -4780,6 +4818,7 @@ function TrainingExerciseCard({
                   simple={isSimple}
                   allowAddRemove={false}
                 />
+                {editSetError && <div className="text-xs text-v5-red">{editSetError}</div>}
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     onClick={saveEditSet}
@@ -4836,7 +4875,7 @@ function TrainingExerciseCard({
         <div className="bg-v5-surface rounded-xl p-2.5 space-y-1.5">
           <div className="text-sm font-bold text-v5-text">
             Set {confirmedSets.length + 1}
-            {targetSetCount ? ` of ${targetSetCount}` : ""}
+            {targetSetCount ? ` of ${targetSetCount} target` : ""}
           </div>
 
           {/* Weight and Reps are two short, independent boxes (not one tall Weight card with the
@@ -5112,6 +5151,8 @@ function TrainingExerciseCard({
             </div>
           )}
 
+          {saveSetError && <div className="text-xs text-v5-red text-center">{saveSetError}</div>}
+
           {/* The one unmistakable primary action on this screen — larger and given a soft red
               glow so it never reads as just another row of buttons among Plate Calc/Options. */}
           <button
@@ -5125,6 +5166,20 @@ function TrainingExerciseCard({
           >
             Save set
           </button>
+
+          {/* Bug fix: a programmed set count is a target, not a hard lock — this must be at
+              least as visible as Save Set itself, since a buried/easy-to-miss version of this
+              exact button is what pushed an athlete toward faking a 0-rep set to "skip" a set
+              they didn't want to do (see cleanSetsInput/saveSet above). Only shown once at least
+              one real set this exercise is already logged — never on the very first set. */}
+          {confirmedSets.length > 0 && (
+            <button
+              onClick={finishExercise}
+              className="w-full py-2.5 rounded-xl text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:text-v5-red hover:border-v5-red/30"
+            >
+              Finish exercise now ({confirmedSets.length} of {targetSetCount} target)
+            </button>
+          )}
         </div>
       )}
 
@@ -5143,11 +5198,6 @@ function TrainingExerciseCard({
             + Add another set
           </button>
         </div>
-      )}
-      {showDraft && confirmedSets.length > 0 && confirmedSets.length < targetSetCount && (
-        <button onClick={finishExercise} className="w-full text-center text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red py-1">
-          Finish exercise now ({confirmedSets.length} set{confirmedSets.length > 1 ? "s" : ""} logged)
-        </button>
       )}
     </div>
   );
