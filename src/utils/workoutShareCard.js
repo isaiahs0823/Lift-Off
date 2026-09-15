@@ -1,14 +1,21 @@
 // ---------------- WORKOUT SHARE CARDS (v3 — premium redesign) ----------------
-// Premium, canvas-drawn branded BRK share cards for a completed workout session. Two social
-// poster templates — Performance and Minimal Story — each rendered at three export sizes (9:16
-// Story, 4:5 Post, 1:1 Square). Pure canvas, no image/charting dependency.
+// Premium, canvas-drawn branded BRK share cards for a completed workout session. Three social
+// poster templates — Performance, Workout Recap, and Minimal Story — each rendered at three
+// export sizes (9:16 Story, 4:5 Post, 1:1 Square — "social" only offers Story/Post in the UI,
+// see WorkoutSharePreview.jsx). Pure canvas, no image/charting dependency.
 //
-// Full Recap (task: "BRK FULL RECAP REBUILD") is deliberately NOT a third poster template here —
-// it's a categorically different thing (the complete workout record, not a curated social
-// highlight) and lives in its own full-screen scrollable component, FullWorkoutRecap.jsx, backed
-// by utils/fullRecap.js's data/plaintext builders. Its own image export, renderFullRecapImage
-// below, is a tall document sized to its real content rather than one of SHARE_SIZES' fixed
-// aspect ratios — see that function's own comment.
+// The three templates sit on a deliberate spectrum, per the tasks that built them:
+//   Performance ("BRK FULL RECAP REBUILD" era)  — "look at my result": one hero lift, curated.
+//   Workout Recap ("BRK SHARE SYSTEM EXPANSION") — "here is what I actually did": every
+//     exercise, still one social image. See drawWorkoutRecapCard below.
+//   Full Recap ("BRK FULL RECAP REBUILD")        — "the complete training record": every field,
+//     unlimited length. Deliberately NOT a poster template here at all — it's a categorically
+//     different thing and lives in its own full-screen scrollable component,
+//     FullWorkoutRecap.jsx, backed by utils/fullRecap.js's data/plaintext builders. Its own image
+//     export, renderFullRecapImage below, is a tall document sized to its real content rather
+//     than one of SHARE_SIZES' fixed aspect ratios — see that function's own comment.
+// Workout Recap shares fullRecap.js's data builder with Full Recap (never re-derives its own
+// notion of "working set" or "PR"), but stays a fixed-size poster like Performance/Minimal.
 //
 // v3 moves the card from "clean but forgettable" to "premium, bold, social-ready" without
 // copying any literal reference imagery: stronger hierarchy (workout title now dominates, not
@@ -37,7 +44,8 @@ import {
 } from "../assets/anatomyData.js";
 
 export const SHARE_TEMPLATES = [
-  { id: "performance", label: "Performance", blurb: "Hero lift, key stats, PR badges" },
+  { id: "performance", label: "Performance", blurb: "Best lift, PR, social highlight" },
+  { id: "social", label: "Workout Recap", blurb: "Every exercise, social-ready" },
   { id: "minimal", label: "Minimal Story", blurb: "Big number, clean and sparse" },
 ];
 
@@ -1172,6 +1180,191 @@ function drawMinimalCard(ctx, W, H, session, featured) {
   footerTagline(ctx, W, H, compact ? 15 : 18, storyPad);
 }
 
+// ---------------- template: WORKOUT RECAP (social training record) ----------------
+// Task: "BRK SHARE SYSTEM EXPANSION — add a social 'Workout Recap' template." Sits between
+// Performance ("look at my result" — one hero lift) and Full Recap ("the complete training
+// record" — every field, unlimited scroll): every EXERCISE appears here too, but as a compact,
+// still-one-Story-image summary — "here is what I actually did," built for a training partner
+// running the same program to compare against their own session. Reuses fullRecap.js's
+// buildFullRecapData for the exercise/set/PR breakdown so this, the tall Full Recap image, and
+// the in-app Full Recap screen can never disagree about what a "working set" or a "PR" is.
+//
+// Unlike Performance/Minimal, this card's exercise list has genuinely variable content height (3
+// exercises vs. 12 is a real difference in how much fits) at a FIXED canvas size — so instead of
+// centerBody's single measure-then-center pass, this tries a sequence of (mode, density) tiers
+// from most-detailed to most-compact, measuring each against a scratch context (same technique
+// renderFullRecapImage uses) until one actually fits inside the space left after the header/stat
+// strip/footer, per the task's own priority order: every exercise, then every PR, then every best
+// set, then as much of the real working-set sequence as space allows.
+
+// One row per exercise: every WORKING set (warm-ups excluded per task section 5) rendered as a
+// compact "weight×reps" chain, with drop sequences folded into the same line ("275×6 → 185×4")
+// exactly like the in-app compact set format — plus whatever a compressed fallback needs (best
+// set, working-set count). Nothing here is derived independently of buildFullRecapData, so a
+// deleted/never-saved 0-rep set can never appear (task section 12/15).
+function buildWorkoutRecapRows(data) {
+  return data.exercises.map((ex) => {
+    const working = ex.setRows.filter((r) => !r.isWarmup);
+    const lines = working.map((r) => ({
+      text: [`${r.weight}×${r.reps}`, ...r.drops.map((d) => `${d.weight}×${d.reps}`)].join(" → "),
+      isPR: r.prs.length > 0,
+    }));
+    return { name: ex.name, hasPR: ex.prs.length > 0, lines, bestSet: ex.bestSet, workingCount: ex.workingSetCount };
+  });
+}
+
+// Draws every row starting at `y` and returns the Y it ended at — called once against a throwaway
+// scratch context to MEASURE whether a given (mode, k) tier fits, then again for real once one
+// does. `mode: "full"` lists every working-set line; `"compressed"` (task section 6's explicit
+// fallback) shows only the best set + a working-set count per exercise, for sessions with too
+// much real content to fully enumerate at a legible size.
+function layoutWorkoutRecapRows(ctx, { x, width, y, rows, mode, k }) {
+  let cy = y;
+  rows.forEach((row, i) => {
+    ctx.textAlign = "left";
+    ctx.fillStyle = row.hasPR ? COLOR.red : COLOR.dimGray;
+    ctx.font = `800 ${sz(17, k, 12)}px ${FONT}`;
+    ctx.fillText(String(i + 1).padStart(2, "0"), x, cy);
+
+    const numW = sz(34, k, 24);
+    ctx.fillStyle = COLOR.white;
+    const nameSize = sz(20, k, 14);
+    ctx.font = `800 ${nameSize}px ${FONT}`;
+    const badgeReserve = row.hasPR ? sz(56, k, 38) : 0;
+    const name = truncateToWidth(ctx, row.name.toUpperCase(), width - numW - badgeReserve);
+    ctx.fillText(name, x + numW, cy);
+    if (row.hasPR) drawBadgeInline(ctx, x + numW + ctx.measureText(name).width + 10, cy - sz(16, k, 11), "PR", k);
+    cy += sz(27, k, 19);
+
+    if (mode === "full" && row.lines.length > 0) {
+      row.lines.forEach((line) => {
+        ctx.fillStyle = line.isPR ? COLOR.red : COLOR.white;
+        ctx.font = `${line.isPR ? 800 : 700} ${sz(18, k, 13)}px ${FONT}`;
+        ctx.fillText(line.text, x + numW, cy);
+        cy += sz(24, k, 17);
+      });
+    } else if (row.bestSet) {
+      ctx.fillStyle = COLOR.gray;
+      ctx.font = `700 ${sz(17, k, 12)}px ${FONT}`;
+      ctx.fillText(`Top: ${row.bestSet.weight}×${row.bestSet.reps}`, x + numW, cy);
+      cy += sz(22, k, 16);
+      if (row.workingCount > 0) {
+        ctx.fillStyle = COLOR.dimGray;
+        ctx.font = `600 ${sz(15, k, 11)}px ${FONT}`;
+        ctx.fillText(`${row.workingCount} working set${row.workingCount === 1 ? "" : "s"}`, x + numW, cy);
+        cy += sz(21, k, 15);
+      }
+    }
+    cy += sz(15, k, 9);
+  });
+  return cy;
+}
+
+function drawWorkoutRecapCard(ctx, W, H, session, exMap, data) {
+  const { k: tierK } = sizeScale(H);
+  const leftX = W * 0.08;
+  const rightEdge = W - W * 0.08;
+  const contentW = rightEdge - leftX;
+  const isStoryHeight = H >= 1900;
+
+  background(ctx, W, H, H * 0.18);
+
+  let y = H * 0.05 + sz(20, tierK, 10);
+  wordmark(ctx, W, y, sz(34, tierK, 22), "left", leftX);
+  y += sz(42, tierK, 28);
+
+  // Program/day identity (task section 8/9) — only when this session actually came from a real
+  // program day, never invented for a custom/blank workout that has no such context.
+  if (session.sourceProgramName) {
+    ctx.textAlign = "left";
+    ctx.fillStyle = COLOR.red;
+    ctx.font = `800 ${sz(15, tierK, 11)}px ${FONT}`;
+    const programLine = session.sourceDayLabel ? `${session.sourceProgramName} · ${session.sourceDayLabel}` : session.sourceProgramName;
+    ctx.fillText(programLine.toUpperCase(), leftX, y);
+    y += sz(28, tierK, 18);
+  }
+
+  ctx.fillStyle = COLOR.white;
+  const titleSize = fitFontSize(ctx, data.planName, contentW, "900", sz(46, tierK, 26), 22);
+  ctx.font = `900 ${titleSize}px ${FONT}`;
+  const titleLines = wrapAligned(ctx, data.planName, leftX, y + titleSize * 0.82, contentW, titleSize * 1.05, 2, "left");
+  y += titleSize * 0.82 + (titleLines - 1) * titleSize * 1.05 + sz(16, tierK, 10);
+
+  // Real comparison only (task section 2/12) — session.perfDeltaPct is computed once at
+  // buildSessionSummary time against the most recent prior session sharing this exact plan name;
+  // never recomputed or guessed here.
+  if (session.perfDeltaPct != null) {
+    const up = session.perfDeltaPct >= 0;
+    ctx.textAlign = "left";
+    ctx.fillStyle = up ? COLOR.green : COLOR.gray;
+    ctx.font = `700 ${sz(19, tierK, 13)}px ${FONT}`;
+    ctx.fillText(`${up ? "+" : ""}${session.perfDeltaPct}% volume vs last ${data.planName}`, leftX, y);
+    y += sz(34, tierK, 22);
+  }
+  y += sz(14, tierK, 8);
+
+  divider(ctx, W, y, 0.12, (rightEdge - leftX) / W);
+  y += sz(36, tierK, 22);
+
+  const stats = [
+    { value: data.durationLabel, label: "Duration", icon: "clock" },
+    { value: String(data.workingSets), label: "Sets", icon: "layers" },
+    { value: data.totalVolume.toLocaleString(), label: "Volume", icon: "chart" },
+    { value: String(data.prCount), label: "PRs", icon: "trophy" },
+  ];
+  const stripH = drawStatStrip(ctx, { x: leftX, y, width: contentW, stats, k: tierK });
+  y += stripH + sz(30, tierK, 18);
+  ctx.textAlign = "left"; // drawStatStrip leaves textAlign at "center"
+
+  const bodyTop = y;
+  const footerReserve = sz(session.sourceProgramName ? 210 : 170, tierK, session.sourceProgramName ? 130 : 100);
+  const bodyBottom = H - footerReserve;
+
+  const rows = buildWorkoutRecapRows(data);
+  // Most-detailed-that-fits (task section 6's priority order: every exercise and every PR are
+  // non-negotiable — already guaranteed since `rows` always has one entry per exercise — best/top
+  // sets next, the full working-set sequence only "as much as practical"). Tries full detail at
+  // full density first, then progressively falls back to the compressed per-exercise summary
+  // before shrinking density further — never drops an exercise to make room.
+  const attempts = [
+    { mode: "full", k: tierK },
+    { mode: "full", k: tierK * 0.85 },
+    { mode: "full", k: Math.max(0.55, tierK * 0.7) },
+    { mode: "compressed", k: tierK },
+    { mode: "compressed", k: tierK * 0.85 },
+    { mode: "compressed", k: Math.max(0.5, tierK * 0.68) },
+  ];
+  let chosen = attempts[attempts.length - 1];
+  for (const attempt of attempts) {
+    const endY = layoutWorkoutRecapRows(scratchContext(), { x: leftX, width: contentW, y: bodyTop, rows, ...attempt });
+    if (endY <= bodyBottom) {
+      chosen = attempt;
+      break;
+    }
+  }
+  // A short 3-exercise session would otherwise leave a large dead gap between the list and the
+  // footer, so leftover space is distributed rather than left entirely below — but unlike
+  // Minimal/Full Recap's fully-centered single hero block, this is a document-style list read
+  // top-down right after the stat strip, so only a quarter of the slack goes above it (full 50/50
+  // centering read as "floating," disconnected from the header it belongs with).
+  const measuredEnd = layoutWorkoutRecapRows(scratchContext(), { x: leftX, width: contentW, y: bodyTop, rows, ...chosen });
+  const listOffset = Math.max(0, (bodyBottom - bodyTop - (measuredEnd - bodyTop)) * 0.25);
+  layoutWorkoutRecapRows(ctx, { x: leftX, width: contentW, y: bodyTop + listOffset, rows, ...chosen });
+
+  // ---- footer: understated program/community copy (task section 8), then the standard BRK
+  // wordmark + tagline every export ends with ----
+  let fy = bodyBottom + sz(26, tierK, 16);
+  if (session.sourceProgramName) {
+    ctx.textAlign = "center";
+    ctx.fillStyle = COLOR.gray;
+    ctx.font = `700 ${sz(15, tierK, 11)}px ${FONT}`;
+    ctx.fillText("SAME PLAN. YOUR NUMBERS.", W / 2, fy);
+    fy += sz(30, tierK, 18);
+  }
+  wordmark(ctx, W, fy + sz(24, tierK, 16), sz(28, tierK, 18));
+  footerTagline(ctx, W, H, sz(16, tierK, 12), isStoryHeight ? 46 : 0);
+}
+
 // ---------------- FULL RECAP — complete workout record (tall document image) ----------------
 // Rebuilt (task: "BRK FULL RECAP REBUILD — turn it into the complete workout record"). This is
 // NOT a social poster and is deliberately never drawn at one of SHARE_SIZES' fixed heights — the
@@ -1501,16 +1694,27 @@ export function renderFullRecapImage({ session, exMap, state }) {
 //   session      — a workoutSessions entry (App.jsx's Session Complete `summary`, or a stored
 //                  session opened from Workout History — same shape either way).
 //   exMap        — id -> exercise lookup, for names/types.
-//   template     — "performance" | "minimal" | "recap"
-//   sizeId       — "story" | "post" | "square"
+//   state        — only read by the "social" (Workout Recap) template, to build the same
+//                  exercise/set/PR breakdown Full Recap uses via fullRecap.js. Unused by
+//                  Performance/Minimal — safe to omit for those.
+//   template     — "performance" | "minimal" | "social"
+//   sizeId       — "story" | "post" | "square" ("square" isn't offered for "social" in the UI,
+//                  but still renders rather than erroring if ever passed)
 //   featuredLift — result of pickFeaturedLift()/listFeaturableLifts(), or a user override of
-//                  the same shape. Ignored by the recap template (it shows every exercise).
-export function renderWorkoutShareCard({ session, exMap, template = "performance", sizeId = "story", featuredLift }) {
+//                  the same shape. Ignored by "social" (it shows every exercise, not one hero
+//                  lift) and by Full Recap (a separate export path, see renderFullRecapImage).
+export function renderWorkoutShareCard({ session, exMap, state, template = "performance", sizeId = "story", featuredLift }) {
   const size = SHARE_SIZES.find((s) => s.id === sizeId) || SHARE_SIZES[0];
   const canvas = document.createElement("canvas");
   canvas.width = size.width;
   canvas.height = size.height;
   const ctx = canvas.getContext("2d");
+
+  if (template === "social") {
+    const data = buildFullRecapData({ session, state, exMap });
+    drawWorkoutRecapCard(ctx, size.width, size.height, session, exMap, data);
+    return canvas.toDataURL("image/png");
+  }
 
   const featured = featuredLift || pickFeaturedLift(session, exMap);
 

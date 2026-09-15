@@ -36,15 +36,19 @@ export default function WorkoutSharePreview({ session, exMap, state, onClose }) 
 
   const featurable = useMemo(() => listFeaturableLifts(session, exMap), [session, exMap]);
   const featured = featuredOverride || autoFeatured;
+  // Workout Recap targets Story primarily, with Post as a documented secondary option (task:
+  // "Primary format: 1080×1920 Instagram Story... Optional later: 4:5 post") — Square isn't
+  // offered for it at all, since the dense per-exercise layout was never designed for 1:1.
+  const availableSizes = template === "social" ? SHARE_SIZES.filter((s) => s.id !== "square") : SHARE_SIZES;
   const size = SHARE_SIZES.find((s) => s.id === sizeId) || SHARE_SIZES[0];
 
   const dataUrl = useMemo(() => {
     try {
-      return renderWorkoutShareCard({ session, exMap, template, sizeId, featuredLift: featured });
+      return renderWorkoutShareCard({ session, exMap, state, template, sizeId, featuredLift: featured });
     } catch (e) {
       return null;
     }
-  }, [session, exMap, template, sizeId, featured]);
+  }, [session, exMap, state, template, sizeId, featured]);
 
   const save = async () => {
     if (!dataUrl) return;
@@ -69,9 +73,10 @@ export default function WorkoutSharePreview({ session, exMap, state, onClose }) 
   };
 
   // Full Recap opens its own full-screen overlay (see fullRecapOpen below) instead of using this
-  // component's canvas preview at all, so the featured-lift override only ever applies to the two
-  // real canvas templates.
-  const showFeaturedPicker = true;
+  // component's canvas preview at all. Workout Recap shows every exercise rather than one curated
+  // hero lift, so "Featured Lift" has nothing to apply to there either — only Performance/Minimal
+  // actually read `featuredLift`.
+  const showFeaturedPicker = template === "performance" || template === "minimal";
 
   if (fullRecapOpen) {
     return <FullWorkoutRecap session={session} state={state} exMap={exMap} onClose={() => setFullRecapOpen(false)} />;
@@ -109,14 +114,25 @@ export default function WorkoutSharePreview({ session, exMap, state, onClose }) 
           </div>
 
           {/* Style picker — Full Recap is a navigation action (opens its own full-screen record),
-              not a canvas template selection; see STYLE_OPTIONS' comment above. */}
+              not a canvas template selection; see STYLE_OPTIONS' comment above. Four options now
+              (task: "BRK SHARE SYSTEM EXPANSION" added Workout Recap between Performance and Full
+              Recap), so a 2x2 grid reads better than a lopsided 3-then-1. */}
           <div>
             <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Style</div>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
               {STYLE_OPTIONS.map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => (t.id === "recap" ? setFullRecapOpen(true) : setTemplate(t.id))}
+                  onClick={() => {
+                    if (t.id === "recap") {
+                      setFullRecapOpen(true);
+                      return;
+                    }
+                    setTemplate(t.id);
+                    // Square isn't offered for Workout Recap — switching into it while Square was
+                    // selected must not leave the preview stuck on a hidden size.
+                    if (t.id === "social" && sizeId === "square") setSizeId("story");
+                  }}
                   className={`py-2.5 px-1.5 text-center border ${
                     template === t.id && t.id !== "recap"
                       ? "border-v5-red bg-v5-red/20 text-white"
@@ -127,6 +143,7 @@ export default function WorkoutSharePreview({ session, exMap, state, onClose }) 
                     {t.id === "recap" && <FileText size={11} />}
                     {t.label}
                   </div>
+                  <div className="text-[10px] text-v5-subtext/70 normal-case font-normal mt-0.5">{t.blurb}</div>
                 </button>
               ))}
             </div>
@@ -136,7 +153,7 @@ export default function WorkoutSharePreview({ session, exMap, state, onClose }) 
           <div>
             <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Export Size</div>
             <div className="grid grid-cols-3 gap-1.5">
-              {SHARE_SIZES.map((s) => (
+              {availableSizes.map((s) => (
                 <button
                   key={s.id}
                   onClick={() => setSizeId(s.id)}
