@@ -226,25 +226,31 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
         title="Today's Workout"
         subtitle={previewRow.dayLabel ? `${previewRow.programName} — ${previewRow.dayLabel}` : previewRow.programName}
         onBack={() => setPreviewRow(null)}
+        // Persistent decision bar (task: "BRK Workout Preview UX Bug") — Use This Workout/Cancel
+        // must stay reachable without scrolling through the exercise list first. Primary clearly
+        // dominates (solid red, full width) over Cancel (plain text link beneath it), rather than
+        // two equally-weighted buttons side by side.
+        footer={
+          <div className="space-y-2">
+            <button
+              onClick={() => commitRow(previewRow)}
+              className="w-full py-3.5 text-sm uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90 shadow-[0_8px_24px_-8px_rgba(210,38,46,0.55)]"
+            >
+              Use This Workout Today
+            </button>
+            <button
+              onClick={() => setPreviewRow(null)}
+              className="w-full py-1 text-[11px] uppercase tracking-widest font-bold text-v5-subtext hover:text-v5-red"
+            >
+              Cancel
+            </button>
+          </div>
+        }
       >
         <div>
           {previewRow.exercises.map((e, i) => (
             <ExerciseAnatomyRow key={i} exercise={exMap[e.exId]} exId={e.exId} prescription={formatSetPrescription(e)} />
           ))}
-        </div>
-        <div className="flex gap-2 pt-2">
-          <button
-            onClick={() => commitRow(previewRow)}
-            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
-          >
-            Use This Workout Today
-          </button>
-          <button
-            onClick={() => setPreviewRow(null)}
-            className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
-          >
-            Cancel
-          </button>
         </div>
       </SlideInPanel>
     );
