@@ -87,9 +87,9 @@ export function Card({ children, tone = "default", onClick, className = "", padd
 // The one big focal card per screen (Today's workout, Train's current program). Larger padding,
 // accent tone by default, room for a headline + a couple of stat lines + a CTA. Still the most
 // generous Card variant after the density pass — just not as oversized as before.
-export function HeroCard({ children, className = "", tone = "accent", onClick, as }) {
+export function HeroCard({ children, className = "", tone = "accent", padding = "p-4 sm:p-5", onClick, as }) {
   return (
-    <Card tone={tone} padding="p-4 sm:p-5" radius="rounded-2xl" className={`space-y-2.5 sm:space-y-3 ${className}`} onClick={onClick} as={as}>
+    <Card tone={tone} padding={padding} radius="rounded-2xl" className={`space-y-2.5 sm:space-y-3 ${className}`} onClick={onClick} as={as}>
       {children}
     </Card>
   );
@@ -237,9 +237,9 @@ export function EmptyState({ icon: Icon, title, body, action, className = "" }) 
 // than a full ListRow/Button for a grid of 3-4 short actions.
 export function ActionTile({ icon: Icon, label, onClick, className = "" }) {
   return (
-    <button onClick={onClick} className={`flex flex-col items-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl bg-v5-surface hover:bg-v5-elevated ${className}`}>
-      <span className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-v5-elevated flex items-center justify-center">
-        <Icon size={16} className="text-v5-red" />
+    <button onClick={onClick} className={`flex flex-col items-center gap-1 sm:gap-1.5 py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl bg-v5-surface hover:bg-v5-elevated ${className}`}>
+      <span className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-v5-elevated flex items-center justify-center">
+        <Icon size={15} className="text-v5-red" />
       </span>
       <span className="text-[11px] font-bold uppercase tracking-wide text-v5-subtext text-center leading-tight">{label}</span>
     </button>
@@ -312,12 +312,12 @@ export function PeriodSelect({ value, onChange, options, className = "" }) {
 // hero exactly so desktop is identical either way (mobile density/composition pass, section 7).
 export function PhotoHero({ exercise, eyebrow, title, meta, children, className = "", compact = false }) {
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-v5-red/25 via-v5-elevated to-v5-surface ${compact ? "p-3.5" : "p-5"} sm:p-6 ${className}`}>
+    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-v5-red/25 via-v5-elevated to-v5-surface p-3.5 sm:p-6 ${className}`}>
       <div className="absolute -right-8 -bottom-10 opacity-95 pointer-events-none">
         <MuscleBodyOutline exercise={exercise} size={190} />
       </div>
       <div className="absolute inset-0 bg-gradient-to-r from-v5-surface via-v5-surface/55 to-transparent pointer-events-none" />
-      <div className={`relative ${compact ? "space-y-1.5" : "space-y-2.5"} sm:space-y-3`}>
+      <div className="relative space-y-1.5 sm:space-y-3">
         {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
         {title && <div className={`${compact ? "text-lg" : "text-[22px]"} sm:text-[26px] leading-[1.1] font-black text-v5-text tracking-tight`}>{title}</div>}
         {meta}

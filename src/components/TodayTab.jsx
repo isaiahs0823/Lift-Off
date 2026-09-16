@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown, Target, Flame } from "lucide-react";
+import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown, Target, Flame, Plus, X } from "lucide-react";
 import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
 import NutritionCard from "./NutritionCard.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
 import { SlideInPanel } from "./SlideInPanel.jsx";
 import { SectionLabel, Card, HeroCard, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, Pill, ActionTile, ListRow, RingGauge, LineChart } from "./ui/Kit.jsx";
-import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
+import { rollingAverage, weeklyRateOfChange, latestValue, upsertBodyweightEntry, isValidBodyweightLb } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue, goalHistory } from "../utils/goalData.js";
 import { goalProgressPct, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
 import { resolveTodayWorkout } from "../utils/programSchedule.js";
@@ -249,7 +249,7 @@ const BAND_RING_TONE = { green: "success", yellow: "warn", red: "red" };
 
 function CompactReadinessTile({ readiness, onOpen }) {
   return (
-    <Card onClick={onOpen} padding="p-2.5" className="flex flex-col items-center gap-1 text-center">
+    <Card onClick={onOpen} padding="p-1.5" className="flex flex-col items-center gap-1 text-center">
       <SectionLabel tone="muted">Readiness</SectionLabel>
       {readiness ? (
         <>
@@ -266,11 +266,27 @@ function CompactReadinessTile({ readiness, onOpen }) {
   );
 }
 
-function CompactBodyweightTile({ currentWeight, weeklyChange, onOpen }) {
+// `onQuickAdd` is the one-tap daily entry — a small red [+] pinned to the tile's corner that
+// opens BodyweightQuickEntry directly, never routing through Progress/Body (task: "Bodyweight
+// must be a one-tap daily action"). It sits inside the same tappable Card as `onOpen` (which
+// still opens the fuller Progress/Body view — "[+] = quick log, tile body = detailed history"),
+// so its own click handler stops propagation to avoid triggering both at once.
+function CompactBodyweightTile({ currentWeight, weeklyChange, onOpen, onQuickAdd }) {
   const trendUp = weeklyChange != null && weeklyChange > 0;
   const trendDown = weeklyChange != null && weeklyChange < 0;
   return (
-    <Card onClick={onOpen} padding="p-2.5" className="flex flex-col items-center justify-center gap-1 text-center">
+    <Card onClick={onOpen} padding="p-1.5" className="relative flex flex-col items-center justify-center gap-1 text-center">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onQuickAdd();
+        }}
+        aria-label="Log today's bodyweight"
+        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-v5-red text-white flex items-center justify-center hover:opacity-90 active:opacity-80"
+      >
+        <Plus size={12} strokeWidth={3} />
+      </button>
       <SectionLabel tone="muted">Bodyweight</SectionLabel>
       {currentWeight != null ? (
         <>
@@ -296,9 +312,60 @@ function CompactBodyweightTile({ currentWeight, weeklyChange, onOpen }) {
   );
 }
 
+// Compact weight-entry popover shared by the mobile summary tile and the desktop Bodyweight
+// card — the ONLY new UI this task adds. Weight-only (waist/body-fat/notes stay on the fuller
+// BodyweightTab editor), prefilled from today's entry if one exists else the most recent value,
+// and saved through the same `upsertBodyweightEntry` same-day upsert BodyweightTab and the
+// Nutrition assessment already use — one source of truth, never a second Today-only weight
+// system. Rendered as a bottom-sheet/modal overlay (WorkoutSharePreview's pattern), not a
+// SlideInPanel push, since it's a quick popover, not a navigation.
+function BodyweightQuickEntry({ entries, onSave, onClose }) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayEntry = (entries || []).find((e) => e.date.slice(0, 10) === todayStr);
+  const prefill = todayEntry ? todayEntry.weight : latestValue(entries, "weight");
+  const [value, setValue] = useState(prefill != null ? String(prefill) : "");
+  const numeric = value.trim() !== "" ? Number(value) : null;
+  const valid = numeric != null && isValidBodyweightLb(numeric);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/85 flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-xs sm:mx-4 bg-v5-elevated border border-white/10 sm:border rounded-t-2xl sm:rounded-2xl p-5 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <SectionLabel>Today's bodyweight</SectionLabel>
+          <button onClick={onClose} className="p-1 -m-1 text-v5-subtext hover:text-v5-red" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="flex items-end justify-center gap-2">
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && valid) onSave(numeric);
+            }}
+            placeholder="0.0"
+            className="w-28 bg-v5-surface rounded-xl text-center text-3xl font-black text-v5-text tabular-nums px-2 py-2.5 focus:outline-none focus:ring-1 focus:ring-v5-red"
+          />
+          <span className="text-sm text-v5-subtext pb-3">lb</span>
+        </div>
+        <ButtonPrimary size="lg" disabled={!valid} onClick={() => onSave(numeric)}>
+          Save
+        </ButtonPrimary>
+      </div>
+    </div>
+  );
+}
+
 function CompactStreakTile({ streak, onOpen }) {
   return (
-    <Card onClick={onOpen} padding="p-2.5" className="flex flex-col items-center justify-center gap-1 text-center">
+    <Card onClick={onOpen} padding="p-1.5" className="flex flex-col items-center justify-center gap-1 text-center">
       <SectionLabel tone="muted">Streak</SectionLabel>
       <div className="flex items-center gap-1 text-lg font-black text-v5-text leading-none py-1.5">
         <Flame size={15} className={streak > 0 ? "text-v5-red" : "text-v5-subtext/40"} />
@@ -314,7 +381,7 @@ function CompactStreakTile({ streak, onOpen }) {
 // its own trend sparkline — rather than the tighter 3-tile mobile row above, per the mobile
 // composition pass's "desktop remains unchanged" rule (this is a real layout difference, not
 // just spacing, so it's gated by breakpoint rather than restyled in place).
-function BodyweightCard({ state, currentWeight, avg7, weeklyChange, onNavigate }) {
+function BodyweightCard({ state, currentWeight, avg7, weeklyChange, onNavigate, onQuickAdd }) {
   const entries = (state.bodyweightLogs || [])
     .slice()
     .sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -326,7 +393,18 @@ function BodyweightCard({ state, currentWeight, avg7, weeklyChange, onNavigate }
   const trendUp = weeklyChange != null && weeklyChange > 0;
   const trendDown = weeklyChange != null && weeklyChange < 0;
   return (
-    <Card onClick={() => onNavigate("progress")} padding="p-4" className="space-y-2">
+    <Card onClick={() => onNavigate("progress")} padding="p-4" className="relative space-y-2">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onQuickAdd();
+        }}
+        aria-label="Log today's bodyweight"
+        className="absolute top-3 right-3 w-6 h-6 rounded-full bg-v5-red text-white flex items-center justify-center hover:opacity-90 active:opacity-80"
+      >
+        <Plus size={13} strokeWidth={3} />
+      </button>
       <SectionLabel tone="muted">Bodyweight</SectionLabel>
       <div className="text-2xl font-black text-v5-text tabular-nums leading-none">
         {fmt1(currentWeight)} <span className="text-xs font-normal text-v5-subtext">lb</span>
@@ -350,7 +428,7 @@ function BodyweightCard({ state, currentWeight, avg7, weeklyChange, onNavigate }
 // Nutrition neighbor.
 function CoachBriefCard({ message, onNavigate }) {
   return (
-    <Card onClick={() => onNavigate("coach")} className="space-y-2">
+    <Card onClick={() => onNavigate("coach")} padding="p-2.5 sm:p-3.5" className="space-y-2">
       <SectionLabel className="flex items-center gap-1.5">
         <MessageCircle size={12} /> Coach Brief
       </SectionLabel>
@@ -360,20 +438,34 @@ function CoachBriefCard({ message, onNavigate }) {
   );
 }
 
+// An onboarding nudge, not one of Today's 7 primary sections — a slim one-line row on mobile
+// (task Part 2: only Workout/Readiness-Bodyweight-Streak/Nutrition-Coach/Quick Actions are
+// allowed to take real vertical space), the fuller two-button card kept for sm: and up where
+// there's room to spare.
 function SetupSchedulePrompt({ onSetup, onLater }) {
   return (
-    <Card className="flex items-center justify-between gap-3">
-      <div>
-        <div className="text-sm font-bold text-v5-text">Set up your training week</div>
-        <div className="text-xs text-v5-subtext mt-0.5">Know which days are training, conditioning, recovery, or rest.</div>
-      </div>
-      <div className="shrink-0 flex items-center gap-3">
-        <ButtonText tone="muted" onClick={onLater}>Later</ButtonText>
-        <button onClick={onSetup} className="px-3 py-2 rounded-lg text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90">
-          Set up
-        </button>
-      </div>
-    </Card>
+    <>
+      <button
+        type="button"
+        onClick={onSetup}
+        className="sm:hidden w-full flex items-center justify-between px-1 py-1 text-xs font-bold text-v5-text"
+      >
+        <span className="truncate">Set up your training week</span>
+        <span className="shrink-0 text-[11px] uppercase tracking-widest text-v5-red">Set up</span>
+      </button>
+      <Card className="hidden sm:flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-bold text-v5-text">Set up your training week</div>
+          <div className="text-xs text-v5-subtext mt-0.5">Know which days are training, conditioning, recovery, or rest.</div>
+        </div>
+        <div className="shrink-0 flex items-center gap-3">
+          <ButtonText tone="muted" onClick={onLater}>Later</ButtonText>
+          <button onClick={onSetup} className="px-3 py-2 rounded-lg text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90">
+            Set up
+          </button>
+        </div>
+      </Card>
+    </>
   );
 }
 
@@ -412,6 +504,12 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
   // The full readiness questionnaire is a dedicated sheet, not a permanent block on Today (task
   // section 3) — Today only ever shows ReadinessCheckIn's compact ring-gauge/prompt state.
   const [readinessSheetOpen, setReadinessSheetOpen] = useState(false);
+  // One-tap bodyweight quick entry (task: "BRK Today screen finalization") — a small overlay,
+  // not a SlideInPanel push, so it never counts as "routing away" from Today.
+  const [bodyweightSheetOpen, setBodyweightSheetOpen] = useState(false);
+  // Secondary sheet for This Week / Mission / Recent Win, pulled out of the always-visible Today
+  // stack so the primary dashboard fits one viewport (task Part 2).
+  const [moreTodayOpen, setMoreTodayOpen] = useState(false);
 
   const coachContext = buildCoachContext(state, exMap);
   const coachMessage = generateTodaySnapshot(coachContext).message;
@@ -459,6 +557,19 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
     if (run) onStartRun(run.plan, run.programContext);
   };
 
+  // Same-day upsert through the one shared bodyweightLogs architecture (bodyweightMath.js) —
+  // BodyweightTab's own saveToday() and the Nutrition assessment call this exact function, so a
+  // Today quick-entry is a third caller, not a parallel system. `updateState` re-renders Today
+  // (and every other screen reading state.bodyweightLogs) immediately — no refresh needed.
+  const saveQuickBodyweight = (weight) => {
+    updateState((prev) => ({
+      ...prev,
+      bodyweightLogs: upsertBodyweightEntry(prev.bodyweightLogs || [], { weight }),
+      hasSeenOnboarding: true,
+    }));
+    setBodyweightSheetOpen(false);
+  };
+
   if (swapOpen && !activeRun) {
     return <SwapWorkoutSheet state={state} updateState={updateState} exMap={exMap} onClose={() => setSwapOpen(false)} onNavigate={onNavigate} />;
   }
@@ -472,7 +583,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5 sm:space-y-4">
       <div>
         <div className="text-2xl font-black text-v5-text tracking-tight">{greeting()}</div>
         <div className="text-xs text-v5-subtext mt-0.5">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
@@ -606,11 +717,9 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
                 )
               }
             >
-              {readiness && (
-                <div className="text-xs text-v5-subtext">
-                  Readiness <span className={`font-bold ${READINESS_COLOR[readiness.band]}`}>{readiness.score} {BAND_LABEL[readiness.band]}</span>
-                </div>
-              )}
+              {/* No separate Readiness line here — the Readiness/Bodyweight/Streak summary row
+                  right below already shows the same score; repeating it inside the hero was
+                  pure duplication eating hero height for nothing (Part 2). */}
               <ButtonPrimary size="lg" icon={Play} onClick={() => (run ? startScheduled(todaySchedule.source) : onNavigate("train"))}>
                 {run ? "Start workout" : "Choose a workout"}
               </ButtonPrimary>
@@ -670,7 +779,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
           </div>
         </PhotoHero>
       ) : (
-        <HeroCard>
+        <HeroCard padding="p-3.5 sm:p-5">
           <div className="flex items-center justify-between gap-2">
             <SectionLabel>Today</SectionLabel>
             {(todayPlan || programDay?.isRecoveryDay) && !programDay.completedToday && !activeRun && (
@@ -766,17 +875,36 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
           layout below instead (unchanged desktop/tablet experience — section 12/18/31). */}
       <div className={`sm:hidden grid ${scheduleOn ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
         <CompactReadinessTile readiness={readiness} onOpen={() => setReadinessSheetOpen(true)} />
-        <CompactBodyweightTile currentWeight={currentWeight} weeklyChange={weeklyChange} onOpen={() => onNavigate("progress")} />
+        <CompactBodyweightTile
+          currentWeight={currentWeight}
+          weeklyChange={weeklyChange}
+          onOpen={() => onNavigate("progress")}
+          onQuickAdd={() => setBodyweightSheetOpen(true)}
+        />
         {scheduleOn && <CompactStreakTile streak={streak} onOpen={() => onNavigate("mission")} />}
       </div>
 
       <div className="hidden sm:grid sm:grid-cols-2 gap-3 items-start">
         <ReadinessCheckIn state={state} updateState={updateState} compact onOpenFull={() => setReadinessSheetOpen(true)} />
         {currentWeight != null ? (
-          <BodyweightCard state={state} currentWeight={currentWeight} avg7={avg7} weeklyChange={weeklyChange} onNavigate={onNavigate} />
+          <BodyweightCard
+            state={state}
+            currentWeight={currentWeight}
+            avg7={avg7}
+            weeklyChange={weeklyChange}
+            onNavigate={onNavigate}
+            onQuickAdd={() => setBodyweightSheetOpen(true)}
+          />
         ) : (
-          <Card onClick={() => onNavigate("progress")} padding="p-4" className="flex flex-col justify-center items-center text-center space-y-1.5">
-            <Scale size={18} className="text-v5-subtext/60" />
+          <Card padding="p-4" className="relative flex flex-col justify-center items-center text-center space-y-1.5">
+            <button
+              type="button"
+              onClick={() => setBodyweightSheetOpen(true)}
+              className="w-9 h-9 rounded-full bg-v5-red text-white flex items-center justify-center hover:opacity-90 active:opacity-80"
+              aria-label="Log today's bodyweight"
+            >
+              <Plus size={16} strokeWidth={3} />
+            </button>
             <div className="text-[11px] text-v5-subtext">Log your weight</div>
           </Card>
         )}
@@ -790,42 +918,79 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         <CoachBriefCard message={coachMessage} onNavigate={onNavigate} />
       </div>
 
-      {/* Secondary/supporting information, consolidated under one heading instead of each
-          being its own giant full-width card (task section 6) — this week's schedule stays its
-          own compact glance-strip, Mission and Recent Win collapse to single-line rows, and
-          Quick Actions stays the icon-tile row it already was. */}
-      {(weekStrip || missionView || recentWin) && (
-        <div className="space-y-2">
-          <SectionLabel tone="muted">More today</SectionLabel>
-          {weekStrip && <WeekStrip strip={weekStrip} />}
-          {missionView && (
-            <ListRow
-              icon={Target}
-              title={missionView.goal.title}
-              subtitle={`${missionView.pct}% complete · ${GOAL_STATUS_LABEL[missionView.status]}`}
-              onClick={() => onNavigate("mission")}
-            />
+      <div>
+        {/* This Week / Mission / Recent Win are useful but secondary — pulled out of the
+            always-visible stack (task Part 2: "stop making Today carry every feature") into the
+            "More today" sheet, reached from a trailing link sharing this same header row rather
+            than a whole extra line of its own. Data/logic untouched, just relocated. */}
+        <div className="flex items-center justify-between mb-2">
+          <SectionLabel tone="muted">Quick actions</SectionLabel>
+          {(weekStrip || missionView || recentWin) && (
+            <button
+              type="button"
+              onClick={() => setMoreTodayOpen(true)}
+              className="flex items-center gap-0.5 text-[11px] font-bold uppercase tracking-widest text-v5-subtext hover:text-v5-red"
+            >
+              More today
+              <ChevronRight size={12} />
+            </button>
           )}
-          {recentWin && (
-            <ListRow
-              icon={Award}
-              title={exMap[recentWin.exId]?.name || recentWin.exId}
-              subtitle={recentWin.weight != null ? `${recentWin.weight} × ${recentWin.reps} · Recent win` : "Recent win"}
-              onClick={() => onNavigate("progress")}
-            />
-          )}
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          {/* One-word labels (rather than "Log weight"/"Change workout"/"View progress") are a
+              content edit, not a font shrink — at 4-up tile width, two words wrapped to two
+              lines, quietly pushing the whole row's height past what one word needs. */}
+          <ActionTile icon={Weight} label="Weight" onClick={() => setBodyweightSheetOpen(true)} />
+          <ActionTile icon={RefreshCw} label="Swap" onClick={() => onNavigate("train")} />
+          <ActionTile icon={TrendingUp} label="Progress" onClick={() => onNavigate("progress")} />
+          <ActionTile icon={MessageCircle} label="Coach" onClick={() => onNavigate("coach")} />
+        </div>
+      </div>
+
+      {moreTodayOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-end sm:items-center justify-center" onClick={() => setMoreTodayOpen(false)}>
+          <div
+            className="w-full sm:max-w-md sm:mx-4 bg-v5-elevated border border-white/10 sm:border rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] shrink-0">
+              <SectionLabel>More today</SectionLabel>
+              <button onClick={() => setMoreTodayOpen(false)} className="p-1 -m-1 text-v5-subtext hover:text-v5-red" aria-label="Close">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-2">
+              {weekStrip && <WeekStrip strip={weekStrip} />}
+              {missionView && (
+                <ListRow
+                  icon={Target}
+                  title={missionView.goal.title}
+                  subtitle={`${missionView.pct}% complete · ${GOAL_STATUS_LABEL[missionView.status]}`}
+                  onClick={() => {
+                    setMoreTodayOpen(false);
+                    onNavigate("mission");
+                  }}
+                />
+              )}
+              {recentWin && (
+                <ListRow
+                  icon={Award}
+                  title={exMap[recentWin.exId]?.name || recentWin.exId}
+                  subtitle={recentWin.weight != null ? `${recentWin.weight} × ${recentWin.reps} · Recent win` : "Recent win"}
+                  onClick={() => {
+                    setMoreTodayOpen(false);
+                    onNavigate("progress");
+                  }}
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-      <div>
-        <SectionLabel tone="muted" className="mb-2">Quick actions</SectionLabel>
-        <div className="grid grid-cols-4 gap-2">
-          <ActionTile icon={Weight} label="Log weight" onClick={() => onNavigate("progress")} />
-          <ActionTile icon={RefreshCw} label="Change workout" onClick={() => onNavigate("train")} />
-          <ActionTile icon={TrendingUp} label="View progress" onClick={() => onNavigate("progress")} />
-          <ActionTile icon={MessageCircle} label="Ask coach" onClick={() => onNavigate("coach")} />
-        </div>
-      </div>
+      {bodyweightSheetOpen && (
+        <BodyweightQuickEntry entries={entries} onSave={saveQuickBodyweight} onClose={() => setBodyweightSheetOpen(false)} />
+      )}
     </div>
   );
 }

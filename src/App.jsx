@@ -2739,11 +2739,14 @@ function Header() {
     <div className="px-4 sm:px-6 pt-2 pb-1.5 sm:pt-3 sm:pb-2 bg-v5-bg">
       <div className="flex items-center gap-1.5 sm:gap-2">
         <img src={BREAK_LOGO} alt="B.R.E.A.K. logo" className="w-7 h-7 rounded-full object-cover ring-1 ring-v5-red/50" />
-        <div>
+        <div className="min-w-0">
           <div className="text-v5-text font-black tracking-wide text-sm leading-none">
             BRK <span className="text-v5-red">-</span> LIFT
           </div>
-          <div className="text-[11px] text-v5-subtext/70 tracking-[0.18em] uppercase mt-0.5 sm:mt-1">Keep the promises you make to yourself</div>
+          {/* truncate (rather than letting the tagline wrap) keeps the header a fixed one-line
+              height at every width — at 375px the wide letter-tracking was pushing it to two
+              lines, which is exactly the kind of "compact app/header area" tax Part 2 removes. */}
+          <div className="text-[11px] text-v5-subtext/70 tracking-[0.18em] uppercase mt-0.5 sm:mt-1 truncate">Keep the promises you make to yourself</div>
         </div>
       </div>
     </div>

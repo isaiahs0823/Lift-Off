@@ -17,7 +17,7 @@ import { Card, SectionLabel, ButtonPrimary, ButtonSecondary, ProgressBar } from 
 export default function NutritionCard({ state, onNavigate, compact = false }) {
   if (!hasNutritionProfile(state) || !state.nutritionTargets) {
     return (
-      <Card onClick={() => onNavigate("nutrition")}>
+      <Card onClick={() => onNavigate("nutrition")} padding={compact ? "p-3 sm:p-3.5" : "p-3.5"}>
         <SectionLabel>Nutrition</SectionLabel>
         <div className="text-sm text-v5-subtext mt-1">{compact ? "Set up your nutrition plan." : "Set up your nutrition plan so Coach can guide your intake alongside training."}</div>
         <div className="mt-2 text-[11px] uppercase tracking-widest text-v5-red font-bold flex items-center gap-1">
