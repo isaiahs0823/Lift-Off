@@ -2143,6 +2143,45 @@ export default function LiftLog() {
   const addRunExercise = (exId) => {
     setActiveRun((run) => ({ ...run, exercises: [...run.exercises, { exId, sets: 3 }] }));
   };
+  // Swipe-to-remove (task: "BRK Active Workout — Swipe to Remove Exercise") — removes one slot
+  // from the in-progress run, today-only: this only ever mutates activeRun.exercises, the
+  // program/template/plan itself is never touched, so nothing changes there unless the athlete
+  // edits it separately. If that slot already had a logged set, its durable state.logs entry is
+  // deleted too (same scoping discardRun above uses for a whole-run cleanup, just for one
+  // entry) so it doesn't linger as orphaned history still counted toward that exercise's future
+  // PR baseline. Every later slot's sessionEntries/draftByIndex/swaps index is shifted down by
+  // one to stay aligned with the now-shorter exercises array — see sanitizeActiveRun's
+  // draftByIndex comment for why these are keyed by array position rather than a stable id.
+  // buildSessionSummary (used by finishRun) reads only sessionEntries, never activeRun.exercises
+  // directly, so removing here is also automatically sufficient for volume/PR/recap accuracy —
+  // nothing downstream (Full Recap, share cards, Coach summary) needs separate cleanup.
+  const removeRunExercise = (index) => {
+    if (!activeRun) return;
+    const removedEntry = activeRun.sessionEntries.find((se) => se.index === index)?.entry;
+    if (removedEntry) {
+      updateState((prev) => ({ ...prev, logs: (prev.logs || []).filter((l) => l.id !== removedEntry.id) }));
+    }
+    const reindex = (idx) => (idx > index ? idx - 1 : idx);
+    setActiveRun((run) => {
+      if (!run) return run;
+      return {
+        ...run,
+        exercises: run.exercises.filter((_, i) => i !== index),
+        sessionEntries: run.sessionEntries.filter((se) => se.index !== index).map((se) => ({ ...se, index: reindex(se.index) })),
+        draftByIndex: Object.fromEntries(
+          Object.entries(run.draftByIndex || {})
+            .filter(([k]) => Number(k) !== index)
+            .map(([k, v]) => [reindex(Number(k)), v])
+        ),
+        swaps: Object.fromEntries(
+          Object.entries(run.swaps || {})
+            .filter(([k]) => Number(k) !== index)
+            .map(([k, v]) => [reindex(Number(k)), v])
+        ),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  };
   // Shared by finishRun (lifting) and finishRecoverySession (mobility/recovery) — a program day
   // is a program day regardless of whether it was a lifting workout or a recovery day, so
   // "advance to the next day, clear a same-day override, record when/what was completed" is one
@@ -2404,6 +2443,7 @@ export default function LiftLog() {
             persistStatus={persistStatus}
             onSwap={swapRunExercise}
             onAddExercise={addRunExercise}
+            onRemoveExercise={removeRunExercise}
             onReopen={reopenRun}
             onLoggedSet={bumpRestTimer}
             onRate={rateSession}
@@ -5206,6 +5246,99 @@ function TrainingExerciseCard({
   );
 }
 
+// Swipe-to-reveal wrapper for one COLLAPSED exercise row (task: "BRK Active Workout — Swipe to
+// Remove Exercise") — never used around the expanded TrainingExerciseCard or the edit panel, so
+// it can never fight with scrolling a set list, typing weight/reps, or tapping a set type.
+// `isOpen`/`onOpenChange` are lifted to the parent rather than kept locally, since only one row
+// should ever be revealed at a time (opening a new one should close whatever was open) and
+// because a removal shifts every later row's array index — a single parent-owned "which index is
+// open" resets cleanly to null on any removal instead of needing per-row reindexing.
+const SWIPE_REVEAL_PX = 76;
+const SWIPE_OPEN_THRESHOLD = 34;
+function SwipeableExerciseRow({ isOpen, onOpenChange, onRemove, exName, children }) {
+  const [dragging, setDragging] = useState(false);
+  const [dragDx, setDragDx] = useState(0);
+  const gestureRef = useRef(null); // { startX, startY, axis: null | "x" | "y" }
+
+  const baseX = isOpen ? -SWIPE_REVEAL_PX : 0;
+  const x = baseX + (dragging ? dragDx : 0);
+
+  const handleStart = (clientX, clientY) => {
+    gestureRef.current = { startX: clientX, startY: clientY, axis: null };
+  };
+  const handleMove = (clientX, clientY, evt) => {
+    const g = gestureRef.current;
+    if (!g) return;
+    const dx = clientX - g.startX;
+    const dy = clientY - g.startY;
+    if (g.axis === null) {
+      // A few px of jitter commits to neither direction yet — slight diagonal movement must
+      // never accidentally start a horizontal swipe (task section 9).
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      g.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? "x" : "y";
+      if (g.axis === "x") setDragging(true);
+    }
+    if (g.axis !== "x") return; // vertical intent — leave it to native scrolling entirely
+    if (evt?.cancelable) evt.preventDefault();
+    const min = isOpen ? -14 : -(SWIPE_REVEAL_PX + 14);
+    const max = isOpen ? SWIPE_REVEAL_PX + 14 : 14;
+    setDragDx(Math.min(max, Math.max(min, dx)));
+  };
+  const handleEnd = () => {
+    const g = gestureRef.current;
+    gestureRef.current = null;
+    const wasHorizontal = g?.axis === "x";
+    const finalX = baseX + dragDx;
+    setDragging(false);
+    setDragDx(0);
+    if (!wasHorizontal) return;
+    if (!isOpen && finalX < -SWIPE_OPEN_THRESHOLD) onOpenChange(true);
+    else if (isOpen && finalX > -SWIPE_REVEAL_PX + SWIPE_OPEN_THRESHOLD) onOpenChange(false);
+    // else: no state change — CSS transition below snaps the row back to wherever it already was
+  };
+
+  return (
+    <div
+      className="relative overflow-hidden"
+      // Capture phase, so a tap anywhere on the row while it's open closes it instead of
+      // reaching the row's own tap target underneath (task: "tap elsewhere / swipe back ->
+      // action closes") — never fires while closed, so normal taps (Edit, etc.) are untouched.
+      onClickCapture={(e) => {
+        if (!isOpen) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenChange(false);
+      }}
+    >
+      <div className="absolute inset-y-0 right-0 flex" style={{ width: SWIPE_REVEAL_PX }}>
+        <button
+          onClick={() => {
+            onOpenChange(false);
+            onRemove();
+          }}
+          // Distinct from the always-visible Trash2 fallback's aria-label on the same row
+          // (task section 10) — both do the same thing, but two identically-labeled controls on
+          // one row would be an ambiguous pair for a screen reader user to tell apart.
+          aria-label={`Remove ${exName} (swipe action)`}
+          className="flex-1 bg-v5-red text-white text-[11px] font-bold uppercase tracking-widest flex items-center justify-center"
+        >
+          Remove
+        </button>
+      </div>
+      <div
+        onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchMove={(e) => handleMove(e.touches[0].clientX, e.touches[0].clientY, e)}
+        onTouchEnd={handleEnd}
+        onTouchCancel={handleEnd}
+        className={`relative bg-v5-bg ${dragging ? "" : "transition-transform duration-200 ease-out"}`}
+        style={{ transform: `translateX(${x}px)`, touchAction: "pan-y" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ---------------- GUIDED PLAN RUNNER ----------------
 // Shows every exercise in the plan on one page so the whole session is visible at once, but
 // only the current, not-yet-logged exercise ever shows active input fields — logged ones
@@ -5214,6 +5347,11 @@ function TrainingExerciseCard({
 // target on screen to mis-tap. Saving a set writes to the same state.logs array the
 // standalone Log tab uses and bumps the rest timer. A "Finish workout" button ends the
 // session; it doesn't require every exercise to be logged.
+//
+// Swipe-to-remove (task: "BRK Active Workout — Swipe to Remove Exercise") lets the athlete pull
+// an exercise out of TODAY's session entirely — equipment unavailable, pain, time, or the
+// movement just doesn't make sense today. It only ever mutates activeRun (via onRemoveExercise),
+// never the source program/template/plan, so "program = plan, session = reality."
 function GuidedRunView({
   run,
   state,
@@ -5240,10 +5378,37 @@ function GuidedRunView({
   onRename,
   onSaveTemporaryProfile,
   onUpdateSessionContext,
+  onRemoveExercise,
 }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
   const [addingExercise, setAddingExercise] = useState(false);
+  // Swipe-to-remove (task: "BRK Active Workout — Swipe to Remove Exercise"). `openSwipeIdx`:
+  // which collapsed row currently has its Remove action revealed — a single value, not a map,
+  // since only one row is ever open at once and it needs no reindexing on removal (just reset to
+  // null). `removeConfirm`: the pending confirmation, `{ idx, exName, hasLoggedSets }` or null —
+  // carries its own exName/hasLoggedSets snapshot rather than re-deriving from `idx` at confirm
+  // time, so the copy stays correct even though a *later* removal could otherwise shift indices
+  // before this one is acted on.
+  const [openSwipeIdx, setOpenSwipeIdx] = useState(null);
+  const [removeConfirm, setRemoveConfirm] = useState(null);
+  const requestRemoveExercise = (idx, exName, hasLoggedSets) => {
+    setOpenSwipeIdx(null);
+    setRemoveConfirm({ idx, exName, hasLoggedSets });
+  };
+  const confirmRemoveExercise = () => {
+    if (!removeConfirm) return;
+    onRemoveExercise?.(removeConfirm.idx);
+    setRemoveConfirm(null);
+    setOpenSwipeIdx(null);
+    // These are all keyed by array position (like sessionEntries/draftByIndex/swaps — see
+    // removeRunExercise's own comment) but are transient UI-only state, so the simplest correct
+    // fix is clearing them rather than reindexing: a stale PR badge/open-edit-panel/save-profile
+    // prompt pointing at the wrong (shifted) exercise would be worse than it just closing.
+    setPrByIndex({});
+    setEditingIdx(null);
+    setSavingProfileForIdx(null);
+  };
   // Redesigned workout share flow (task: "Redesign the workout share/export feature") — a full
   // preview modal with template/size/featured-lift choice, opened from the same "Share" action
   // this screen has always had. See components/WorkoutSharePreview.jsx.
@@ -5748,6 +5913,42 @@ function GuidedRunView({
           />
         </div>
       )}
+      {/* Remove-exercise confirmation (task section 2/5) — a plain untouched slot gets the
+          simple one-line version; a slot with real logged sets gets the stronger warning and a
+          "Remove Exercise" (rather than bare "Remove") confirm label, matching the app's existing
+          convention of a plainer confirm for pre-commit state vs. a stronger one once real
+          logged data is on the line (see EditLogEntryPanel's "Delete this logged entry?"). */}
+      {removeConfirm && (
+        <div className="fixed inset-0 z-40 bg-black/85 flex items-end sm:items-center justify-center" onClick={() => setRemoveConfirm(null)}>
+          <div
+            className="w-full sm:max-w-xs sm:mx-4 bg-v5-elevated border border-white/10 sm:border rounded-t-2xl sm:rounded-2xl p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-1.5">
+              <div className="text-sm font-bold text-v5-text uppercase tracking-wide">Remove exercise?</div>
+              <div className="text-sm text-v5-subtext">
+                {removeConfirm.hasLoggedSets
+                  ? "This will remove the exercise and its logged sets from today's workout."
+                  : `${removeConfirm.exName} will be removed from today's workout.`}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setRemoveConfirm(null)}
+                className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRemoveExercise}
+                className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
+              >
+                {removeConfirm.hasLoggedSets ? "Remove Exercise" : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -5895,86 +6096,136 @@ function GuidedRunView({
                 (() => {
                   const finishedTop = topSetOf(entry.sets);
                   const workingCount = countedSets(entry.sets).length;
+                  const exName = exMap[currentExId]?.name || currentExId;
                   return (
-                    <div className="space-y-3">
-                      <button onClick={() => setEditingIdx(idx)} className="w-full text-left flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 text-sm font-bold text-v5-text mb-1">
-                            <Check size={14} className="text-v5-success shrink-0" />
-                            <span className="truncate">{exMap[currentExId]?.name || currentExId}</span>
-                          </div>
-                          <div className="text-xs text-v5-subtext">
-                            {workingCount} working set{workingCount === 1 ? "" : "s"} · Best {finishedTop.weight} × {finishedTop.reps} · Volume{" "}
-                            {Math.round(entryVolume(entry)).toLocaleString()} lb
-                          </div>
-                        </div>
-                        <span className="shrink-0 text-xs uppercase tracking-widest text-v5-red hover:opacity-80">Edit</span>
-                      </button>
-                      {prByIndex[idx] && <PRCallout exMap={exMap} exId={currentExId} prs={prByIndex[idx]} state={state} />}
-                      {/* Optional, non-blocking — task section 17: a temporary/different-machine
-                          entry can become real, comparable history without ever having required
-                          a saved profile up front. */}
-                      {entry.equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT && onSaveTemporaryProfile && (
-                        savingProfileForIdx === idx ? (
-                          <AddEquipmentProfileForm
-                            saveLabel="Save profile"
-                            onSave={(label, gymLabel) => {
-                              onSaveTemporaryProfile(idx, entry, label, gymLabel);
-                              setSavingProfileForIdx(null);
-                            }}
-                            onCancel={() => setSavingProfileForIdx(null)}
-                          />
-                        ) : (
-                          <button
-                            onClick={() => setSavingProfileForIdx(idx)}
-                            className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red"
-                          >
-                            Save this machine profile
+                    <SwipeableExerciseRow
+                      isOpen={openSwipeIdx === idx}
+                      onOpenChange={(open) => setOpenSwipeIdx(open ? idx : null)}
+                      onRemove={() => requestRemoveExercise(idx, exName, true)}
+                      exName={exName}
+                    >
+                      <div className="space-y-3">
+                        <div className="w-full flex items-center justify-between gap-3">
+                          <button onClick={() => setEditingIdx(idx)} className="min-w-0 text-left flex-1">
+                            <div className="flex items-center gap-1.5 text-sm font-bold text-v5-text mb-1">
+                              <Check size={14} className="text-v5-success shrink-0" />
+                              <span className="truncate">{exName}</span>
+                            </div>
+                            <div className="text-xs text-v5-subtext">
+                              {workingCount} working set{workingCount === 1 ? "" : "s"} · Best {finishedTop.weight} × {finishedTop.reps} · Volume{" "}
+                              {Math.round(entryVolume(entry)).toLocaleString()} lb
+                            </div>
                           </button>
-                        )
-                      )}
-                    </div>
+                          <span onClick={() => setEditingIdx(idx)} className="shrink-0 text-xs uppercase tracking-widest text-v5-red hover:opacity-80 cursor-pointer">
+                            Edit
+                          </span>
+                          {/* Accessible fallback (task section 10) — desktop, non-swipe-discoverers,
+                              and screen readers all still get a real remove control. */}
+                          <button
+                            onClick={() => requestRemoveExercise(idx, exName, true)}
+                            aria-label={`Remove ${exName}`}
+                            className="shrink-0 p-1 -m-1 text-v5-subtext/50 hover:text-v5-red"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                        {prByIndex[idx] && <PRCallout exMap={exMap} exId={currentExId} prs={prByIndex[idx]} state={state} />}
+                        {/* Optional, non-blocking — task section 17: a temporary/different-machine
+                            entry can become real, comparable history without ever having required
+                            a saved profile up front. */}
+                        {entry.equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT && onSaveTemporaryProfile && (
+                          savingProfileForIdx === idx ? (
+                            <AddEquipmentProfileForm
+                              saveLabel="Save profile"
+                              onSave={(label, gymLabel) => {
+                                onSaveTemporaryProfile(idx, entry, label, gymLabel);
+                                setSavingProfileForIdx(null);
+                              }}
+                              onCancel={() => setSavingProfileForIdx(null)}
+                            />
+                          ) : (
+                            <button
+                              onClick={() => setSavingProfileForIdx(idx)}
+                              className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red"
+                            >
+                              Save this machine profile
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </SwipeableExerciseRow>
                   );
                 })()
               ) : isActive ? (
-                <TrainingExerciseCard
-                  key={currentExId}
-                  exId={currentExId}
-                  exSlot={exSlot}
-                  state={state}
-                  updateState={updateState}
-                  exMap={exMap}
-                  allExercises={allExercises}
-                  onSaved={(savedEntry) => {
-                    const prs = detectPRs(currentExId, savedEntry, state.logs);
-                    if (prs.length > 0) setPrByIndex((m) => ({ ...m, [idx]: prs }));
-                    onSaved(idx, savedEntry);
-                  }}
-                  onSwap={(newExId) => onSwap(idx, newExId)}
-                  sessionContext={run.sessionContext}
-                  exIndex={idx}
-                  totalExercises={totalExercises}
-                  onSetSaved={(justSaved) => {
-                    // Mid-group (e.g. still on A1 of an A1/A2 pair): no rest, straight into the
-                    // next movement. Rest only starts once the group's last exercise logs a set,
-                    // and uses the "superset" default rather than this one exercise's own
-                    // compound/isolation category. Within a solo exercise (or the group's last
-                    // member), every individual saved set now bumps rest, not just the whole
-                    // exercise at once. The just-saved weight/reps ride along so the compact
-                    // rest timer can show "Next: 245 x 8" — the same numbers as the set that was
-                    // just logged, since that's what the athlete will most likely repeat.
-                    if (isLastInGroup(idx)) {
-                      onLoggedSet?.(
-                        label ? "superset" : { exId: currentExId, nextWeight: justSaved?.weight, nextReps: justSaved?.reps }
-                      );
-                    }
-                  }}
-                  draft={run.draftByIndex?.[idx]}
-                  onDraftChange={(draft) => onDraftChange?.(idx, draft)}
-                  onDraftDirty={onDraftDirty}
-                />
+                <div className="space-y-2">
+                  {/* Non-swipe remove affordance for the exercise currently being worked (task
+                      section 7/10) — deliberately NOT wrapped in SwipeableExerciseRow, which never
+                      touches the expanded TrainingExerciseCard so it can never fight with
+                      scrolling, typing weight/reps, or tapping a set type. */}
+                  <div className="flex items-center justify-end">
+                    <button
+                      onClick={() => requestRemoveExercise(idx, exMap[currentExId]?.name || currentExId, false)}
+                      aria-label={`Remove ${exMap[currentExId]?.name || currentExId}`}
+                      className="p-1 -m-1 text-v5-subtext/50 hover:text-v5-red"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <TrainingExerciseCard
+                    key={currentExId}
+                    exId={currentExId}
+                    exSlot={exSlot}
+                    state={state}
+                    updateState={updateState}
+                    exMap={exMap}
+                    allExercises={allExercises}
+                    onSaved={(savedEntry) => {
+                      const prs = detectPRs(currentExId, savedEntry, state.logs);
+                      if (prs.length > 0) setPrByIndex((m) => ({ ...m, [idx]: prs }));
+                      onSaved(idx, savedEntry);
+                    }}
+                    onSwap={(newExId) => onSwap(idx, newExId)}
+                    sessionContext={run.sessionContext}
+                    exIndex={idx}
+                    totalExercises={totalExercises}
+                    onSetSaved={(justSaved) => {
+                      // Mid-group (e.g. still on A1 of an A1/A2 pair): no rest, straight into the
+                      // next movement. Rest only starts once the group's last exercise logs a set,
+                      // and uses the "superset" default rather than this one exercise's own
+                      // compound/isolation category. Within a solo exercise (or the group's last
+                      // member), every individual saved set now bumps rest, not just the whole
+                      // exercise at once. The just-saved weight/reps ride along so the compact
+                      // rest timer can show "Next: 245 x 8" — the same numbers as the set that was
+                      // just logged, since that's what the athlete will most likely repeat.
+                      if (isLastInGroup(idx)) {
+                        onLoggedSet?.(
+                          label ? "superset" : { exId: currentExId, nextWeight: justSaved?.weight, nextReps: justSaved?.reps }
+                        );
+                      }
+                    }}
+                    draft={run.draftByIndex?.[idx]}
+                    onDraftChange={(draft) => onDraftChange?.(idx, draft)}
+                    onDraftDirty={onDraftDirty}
+                  />
+                </div>
               ) : (
-                <div className="text-base font-medium text-v5-subtext">{exMap[currentExId]?.name || currentExId}</div>
+                <SwipeableExerciseRow
+                  isOpen={openSwipeIdx === idx}
+                  onOpenChange={(open) => setOpenSwipeIdx(open ? idx : null)}
+                  onRemove={() => requestRemoveExercise(idx, exMap[currentExId]?.name || currentExId, false)}
+                  exName={exMap[currentExId]?.name || currentExId}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-base font-medium text-v5-subtext truncate">{exMap[currentExId]?.name || currentExId}</div>
+                    <button
+                      onClick={() => requestRemoveExercise(idx, exMap[currentExId]?.name || currentExId, false)}
+                      aria-label={`Remove ${exMap[currentExId]?.name || currentExId}`}
+                      className="shrink-0 p-1 -m-1 text-v5-subtext/40 hover:text-v5-red"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </SwipeableExerciseRow>
               )}
             </div>
           );
