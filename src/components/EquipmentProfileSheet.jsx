@@ -9,13 +9,16 @@ import {
   TEMPORARY_EQUIPMENT_CONTEXT,
 } from "../utils/equipmentProfiles.js";
 
-// Extremely lightweight by design (task section 5): a name, an optional gym/location label,
-// nothing else — no manufacturer, model, serial, resistance data, or photos. Shared by the main
-// Equipment Profile sheet's "+ Add machine profile" and GuidedRunView's post-exercise "Save
+// Lightweight by design (task section 7): only the profile name is required — gym/location,
+// machine/brand, and notes are all optional, so creating a profile never demands more than the
+// one thing that actually matters (a name to tell it apart from other machines). Shared by the
+// main Equipment Profile sheet's "+ Add machine profile" and GuidedRunView's post-exercise "Save
 // this machine profile" prompt so there's exactly one add form in the app, not two.
 export function AddEquipmentProfileForm({ onSave, onCancel, saveLabel = "Save" }) {
   const [label, setLabel] = useState("");
   const [gymLabel, setGymLabel] = useState("");
+  const [brand, setBrand] = useState("");
+  const [notes, setNotes] = useState("");
   return (
     <div className="border border-white/10 bg-v5-elevated p-3 space-y-2.5">
       <div>
@@ -37,9 +40,27 @@ export function AddEquipmentProfileForm({ onSave, onCancel, saveLabel = "Save" }
           className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
         />
       </div>
+      <div>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1">Machine / brand (optional)</label>
+        <input
+          value={brand}
+          onChange={(e) => setBrand(e.target.value)}
+          placeholder="Life Fitness"
+          className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
+        />
+      </div>
+      <div>
+        <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1">Notes (optional)</label>
+        <input
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Pin 8 is the sweet spot"
+          className="w-full bg-v5-surface border border-white/10 text-v5-text px-3 py-2 text-sm focus:outline-none focus:border-v5-red"
+        />
+      </div>
       <div className="flex gap-2">
         <button
-          onClick={() => label.trim() && onSave(label.trim(), gymLabel.trim())}
+          onClick={() => label.trim() && onSave(label.trim(), gymLabel.trim(), brand.trim(), notes.trim())}
           disabled={!label.trim()}
           className={`flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border ${
             label.trim() ? "bg-v5-red border-v5-red text-white hover:opacity-90" : "border-white/10 text-v5-subtext/40 cursor-not-allowed"
@@ -68,9 +89,9 @@ export default function EquipmentProfileSheet({ exId, exName, state, updateState
   const isDefaultSelected = !equipmentProfileId && equipmentContext !== TEMPORARY_EQUIPMENT_CONTEXT;
   const isTemporarySelected = equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT;
 
-  const saveNewProfile = (label, gymLabel) => {
+  const saveNewProfile = (label, gymLabel, brand, notes) => {
     const id = `equipment_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    updateState((prev) => ({ ...prev, equipmentProfiles: addEquipmentProfile(prev, exId, label, gymLabel, id) }));
+    updateState((prev) => ({ ...prev, equipmentProfiles: addEquipmentProfile(prev, exId, label, gymLabel, id, brand, notes) }));
     setAdding(false);
     onSelect({ equipmentProfileId: id, equipmentContext: null });
   };
@@ -84,22 +105,10 @@ export default function EquipmentProfileSheet({ exId, exName, state, updateState
       <p className="text-xs text-v5-subtext">Track this machine separately so progress compares apples to apples.</p>
 
       <div className="space-y-1.5">
-        <button
-          onClick={() => onSelect({ equipmentProfileId: null, equipmentContext: null })}
-          className={`w-full flex items-center gap-2.5 px-3 py-3 text-left border ${
-            isDefaultSelected ? "border-v5-red bg-v5-red/10" : "border-white/10 bg-v5-elevated"
-          }`}
-        >
-          <span
-            className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-              isDefaultSelected ? "border-red-600" : "border-white/10"
-            }`}
-          >
-            {isDefaultSelected && <span className="w-2 h-2 rounded-full bg-red-600" />}
-          </span>
-          <span className="text-sm text-v5-text flex-1 truncate">Default Machine</span>
-        </button>
-
+        {/* Saved profiles for THIS exercise first (task section 2: "if profiles already exist
+            for that movement, show them first") — Default Machine still always listed, just
+            after them rather than before, so an exercise with real history on a named machine
+            leads with that instead of the generic option nobody's actually using. */}
         {profiles.map((p) => {
           const selected = equipmentProfileId === p.id && equipmentContext !== TEMPORARY_EQUIPMENT_CONTEXT;
           return (
@@ -117,9 +126,9 @@ export default function EquipmentProfileSheet({ exId, exName, state, updateState
                 </span>
                 <span className="min-w-0">
                   <span className="block text-sm text-v5-text truncate">{p.label}</span>
-                  {(p.gymLabel || p.isDefault) && (
+                  {(p.gymLabel || p.brand || p.isDefault) && (
                     <span className="block text-[11px] text-v5-subtext truncate">
-                      {[p.gymLabel, p.isDefault ? "Usual for this exercise" : null].filter(Boolean).join(" · ")}
+                      {[p.gymLabel, p.brand, p.isDefault ? "Usual for this exercise" : null].filter(Boolean).join(" · ")}
                     </span>
                   )}
                 </span>
@@ -140,6 +149,22 @@ export default function EquipmentProfileSheet({ exId, exName, state, updateState
             </div>
           );
         })}
+
+        <button
+          onClick={() => onSelect({ equipmentProfileId: null, equipmentContext: null })}
+          className={`w-full flex items-center gap-2.5 px-3 py-3 text-left border ${
+            isDefaultSelected ? "border-v5-red bg-v5-red/10" : "border-white/10 bg-v5-elevated"
+          }`}
+        >
+          <span
+            className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
+              isDefaultSelected ? "border-red-600" : "border-white/10"
+            }`}
+          >
+            {isDefaultSelected && <span className="w-2 h-2 rounded-full bg-red-600" />}
+          </span>
+          <span className="text-sm text-v5-text flex-1 truncate">Default Machine</span>
+        </button>
       </div>
 
       {adding ? (

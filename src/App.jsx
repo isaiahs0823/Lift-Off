@@ -2086,11 +2086,11 @@ export default function LiftLog() {
   // state (the new profile + the retagged state.logs entry) and the in-memory activeRun's own
   // copy of that entry (run.sessionEntries), so the collapsed summary immediately stops
   // offering to save again and reflects the new profile without needing a refresh.
-  const saveTemporaryAsProfile = (idx, entry, label, gymLabel) => {
+  const saveTemporaryAsProfile = (idx, entry, label, gymLabel, brand, notes) => {
     const id = `equipment_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     updateState((prev) => ({
       ...prev,
-      equipmentProfiles: addEquipmentProfile(prev, entry.exId, label, gymLabel, id),
+      equipmentProfiles: addEquipmentProfile(prev, entry.exId, label, gymLabel, id, brand, notes),
       logs: convertTemporaryLogToProfile(prev.logs, entry.id, id),
     }));
     setActiveRun((run) => {
@@ -2178,6 +2178,49 @@ export default function LiftLog() {
             .filter(([k]) => Number(k) !== index)
             .map(([k, v]) => [reindex(Number(k)), v])
         ),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  };
+  // "Switch equipment mid-exercise, after sets are already logged" (task: "BRK Active Workout —
+  // Equipment Profile Must Be Editable"). One logged entry carries one equipment tag for all its
+  // sets — the data model can't split sets within a single entry — so the safest truthful
+  // behavior once real sets are on the line is exactly what the confirmation dialog promises:
+  // "sets already logged used Machine A, new sets will use Machine B." This finishes whatever
+  // was already confirmed as its own entry under the OLD equipment (same construction
+  // TrainingExerciseCard's own finishExercise uses, built by the caller and passed in as
+  // `finishedEntry`), then inserts a fresh slot for the SAME exercise immediately after it,
+  // pre-selected on the NEW equipment via draftByIndex — so the remaining sets land in their own
+  // honestly-tagged entry instead of silently retagging everything to whichever machine happened
+  // to be selected when Finish Exercise was eventually tapped. The inserted slot never carries
+  // the original's superset `group` — a synthetic split shouldn't pretend to preserve giant-set
+  // structure it was never really part of.
+  const splitExerciseForEquipmentSwitch = (index, finishedEntry, newEquipment) => {
+    if (!activeRun) return;
+    updateState((prev) => ({ ...prev, logs: [finishedEntry, ...(prev.logs || [])], hasSeenOnboarding: true }));
+    const shiftUp = (idx) => (idx > index ? idx + 1 : idx);
+    setActiveRun((run) => {
+      if (!run) return run;
+      const exSlot = run.exercises[index];
+      if (!exSlot) return run;
+      const { group, ...continuationSlot } = exSlot;
+      const draftByIndex = Object.fromEntries(
+        Object.entries(run.draftByIndex || {}).map(([k, v]) => [shiftUp(Number(k)), v])
+      );
+      delete draftByIndex[index]; // this slot is now finished — no draft to carry forward
+      draftByIndex[index + 1] = {
+        equipmentProfileId: newEquipment?.equipmentProfileId ?? null,
+        equipmentContext: newEquipment?.equipmentContext ?? null,
+      };
+      return {
+        ...run,
+        exercises: [...run.exercises.slice(0, index + 1), continuationSlot, ...run.exercises.slice(index + 1)],
+        sessionEntries: [
+          ...run.sessionEntries.map((se) => (se.index > index ? { ...se, index: shiftUp(se.index) } : se)),
+          { index, exId: exSlot.exId, entry: finishedEntry },
+        ],
+        swaps: Object.fromEntries(Object.entries(run.swaps || {}).map(([k, v]) => [shiftUp(Number(k)), v])),
+        draftByIndex,
         updatedAt: new Date().toISOString(),
       };
     });
@@ -2444,6 +2487,7 @@ export default function LiftLog() {
             onSwap={swapRunExercise}
             onAddExercise={addRunExercise}
             onRemoveExercise={removeRunExercise}
+            onSplitEquipmentSwitch={splitExerciseForEquipmentSwitch}
             onReopen={reopenRun}
             onLoggedSet={bumpRestTimer}
             onRate={rateSession}
@@ -4247,6 +4291,7 @@ function TrainingExerciseCard({
   sessionContext,
   exIndex,
   totalExercises,
+  onSplitEquipmentSwitch,
 }) {
   const rirSystem = state.settings?.rirSystem || "rir";
   const trainingDetail = state.settings?.trainingDetail || "advanced";
@@ -4262,6 +4307,10 @@ function TrainingExerciseCard({
   );
   const [equipmentContext, setEquipmentContext] = useState(() => (draft && draft.equipmentContext !== undefined ? draft.equipmentContext : null));
   const [equipmentSheetOpen, setEquipmentSheetOpen] = useState(false);
+  // Mid-exercise equipment switch confirmation (task section 10) — holds the { equipmentProfileId,
+  // equipmentContext } the athlete picked while sets were already logged, pending Cancel/Switch.
+  // Never set at all for the common "nothing logged yet" case, which still applies immediately.
+  const [pendingEquipmentSwitch, setPendingEquipmentSwitch] = useState(null);
   const isBucketedEquipment = !!equipmentProfileId || equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT;
   // In Alternate Gym mode, a machine exercise still sitting on "Default Machine" with nothing
   // ever chosen gets a one-time nudge (task section 20) rather than silently assuming the home
@@ -4567,23 +4616,17 @@ function TrainingExerciseCard({
     setAddingExtra(false);
   };
 
-  const finishExercise = () => {
-    // Defensive safety net (task: "sanitize activeRun/session data... even if UI state gets into
-    // a strange condition") — confirmedSets should never actually contain a 0-rep placeholder
-    // now that saveSet/saveEditSet both route through cleanSetsInput, but a finished exercise
-    // must never persist one regardless of how it got there.
+  // Shared by finishExercise (normal "Finish exercise" tap) and confirmEquipmentSwitch (mid-
+  // exercise machine change after sets are already logged — task: "BRK Active Workout —
+  // Equipment Profile Must Be Editable") — both need the exact same entry built from whatever's
+  // currently confirmed, tagged with whatever equipment is currently selected at that moment.
+  // Returns null when there's nothing valid to save (defensive: confirmedSets should never
+  // actually contain a 0-rep placeholder now that saveSet/saveEditSet both route through
+  // cleanSetsInput, but a finished entry must never persist one regardless of how it got there).
+  const buildEntryFromConfirmedSets = () => {
     const validSets = confirmedSets.filter((s) => Number(s.reps) > 0);
-    if (validSets.length === 0) return;
-    // Cancel any still-pending debounced draft flush for whatever was mid-typed in an abandoned
-    // extra set — the athlete just chose to finish without it, so it must not resurrect as a
-    // stale draft the next time this exercise slot is reopened (see the unmount flush effect
-    // above; recordRunEntry already clears draftByIndex[idx] for the real completed sets).
-    if (draftTimerRef.current) {
-      clearTimeout(draftTimerRef.current);
-      draftTimerRef.current = null;
-    }
-    pendingSnapshotRef.current = null;
-    const entry = {
+    if (validSets.length === 0) return null;
+    return {
       id: `log_${Date.now()}`,
       exId,
       date: new Date().toISOString(),
@@ -4600,8 +4643,40 @@ function TrainingExerciseCard({
         ? { jointNote: sanitizePainInfo({ bodyArea: jointNoteArea, severity: jointNoteSeverity, note: jointNoteText }) }
         : {}),
     };
+  };
+  // Cancel any still-pending debounced draft flush for whatever was mid-typed in an abandoned
+  // extra set — the exercise is finishing (or splitting) without it, so it must not resurrect as
+  // a stale draft the next time this slot (or its continuation slot) is opened.
+  const flushDraftTimer = () => {
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
+    }
+    pendingSnapshotRef.current = null;
+  };
+
+  const finishExercise = () => {
+    const entry = buildEntryFromConfirmedSets();
+    if (!entry) return;
+    flushDraftTimer();
     updateState((prev) => ({ ...prev, logs: [entry, ...prev.logs], hasSeenOnboarding: true }));
     onSaved?.(entry);
+  };
+
+  // Mid-exercise equipment switch, after sets are already logged (task sections 9/10) — gated
+  // behind a confirmation (see pendingEquipmentSwitch below) rather than applied immediately like
+  // the "nothing logged yet" case, since it finishes whatever's confirmed as a real entry under
+  // the OLD equipment rather than just relabeling the in-progress draft.
+  const confirmEquipmentSwitch = () => {
+    if (!pendingEquipmentSwitch) return;
+    const entry = buildEntryFromConfirmedSets();
+    if (!entry) {
+      setPendingEquipmentSwitch(null);
+      return;
+    }
+    flushDraftTimer();
+    onSplitEquipmentSwitch?.(entry, pendingEquipmentSwitch);
+    setPendingEquipmentSwitch(null);
   };
 
   const useSuggested = () => {
@@ -4626,15 +4701,25 @@ function TrainingExerciseCard({
         equipmentProfileId={equipmentProfileId}
         equipmentContext={equipmentContext}
         onSelect={({ equipmentProfileId: pid, equipmentContext: ctx }) => {
+          const changed = pid !== equipmentProfileId || ctx !== equipmentContext;
+          // Sets already confirmed under the current equipment can't just be silently relabeled
+          // (task section 10) — the exercise stays open, a confirmation names both machines, and
+          // only a real "Switch Equipment" tap finishes those sets under the OLD equipment and
+          // opens a fresh continuation slot on the new one (see confirmEquipmentSwitch/
+          // splitExerciseForEquipmentSwitch). Selecting the SAME equipment already active is a
+          // no-op either way, never worth a confirmation.
+          if (changed && confirmedSets.length > 0) {
+            setEquipmentSheetOpen(false);
+            setPendingEquipmentSwitch({ equipmentProfileId: pid, equipmentContext: ctx });
+            return;
+          }
           setEquipmentProfileId(pid);
           setEquipmentContext(ctx);
           // Refreshes the still-blank weight/reps draft to the newly-selected bucket's own
           // suggestion — critical, not cosmetic: leaving a different machine's number sitting in
           // the input after switching would be exactly the misleading cross-machine carryover
-          // this whole feature exists to prevent (task section 11). Only when nothing has been
-          // logged yet this exercise — a mid-exercise switch after already confirming sets under
-          // the old context leaves whatever's currently typed alone, since Finish Exercise
-          // decides the entry's equipment tag from whatever's selected at that moment anyway.
+          // this whole feature exists to prevent (task section 11). Only reached here when
+          // nothing's logged yet this exercise (the mid-exercise case returns above).
           if (confirmedSets.length === 0) {
             const next = suggestNext(exId, state.logs, exMap, { readinessLogs: state.readinessLogs, equipmentProfileId: pid, equipmentContext: ctx });
             setWeight(next.suggestion ?? 0);
@@ -4694,17 +4779,34 @@ function TrainingExerciseCard({
           {exMap[exId]?.muscle && (
             <div className="min-w-0 text-xs text-v5-subtext self-end pb-0.5">Targets: {exMap[exId].muscle}</div>
           )}
-          {lastTopSet && (
+          {lastTopSet ? (
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wide text-v5-subtext">Last</div>
               <div className="text-sm font-bold text-v5-text tabular-nums">{lastTopSet.weight} × {lastTopSet.reps}</div>
             </div>
+          ) : (
+            // A newly-selected equipment profile/temporary machine with zero comparable history
+            // never shows a number from another machine (task section 5) — "Baseline" says
+            // plainly that this is a fresh start on this equipment, not a rendering gap.
+            isBucketedEquipment && (
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-wide text-v5-subtext">Last</div>
+                <div className="text-sm font-bold text-v5-subtext">Baseline</div>
+              </div>
+            )
           )}
-          {suggestion.suggestion != null && (
+          {suggestion.suggestion != null ? (
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wide text-v5-red">Today's target</div>
               <div className="text-sm font-bold text-v5-text tabular-nums">{suggestion.suggestion} × {suggestion.targetReps}</div>
             </div>
+          ) : (
+            isBucketedEquipment && (
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-wide text-v5-red">Today's target</div>
+                <div className="text-sm font-bold text-v5-text">Baseline — choose load</div>
+              </div>
+            )
           )}
         </div>
       </PhotoHero>
@@ -5242,6 +5344,42 @@ function TrainingExerciseCard({
           </button>
         </div>
       )}
+
+      {/* Mid-exercise equipment-switch confirmation (task section 10) — never silently relabels
+          sets already logged this exercise. */}
+      {pendingEquipmentSwitch && (
+        <div
+          className="fixed inset-0 z-40 bg-black/85 flex items-end sm:items-center justify-center"
+          onClick={() => setPendingEquipmentSwitch(null)}
+        >
+          <div
+            className="w-full sm:max-w-xs sm:mx-4 bg-v5-elevated border border-white/10 sm:border rounded-t-2xl sm:rounded-2xl p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-1.5">
+              <div className="text-sm font-bold text-v5-text uppercase tracking-wide">Switch equipment?</div>
+              <div className="text-sm text-v5-subtext">
+                Sets already logged on this exercise used {equipmentDisplayLabel(state, equipmentProfileId, equipmentContext)}. New sets will
+                use {equipmentDisplayLabel(state, pendingEquipmentSwitch.equipmentProfileId, pendingEquipmentSwitch.equipmentContext)}.
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPendingEquipmentSwitch(null)}
+                className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmEquipmentSwitch}
+                className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
+              >
+                Switch Equipment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -5379,6 +5517,7 @@ function GuidedRunView({
   onSaveTemporaryProfile,
   onUpdateSessionContext,
   onRemoveExercise,
+  onSplitEquipmentSwitch,
 }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
@@ -6137,8 +6276,8 @@ function GuidedRunView({
                           savingProfileForIdx === idx ? (
                             <AddEquipmentProfileForm
                               saveLabel="Save profile"
-                              onSave={(label, gymLabel) => {
-                                onSaveTemporaryProfile(idx, entry, label, gymLabel);
+                              onSave={(label, gymLabel, brand, notes) => {
+                                onSaveTemporaryProfile(idx, entry, label, gymLabel, brand, notes);
                                 setSavingProfileForIdx(null);
                               }}
                               onCancel={() => setSavingProfileForIdx(null)}
@@ -6183,6 +6322,11 @@ function GuidedRunView({
                       const prs = detectPRs(currentExId, savedEntry, state.logs);
                       if (prs.length > 0) setPrByIndex((m) => ({ ...m, [idx]: prs }));
                       onSaved(idx, savedEntry);
+                    }}
+                    onSplitEquipmentSwitch={(finishedEntry, newEquipment) => {
+                      const prs = detectPRs(currentExId, finishedEntry, state.logs);
+                      if (prs.length > 0) setPrByIndex((m) => ({ ...m, [idx]: prs }));
+                      onSplitEquipmentSwitch?.(idx, finishedEntry, newEquipment);
                     }}
                     onSwap={(newExId) => onSwap(idx, newExId)}
                     sessionContext={run.sessionContext}
