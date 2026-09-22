@@ -5554,6 +5554,11 @@ function GuidedRunView({
   const [sharePreviewOpen, setSharePreviewOpen] = useState(false);
   // Travel/Alternate Gym mode (task Part 3, section 17) — "Active Workout → Session Options."
   const [sessionOptionsOpen, setSessionOptionsOpen] = useState(false);
+  // Finish Workout confirmation (task: "BRK Active Workout — Critical UX Fixes") — Finish
+  // Workout is state-changing enough (moves the session to history, advances the program day)
+  // that one accidental tap must never complete it. Neither of the two "Finish"/"Finish workout"
+  // buttons below call onFinish directly anymore — both open this instead.
+  const [finishConfirmOpen, setFinishConfirmOpen] = useState(false);
   // "Save this machine profile" (task section 17) — a non-blocking, optional prompt shown right
   // on a just-finished exercise's collapsed summary when it was logged as a temporary/different
   // machine. Only one at a time and never forced; saving or dismissing never interrupts the rest
@@ -5958,6 +5963,20 @@ function GuidedRunView({
           <div className="text-sm text-v5-subtext">Nothing logged this session.</div>
         )}
 
+        {/* Recovery path (task: "Reopen Workout" — "extremely useful if someone accidentally
+            completes despite the confirmation or realizes afterward they forgot something").
+            onReopen (reopenRun in LiftLog) already existed for the "Add exercise" shortcut below
+            — it removes this session from history, reverts the program-day advance, and clears
+            finished/summaryId on activeRun, but never touches sessionEntries/exercises/drafts/
+            equipment profiles, so every already-logged set, note, and PR stays exactly as it
+            was. Same activeRun the whole time — nothing is duplicated, and finishing again later
+            recomputes the identical session id fresh. Exposed here as its own explicit action
+            rather than only implicitly through "Add exercise," since the athlete may want back
+            in for any reason, not just to add a new exercise. */}
+        <ButtonSecondary icon={RotateCcw} onClick={onReopen}>
+          Reopen workout
+        </ButtonSecondary>
+
         <ButtonSecondary
           icon={Plus}
           onClick={() => {
@@ -6021,6 +6040,21 @@ function GuidedRunView({
   const progressPct = totalExercises > 0 ? Math.round((loggedCount / totalExercises) * 100) : 0;
   const elapsedSec = Math.max(0, Math.round((nowTick - new Date(run.startedAt).getTime()) / 1000));
   const elapsedLabel = `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, "0")}`;
+
+  // Finish Workout confirmation (task: "BRK Active Workout — Critical UX Fixes," Issue 1) — the
+  // numbers shown in that dialog, computed once here rather than in the modal's own JSX so both
+  // the summary line and the incomplete-exercise warning read the same values. workingSetsLogged
+  // only counts what buildSessionSummary will actually see (real sessionEntries) — a still-
+  // in-progress active exercise's confirmed-but-not-yet-"Finish exercise"'d sets are correctly
+  // NOT counted, since they won't be part of the saved session either; this keeps the dialog's
+  // numbers truthful rather than promising something Finish Workout wouldn't actually save.
+  const workingSetsLogged = run.sessionEntries.reduce((sum, se) => sum + countedSets(se.entry.sets).length, 0);
+  const incompleteExerciseCount = run.exercises.reduce((count, exSlot, idx) => {
+    const target = exSlot?.sets || 0;
+    if (!target) return count;
+    const done = countedSets(entryForIndex(idx)?.sets || []).length;
+    return done < target ? count + 1 : count;
+  }, 0);
 
   return (
     <div className="space-y-6">
@@ -6145,7 +6179,7 @@ function GuidedRunView({
             <button onClick={onMinimize} className="text-xs text-v5-subtext hover:text-v5-red">
               Exit
             </button>
-            <button onClick={onFinish} className="text-xs uppercase tracking-widest font-bold text-v5-red hover:opacity-80">
+            <button onClick={() => setFinishConfirmOpen(true)} className="text-xs uppercase tracking-widest font-bold text-v5-red hover:opacity-80">
               Finish
             </button>
           </div>
@@ -6390,12 +6424,59 @@ function GuidedRunView({
             the one dominant CTA on screen while a set is being logged; Finish Workout stays a
             strong, unmistakably red action without visually tying with it for attention. */}
         <button
-          onClick={onFinish}
+          onClick={() => setFinishConfirmOpen(true)}
           className="w-full py-3 rounded-lg text-xs uppercase tracking-widest font-bold border border-v5-red/70 text-v5-red hover:bg-v5-red hover:text-white mt-1"
         >
           Finish workout
         </button>
       </div>
+
+      {/* Finish Workout confirmation (task: "one accidental tap must NEVER finish a workout") —
+          Keep Training is the calm, bordered/neutral option (never red — this app reserves red
+          for the destructive action alone); Finish Workout/Finish Anyway stays the one solid-red
+          control, consistent with every other destructive confirmation in this app. */}
+      {finishConfirmOpen && (
+        <div className="fixed inset-0 z-40 bg-black/85 flex items-end sm:items-center justify-center" onClick={() => setFinishConfirmOpen(false)}>
+          <div
+            className="w-full sm:max-w-sm sm:mx-4 bg-v5-elevated border border-white/10 sm:border rounded-t-2xl sm:rounded-2xl p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-1.5">
+              <div className="text-sm font-bold text-v5-text uppercase tracking-wide">Finish workout?</div>
+              <div className="text-sm text-v5-subtext">Are you sure you want to complete this workout?</div>
+            </div>
+            <div className="bg-v5-surface rounded-lg px-3.5 py-3 space-y-1 text-sm text-v5-text">
+              <div>• {loggedCount} exercise{loggedCount === 1 ? "" : "s"} completed</div>
+              <div>• {workingSetsLogged} working set{workingSetsLogged === 1 ? "" : "s"}</div>
+              <div>• {Math.floor(elapsedSec / 60)} min elapsed</div>
+            </div>
+            {incompleteExerciseCount > 0 && (
+              <div className="text-xs text-v5-subtext">
+                {incompleteExerciseCount} exercise{incompleteExerciseCount === 1 ? "" : "s"} still{" "}
+                {incompleteExerciseCount === 1 ? "has" : "have"} remaining target sets. You can still finish now.
+              </div>
+            )}
+            <div className="text-[11px] text-v5-subtext/70">Once completed, this session will be moved to workout history.</div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFinishConfirmOpen(false)}
+                className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text hover:border-v5-red/40"
+              >
+                Keep Training
+              </button>
+              <button
+                onClick={() => {
+                  setFinishConfirmOpen(false);
+                  onFinish();
+                }}
+                className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
+              >
+                {incompleteExerciseCount > 0 ? "Finish Anyway" : "Finish Workout"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
