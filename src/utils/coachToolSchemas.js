@@ -140,7 +140,7 @@ export const COACH_TOOL_SCHEMAS = [
     function: {
       name: "saveMemory",
       description:
-        "Record something worth remembering for future coaching — a stated fact the athlete told you directly, or a pattern you've observed with real evidence across multiple sessions. Do not save one-off remarks or anything already covered by an existing memory. Executes immediately (memory is low-stakes and the athlete can edit or delete it any time in 'What Coach Knows About You').",
+        "Record something worth remembering long-term — a fact the athlete stated directly, or a pattern observed with real evidence across multiple sessions. Not for one-off remarks or anything already covered. Executes immediately (low-stakes; editable/deletable in 'What Coach Knows About You').",
       parameters: {
         type: "object",
         properties: {
@@ -159,7 +159,7 @@ export const COACH_TOOL_SCHEMAS = [
     function: {
       name: "proposeCommitment",
       description:
-        "Propose a new commitment for the athlete to accept. Does NOT create it — the athlete must explicitly accept the card this renders. Use only when the athlete is describing a real, recurring struggle (e.g. skipping cardio, missing protein), not for one-off requests.",
+        "Propose a new commitment. Does NOT create it — the athlete must accept the rendered card. Only for a real, recurring struggle (e.g. skipping cardio, missing protein), not one-off requests.",
       parameters: {
         type: "object",
         properties: {
@@ -189,11 +189,11 @@ export const COACH_TOOL_SCHEMAS = [
     function: {
       name: "getExerciseLibrary",
       description:
-        "BRK's exercise catalog (built-in + this athlete's own custom exercises) for selecting real exercises when building or modifying a program. Always filter by muscle group — call this once per muscle group/day you're building rather than requesting everything at once; results are capped and an unfiltered call returns a much less useful list.",
+        "BRK's exercise catalog (built-in + custom) for building/modifying a program. Filter by muscle group — call once per muscle/day rather than requesting everything; an unfiltered call returns a much less useful capped list.",
       parameters: {
         type: "object",
         properties: {
-          muscle: { type: "string", description: "Muscle group to filter to, e.g. 'Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'. Strongly recommended." },
+          muscle: { type: "string", description: "e.g. 'Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'. Strongly recommended." },
           query: { type: "string", description: "Optional substring to further filter by exercise name." },
         },
         additionalProperties: false,
@@ -205,7 +205,7 @@ export const COACH_TOOL_SCHEMAS = [
     function: {
       name: "proposeProgram",
       description:
-        "Propose a complete, structured training program for the athlete to review and save. Does NOT save or activate anything — the athlete sees a full day-by-day review card (exercises, sets, reps, RIR, weekly volume) and must explicitly tap Save. Call getAthleteProfile, getCurrentProgram, and getExerciseLibrary first so the proposal reflects real BRK data and a real exercise catalog, never invented ones. If the proposal fails validation, the result tells you exactly what to fix — repair it and call this again rather than giving up.",
+        "Propose a complete training program for the athlete to review and save. Does NOT save/activate anything — the athlete sees a full day-by-day review card and must tap Save. Call getAthleteProfile, getCurrentProgram, and getExerciseLibrary first so this reflects real data and a real exercise catalog, never invented ones. On a validation failure, the result says exactly what to fix — repair and call again rather than giving up.",
       parameters: {
         type: "object",
         properties: {
@@ -213,10 +213,10 @@ export const COACH_TOOL_SCHEMAS = [
           tagline: { type: "string" },
           goal: { type: "string", description: "Short goal label, e.g. 'hypertrophy'." },
           phase: { type: "string", enum: PHYSIQUE_PHASES },
-          reasoning: { type: "string", description: "2-4 sentences explaining why this program is built this way — reference the athlete's real phase/priorities/data, not generic filler." },
+          reasoning: { type: "string", description: "2-4 sentences: why built this way, tied to real phase/priorities/data, not generic filler." },
           scheduleWarning: {
             type: "string",
-            description: "Set ONLY if the athlete's requested schedule has a real recovery/overlap concern (e.g. pressing 4 days straight, a muscle with excessive overlapping fatigue). Explain the concern briefly. The proposed program can still follow the athlete's exact request — this is a heads-up, not a refusal.",
+            description: "Set ONLY for a real recovery/overlap concern (e.g. pressing 4 days straight). Brief explanation — a heads-up, not a refusal; still build it their way if they want.",
           },
           scheduleMode: { type: "string", enum: SCHEDULE_MODES },
           weeks: { type: "integer", minimum: 1, maximum: 52 },

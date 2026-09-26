@@ -173,7 +173,7 @@ export async function streamChatCompletion({ apiKey, model, messages, tools, sig
         tools: tools && tools.length ? tools : undefined,
         tool_choice: tools && tools.length ? "auto" : undefined,
         stream: true,
-        max_tokens: 700,
+        max_tokens: 500,
         temperature: 0.8,
       }),
       signal,
