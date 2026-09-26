@@ -410,7 +410,12 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
       {history.length > 0 && (
         <div className="space-y-1.5">
           <MiniLabel tone="muted">Earlier Coach notes</MiniLabel>
-          <div className="space-y-2">
+          {/* Bounded + independently scrollable (task: "should be scrollable, not a long page to
+              scroll through") — up to 10 entries here was making the whole Coach screen the
+              scroll container, burying the chat itself below a wall of old notes. Same
+              rounded/bordered-box treatment as the chat's own message list above, so it reads as
+              its own contained region rather than an accidental cutoff. */}
+          <div className="rounded-xl bg-v5-surface border border-white/[0.06] max-h-64 overflow-y-auto p-3 space-y-2">
             {history.slice(0, 10).map((h, i) => (
               <React.Fragment key={h.id}>
                 {i > 0 && <Divider />}
