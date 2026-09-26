@@ -5,7 +5,21 @@ import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
 import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
-import { ScreenHeader, SectionLabel, HeroCard, ButtonPrimary, ButtonText, StatTile, Pill, ActionTile } from "./ui/Kit.jsx";
+import TrainHistorySection from "./TrainHistorySection.jsx";
+import { ScreenHeader, SectionLabel, HeroCard, ButtonPrimary, ButtonText, StatTile, Pill, ActionTile, SegmentedTabs } from "./ui/Kit.jsx";
+
+// Train's own top-level structure (task: "BRK Workout History" — "[ WORKOUT | PROGRAMS |
+// HISTORY ]... HISTORY should be a first-class tab, not buried"). Local component state, same
+// pattern ProgressTab's own Overview/Body/Performance SegmentedTabs already uses — no new
+// top-level app tab, no change to LiftLog's TOP_TABS/SECTION_OF. "Programs" deliberately stays a
+// navigation shortcut to the existing Programs browser (onNavigate("templates"), same screen the
+// landing grid's own Programs tile already opens) rather than being inlined here — that browser
+// is a large, independently-evolved screen and duplicating/absorbing it isn't this task's ask.
+const TRAIN_SECTIONS = [
+  { value: "workout", label: "Workout" },
+  { value: "programs", label: "Programs" },
+  { value: "history", label: "History" },
+];
 
 // Never auto-discards on age — a workout logged right up to midnight, or one left open for
 // days, is still fully recoverable, just described differently: minutes/hours for something
@@ -37,13 +51,26 @@ function elapsedLabel(startedAt) {
 // entire screen: "Resume workout" becomes the one thing to do here, matching the reliability
 // spec's "primary CTA should be RESUME WORKOUT, not Start Workout — do not make them navigate
 // through workout-selection flows again."
-export default function TrainTab({ state, updateState, exMap, activeRun, onStartRun, onStartRecovery, onResumeWorkout, onDiscardWorkout, onNavigate }) {
+export default function TrainTab({ state, updateState, exMap, activeRun, onStartRun, onStartRecovery, onResumeWorkout, onDiscardWorkout, onNavigate, onViewWorkout, section, onSectionChange }) {
   const programDay = resolveTodayWorkout(state);
   const [swapOpen, setSwapOpen] = useState(false);
   // Collapsed by default — Train is a "decide what to do" screen, not a place to scroll through
   // a full per-exercise breakdown before reaching Start (task section 7/16). Expands in place
   // for the athlete who wants to preview the day first.
   const [showExercises, setShowExercises] = useState(false);
+  // `section`/`onSectionChange` are owned by LiftLog, not local state — see its own comment on
+  // why (TrainTab fully unmounts on every "View Workout" trip, which would otherwise reset the
+  // segment back to "Workout" every time the athlete returns from History).
+  const changeSection = (value) => {
+    // "Programs" is a shortcut, not an inline view — see TRAIN_SECTIONS' own comment. Selecting
+    // it navigates away immediately rather than leaving the segmented control parked on a tab
+    // whose content isn't actually rendered here.
+    if (value === "programs") {
+      onNavigate("templates");
+      return;
+    }
+    onSectionChange(value);
+  };
 
   if (swapOpen && !activeRun) {
     return <SwapWorkoutSheet state={state} updateState={updateState} exMap={exMap} onClose={() => setSwapOpen(false)} onNavigate={onNavigate} />;
@@ -107,6 +134,12 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
     <div className="space-y-4">
       <ScreenHeader eyebrow="Train" title="Choose your workout" />
 
+      <SegmentedTabs tabs={TRAIN_SECTIONS} value={section === "history" ? "history" : "workout"} onChange={changeSection} />
+
+      {section === "history" ? (
+        <TrainHistorySection state={state} exMap={exMap} onViewWorkout={onViewWorkout} />
+      ) : (
+        <>
       {programDay && !programDay.isComplete && (
         // Visual-evolution task, priority 4: a subtle anatomy watermark of the day's lead
         // exercise, same low-opacity corner treatment as Resume workout above — the swap/preview/
@@ -230,6 +263,8 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
             cannot write to workout data. */}
         <ActionTile icon={AlarmClock} label="Rest Timer" onClick={() => onNavigate("restTimer")} />
       </div>
+        </>
+      )}
     </div>
   );
 }

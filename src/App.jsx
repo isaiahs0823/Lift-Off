@@ -129,6 +129,7 @@ import { selectableExercises, matchesExerciseSearch, formatCustomLabel, isArchiv
 import StartWorkoutChoice from "./components/StartWorkoutChoice.jsx";
 import RepeatRecentWorkoutPicker from "./components/RepeatRecentWorkoutPicker.jsx";
 import BreakMeaningPage from "./components/BreakMeaningPage.jsx";
+import ExerciseHistorySheet from "./components/ExerciseHistorySheet.jsx";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained).
 // Exported so any screen that needs the official mark (e.g. BreakMeaningPage) reuses this exact
@@ -1885,8 +1886,22 @@ export default function LiftLog() {
   // entry point (Today, Program day list, Training Calendar, Session Complete) the user tapped
   // "View Workout" from, all of which open this same id + the same detail screen.
   const [selectedSessionId, setSelectedSessionId] = useState(null);
-  const viewWorkout = (sessionId) => {
+  // Where "Back" on Workout History Detail lands — defaults to "today" (the pre-existing
+  // behavior every original entry point already relied on) so nothing changes for Today,
+  // Program day list, Training Calendar, or Session Complete. Train > History is the one caller
+  // that passes "train" explicitly, so tapping a session there and hitting Back returns to
+  // Train instead of bouncing the athlete out to a tab they didn't come from.
+  const [workoutDetailReturnTab, setWorkoutDetailReturnTab] = useState("today");
+  // Which of Train's [ WORKOUT | PROGRAMS | HISTORY ] segments is active — lifted up here
+  // (rather than local state inside TrainTab) because the `tab === "train"` block below fully
+  // unmounts TrainTab whenever the athlete steps into Workout History Detail or Session Recap;
+  // local state would silently reset to "Workout" on every "View Workout" + Back round trip,
+  // so a two-tap "Train > History > session" flow would land back on the Workout landing
+  // screen instead of History (task: "Train → History → tap session = two taps").
+  const [trainSection, setTrainSection] = useState("workout");
+  const viewWorkout = (sessionId, returnTab = "today") => {
     setSelectedSessionId(sessionId);
+    setWorkoutDetailReturnTab(returnTab);
     setTab("workoutDetail");
   };
   // Auto Post-Workout Recap (task Part 1) — reopenable from Workout History → Session → Recap
@@ -2534,7 +2549,7 @@ export default function LiftLog() {
                 session={(state.workoutSessions || []).find((s) => s.id === selectedSessionId) || null}
                 state={state}
                 exMap={exMap}
-                onBack={() => setTab("today")}
+                onBack={() => setTab(workoutDetailReturnTab)}
                 onViewRecap={viewRecap}
                 onSetNote={setSessionNote}
                 onAskCoach={(session) => {
@@ -2571,6 +2586,9 @@ export default function LiftLog() {
                   }
                 }}
                 onNavigate={setTab}
+                onViewWorkout={(sessionId) => viewWorkout(sessionId, "train")}
+                section={trainSection}
+                onSectionChange={setTrainSection}
               />
             )}
             {tab === "restTimer" && <StandaloneRestTimer onBack={() => setTab("train")} />}
@@ -3348,6 +3366,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
   const [setsInput, setSetsInput] = useState([{ ...BLANK_SET_ROW, drops: [] }]);
   const [swapOpen, setSwapOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState(null);
+  const [historySheetOpen, setHistorySheetOpen] = useState(false);
   const rirSystem = state.settings?.rirSystem || "rir";
   const isSimple = (state.settings?.trainingDetail || "advanced") === "simple";
 
@@ -3571,7 +3590,16 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
 
       {showHistory && recentForEx.length > 0 && (
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">History</div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[11px] uppercase tracking-widest text-v5-subtext">History</div>
+            {/* Recent list above stays capped/edit-focused (tap an entry to fix a typo); this
+                opens the same read-only, uncapped, equipment-aware ExerciseHistorySheet the
+                active-workout exercise card uses, so "every prior instance" is one tap away from
+                the exercise catalog/standalone log flow too (task section 5). */}
+            <button onClick={() => setHistorySheetOpen(true)} className="text-[11px] uppercase tracking-widest text-v5-red hover:opacity-80">
+              View full history
+            </button>
+          </div>
           {/* Optional equipment-profile filter (task section 13) — shown only once the athlete
               actually has more than one machine's worth of history for this exercise; defaults
               to "All" so nothing is ever hidden without the athlete choosing to narrow it down. */}
@@ -3608,6 +3636,9 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
             ))}
           </div>
         </div>
+      )}
+      {historySheetOpen && (
+        <ExerciseHistorySheet exId={exId} exMap={exMap} state={state} onClose={() => setHistorySheetOpen(false)} />
       )}
     </div>
   );
@@ -4394,6 +4425,10 @@ function TrainingExerciseCard({
   const [lastSessionOpen, setLastSessionOpen] = useState(false);
   const [reasonOpen, setReasonOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
+  // "VIEW HISTORY" (task: "BRK Workout History," section 11) — inspect every prior instance of
+  // this movement without leaving the active workout. Rendered as a fixed overlay sibling
+  // rather than a full view-swap, so the in-progress set/draft underneath is never unmounted.
+  const [historySheetOpen, setHistorySheetOpen] = useState(false);
   const [addingExtra, setAddingExtra] = useState(false);
   // Bug fix: "programmed set count must not hard-lock the athlete" — Save Set previously only
   // blocked on an EMPTY weight/reps field, so decrementing the reps stepper to 0 (e.g. an athlete
@@ -4902,8 +4937,8 @@ function TrainingExerciseCard({
           </div>
         </div>
       )}
-      {(suggestion.suggestion != null || (lastEntry && lastEntry.sets.length > 1)) && (
-        <div className="flex items-center gap-4 px-1">
+      {(suggestion.suggestion != null || (lastEntry && lastEntry.sets.length > 1) || overallRecentForEx.length > 0) && (
+        <div className="flex items-center gap-4 px-1 flex-wrap">
           {suggestion.suggestion != null && (
             <button onClick={useSuggested} className="text-[11px] uppercase tracking-widest text-v5-red hover:opacity-80">
               Use suggested
@@ -4917,6 +4952,14 @@ function TrainingExerciseCard({
           {lastEntry && lastEntry.sets.length > 1 && (
             <button onClick={() => setLastSessionOpen((o) => !o)} className="text-[11px] text-v5-subtext hover:text-v5-text">
               Last session {lastSessionOpen ? "▴" : "▾"}
+            </button>
+          )}
+          {/* VIEW HISTORY (task section 11/14) — one tap, opens as an overlay so the active set
+              draft underneath is never lost. Gated on any logged history existing at all for
+              this movement (any machine), not just this equipment bucket's own. */}
+          {overallRecentForEx.length > 0 && (
+            <button onClick={() => setHistorySheetOpen(true)} className="text-[11px] uppercase tracking-widest text-v5-red hover:opacity-80">
+              View history
             </button>
           )}
         </div>
@@ -5379,6 +5422,9 @@ function TrainingExerciseCard({
             </div>
           </div>
         </div>
+      )}
+      {historySheetOpen && (
+        <ExerciseHistorySheet exId={exId} exMap={exMap} state={state} onClose={() => setHistorySheetOpen(false)} />
       )}
     </div>
   );
