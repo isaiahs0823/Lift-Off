@@ -2767,7 +2767,7 @@ export default function LiftLog() {
                 allExercises={allExercises}
                 exMap={exMap}
                 onNavigate={setTab}
-                onViewWorkout={viewWorkout}
+                onViewWorkout={(sessionId) => viewWorkout(sessionId, "progress")}
                 onViewAllHistory={viewWorkoutHistory}
               />
             )}
@@ -2781,7 +2781,7 @@ export default function LiftLog() {
                 onLogManualRecovery={logManualRecovery}
                 onRestartCompletedProgram={restartProgramById}
                 onGoToBuild={() => setTab("build")}
-                onViewWorkout={viewWorkout}
+                onViewWorkout={(sessionId) => viewWorkout(sessionId, "templates")}
               />
             )}
             {tab === "build" && (
@@ -2821,7 +2821,7 @@ export default function LiftLog() {
               />
             )}
             {tab === "programTimeline" && (
-              <ProgramTimelineScreen state={state} exMap={exMap} onBack={() => setTab("train")} onViewWorkout={viewWorkout} />
+              <ProgramTimelineScreen state={state} exMap={exMap} onBack={() => setTab("train")} onViewWorkout={(sessionId) => viewWorkout(sessionId, "train")} />
             )}
             {tab === "developmentPriorities" && (
               <DevelopmentPrioritiesScreen state={state} updateState={updateState} onBack={() => setTab("coach")} />
@@ -2832,7 +2832,7 @@ export default function LiftLog() {
             {tab === "photos" && <PhotosTab state={state} updateState={updateState} />}
             {tab === "settings" && <SettingsTab state={state} updateState={updateState} onNavigate={setTab} />}
             {tab === "dataWorkbook" && (
-              <DataWorkbookScreen state={state} exMap={exMap} onBack={() => setTab("settings")} onViewWorkout={viewWorkout} />
+              <DataWorkbookScreen state={state} exMap={exMap} onBack={() => setTab("settings")} onViewWorkout={(sessionId) => viewWorkout(sessionId, "settings")} />
             )}
             {tab === "breakMeaning" && <BreakMeaningPage onBack={() => setTab("more")} logoSrc={BREAK_LOGO} />}
           </>

@@ -233,7 +233,7 @@ export default function AthleteProfileForm({ state, updateState, mode = "edit", 
         {mode === "onboarding" ? "Save & continue" : "Save profile"}
       </button>
       {mode === "onboarding" && onSkip && (
-        <button onClick={save} className="w-full text-center text-xs text-v5-subtext hover:text-v5-text/90 py-1">
+        <button onClick={onSkip} className="w-full text-center text-xs text-v5-subtext hover:text-v5-text/90 py-1">
           Skip for now
         </button>
       )}
