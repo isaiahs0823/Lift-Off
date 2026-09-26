@@ -51,7 +51,7 @@ function elapsedLabel(startedAt) {
 // entire screen: "Resume workout" becomes the one thing to do here, matching the reliability
 // spec's "primary CTA should be RESUME WORKOUT, not Start Workout — do not make them navigate
 // through workout-selection flows again."
-export default function TrainTab({ state, updateState, exMap, activeRun, onStartRun, onStartRecovery, onResumeWorkout, onDiscardWorkout, onNavigate, onViewWorkout, section, onSectionChange }) {
+export default function TrainTab({ state, updateState, exMap, activeRun, onStartRun, onStartRecovery, onResumeWorkout, onDiscardWorkout, onNavigate, onViewWorkout, section, onSectionChange, historyFilter }) {
   const programDay = resolveTodayWorkout(state);
   const [swapOpen, setSwapOpen] = useState(false);
   // Collapsed by default — Train is a "decide what to do" screen, not a place to scroll through
@@ -137,7 +137,7 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
       <SegmentedTabs tabs={TRAIN_SECTIONS} value={section === "history" ? "history" : "workout"} onChange={changeSection} />
 
       {section === "history" ? (
-        <TrainHistorySection state={state} exMap={exMap} onViewWorkout={onViewWorkout} />
+        <TrainHistorySection state={state} exMap={exMap} onViewWorkout={onViewWorkout} initialFilter={historyFilter} />
       ) : (
         <>
       {programDay && !programDay.isComplete && (

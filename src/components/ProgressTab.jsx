@@ -147,9 +147,17 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate, onViewAllHisto
               label="Workouts"
               value={periodSessions.length}
               sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label}
-              onClick={onViewAllHistory}
+              onClick={() => onViewAllHistory("all")}
             />
-            <MetricTile label="PRs" value={prsInPeriod} sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label} accent={prsInPeriod > 0} />
+            {/* Same one-tap deep link as Workouts above, pre-filtered to PR Sessions — the
+                athlete tapping a PR count wants to see those sessions, not the whole list. */}
+            <MetricTile
+              label="PRs"
+              value={prsInPeriod}
+              sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label}
+              accent={prsInPeriod > 0}
+              onClick={() => onViewAllHistory("pr")}
+            />
           </div>
 
           {/* Paired row — Muscle Focus next to Recent PRs (task section 10's balanced two-card

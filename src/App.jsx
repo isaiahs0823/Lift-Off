@@ -1899,13 +1899,26 @@ export default function LiftLog() {
   // so a two-tap "Train > History > session" flow would land back on the Workout landing
   // screen instead of History (task: "Train → History → tap session = two taps").
   const [trainSection, setTrainSection] = useState("workout");
+  // Which History filter chip is pre-applied the moment Train > History mounts — "all" for a
+  // plain visit, "pr" when arriving via Progress's PRs tile deep link (see viewWorkoutHistory).
+  // Only meaningful at mount (TrainHistorySection seeds its own local filter state from this
+  // once); changeTrainSection below resets it to "all" on a normal manual tap into History so a
+  // stale "pr" from an earlier deep link can never silently carry over into an unrelated visit.
+  const [trainHistoryFilter, setTrainHistoryFilter] = useState("all");
+  // Plain "which Train segment is active" setter for TrainTab's own SegmentedTabs — distinct
+  // from viewWorkoutHistory below so a manual tap into History always starts unfiltered.
+  const changeTrainSection = (value) => {
+    setTrainSection(value);
+    if (value === "history") setTrainHistoryFilter("all");
+  };
   // One-tap deep link into Train > History from anywhere else in the app (e.g. Progress
-  // Overview's "Workouts" stat tile) — a first-time user staring at a workout COUNT has every
-  // reason to expect tapping it opens those workouts, not to already know History lives inside
-  // Train's own segmented control. Jumps the segment AND the tab in one call so landing on
-  // Train always shows History immediately, never the plain "Choose your workout" screen.
-  const viewWorkoutHistory = () => {
+  // Overview's "Workouts"/"PRs" stat tiles) — a first-time user staring at a workout or PR COUNT
+  // has every reason to expect tapping it opens those, not to already know History lives inside
+  // Train's own segmented control. Jumps the segment AND the tab in one call, with an optional
+  // pre-applied filter, so landing on Train always shows the relevant list immediately.
+  const viewWorkoutHistory = (filter = "all") => {
     setTrainSection("history");
+    setTrainHistoryFilter(filter);
     setTab("train");
   };
   const viewWorkout = (sessionId, returnTab = "today") => {
@@ -2597,7 +2610,8 @@ export default function LiftLog() {
                 onNavigate={setTab}
                 onViewWorkout={(sessionId) => viewWorkout(sessionId, "train")}
                 section={trainSection}
-                onSectionChange={setTrainSection}
+                onSectionChange={changeTrainSection}
+                historyFilter={trainHistoryFilter}
               />
             )}
             {tab === "restTimer" && <StandaloneRestTimer onBack={() => setTab("train")} />}

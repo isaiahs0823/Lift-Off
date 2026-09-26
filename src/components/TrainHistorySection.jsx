@@ -68,10 +68,13 @@ function SessionRow({ session, onClick }) {
 // TrainingCalendar component (already built for Progress > Performance) dropped in unchanged —
 // both ultimately open the exact same WorkoutHistoryDetail via `onViewWorkout`, so there is
 // still only one "view a past workout" implementation in the app, just two ways to browse to it.
-export default function TrainHistorySection({ state, exMap, onViewWorkout }) {
+export default function TrainHistorySection({ state, exMap, onViewWorkout, initialFilter = "all" }) {
   const [subView, setSubView] = useState("list"); // "list" | "calendar"
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
+  // Seeded once from the caller (e.g. Progress's PRs tile deep-links straight to "pr") — a plain
+  // local default otherwise, so freely re-filtering afterward inside this screen still works
+  // exactly like before this prop existed.
+  const [filter, setFilter] = useState(initialFilter);
   const [period, setPeriod] = useState("all");
 
   const sessions = useMemo(
