@@ -1,11 +1,11 @@
 // ---------------- TEMPORARY DIAGNOSTIC ENDPOINT ----------------
 // Exists only to answer one question: why can't Vercel production serverless
-// functions see OPENAI_API_KEY / USDA_FDC_API_KEY even though both are set in
+// functions see GROQ_API_KEY / USDA_FDC_API_KEY even though both are set in
 // Project Settings? Never returns or logs any environment variable VALUE —
 // only presence/length booleans and variable NAMES (as JSON.stringify, so
 // stray whitespace in a name is visible). Safe to leave attached to a public
 // URL, but should be removed once the root cause is found.
-const MATCH_SUBSTRINGS = ["OPENAI", "USDA", "FDC", "COACH"];
+const MATCH_SUBSTRINGS = ["GROQ", "USDA", "FDC", "COACH"];
 
 export default function handler(req, res) {
   if (req.method !== "GET") {
@@ -29,7 +29,7 @@ export default function handler(req, res) {
     vercelEnv: process.env.VERCEL_ENV ?? null,
     vercelTargetEnv: process.env.VERCEL_TARGET_ENV ?? null,
     expected: {
-      OPENAI_API_KEY: typeof process.env.OPENAI_API_KEY === "string" && process.env.OPENAI_API_KEY.length > 0,
+      GROQ_API_KEY: typeof process.env.GROQ_API_KEY === "string" && process.env.GROQ_API_KEY.length > 0,
       USDA_FDC_API_KEY: typeof process.env.USDA_FDC_API_KEY === "string" && process.env.USDA_FDC_API_KEY.length > 0,
       COACH_MODEL: typeof process.env.COACH_MODEL === "string" && process.env.COACH_MODEL.length > 0,
     },

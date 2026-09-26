@@ -21,11 +21,14 @@ const MAX_MESSAGE_CHARS = 6000; // a single message this long is almost certainl
 const MAX_CONTEXT_CHARS = 8000;
 const VALID_ROLES = new Set(["system", "user", "assistant", "tool"]);
 const VALID_STYLES = new Set(["supportive", "balanced", "direct", "hard"]);
-// Current, low-cost OpenAI model with tool-calling support. Override with COACH_MODEL — do not
-// assume this name stays valid forever; if OpenAI ever retires/renames it, classifyOpenAIError()
-// maps the resulting 404/model_not_found straight to a clear client message and a specific
-// server log line naming the exact model that failed, rather than a guess.
-const DEFAULT_MODEL = "gpt-4o-mini";
+// Groq's free tier (https://console.groq.com — no payment method required to start) rather than
+// a paid provider — see api/_lib/coachAIProvider.js's own header comment for why Groq
+// specifically. Llama 3.3 70B is Groq's current strongest tool-calling-capable model; override
+// with COACH_MODEL if Groq's lineup changes (they retire/rename models faster than OpenAI does).
+// A retired/renamed model surfaces as 404/model_not_found, which classifyProviderError() maps to
+// a clear client message and a specific server log line naming the exact model that failed,
+// rather than a guess.
+const DEFAULT_MODEL = "llama-3.3-70b-versatile";
 
 function validateMessages(messages) {
   if (!Array.isArray(messages) || messages.length === 0) return "messages must be a non-empty array.";
@@ -66,8 +69,8 @@ export function validateToolSchemas(tools) {
 // Safe server-side log — every field here is either a status code, a provider-defined
 // enum/code, the configured model name, or this request's own id. NEVER logs: the API key, the
 // Authorization header, athlete context, or conversation content.
-function logOpenAIError(requestId, details) {
-  console.error("BRK Coach OpenAI error", {
+function logProviderError(requestId, details) {
+  console.error("BRK Coach provider error", {
     requestId,
     status: details.status ?? null,
     type: details.type ?? null,
@@ -80,7 +83,7 @@ function logOpenAIError(requestId, details) {
 
 function mapUpstreamStatusForClient(status) {
   if (status === 429) return 429;
-  return 502; // never mirror an upstream 401/404/etc. onto BRK's own response status — those are OpenAI's auth/routing, not a fact about this request
+  return 502; // never mirror an upstream 401/404/etc. onto BRK's own response status — those are the provider's auth/routing, not a fact about this request
 }
 
 export default async function handler(req, res) {
@@ -91,12 +94,12 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   const model = process.env.COACH_MODEL || DEFAULT_MODEL;
   // Section 3 — confirms configuration state on every request without ever printing the key
   // itself. Cheap enough to always log; the moment production starts failing, this line alone
   // tells you whether it's even worth looking further.
-  console.log("BRK Coach config check", { requestId, OPENAI_API_KEY_configured: !!apiKey, COACH_MODEL: model });
+  console.log("BRK Coach config check", { requestId, GROQ_API_KEY_configured: !!apiKey, COACH_MODEL: model });
 
   if (!apiKey) {
     res.status(503).json({ error: "AI Coach is not configured yet.", requestId });
@@ -117,7 +120,7 @@ export default async function handler(req, res) {
 
   // ---- AI CONNECTION TEST ----
   // A self-contained layered probe, exposed via Coach Settings' "Test Connection" button —
-  // tests the SAME deployed backend and OPENAI_API_KEY the real chat pipeline uses, but through
+  // tests the SAME deployed backend and GROQ_API_KEY the real chat pipeline uses, but through
   // neither the streaming-SSE-to-client path nor any BRK tool/context code. Non-streaming first
   // (rules provider/key/billing/model/request-format in or out on its own); only if that passes
   // does it test streaming (isolates the SSE event-translation layer specifically). Returns one
@@ -207,7 +210,7 @@ export default async function handler(req, res) {
   // Only the 45s ceiling aborts the upstream request now. This previously also aborted on the
   // request's "close" event to catch a genuine client disconnect, but in the Vercel/Node runtime
   // IncomingMessage can emit "close" once the request has simply finished being received — not
-  // only on a real disconnect — which was killing the OpenAI fetch immediately after the POST
+  // only on a real disconnect — which was killing the upstream fetch immediately after the POST
   // body finished arriving, before any response could stream back. Until a signal that reliably
   // tells "client actually disconnected" apart from "request finished normally" is confirmed for
   // this runtime, rely on the timeout alone rather than guess wrong again.
@@ -219,12 +222,12 @@ export default async function handler(req, res) {
     const result = await streamChatCompletion(
       { apiKey, model, messages: [...systemMessages, ...messages], tools: toolsToSend, signal: controller.signal, requestId, diagnostic: isDiagnostic },
       res,
-      { onUnhandledEvent: (event) => console.warn("BRK Coach: unrecognized Responses API stream event", { requestId, event, model }) }
+      { onUnhandledEvent: (event) => console.warn("BRK Coach: unrecognized upstream stream event", { requestId, event, model }) }
     );
     clearTimeout(timeout);
 
     if (!result.ok) {
-      logOpenAIError(requestId, result);
+      logProviderError(requestId, result);
       if (!res.headersSent) {
         res.status(mapUpstreamStatusForClient(result.status)).json({ error: result.clientMessage, requestId });
       }
@@ -233,7 +236,7 @@ export default async function handler(req, res) {
     if (result.streamedFailure) {
       // Streaming had already started (200 sent) when this happened, so the client already
       // received a real HTTP response — this log is the only way the actual cause is visible.
-      logOpenAIError(requestId, { status: null, type: result.streamedFailure.type, code: result.streamedFailure.code, message: result.streamedFailure.message, model });
+      logProviderError(requestId, { status: null, type: result.streamedFailure.type, code: result.streamedFailure.code, message: result.streamedFailure.message, model });
     }
   } catch (e) {
     clearTimeout(timeout);

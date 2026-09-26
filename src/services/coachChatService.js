@@ -1,6 +1,6 @@
 // ---------------- COACH CHAT SERVICE (client side) ----------------
 // Talks only to BRK's own /api/coach-chat proxy, never to the LLM provider directly. Parses
-// the provider's SSE stream (OpenAI's own wire format, passed through unmodified by the
+// the provider's SSE stream (OpenAI-Chat-Completions-shaped, passed through unmodified by the
 // server) and, when the model asks for a tool, hands control back to the caller to execute it
 // locally and continue the conversation — see runCoachTurn(). This file has zero knowledge of
 // which provider is behind the proxy; that's isolated to api/_lib/coachAIProvider.js.

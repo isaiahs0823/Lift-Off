@@ -30,7 +30,7 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
   const [connResult, setConnResult] = useState(null);
 
   // Production-incident tooling — tests the SAME deployed /api/coach-chat backend and
-  // OPENAI_API_KEY the real Coach chat uses, layered: the server checks the provider/key/model
+  // GROQ_API_KEY the real Coach chat uses, layered: the server checks the provider/key/model
   // in isolation first, then streaming, and reports exactly which layer failed rather than
   // collapsing everything into one generic result.
   const testConnection = async () => {
