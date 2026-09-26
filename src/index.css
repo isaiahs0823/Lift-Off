@@ -119,3 +119,21 @@ html.snap-scroll-active {
     padding-bottom: 0.875rem !important;
   }
 }
+
+/* ---------------- BOTTOM-NAV CLEARANCE FIX ---------------- */
+/* The mobile density pass above forces `.p-4`'s padding-bottom down to 0.875rem with
+   `!important`. App.jsx's main content wrapper is `p-4 sm:p-6 pb-24` — `pb-24` exists
+   specifically to reserve 6rem of clearance below the last thing on any screen so it isn't
+   hidden under the fixed bottom nav (~58px tall, plus env(safe-area-inset-bottom) on notched
+   phones). Because `.p-4`'s override carries `!important` and `.pb-24` doesn't, `.p-4` was
+   silently winning on every mobile screen regardless of which rule came first in the file —
+   collapsing real bottom clearance to ~14px, well under the nav's own height. That's what made
+   the last item on a long list (or the last button on a tall form, like Coach onboarding's
+   "Skip for now") end up rendered partly or fully underneath the nav — a real, tappable-target
+   bug, not just a cosmetic one. Restated here, still `!important`, so bottom-nav clearance
+   always wins no matter which side-shrinking utility is also present on the same element. */
+@media (max-width: 639px) {
+  .pb-24 {
+    padding-bottom: 6rem !important;
+  }
+}
