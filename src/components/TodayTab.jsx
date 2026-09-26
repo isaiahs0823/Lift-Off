@@ -275,7 +275,7 @@ function CompactBodyweightTile({ currentWeight, weeklyChange, onOpen, onQuickAdd
   const trendUp = weeklyChange != null && weeklyChange > 0;
   const trendDown = weeklyChange != null && weeklyChange < 0;
   return (
-    <Card onClick={onOpen} padding="p-1.5" className="relative flex flex-col items-center justify-center gap-1 text-center">
+    <Card as="div" onClick={onOpen} padding="p-1.5" className="relative flex flex-col items-center justify-center gap-1 text-center">
       <button
         type="button"
         onClick={(e) => {
@@ -393,7 +393,7 @@ function BodyweightCard({ state, currentWeight, avg7, weeklyChange, onNavigate, 
   const trendUp = weeklyChange != null && weeklyChange > 0;
   const trendDown = weeklyChange != null && weeklyChange < 0;
   return (
-    <Card onClick={() => onNavigate("progress")} padding="p-4" className="relative space-y-2">
+    <Card as="div" onClick={() => onNavigate("progress")} padding="p-4" className="relative space-y-2">
       <button
         type="button"
         onClick={(e) => {
