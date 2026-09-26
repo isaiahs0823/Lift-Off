@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Search, X, Calendar, List, Award } from "lucide-react";
 import TrainingCalendar from "./TrainingCalendar.jsx";
 import { PeriodSelect } from "./ui/Kit.jsx";
@@ -37,7 +37,7 @@ function SessionRow({ session, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left border border-white/10 bg-v5-elevated px-4 py-3 hover:border-v5-red/40 space-y-1"
+      className="snap-scroll-row w-full text-left border border-white/10 bg-v5-elevated px-4 py-3 hover:border-v5-red/40 space-y-1"
     >
       <div className="text-[11px] uppercase tracking-widest text-v5-subtext">
         {new Date(session.finishedAt || session.startedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
@@ -76,6 +76,16 @@ export default function TrainHistorySection({ state, exMap, onViewWorkout, initi
   // exactly like before this prop existed.
   const [filter, setFilter] = useState(initialFilter);
   const [period, setPeriod] = useState("all");
+
+  // Snap-scroll only applies to the Recent list (task: "better scrolling stopping points" — a
+  // card sliced in half by the fixed bottom nav on a momentum stop reads as broken); the
+  // Calendar grid has no rows to snap to, so this turns off whenever that sub-view is active,
+  // and always turns off on unmount so leaving History never leaves another screen snapping.
+  useEffect(() => {
+    if (subView !== "list") return;
+    document.documentElement.classList.add("snap-scroll-active");
+    return () => document.documentElement.classList.remove("snap-scroll-active");
+  }, [subView]);
 
   const sessions = useMemo(
     () =>
