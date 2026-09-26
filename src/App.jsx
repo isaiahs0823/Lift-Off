@@ -96,6 +96,7 @@ import CoachKnowledgeScreen from "./components/CoachKnowledgeScreen.jsx";
 import CoachSettingsScreen from "./components/CoachSettingsScreen.jsx";
 import CoachSpecialtySelect from "./components/CoachSpecialtySelect.jsx";
 import DataWorkbookScreen from "./components/DataWorkbookScreen.jsx";
+import HelpGuideScreen from "./components/HelpGuideScreen.jsx";
 import IntervalTimerScreen from "./components/IntervalTimerScreen.jsx";
 import PlateCalculatorPanel, { PlateCalculatorToggle } from "./components/PlateCalculatorPanel.jsx";
 import MuscleBodyOutline from "./components/MuscleBodyOutline.jsx";
@@ -1768,6 +1769,7 @@ const SECTION_OF = {
   settings: "more",
   schedule: "more",
   dataWorkbook: "more",
+  helpGuide: "more",
   breakMeaning: "more",
   intervalTimer: "train",
   mobility: "more",
@@ -2835,6 +2837,7 @@ export default function LiftLog() {
               <DataWorkbookScreen state={state} exMap={exMap} onBack={() => setTab("settings")} onViewWorkout={(sessionId) => viewWorkout(sessionId, "settings")} />
             )}
             {tab === "breakMeaning" && <BreakMeaningPage onBack={() => setTab("more")} logoSrc={BREAK_LOGO} />}
+            {tab === "helpGuide" && <HelpGuideScreen onBack={() => setTab("more")} />}
           </>
         )}
       </div>

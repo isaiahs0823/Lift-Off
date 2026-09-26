@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays, HeartPulse, ShieldCheck } from "lucide-react";
+import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays, HeartPulse, ShieldCheck, HelpCircle } from "lucide-react";
 import { MORE_CARD_CONTENT } from "../utils/breakBrandContent.js";
 import { ScreenHeader, SectionLabel, Card, ListRow, ButtonPrimary, ButtonSecondary } from "./ui/Kit.jsx";
 
@@ -13,6 +13,7 @@ const ITEMS = [
   { id: "mobility", label: "Mobility & Stretching", desc: "Stretch/mobility library, recovery routines, and guided sessions", icon: HeartPulse },
   { id: "top", label: "Top used", desc: "Your most-logged exercises", icon: Flame },
   { id: "settings", label: "Settings", desc: "Training defaults, backup & restore", icon: SettingsIcon },
+  { id: "helpGuide", label: "Help & Guide", desc: "How BRK works, FAQs, and the downloadable user guide", icon: HelpCircle },
 ];
 
 // Restrained brand card below the normal navigation rows — a deliberate brand touch, not an

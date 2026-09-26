@@ -121,19 +121,25 @@ html.snap-scroll-active {
 }
 
 /* ---------------- BOTTOM-NAV CLEARANCE FIX ---------------- */
-/* The mobile density pass above forces `.p-4`'s padding-bottom down to 0.875rem with
-   `!important`. App.jsx's main content wrapper is `p-4 sm:p-6 pb-24` — `pb-24` exists
-   specifically to reserve 6rem of clearance below the last thing on any screen so it isn't
-   hidden under the fixed bottom nav (~58px tall, plus env(safe-area-inset-bottom) on notched
-   phones). Because `.p-4`'s override carries `!important` and `.pb-24` doesn't, `.p-4` was
-   silently winning on every mobile screen regardless of which rule came first in the file —
-   collapsing real bottom clearance to ~14px, well under the nav's own height. That's what made
-   the last item on a long list (or the last button on a tall form, like Coach onboarding's
-   "Skip for now") end up rendered partly or fully underneath the nav — a real, tappable-target
-   bug, not just a cosmetic one. Restated here, still `!important`, so bottom-nav clearance
-   always wins no matter which side-shrinking utility is also present on the same element. */
-@media (max-width: 639px) {
-  .pb-24 {
-    padding-bottom: 6rem !important;
-  }
+/* App.jsx's main content wrapper is `p-4 sm:p-6 pb-24` — `pb-24` exists specifically to reserve
+   6rem of clearance below the last thing on any screen so it isn't hidden under the fixed
+   bottom nav (~58-62px tall, plus env(safe-area-inset-bottom) on notched phones).
+   Two independent bugs were silently defeating it:
+   1. Mobile (<640px): the density pass above forces `.p-4`'s padding-bottom to 0.875rem with
+      `!important`, which beats `.pb-24` regardless of source order since it has no
+      `!important` of its own. Collapsed real clearance to ~14px on every mobile screen.
+   2. Desktop (>=640px): `.sm\:p-6` (1.5rem, all sides, no `!important`) is a *responsive*
+      Tailwind utility, and Tailwind always emits responsive-variant utilities after all
+      unprefixed ones in the compiled stylesheet — so even with equal specificity and no
+      `!important` on either side, `.sm\:p-6` physically comes after `.pb-24` in the file and
+      wins the cascade for the padding-bottom property they both touch. Collapsed real
+      clearance to 1.5rem (24px) on every desktop-width screen, confirmed by computed style
+      (paddingBottom: "24px" instead of "96px" at 1440px).
+   Both made the last item on a long list, or the last button on a tall form (Coach
+   onboarding's "Skip for now"; Help & Guide's About row), end up rendered partly or fully
+   underneath the nav — a real, tappable-target bug, not just a cosmetic one. Restated here
+   unconditionally (every breakpoint) and with `!important`, so bottom-nav clearance always
+   wins no matter which side-setting utility is also present on the same element. */
+.pb-24 {
+  padding-bottom: 6rem !important;
 }
