@@ -1899,6 +1899,15 @@ export default function LiftLog() {
   // so a two-tap "Train > History > session" flow would land back on the Workout landing
   // screen instead of History (task: "Train → History → tap session = two taps").
   const [trainSection, setTrainSection] = useState("workout");
+  // One-tap deep link into Train > History from anywhere else in the app (e.g. Progress
+  // Overview's "Workouts" stat tile) — a first-time user staring at a workout COUNT has every
+  // reason to expect tapping it opens those workouts, not to already know History lives inside
+  // Train's own segmented control. Jumps the segment AND the tab in one call so landing on
+  // Train always shows History immediately, never the plain "Choose your workout" screen.
+  const viewWorkoutHistory = () => {
+    setTrainSection("history");
+    setTab("train");
+  };
   const viewWorkout = (sessionId, returnTab = "today") => {
     setSelectedSessionId(sessionId);
     setWorkoutDetailReturnTab(returnTab);
@@ -2738,7 +2747,15 @@ export default function LiftLog() {
               <IntervalTimerScreen updateState={updateState} allExercises={allExercises} onBack={() => setTab("cardio")} />
             )}
             {tab === "progress" && (
-              <ProgressTab state={state} updateState={updateState} allExercises={allExercises} exMap={exMap} onNavigate={setTab} onViewWorkout={viewWorkout} />
+              <ProgressTab
+                state={state}
+                updateState={updateState}
+                allExercises={allExercises}
+                exMap={exMap}
+                onNavigate={setTab}
+                onViewWorkout={viewWorkout}
+                onViewAllHistory={viewWorkoutHistory}
+              />
             )}
             {tab === "templates" && (
               <TemplatesTab

@@ -67,7 +67,7 @@ const PROGRESS_TABS = [
 // drill-ins (which already house the deeper PR history/per-exercise stats). Calendar and
 // Analytics remain one tap away rather than fully inlined — they're their own screens with their
 // own real depth, not content that would fit compactly in a tab.
-function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
+function ProgressLanding({ state, exMap, onDrillDown, onNavigate, onViewAllHistory }) {
   const [period, setPeriod] = useState("month");
   const [tab, setTab] = useState("overview");
   const entries = state.bodyweightLogs || [];
@@ -139,7 +139,16 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
           {/* Top metric row — compact tiles, never the focal point themselves (mockup section 8). */}
           <div className="grid grid-cols-3 gap-2.5">
             <MetricTile label="Bodyweight" value={currentWeight != null ? fmt1(currentWeight) : "—"} sublabel={currentWeight != null ? "lb" : undefined} />
-            <MetricTile label="Workouts" value={periodSessions.length} sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label} />
+            {/* Tapping the count jumps straight to Train > History (task: "make it where I just
+                tap the workouts tab right there and it opens all the history" — a first-time
+                user has no reason to already know History lives inside Train's own segmented
+                control, so the number itself has to be the door in). */}
+            <MetricTile
+              label="Workouts"
+              value={periodSessions.length}
+              sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label}
+              onClick={onViewAllHistory}
+            />
             <MetricTile label="PRs" value={prsInPeriod} sublabel={PERIOD_OPTIONS.find((p) => p.value === period)?.label} accent={prsInPeriod > 0} />
           </div>
 
@@ -273,7 +282,7 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate }) {
   );
 }
 
-export default function ProgressTab({ state, updateState, allExercises, exMap, onNavigate, onViewWorkout }) {
+export default function ProgressTab({ state, updateState, allExercises, exMap, onNavigate, onViewWorkout, onViewAllHistory }) {
   const [view, setView] = useState("landing");
 
   if (view !== "landing") {
@@ -289,5 +298,5 @@ export default function ProgressTab({ state, updateState, allExercises, exMap, o
     );
   }
 
-  return <ProgressLanding state={state} exMap={exMap} onDrillDown={setView} onNavigate={onNavigate} />;
+  return <ProgressLanding state={state} exMap={exMap} onDrillDown={setView} onNavigate={onNavigate} onViewAllHistory={onViewAllHistory} />;
 }
