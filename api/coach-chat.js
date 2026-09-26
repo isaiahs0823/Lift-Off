@@ -23,12 +23,15 @@ const VALID_ROLES = new Set(["system", "user", "assistant", "tool"]);
 const VALID_STYLES = new Set(["supportive", "balanced", "direct", "hard"]);
 // Groq's free tier (https://console.groq.com — no payment method required to start) rather than
 // a paid provider — see api/_lib/coachAIProvider.js's own header comment for why Groq
-// specifically. Llama 3.3 70B is Groq's current strongest tool-calling-capable model; override
-// with COACH_MODEL if Groq's lineup changes (they retire/rename models faster than OpenAI does).
-// A retired/renamed model surfaces as 404/model_not_found, which classifyProviderError() maps to
+// specifically. openai/gpt-oss-120b is Groq's own recommended, currently-supported
+// tool-calling-capable model — llama-3.3-70b-versatile (this constant's original value) was
+// fully decommissioned by Groq on 2026-08-16, which is exactly what produced the
+// "Configured AI model is unavailable" failure this replaced. Override with COACH_MODEL if
+// Groq's lineup changes again (they retire/rename models faster than OpenAI does) — a
+// retired/renamed model surfaces as 404/model_not_found, which classifyProviderError() maps to
 // a clear client message and a specific server log line naming the exact model that failed,
 // rather than a guess.
-const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+const DEFAULT_MODEL = "openai/gpt-oss-120b";
 
 function validateMessages(messages) {
   if (!Array.isArray(messages) || messages.length === 0) return "messages must be a non-empty array.";
