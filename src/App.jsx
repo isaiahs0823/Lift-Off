@@ -6571,14 +6571,17 @@ function EditCardioEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
   const [load, setLoad] = useState(entry.load != null ? String(entry.load) : "");
   const [notes, setNotes] = useState(entry.notes || "");
 
-  const canSave = distance !== "" || duration !== "";
+  const distanceNum = distance === "" ? null : Number(distance);
+  const durationNum = duration === "" ? null : Number(duration);
+  const hasInvalidValue = (distanceNum !== null && !(distanceNum > 0)) || (durationNum !== null && !(durationNum > 0));
+  const canSave = !hasInvalidValue && (distanceNum !== null || durationNum !== null);
 
   const handleSave = () => {
     if (!canSave) return;
     onSave({
-      distance: distance !== "" ? Number(distance) : null,
+      distance: distanceNum,
       distanceUnit,
-      duration: duration !== "" ? Number(duration) : null,
+      duration: durationNum,
       load: load !== "" ? Number(load) : null,
       notes: notes.trim(),
     });
@@ -6596,6 +6599,7 @@ function EditCardioEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
           <div className="flex gap-2">
             <input
               type="number"
+              min="0"
               value={distance}
               onChange={(e) => setDistance(e.target.value)}
               placeholder="0"
@@ -6615,6 +6619,7 @@ function EditCardioEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
           <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Duration (min)</label>
           <input
             type="number"
+            min="0"
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
             placeholder="0"
@@ -6627,6 +6632,7 @@ function EditCardioEntryPanel({ entry, exMap, onBack, onSave, onDelete }) {
         <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Load — sled/ruck only (lb)</label>
         <input
           type="number"
+          min="0"
           value={load}
           onChange={(e) => setLoad(e.target.value)}
           placeholder="Optional"
@@ -6700,7 +6706,10 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
   const lastEntry = recentForEx[0];
   const best = bestCardioStat(currentExId, cardioLogs);
 
-  const canSave = distance !== "" || duration !== "";
+  const distanceNum = distance === "" ? null : Number(distance);
+  const durationNum = duration === "" ? null : Number(duration);
+  const hasInvalidValue = (distanceNum !== null && !(distanceNum > 0)) || (durationNum !== null && !(durationNum > 0));
+  const canSave = !hasInvalidValue && (distanceNum !== null || durationNum !== null);
 
   const saveEntry = () => {
     if (!canSave) return;
@@ -6708,9 +6717,9 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
       id: `cardio_${Date.now()}`,
       exId: currentExId,
       date: new Date().toISOString(),
-      distance: distance !== "" ? Number(distance) : null,
+      distance: distanceNum,
       distanceUnit,
-      duration: duration !== "" ? Number(duration) : null,
+      duration: durationNum,
       load: load !== "" ? Number(load) : null,
       notes: notes.trim(),
     };
@@ -6810,6 +6819,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
           <div className="flex gap-2">
             <input
               type="number"
+              min="0"
               value={distance}
               onChange={(e) => setDistance(e.target.value)}
               placeholder="0"
@@ -6829,6 +6839,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
           <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Duration (min)</label>
           <input
             type="number"
+            min="0"
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
             placeholder="0"
@@ -6841,6 +6852,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
         <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Load — sled/ruck only (lb)</label>
         <input
           type="number"
+          min="0"
           value={load}
           onChange={(e) => setLoad(e.target.value)}
           placeholder="Optional"
