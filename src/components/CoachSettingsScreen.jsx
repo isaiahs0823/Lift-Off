@@ -18,9 +18,17 @@ import { getSpecialty } from "../coachSpecialties/index.js";
 // AthleteProfileForm's edit mode — that's the full ~10-field profile; this is just "how Coach
 // behaves," saved immediately per change rather than behind a Save button, matching how a
 // settings screen (not a form) is expected to behave.
+// Append ?debug=1 to the URL to reveal the AI Connection diagnostics panel below (dev/support
+// use only — it surfaces raw provider failure reasons/request IDs that mean nothing to a real
+// athlete and shouldn't sit in a normal settings screen).
+function isDebugMode() {
+  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1";
+}
+
 export default function CoachSettingsScreen({ state, updateState, onNavigate, onBack }) {
   const profile = resolveProfile(state);
   const currentSpecialty = getSpecialty(profile.coachSpecialty || "bodybuilding");
+  const debugMode = isDebugMode();
 
   const patch = (fields) => {
     updateState((prev) => ({ ...prev, athleteProfile: { ...resolveProfile(prev), ...fields, updatedAt: new Date().toISOString() } }));
@@ -248,40 +256,42 @@ export default function CoachSettingsScreen({ state, updateState, onNavigate, on
         </button>
       </div>
 
-      <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
-        <div className="text-[11px] uppercase tracking-widest text-v5-red">AI Connection</div>
+      {debugMode && (
+        <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">AI Connection (debug)</div>
 
-        {connState === "idle" && (
-          <button onClick={testConnection} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30">
-            Test Connection
-          </button>
-        )}
+          {connState === "idle" && (
+            <button onClick={testConnection} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30">
+              Test Connection
+            </button>
+          )}
 
-        {connState === "testing" && <div className="text-sm text-v5-subtext">Testing…</div>}
+          {connState === "testing" && <div className="text-sm text-v5-subtext">Testing…</div>}
 
-        {connState === "connected" && (
-          <div className="space-y-1.5">
-            <div className="text-sm font-bold text-green-500">CONNECTED</div>
-            <div className="text-xs text-v5-subtext">
-              Model: <span className="text-v5-text/90">{connResult?.model}</span>
+          {connState === "connected" && (
+            <div className="space-y-1.5">
+              <div className="text-sm font-bold text-green-500">CONNECTED</div>
+              <div className="text-xs text-v5-subtext">
+                Model: <span className="text-v5-text/90">{connResult?.model}</span>
+              </div>
+              <button onClick={testConnection} className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red">
+                Test again
+              </button>
             </div>
-            <button onClick={testConnection} className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red">
-              Test again
-            </button>
-          </div>
-        )}
+          )}
 
-        {connState === "failed" && (
-          <div className="space-y-1.5">
-            <div className="text-sm font-bold text-v5-red">FAILED</div>
-            <div className="text-xs text-v5-subtext">Reason: {connResult?.reason}</div>
-            {connResult?.requestId && <div className="text-[11px] text-v5-subtext/70">Error ID: {connResult.requestId}</div>}
-            <button onClick={testConnection} className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red">
-              Retry
-            </button>
-          </div>
-        )}
-      </div>
+          {connState === "failed" && (
+            <div className="space-y-1.5">
+              <div className="text-sm font-bold text-v5-red">FAILED</div>
+              <div className="text-xs text-v5-subtext">Reason: {connResult?.reason}</div>
+              {connResult?.requestId && <div className="text-[11px] text-v5-subtext/70">Error ID: {connResult.requestId}</div>}
+              <button onClick={testConnection} className="text-[11px] uppercase tracking-widest text-v5-subtext hover:text-v5-red">
+                Retry
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="border border-white/10 p-4 space-y-2">
         <div className="text-sm font-bold text-white">Clear conversation memory</div>
