@@ -469,7 +469,7 @@ function SetupSchedulePrompt({ onSetup, onLater }) {
   );
 }
 
-export default function TodayTab({ state, updateState, exMap, allExercises, activeRun, onStartRun, onStartRecovery, onNavigate, onViewWorkout }) {
+export default function TodayTab({ state, updateState, exMap, allExercises, activeRun, onStartRun, onStartRecovery, onNavigate, onViewWorkout, onOpenNutrition }) {
   const entries = state.bodyweightLogs || [];
   const currentWeight = latestValue(entries, "weight");
   const avg7 = rollingAverage(entries, "weight", 7);
@@ -914,7 +914,7 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
           full-width cards (task section 5). Both drop to their `compact` presentation so
           neither cramps at 375px: one headline metric each, tap through for the rest. */}
       <div className="grid grid-cols-2 gap-3">
-        <NutritionCard state={state} onNavigate={onNavigate} compact />
+        <NutritionCard state={state} onNavigate={onOpenNutrition} compact />
         <CoachBriefCard message={coachMessage} onNavigate={onNavigate} />
       </div>
 

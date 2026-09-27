@@ -49,7 +49,7 @@ const GENERAL_QUICK_QUESTIONS = [
 // (specialty card, knowledge/settings/nutrition nav, active commitments) is the same
 // functionality CoachTab always had, just no longer the dominant thing on screen. Chat is now
 // the central experience; those stay one tap away, exactly as before.
-export default function CoachTab({ state, updateState, exMap, allExercises, onNavigate, openContext }) {
+export default function CoachTab({ state, updateState, exMap, allExercises, onNavigate, openContext, onOpenNutrition }) {
   const [showOnboarding, setShowOnboarding] = useState(!hasProfile(state));
   const [showSpecialtySelect, setShowSpecialtySelect] = useState(!resolveCoachOnboarding(state).specialtySelected);
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
@@ -210,7 +210,7 @@ export default function CoachTab({ state, updateState, exMap, allExercises, onNa
         <div className="grid grid-cols-2 gap-2">
           <ActionTile icon={BookOpen} label="Knowledge" onClick={() => onNavigate?.("coachKnowledge")} />
           <ActionTile icon={Target} label="Priorities" onClick={() => onNavigate?.("developmentPriorities")} />
-          <ActionTile icon={Apple} label="Nutrition" onClick={() => onNavigate?.("nutrition")} />
+          <ActionTile icon={Apple} label="Nutrition" onClick={() => (onOpenNutrition ? onOpenNutrition() : onNavigate?.("nutrition"))} />
           <ActionTile icon={ListChecks} label="Program" onClick={() => setShowScheduleBuilder(true)} />
           <ActionTile icon={SettingsIcon} label="Settings" onClick={() => onNavigate?.("coachSettings")} />
         </div>

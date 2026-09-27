@@ -1737,6 +1737,21 @@ const TOP_TABS = [
   { id: "progress", label: "Progress", icon: Scale },
   { id: "more", label: "More", icon: MoreHorizontal },
 ];
+// Every nutritionXxx id below maps to "coach" by default, but that's only correct when Coach
+// Tools was the entry point — Nutrition is also reached directly from Today (NutritionCard).
+// NUTRITION_TAB_IDS lets the bottom-nav highlight check swap in the real entry tab
+// (nutritionEntryTab) for these ids instead of trusting the static "coach" below.
+const NUTRITION_TAB_IDS = new Set([
+  "nutrition",
+  "nutritionLog",
+  "nutritionMealPlan",
+  "nutritionCheckIn",
+  "nutritionScan",
+  "nutritionScanBarcode",
+  "nutritionScanLabel",
+  "foodSearch",
+  "foodDetail",
+]);
 const SECTION_OF = {
   today: "today",
   mission: "today",
@@ -1927,6 +1942,17 @@ export default function LiftLog() {
     setSelectedSessionId(sessionId);
     setWorkoutDetailReturnTab(returnTab);
     setTab("workoutDetail");
+  };
+  // Which top-level tab the bottom nav should highlight while anywhere in the nutrition family
+  // (every nutritionXxx id maps to "coach" in SECTION_OF, but Nutrition is now ALSO reached
+  // directly from Today via NutritionCard) — same returnTab-style tracking as
+  // workoutDetailReturnTab above, just for "which tab did we enter FROM" instead of "which tab
+  // do we return TO". Defaults to "coach" so nothing changes for the original Coach Tools entry
+  // point; NutritionCard is the one caller that passes "today".
+  const [nutritionEntryTab, setNutritionEntryTab] = useState("coach");
+  const goToNutrition = (fromTab, dest = "nutrition") => {
+    setNutritionEntryTab(fromTab);
+    setTab(dest);
   };
   // Auto Post-Workout Recap (task Part 1) — reopenable from Workout History → Session → Recap
   // (task section 1), reusing the same selectedSessionId plumbing as viewWorkout so there's one
@@ -2566,6 +2592,7 @@ export default function LiftLog() {
                   onStartRecovery={(routine, programContext) => startRecoverySession(routine, programContext, "today")}
                   onNavigate={setTab}
                   onViewWorkout={viewWorkout}
+                  onOpenNutrition={(dest) => goToNutrition("today", dest)}
                 />
               ))}
             {tab === "workoutDetail" && (
@@ -2655,6 +2682,7 @@ export default function LiftLog() {
                 allExercises={allExercises}
                 onNavigate={setTab}
                 openContext={pendingCoachContext}
+                onOpenNutrition={() => goToNutrition("coach")}
               />
             )}
             {tab === "coachKnowledge" && <CoachKnowledgeScreen state={state} updateState={updateState} onNavigate={setTab} onBack={() => setTab("coach")} />}
@@ -2850,7 +2878,7 @@ export default function LiftLog() {
         // tap target itself never shrinks on notched devices, only the empty margin below it does.
         <div className="fixed bottom-0 left-0 right-0 z-20 flex bg-v5-surface border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]">
           {TOP_TABS.map((t) => {
-            const active = (SECTION_OF[tab] || tab) === t.id;
+            const active = (NUTRITION_TAB_IDS.has(tab) ? nutritionEntryTab : SECTION_OF[tab] || tab) === t.id;
             return (
               <button
                 key={t.id}
