@@ -116,7 +116,13 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate, onViewAllHisto
           <div className="text-xs text-v5-subtext">
             7-day avg {fmt1(avg7)} · {weeklyChange != null ? `${weeklyChange >= 0 ? "+" : ""}${fmt1(weeklyChange)} lb/wk` : "—"}
           </div>
-          <LineChart points={chartPoints} height={120} />
+          {chartPoints.length < 2 ? (
+            <div className="flex items-center justify-center text-xs text-v5-subtext" style={{ height: 120 }}>
+              Log again to see a trend
+            </div>
+          ) : (
+            <LineChart points={chartPoints} height={120} />
+          )}
         </>
       ) : (
         <div className="text-sm text-v5-subtext">No entries yet — log your weight to see a trend here.</div>
