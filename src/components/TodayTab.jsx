@@ -57,15 +57,14 @@ function todayReadiness(state) {
   if (score == null) return null;
   return { score, band: readinessBand(score) };
 }
-const READINESS_COLOR = { green: "text-v5-success", yellow: "text-amber-400", red: "text-v5-red" };
-const GLYPH_FOR_STATUS = { completed: "✓", pending: "●", upcoming: "○", rest: "REST", missed: "×", skipped: "×", moved_away: "–", none: "" };
+const GLYPH_FOR_STATUS = { completed: "✓", pending: "●", upcoming: "○", rest: "REST", missed: "×", skipped: "»", moved_away: "–", none: "" };
 const GLYPH_COLOR = {
   completed: "text-v5-success",
   pending: "text-v5-red",
   upcoming: "text-v5-subtext/50",
   rest: "text-v5-subtext",
   missed: "text-v5-red",
-  skipped: "text-v5-red",
+  skipped: "text-amber-400",
   moved_away: "text-v5-subtext/50",
   none: "text-v5-subtext/20",
 };
