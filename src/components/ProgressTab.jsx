@@ -197,7 +197,7 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate, onViewAllHisto
                   <div className="space-y-1">
                     {recentPRs.slice(0, focus ? 2 : 3).map((pr, i) => (
                       <div key={i} className="flex items-center justify-between text-xs">
-                        <span className="text-v5-subtext truncate">{exMap[pr.exId]?.name || pr.exId}</span>
+                        <span className="text-v5-subtext truncate">{exMap[pr.exId]?.name || "Deleted exercise"}</span>
                         <span className="text-v5-text font-bold shrink-0 ml-2 tabular-nums">{pr.weight != null ? `${pr.weight} × ${pr.reps}` : `${pr.value} lb`}</span>
                       </div>
                     ))}

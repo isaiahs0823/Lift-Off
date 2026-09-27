@@ -176,7 +176,7 @@ export default function AnalyticsTab({ state, allExercises, exMap }) {
             >
               {trainedExIds.map((id) => (
                 <option key={id} value={id}>
-                  {exMap[id]?.name || id}
+                  {exMap[id]?.name || "Deleted exercise"}
                 </option>
               ))}
             </select>
