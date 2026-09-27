@@ -7616,7 +7616,14 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
     setSupersetPicks((p) => p.filter((id) => id !== exId));
   };
   const updateExercise = (exId, field, val) =>
-    setSelectedExercises((s) => s.map((e) => (e.exId === exId ? { ...e, [field]: field === "group" ? val : Number(val) } : e)));
+    setSelectedExercises((s) =>
+      s.map((e) => {
+        if (e.exId !== exId) return e;
+        if (field === "group") return { ...e, group: val };
+        const n = Number(val);
+        return { ...e, [field]: Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 1 };
+      })
+    );
 
   // Simplified superset creation: pick 2+ exercises already added to the plan, tap "Create
   // superset" once, and they're grouped under the next free letter and moved next to each
@@ -7824,6 +7831,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
                 <div className="flex items-center gap-2 flex-wrap">
                   <input
                     type="number"
+                    min="1"
                     value={e.sets}
                     onChange={(ev) => updateExercise(e.exId, "sets", ev.target.value)}
                     className="w-14 bg-v5-elevated border border-white/10 text-v5-text px-2 py-1 text-xs"
@@ -7831,6 +7839,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
                   <span className="text-v5-subtext/70 text-xs">sets</span>
                   <input
                     type="number"
+                    min="1"
                     value={e.reps}
                     onChange={(ev) => updateExercise(e.exId, "reps", ev.target.value)}
                     className="w-14 bg-v5-elevated border border-white/10 text-v5-text px-2 py-1 text-xs"
