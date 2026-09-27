@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Trash2 } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
-import { rollingAverage, weeklyRateOfChange, totalChange, latestValue, paceClassification, PACE_LABEL, upsertBodyweightEntry } from "../utils/bodyweightMath.js";
+import { rollingAverage, weeklyRateOfChange, totalChange, latestValue, paceClassification, PACE_LABEL, upsertBodyweightEntry, isValidBodyweightLb, BODYWEIGHT_MIN_LB, BODYWEIGHT_MAX_LB } from "../utils/bodyweightMath.js";
 import { requiredPace, projectedCompletionDate } from "../utils/goalMath.js";
 import { goalHistory, resolveGoalCurrentValue } from "../utils/goalData.js";
 
@@ -46,14 +46,24 @@ function EditEntryPanel({ entry, onBack, onSave, onDelete }) {
   const [waist, setWaist] = useState(entry.waist != null ? String(entry.waist) : "");
   const [bodyFat, setBodyFat] = useState(entry.bodyFat != null ? String(entry.bodyFat) : "");
   const [notes, setNotes] = useState(entry.notes || "");
-  const canSave = weight !== "" || waist !== "" || bodyFat !== "";
+  const weightNum = weight === "" ? null : Number(weight);
+  const weightValid = weightNum === null || isValidBodyweightLb(weightNum);
+  const canSave = weightValid && (weight !== "" || waist !== "" || bodyFat !== "");
 
   return (
     <SlideInPanel title="Edit entry" subtitle={new Date(entry.date).toLocaleDateString()} onBack={onBack}>
       <div className="grid grid-cols-3 gap-2">
         <div>
           <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Weight</label>
-          <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="w-full bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red" />
+          <input
+            type="number"
+            min={BODYWEIGHT_MIN_LB}
+            max={BODYWEIGHT_MAX_LB}
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            className="w-full bg-v5-elevated border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
+          />
+          {!weightValid && <div className="text-[11px] text-v5-red mt-1">{BODYWEIGHT_MIN_LB}-{BODYWEIGHT_MAX_LB} lb.</div>}
         </div>
         <div>
           <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Waist</label>
@@ -72,7 +82,7 @@ function EditEntryPanel({ entry, onBack, onSave, onDelete }) {
         onClick={() =>
           canSave &&
           onSave({
-            weight: weight !== "" ? Number(weight) : null,
+            weight: weightNum,
             waist: waist !== "" ? Number(waist) : null,
             bodyFat: bodyFat !== "" ? Number(bodyFat) : null,
             notes: notes.trim(),
@@ -99,14 +109,16 @@ export default function BodyweightTab({ state, updateState }) {
   const [notes, setNotes] = useState("");
   const [editingId, setEditingId] = useState(null);
 
-  const canSave = weight !== "" || waist !== "" || bodyFat !== "";
+  const weightNum = weight === "" ? null : Number(weight);
+  const weightValid = weightNum === null || isValidBodyweightLb(weightNum);
+  const canSave = weightValid && (weight !== "" || waist !== "" || bodyFat !== "");
 
   const saveToday = () => {
     if (!canSave) return;
     updateState((prev) => ({
       ...prev,
       bodyweightLogs: upsertBodyweightEntry(prev.bodyweightLogs || [], {
-        weight: weight !== "" ? Number(weight) : undefined,
+        weight: weightNum !== null ? weightNum : undefined,
         waist: waist !== "" ? Number(waist) : undefined,
         bodyFat: bodyFat !== "" ? Number(bodyFat) : undefined,
         notes: notes.trim() || undefined,
@@ -170,11 +182,14 @@ export default function BodyweightTab({ state, updateState }) {
             <label className="block text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">Weight</label>
             <input
               type="number"
+              min={BODYWEIGHT_MIN_LB}
+              max={BODYWEIGHT_MAX_LB}
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
               placeholder={existingToday?.weight != null ? String(existingToday.weight) : "lb"}
               className="w-full bg-v5-surface border border-white/10 text-v5-text px-2 py-2 text-sm focus:outline-none focus:border-v5-red"
             />
+            {!weightValid && <div className="text-[11px] text-v5-red mt-1">{BODYWEIGHT_MIN_LB}-{BODYWEIGHT_MAX_LB} lb.</div>}
           </div>
           <div>
             <label className="block text-[11px] uppercase tracking-widest text-v5-subtext/70 mb-1">Waist</label>
