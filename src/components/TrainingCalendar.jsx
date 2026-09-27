@@ -199,11 +199,11 @@ export default function TrainingCalendar({ state, exMap, onViewWorkout }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <button onClick={goPrev} className="text-v5-subtext hover:text-v5-red p-1">
+        <button onClick={goPrev} aria-label="Previous month" className="text-v5-subtext hover:text-v5-red p-1">
           <ChevronLeft size={18} />
         </button>
         <div className="text-sm font-bold text-white">{monthLabel(year, month)}</div>
-        <button onClick={goNext} className="text-v5-subtext hover:text-v5-red p-1">
+        <button onClick={goNext} aria-label="Next month" className="text-v5-subtext hover:text-v5-red p-1">
           <ChevronRight size={18} />
         </button>
       </div>

@@ -59,7 +59,7 @@ export default function NutritionHome({ state, updateState, onNavigate, onAskCoa
         eyebrow="Coach"
         title="Nutrition Plan"
         right={
-          <button onClick={() => setShowAssessment(true)} className="text-v5-subtext hover:text-v5-red p-1" title="Edit nutrition assessment">
+          <button onClick={() => setShowAssessment(true)} className="text-v5-subtext hover:text-v5-red p-1" title="Edit nutrition assessment" aria-label="Edit nutrition assessment">
             <SettingsIcon size={18} />
           </button>
         }

@@ -30,7 +30,7 @@ function TagList({ items, onAdd, onRemove, suggestions, placeholder }) {
           {items.map((item) => (
             <span key={item} className="flex items-center gap-1 px-2.5 py-1 text-xs border border-white/10 text-v5-text/90 bg-v5-surface">
               {item}
-              <button onClick={() => onRemove(item)} className="text-v5-subtext/70 hover:text-v5-red">
+              <button onClick={() => onRemove(item)} aria-label={`Remove: ${item}`} className="text-v5-subtext/70 hover:text-v5-red">
                 <X size={11} />
               </button>
             </span>

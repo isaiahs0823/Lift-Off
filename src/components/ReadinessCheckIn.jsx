@@ -38,6 +38,8 @@ function RatingRow({ label, anchor, value, onChange }) {
             <button
               key={n}
               onClick={() => onChange(n)}
+              aria-label={`${label}: ${n} of 5${anchor ? ` (${anchor})` : ""}`}
+              aria-pressed={value === n}
               className={`w-8 h-8 rounded-lg text-xs font-bold ${
                 value === n ? "bg-v5-red text-white" : "bg-v5-elevated text-v5-subtext hover:text-v5-text"
               }`}

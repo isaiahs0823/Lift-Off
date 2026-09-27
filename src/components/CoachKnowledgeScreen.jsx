@@ -62,10 +62,10 @@ function MemoryRow({ memory, updateState }) {
       <div className="flex items-start justify-between gap-2">
         <div className="text-sm text-v5-text/90">{memory.text}</div>
         <div className="shrink-0 flex items-center gap-2">
-          <button onClick={() => setEditing(true)} className="text-v5-subtext/70 hover:text-v5-red p-0.5">
+          <button onClick={() => setEditing(true)} aria-label="Edit memory" className="text-v5-subtext/70 hover:text-v5-red p-0.5">
             <Pencil size={13} />
           </button>
-          <button onClick={remove} className="text-v5-subtext/70 hover:text-v5-red p-0.5">
+          <button onClick={remove} aria-label="Delete memory" className="text-v5-subtext/70 hover:text-v5-red p-0.5">
             <Trash2 size={13} />
           </button>
         </div>
@@ -167,7 +167,7 @@ export default function CoachKnowledgeScreen({ state, updateState, onNavigate, o
             {profile.constraints.map((c) => (
               <span key={c} className="flex items-center gap-1 px-2.5 py-1 text-xs border border-white/10 text-v5-text/90 bg-v5-elevated">
                 {c}
-                <button onClick={() => removeConstraintTag(c)} className="text-v5-subtext/70 hover:text-v5-red">
+                <button onClick={() => removeConstraintTag(c)} aria-label={`Remove constraint: ${c}`} className="text-v5-subtext/70 hover:text-v5-red">
                   <X size={11} />
                 </button>
               </span>
