@@ -37,6 +37,7 @@ export default function NutritionCheckInScreen({ state, updateState, onBack }) {
   const [submitted, setSubmitted] = useState(null);
 
   const submit = () => {
+    if (canRepeat === null) return;
     const checkIn = {
       id: `nutchk_${Date.now()}`,
       date: new Date().toISOString(),
@@ -132,7 +133,13 @@ export default function NutritionCheckInScreen({ state, updateState, onBack }) {
         </div>
       </div>
 
-      <button onClick={submit} className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90">
+      <button
+        onClick={submit}
+        disabled={canRepeat === null}
+        className={`w-full py-3 text-xs uppercase tracking-widest font-bold border ${
+          canRepeat === null ? "bg-v5-elevated border-white/10 text-v5-subtext/40 cursor-not-allowed" : "bg-v5-red border-v5-red text-white hover:opacity-90"
+        }`}
+      >
         Submit Check-In
       </button>
     </div>
