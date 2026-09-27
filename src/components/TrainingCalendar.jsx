@@ -6,14 +6,14 @@ import { sessionPRCount } from "../utils/prSummary.js";
 
 // Compact, mobile-safe glyphs for a narrow 7-column month grid — the spec's fuller "REST" /
 // "MISSED" wording shows in the day-detail panel instead, where there's room for it.
-const CAL_GLYPH = { completed: "✓", pending: "●", upcoming: "○", rest: "–", missed: "×", skipped: "×", moved_away: "·", none: "" };
+const CAL_GLYPH = { completed: "✓", pending: "●", upcoming: "○", rest: "–", missed: "×", skipped: "»", moved_away: "·", none: "" };
 const CAL_GLYPH_COLOR = {
   completed: "text-green-500",
   pending: "text-v5-red",
   upcoming: "text-v5-subtext/40",
   rest: "text-v5-subtext/70",
   missed: "text-v5-red",
-  skipped: "text-v5-red",
+  skipped: "text-amber-400",
   moved_away: "text-v5-subtext/40",
   none: "text-transparent",
 };
