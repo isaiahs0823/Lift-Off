@@ -46,6 +46,7 @@ function EditEntryPanel({ entry, onBack, onSave, onDelete }) {
   const [waist, setWaist] = useState(entry.waist != null ? String(entry.waist) : "");
   const [bodyFat, setBodyFat] = useState(entry.bodyFat != null ? String(entry.bodyFat) : "");
   const [notes, setNotes] = useState(entry.notes || "");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const weightNum = weight === "" ? null : Number(weight);
   const weightValid = weightNum === null || isValidBodyweightLb(weightNum);
   const canSave = weightValid && (weight !== "" || waist !== "" || bodyFat !== "");
@@ -93,9 +94,26 @@ function EditEntryPanel({ entry, onBack, onSave, onDelete }) {
       >
         Save changes
       </button>
-      <button onClick={onDelete} className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-subtext hover:text-v5-red hover:border-v5-red/25 flex items-center justify-center gap-1.5">
-        <Trash2 size={14} /> Delete entry
-      </button>
+      {confirmingDelete ? (
+        <div className="space-y-2 border border-v5-red/25 bg-v5-elevated p-3">
+          <div className="text-xs text-v5-subtext">Delete this entry? This can't be undone.</div>
+          <div className="flex gap-2">
+            <button onClick={onDelete} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90">
+              Delete
+            </button>
+            <button onClick={() => setConfirmingDelete(false)} className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setConfirmingDelete(true)}
+          className="w-full py-3 text-xs uppercase tracking-widest font-bold border border-white/10 bg-v5-elevated text-v5-subtext hover:text-v5-red hover:border-v5-red/25 flex items-center justify-center gap-1.5"
+        >
+          <Trash2 size={14} /> Delete entry
+        </button>
+      )}
     </SlideInPanel>
   );
 }
@@ -154,7 +172,6 @@ export default function BodyweightTab({ state, updateState }) {
           setEditingId(null);
         }}
         onDelete={() => {
-          if (!window.confirm("Delete this entry? This can't be undone.")) return;
           updateState((prev) => ({ ...prev, bodyweightLogs: prev.bodyweightLogs.filter((e) => e.id !== editingId) }));
           setEditingId(null);
         }}
