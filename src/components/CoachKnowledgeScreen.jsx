@@ -140,7 +140,14 @@ export default function CoachKnowledgeScreen({ state, updateState, onNavigate, o
         )}
       </Section>
 
-      <Section title="Training preferences" empty="Nothing set yet — add this from Coach Settings.">
+      <Section
+        title="Training preferences"
+        empty={
+          <button onClick={() => onNavigate?.("coachProfile")} className="text-sm text-v5-subtext/70 hover:text-v5-red text-left">
+            Nothing set yet — add this from Edit full athlete profile.
+          </button>
+        }
+      >
         {(profile.preferredDays || profile.preferredDuration || profile.trainingStyle || profile.equipment.length > 0) && (
           <div className="border border-white/10 bg-v5-elevated p-3 space-y-1 text-sm text-v5-text/90">
             {profile.preferredDays && <div>Prefers {profile.preferredDays} lifting days/week.</div>}
@@ -189,7 +196,14 @@ export default function CoachKnowledgeScreen({ state, updateState, onNavigate, o
         )}
       </Section>
 
-      <Section title="Motivation" empty="Not set — add this from Coach Settings.">
+      <Section
+        title="Motivation"
+        empty={
+          <button onClick={() => onNavigate?.("coachProfile")} className="text-sm text-v5-subtext/70 hover:text-v5-red text-left">
+            Not set — add this from Edit full athlete profile.
+          </button>
+        }
+      >
         {profile.motivation && (
           <div className="border border-white/10 bg-v5-elevated p-3 text-sm text-v5-text/90">
             {profile.motivation}
