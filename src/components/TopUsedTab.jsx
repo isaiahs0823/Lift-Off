@@ -11,17 +11,31 @@ function usageCounts(logs) {
   return counts;
 }
 
-export default function TopUsedTab({ state, exMap }) {
+export default function TopUsedTab({ state, exMap, onBack }) {
   const counts = usageCounts(state.logs);
   const ranked = Object.entries(counts)
     .map(([exId, count]) => ({ ex: exMap[exId], count }))
     .filter((r) => r.ex)
     .sort((a, b) => b.count - a.count);
 
+  const header = (
+    <div className="flex items-center justify-between">
+      <div className="text-xl font-bold text-white">Top used</div>
+      {onBack && (
+        <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
+          ← Back
+        </button>
+      )}
+    </div>
+  );
+
   if (ranked.length === 0) {
     return (
-      <div className="text-center py-16 text-v5-subtext text-sm">
-        No sessions logged yet. Log a workout and this tab tracks what you actually train most.
+      <div className="space-y-4">
+        {header}
+        <div className="text-center py-16 text-v5-subtext text-sm">
+          No sessions logged yet. Log a workout and this tab tracks what you actually train most.
+        </div>
       </div>
     );
   }
@@ -30,6 +44,7 @@ export default function TopUsedTab({ state, exMap }) {
 
   return (
     <div className="space-y-3">
+      {header}
       <p className="text-xs text-v5-subtext">Ranked by how often you've logged each lift.</p>
       {ranked.map((r, i) => (
         <div key={r.ex.id} className="border border-white/10 bg-v5-elevated px-4 py-3">

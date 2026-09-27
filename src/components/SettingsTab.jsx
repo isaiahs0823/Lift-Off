@@ -93,6 +93,15 @@ export default function SettingsTab({ state, updateState, onNavigate }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="text-xl font-bold text-white">Settings</div>
+        {onNavigate && (
+          <button onClick={() => onNavigate("more")} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
+            ← Back
+          </button>
+        )}
+      </div>
+
       <div className="border border-white/10 bg-v5-elevated p-4 space-y-4">
         <div className="text-[11px] uppercase tracking-widest text-v5-red">Training</div>
 

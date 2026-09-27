@@ -2812,6 +2812,7 @@ export default function LiftLog() {
                 onRestartCompletedProgram={restartProgramById}
                 onGoToBuild={() => setTab("build")}
                 onViewWorkout={(sessionId) => viewWorkout(sessionId, "templates")}
+                onBack={() => setTab("train")}
               />
             )}
             {tab === "build" && (
@@ -2857,8 +2858,8 @@ export default function LiftLog() {
               <DevelopmentPrioritiesScreen state={state} updateState={updateState} onBack={() => setTab("coach")} />
             )}
             {tab === "schedule" && <ScheduleEditor state={state} updateState={updateState} onBack={() => setTab("more")} />}
-            {tab === "catalog" && <CatalogTab state={state} updateState={updateState} allExercises={allExercises} />}
-            {tab === "top" && <TopUsedTab state={state} exMap={exMap} />}
+            {tab === "catalog" && <CatalogTab state={state} updateState={updateState} allExercises={allExercises} onBack={() => setTab("more")} />}
+            {tab === "top" && <TopUsedTab state={state} exMap={exMap} onBack={() => setTab("more")} />}
             {tab === "photos" && <PhotosTab state={state} updateState={updateState} />}
             {tab === "settings" && <SettingsTab state={state} updateState={updateState} onNavigate={setTab} />}
             {tab === "dataWorkbook" && (
@@ -6948,7 +6949,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
 // formatSetPrescription now lives in utils/exercisePrescription.js so TrainTab.jsx (the
 // workout/day preview) can share the exact same formatting instead of reimplementing it.
 
-function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, onLogManualRecovery, onRestartCompletedProgram, onGoToBuild, onViewWorkout }) {
+function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, onLogManualRecovery, onRestartCompletedProgram, onGoToBuild, onViewWorkout, onBack }) {
   const [detail, setDetail] = useState(null); // { kind: "program" | "template" | "customPlan" | "customProgram", id }
   // Frequency-aware program picker (Part 2) — selectedDays starts from the athlete's saved
   // preference (or a pending review's proposed frequency) but is local UI state, never written
@@ -7357,7 +7358,16 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
       <ScreenHeader
         eyebrow="Plans & programs"
         title="Browse everything"
-        right={onGoToBuild && <ButtonText icon={Plus} onClick={onGoToBuild}>Create plan</ButtonText>}
+        right={
+          <div className="flex items-center gap-3">
+            {onGoToBuild && <ButtonText icon={Plus} onClick={onGoToBuild}>Create plan</ButtonText>}
+            {onBack && (
+              <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
+                ← Back
+              </button>
+            )}
+          </div>
+        }
       />
 
       {/* Shown only while pendingFrequencyReview is set — i.e. only right after the athlete
@@ -7918,7 +7928,7 @@ function BuildPlanTab({ state, updateState, allExercises, exMap, onStartRun, onG
 
 // ---------------- TOP USED TAB ----------------
 // ---------------- CATALOG TAB ----------------
-function CatalogTab({ state, updateState, allExercises }) {
+function CatalogTab({ state, updateState, allExercises, onBack }) {
   const [query, setQuery] = useState("");
   const [muscleFilter, setMuscleFilter] = useState("All");
   const [showArchived, setShowArchived] = useState(false);
@@ -7972,6 +7982,14 @@ function CatalogTab({ state, updateState, allExercises }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-xl font-bold text-white">Exercise catalog</div>
+        {onBack && (
+          <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
+            ← Back
+          </button>
+        )}
+      </div>
       <p className="text-xs text-v5-subtext">
         Every movement and machine in the library. Can't find something you use — add it once and it shows up
         everywhere you pick an exercise.
