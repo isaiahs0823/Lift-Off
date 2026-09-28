@@ -4917,18 +4917,27 @@ function TrainingExerciseCard({
         </button>
       )}
 
-      {/* Equipment Profile control (task section 3) — only for exercises where two physical
-          units can plausibly load very differently, quiet/small so it never competes with the
-          actual set-logging controls, and completely absent for free-weight movements. */}
-      {isMachineBasedExercise(exMap[exId]) && (
-        <button
-          onClick={() => setEquipmentSheetOpen(true)}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-v5-surface text-left"
-        >
-          <span className="text-[11px] uppercase tracking-wide text-v5-subtext shrink-0">Equipment</span>
-          <span className="text-xs font-bold text-v5-text truncate ml-2">{equipmentDisplayLabel(state, equipmentProfileId, equipmentContext)} ▾</span>
-        </button>
-      )}
+      {/* Equipment control (bug: "cannot change machine mid-workout" — isMachineBasedExercise's
+          name-keyword heuristic below still decides the Alternate Gym nudge, but it was ALSO
+          gating this button's very existence, so any real exercise whose catalog name didn't
+          happen to contain "machine"/"cable"/"smith"/etc. had no way to open the equipment
+          picker at all — not hidden in Options, just completely absent. Always-visible now, one
+          compact row identical in cost to Swap exercise above it, reusing the exact same
+          EquipmentProfileSheet/equipmentProfileId architecture every other exercise already had.
+          "Select equipment" (vs. "Default Machine") only when this exercise has zero saved
+          profiles at all, so it reads as an invitation rather than a label nobody set. */}
+      <button
+        onClick={() => setEquipmentSheetOpen(true)}
+        className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-v5-surface text-left"
+      >
+        <span className="text-[11px] uppercase tracking-wide text-v5-subtext shrink-0">Equipment</span>
+        <span className="text-xs font-bold text-v5-text truncate ml-2">
+          {!isBucketedEquipment && profilesForExercise(state, exId).length === 0
+            ? "Select equipment"
+            : equipmentDisplayLabel(state, equipmentProfileId, equipmentContext)}{" "}
+          ▾
+        </span>
+      </button>
 
       {/* Alternate Gym mode (task section 20) — a machine exercise still on "Default Machine"
           gets one dismissible nudge rather than silently assuming home-gym numbers apply here
