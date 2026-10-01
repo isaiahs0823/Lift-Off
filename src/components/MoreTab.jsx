@@ -1,5 +1,5 @@
-import React from "react";
-import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays, HeartPulse, ShieldCheck, HelpCircle } from "lucide-react";
+import React, { useState } from "react";
+import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays, HeartPulse, ShieldCheck, HelpCircle, Mail, LogOut } from "lucide-react";
 import { MORE_CARD_CONTENT } from "../utils/breakBrandContent.js";
 import { ScreenHeader, SectionLabel, Card, ListRow, ButtonPrimary, ButtonSecondary } from "./ui/Kit.jsx";
 
@@ -56,18 +56,28 @@ function TrainingDetailToggle({ state, updateState }) {
   );
 }
 
-// Non-alarming reminder that this is still a local-first app — no account, no cloud sync yet —
-// surfaced where a user would actually look for it rather than buried a screen deeper. Routes
-// straight to the real export/import flow already built into Settings rather than duplicating
-// it or faking a "back up" action here.
-function DataSafetyCard({ onNavigate }) {
+// Reminder of where training data actually lives — always true on-device storage, plus
+// account sync once signed in. Routes straight to the real export/import flow already built
+// into Settings rather than duplicating it or faking a "back up" action here.
+function DataSafetyCard({ onNavigate, auth }) {
+  const signedIn = !!auth?.user;
   return (
     <Card className="space-y-2">
       <div className="flex items-center gap-2">
         <ShieldCheck size={15} className="text-v5-subtext shrink-0" />
         <SectionLabel tone="muted">Data safety</SectionLabel>
       </div>
-      <p className="text-xs text-v5-subtext">Your training data is currently stored on this device only. Export a backup before switching phones or clearing browser data.</p>
+      {signedIn ? (
+        <p className="text-xs text-v5-subtext">
+          Your training data is stored on this device and synced to your account ({auth.user.email}). Sign in with the same
+          email on another device to bring your history over.
+        </p>
+      ) : (
+        <p className="text-xs text-v5-subtext">
+          Your training data is stored on this device. Sign in below to also sync it to your account, or export a backup
+          before switching phones or clearing browser data.
+        </p>
+      )}
       <ButtonSecondary size="sm" onClick={() => onNavigate("settings")} fullWidth={false}>
         Back up data
       </ButtonSecondary>
@@ -75,7 +85,72 @@ function DataSafetyCard({ onNavigate }) {
   );
 }
 
-export default function MoreTab({ state, updateState, onNavigate }) {
+// Email magic-link sign-in. Entirely optional — the app is fully usable signed-out, this only
+// adds cross-device sync for whoever opts in. Hidden outright if cloud sync isn't configured
+// (no Supabase env vars), so a build without them behaves exactly like before this existed.
+function AccountCard({ auth }) {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState("idle"); // idle | sending | sent | error
+  const [errorMsg, setErrorMsg] = useState(null);
+
+  if (!auth?.supabaseEnabled) return null;
+
+  if (auth.user) {
+    return (
+      <Card className="space-y-2">
+        <SectionLabel tone="muted">Account</SectionLabel>
+        <p className="text-xs text-v5-text/90">Signed in as {auth.user.email}</p>
+        <ButtonSecondary size="sm" icon={LogOut} onClick={() => auth.signOut()} fullWidth={false}>
+          Sign out
+        </ButtonSecondary>
+      </Card>
+    );
+  }
+
+  const handleSend = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setStatus("sending");
+    setErrorMsg(null);
+    try {
+      await auth.signInWithEmail(email.trim());
+      setStatus("sent");
+    } catch (err) {
+      setStatus("error");
+      setErrorMsg(err?.message || "Couldn't send that link. Try again.");
+    }
+  };
+
+  return (
+    <Card className="space-y-2.5">
+      <SectionLabel tone="muted">Account</SectionLabel>
+      {status === "sent" ? (
+        <p className="text-xs text-v5-text/90">Check your email for a sign-in link — it'll bring you right back here, signed in.</p>
+      ) : (
+        <>
+          <p className="text-xs text-v5-subtext">Sign in with email to sync your training data across devices. No password needed.</p>
+          <form onSubmit={handleSend} className="flex gap-2">
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="flex-1 bg-v5-muted rounded-lg text-v5-text px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-v5-red placeholder:text-v5-subtext/50"
+            />
+            <ButtonPrimary size="sm" icon={Mail} type="submit" disabled={status === "sending"} fullWidth={false}>
+              {status === "sending" ? "Sending…" : "Send link"}
+            </ButtonPrimary>
+          </form>
+          {status === "error" && <p className="text-xs text-v5-red">{errorMsg}</p>}
+        </>
+      )}
+    </Card>
+  );
+}
+
+export default function MoreTab({ state, updateState, onNavigate, auth }) {
   return (
     <div className="space-y-4">
       <ScreenHeader eyebrow="More" title="Tools & settings" />
@@ -86,7 +161,9 @@ export default function MoreTab({ state, updateState, onNavigate }) {
         ))}
       </div>
 
-      <DataSafetyCard onNavigate={onNavigate} />
+      <AccountCard auth={auth} />
+
+      <DataSafetyCard onNavigate={onNavigate} auth={auth} />
 
       <TrainingDetailToggle state={state} updateState={updateState} />
 

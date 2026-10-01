@@ -115,6 +115,9 @@ import AddFoodScreen from "./components/AddFoodScreen.jsx";
 import FoodDetailScreen from "./components/FoodDetailScreen.jsx";
 import { NUTRITION_FOOD_LOGGING_ENABLED } from "./utils/nutritionFeatureFlags.js";
 import { todayDateKey } from "./utils/nutrition.js";
+import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
+import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
+import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
 import { SET_TYPES, isWarmup, countedSets, formatSetCompact, rirRpeSuffix, formatSetVerbose, formatSessionDuration } from "./utils/workoutSets.js";
 import WorkoutHistoryDetail from "./components/WorkoutHistoryDetail.jsx";
 import WorkoutNotesSection from "./components/WorkoutNotesSection.jsx";
@@ -1849,6 +1852,12 @@ export default function LiftLog() {
   const [state, setState] = useState(loadInitialState());
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("today");
+  // Optional cloud sync (hybrid: localStorage stays the source of truth signed-out AND
+  // signed-in — this only ever backs state up to Supabase and fills in gaps from other
+  // devices, never replaces what's already here). See src/utils/supabaseSync.js.
+  const auth = useSupabaseAuth();
+  const cloudSyncTimerRef = useRef(null);
+  const pulledForUserIdRef = useRef(null);
   // Lazy-initted straight from localStorage (not loaded in an effect like `state` below) so
   // an in-progress workout is already in place on the very first render — no flash back to
   // the plan-picker tab, and no race with the persist effect right below.
@@ -2019,17 +2028,44 @@ export default function LiftLog() {
     }
   }, []);
 
-  const persist = useCallback((next) => {
-    try {
-      // Never persist templates/programs — they're static app content that should
-      // always come from source on the next load, not a snapshot from whatever build
-      // last saved.
-      const { templates, programs, ...toPersist } = next;
-      window.localStorage.setItem("liftlog-data", JSON.stringify(toPersist));
-    } catch (e) {
-      console.error("Storage error", e);
-    }
-  }, []);
+  // Debounced background push — fires at most once per 1.5s of inactivity rather than on
+  // every single set logged, since bursts of updateState calls (e.g. rapid set entry) would
+  // otherwise fire a network request per keystroke. Never runs signed-out.
+  const scheduleCloudSync = useCallback(
+    (next) => {
+      if (!auth.user) return;
+      if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
+      const userId = auth.user.id;
+      cloudSyncTimerRef.current = setTimeout(() => {
+        pushWorkoutDataToSupabase(next, userId);
+        pushPhotosToSupabase(next.photos, userId).then(({ uploadedIds }) => {
+          if (uploadedIds && uploadedIds.length > 0) {
+            setState((prev) => ({
+              ...prev,
+              photos: (prev.photos || []).map((p) => (uploadedIds.includes(p.id) ? { ...p, syncedToCloud: true } : p)),
+            }));
+          }
+        });
+      }, 1500);
+    },
+    [auth.user]
+  );
+
+  const persist = useCallback(
+    (next) => {
+      try {
+        // Never persist templates/programs — they're static app content that should
+        // always come from source on the next load, not a snapshot from whatever build
+        // last saved.
+        const { templates, programs, ...toPersist } = next;
+        window.localStorage.setItem("liftlog-data", JSON.stringify(toPersist));
+      } catch (e) {
+        console.error("Storage error", e);
+      }
+      scheduleCloudSync(next);
+    },
+    [scheduleCloudSync]
+  );
 
   const updateState = useCallback(
     (updater) => {
@@ -2041,6 +2077,34 @@ export default function LiftLog() {
     },
     [persist]
   );
+
+  // Fires once per sign-in (not on every render/token refresh) — pulls down anything this
+  // account already has in Supabase that isn't on THIS device yet (the real use case: signing
+  // in on a second phone, or a fresh install after clearing browser data). mergeRemoteIntoLocal
+  // only ever adds missing rows; it can't overwrite or remove anything already local.
+  useEffect(() => {
+    if (!loaded || !auth.user) return;
+    if (pulledForUserIdRef.current === auth.user.id) return;
+    pulledForUserIdRef.current = auth.user.id;
+    const userId = auth.user.id;
+    (async () => {
+      const { data } = await pullWorkoutDataFromSupabase(userId);
+      setState((prev) => {
+        const merged = mergeRemoteIntoLocal(prev, data);
+        persist(merged);
+        return merged;
+      });
+      const localPhotoIds = new Set((state.photos || []).map((p) => p.id));
+      const newPhotos = await pullNewPhotosFromSupabase(userId, localPhotoIds);
+      if (newPhotos.length > 0) {
+        setState((prev) => {
+          const merged = { ...prev, photos: [...(prev.photos || []), ...newPhotos] };
+          persist(merged);
+          return merged;
+        });
+      }
+    })();
+  }, [loaded, auth.user, persist]);
 
   const allExercises = useMemo(
     () => [...EXERCISE_LIBRARY, ...(state.customExercises || [])],
@@ -2662,7 +2726,7 @@ export default function LiftLog() {
                 onBack={() => setTab("startWorkout")}
               />
             )}
-            {tab === "more" && <MoreTab state={state} updateState={updateState} onNavigate={setTab} />}
+            {tab === "more" && <MoreTab state={state} updateState={updateState} onNavigate={setTab} auth={auth} />}
             {tab === "log" && (
               <LogTab
                 state={state}
