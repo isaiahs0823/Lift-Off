@@ -16,6 +16,7 @@ import { equipmentDisplayLabel, DEFAULT_MACHINE_LABEL } from "./equipmentProfile
 import { computeReadinessScore, readinessBand, BAND_LABEL } from "./readiness.js";
 import { PR_TYPE_LABEL, prDeltaLabel, prHeroLabel, prPreviousLabel, sessionPRCount } from "./prSummary.js";
 import { SET_QUALITY_LABEL, painSummaryLabel, summarizePainFlags } from "./workoutQuality.js";
+import { matchExerciseEntry, computeSessionConfidence, describeSessionVolume, matchedExerciseLines } from "./sessionComparison.js";
 
 // A PR fires on a specific SET (weight+reps identify it) for every type except exerciseVolume,
 // which describes the whole exercise entry rather than one set — so it's never attached to a row.
@@ -95,19 +96,37 @@ function findPreviousComparable(session, allSessions) {
     .sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt))[0] || null;
 }
 
-function buildComparison(session, prev) {
+// bestLift (current session's single best set vs prev session's single best set) used to be the
+// headline comparison here — but those two "best" sets can easily be two different exercises
+// (today's best lift Squat, last time's best lift Incline Press), which is exactly the kind of
+// apples-to-oranges comparison this file exists to avoid. Replaced with real equipment-aware
+// per-exercise matching (sessionComparison.js), looking back through the athlete's full log
+// history for each exercise's most recent comparable (same exercise + same equipment) exposure —
+// not just whatever `prev` happens to be — same principle buildWorkoutRecap already uses.
+function buildComparison(session, prev, state, exMap) {
   if (!prev) return null;
   const deltaVolumePct = prev.totalVolume > 0 ? Math.round(((session.totalVolume - prev.totalVolume) / prev.totalVolume) * 1000) / 10 : null;
-  const prevBest = prev.bestLift || null;
-  const currentBest = session.bestLift || null;
+
+  const sessionStartMs = new Date(session.startedAt || session.finishedAt).getTime();
+  const priorLogsAll = (state?.logs || []).filter((l) => new Date(l.date).getTime() < sessionStartMs);
+  const perExercise = (session.entries || []).map((entry) => ({
+    exId: entry.exId,
+    name: exMap?.[entry.exId]?.name || entry.exId,
+    workingSetCount: countedSets(entry.sets).length,
+    progression: matchExerciseEntry(entry, priorLogsAll),
+  }));
+  const sessionConfidence = computeSessionConfidence(perExercise);
+
   return {
     planName: prev.planName,
     prevDate: prev.finishedAt,
     deltaVolumePct,
+    volumeLine: describeSessionVolume({ perfDeltaPct: deltaVolumePct, planName: prev.planName, confidence: sessionConfidence }),
+    sessionConfidence,
+    matched: matchedExerciseLines(perExercise, 5),
     deltaWorkingSets: session.workingSets != null && prev.workingSets != null ? session.workingSets - prev.workingSets : null,
     deltaTotalReps: session.totalReps != null && prev.totalReps != null ? session.totalReps - prev.totalReps : null,
     prCount: sessionPRCount(session),
-    bestLift: currentBest && prevBest ? { current: currentBest, previous: prevBest } : null,
   };
 }
 
@@ -156,7 +175,7 @@ export function buildFullRecapData({ session, state, exMap }) {
     readiness,
     note: typeof session.note === "string" && session.note.trim() ? session.note.trim() : null,
     coachMessage: session.coachMessage || null,
-    comparison: buildComparison(session, prev),
+    comparison: buildComparison(session, prev, state, exMap),
   };
 }
 
@@ -258,15 +277,18 @@ export function buildFullRecapText(data) {
   if (data.comparison) {
     lines.push("");
     lines.push(`VS LAST ${data.comparison.planName.toUpperCase()}`);
-    if (data.comparison.deltaVolumePct != null) lines.push(`Volume: ${data.comparison.deltaVolumePct >= 0 ? "+" : ""}${data.comparison.deltaVolumePct}%`);
+    // Matched exercises (same exercise + same equipment, most recent comparable exposure) lead —
+    // this is the real answer to "did I get stronger," never session.totalVolume on its own.
+    if (data.comparison.matched.length > 0) {
+      lines.push("Matched performance:");
+      data.comparison.matched.forEach((m) => lines.push(`  ${m.name}: ${m.change}`));
+    } else {
+      lines.push("No directly comparable lifts this session.");
+    }
+    if (data.comparison.volumeLine) lines.push(data.comparison.volumeLine);
     if (data.comparison.deltaWorkingSets != null) lines.push(`Working Sets: ${data.comparison.deltaWorkingSets >= 0 ? "+" : ""}${data.comparison.deltaWorkingSets}`);
     if (data.comparison.deltaTotalReps != null) lines.push(`Total Reps: ${data.comparison.deltaTotalReps >= 0 ? "+" : ""}${data.comparison.deltaTotalReps}`);
     lines.push(`PRs: ${data.comparison.prCount}`);
-    if (data.comparison.bestLift) {
-      lines.push(
-        `Best Lift: ${data.comparison.bestLift.current.weight} x ${data.comparison.bestLift.current.reps} vs ${data.comparison.bestLift.previous.weight} x ${data.comparison.bestLift.previous.reps}`
-      );
-    }
   }
 
   return lines.join("\n");

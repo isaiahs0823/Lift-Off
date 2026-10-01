@@ -27,6 +27,7 @@
 import { countedSets, topSetOf } from "./progression.js";
 import { featuredAndOtherPRs, sessionPRCount, PR_TYPE_LABEL, prDeltaLabel, prPreviousLabel } from "./prSummary.js";
 import { formatSessionDuration } from "./workoutSets.js";
+import { matchExerciseEntry, computeSessionConfidence, describeSessionVolume } from "./sessionComparison.js";
 import { getMuscleDisplay } from "./muscleDisplay.js";
 import {
   VIEW_BOX_FRONT,
@@ -807,7 +808,22 @@ function drawHeroPanel(ctx, x, y, w, h, isPR) {
   ctx.stroke();
 }
 
-function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
+// Lightweight equivalent of fullRecap.js's buildComparison, computed inline rather than pulling
+// in the full buildFullRecapData pass (exercise/set breakdown this card never renders) just to
+// get one confidence-gated comparison line. Same equipment-aware most-recent-comparable-exposure
+// matching as everywhere else — see sessionComparison.js.
+function sessionVolumeContext(session, state) {
+  if (session.perfDeltaPct == null) return null;
+  const entries = session.entries || [];
+  if (entries.length === 0 || !state?.logs) return { volumeLine: null, confidence: null };
+  const sessionStartMs = new Date(session.startedAt || session.finishedAt).getTime();
+  const priorLogsAll = state.logs.filter((l) => new Date(l.date).getTime() < sessionStartMs);
+  const perExercise = entries.map((entry) => ({ workingSetCount: countedSets(entry.sets).length, progression: matchExerciseEntry(entry, priorLogsAll) }));
+  const confidence = computeSessionConfidence(perExercise);
+  return { confidence, volumeLine: describeSessionVolume({ perfDeltaPct: session.perfDeltaPct, planName: session.planName, confidence }) };
+}
+
+function drawPerformanceCard(ctx, W, H, session, exMap, featured, state) {
   const { k } = sizeScale(H);
   const isPR = !!featured?.isPR;
 
@@ -1017,31 +1033,24 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured) {
     { value: String(prCount), label: "PR", icon: "trophy" },
   ];
   const stripH = drawStatStrip(ctx, { x: stripX, y: stripY, width: stripW, stats, k });
-  const hasComparison = session.perfDeltaPct != null;
+  const volCtx = sessionVolumeContext(session, state);
   const cmpY = stripY + stripH + sz(38, k, 24);
 
-  // ---- performance-comparison strip (task section 9) — real data only, cleanly omitted when
-  // there's no prior session to compare against. Never invented. ----
-  if (hasComparison) {
-    const up = session.perfDeltaPct >= 0;
+  // ---- performance-comparison strip — real data only, cleanly omitted when there's no prior
+  // session to compare against. Never invented, and never colored green/red as if a volume swing
+  // were itself good or bad news — bug: total tonnage changes for reasons that have nothing to do
+  // with getting stronger (different exercises, equipment, warm-ups, drop sets, bodyweight work).
+  // One neutral-toned line with the real number plus how comparable today's session actually was,
+  // never a judgment. ----
+  if (session.perfDeltaPct != null) {
+    const sign = session.perfDeltaPct >= 0 ? "+" : "";
+    const level = volCtx?.confidence?.level;
+    const qualifier = level === "high" ? "similar session" : level === "moderate" ? "mixed session" : level === "low" ? "different session" : null;
+    const text = `Volume ${sign}${session.perfDeltaPct}% vs last ${session.planName}${qualifier ? ` — ${qualifier}` : ""}`;
     ctx.textAlign = "center";
     ctx.fillStyle = COLOR.gray;
-    ctx.font = `600 ${sz(18, k, 13)}px ${FONT}`;
-    const prefix = `Performance vs last ${session.planName}: `;
-    const deltaText = `${up ? "+" : ""}${session.perfDeltaPct}%`;
     ctx.font = `700 ${sz(18, k, 13)}px ${FONT}`;
-    const prefixW = ctx.measureText(prefix).width;
-    ctx.font = `800 ${sz(18, k, 13)}px ${FONT}`;
-    const deltaW = ctx.measureText(deltaText).width;
-    const totalW = prefixW + deltaW;
-    ctx.textAlign = "left";
-    ctx.font = `700 ${sz(18, k, 13)}px ${FONT}`;
-    ctx.fillStyle = COLOR.gray;
-    ctx.fillText(prefix, W / 2 - totalW / 2, cmpY);
-    ctx.font = `800 ${sz(18, k, 13)}px ${FONT}`;
-    ctx.fillStyle = up ? COLOR.green : COLOR.red;
-    ctx.fillText(deltaText, W / 2 - totalW / 2 + prefixW, cmpY);
-    ctx.textAlign = "center";
+    ctx.fillText(text, W / 2, cmpY);
   }
 
   // ---- TOP SETS — fixed zone 4 start (task section 10: ~4 rows, not the full log). Floored at
@@ -1290,15 +1299,20 @@ function drawWorkoutRecapCard(ctx, W, H, session, exMap, data) {
   const titleLines = wrapAligned(ctx, data.planName, leftX, y + titleSize * 0.82, contentW, titleSize * 1.05, 2, "left");
   y += titleSize * 0.82 + (titleLines - 1) * titleSize * 1.05 + sz(16, tierK, 10);
 
-  // Real comparison only (task section 2/12) — session.perfDeltaPct is computed once at
-  // buildSessionSummary time against the most recent prior session sharing this exact plan name;
-  // never recomputed or guessed here.
+  // Real comparison only — session.perfDeltaPct is computed once at buildSessionSummary time
+  // against the most recent prior session sharing this exact plan name, never recomputed or
+  // guessed here. Never colored as if a volume swing alone were good or bad news (bug: total
+  // tonnage changes for reasons that have nothing to do with getting stronger) — one neutral
+  // line with the real number plus data.comparison's own confidence read on how comparable
+  // today's session actually was (see utils/sessionComparison.js / fullRecap.js buildComparison).
   if (session.perfDeltaPct != null) {
-    const up = session.perfDeltaPct >= 0;
+    const sign = session.perfDeltaPct >= 0 ? "+" : "";
+    const level = data.comparison?.sessionConfidence?.level;
+    const qualifier = level === "high" ? "similar session" : level === "moderate" ? "mixed session" : level === "low" ? "different session" : null;
     ctx.textAlign = "left";
-    ctx.fillStyle = up ? COLOR.green : COLOR.gray;
+    ctx.fillStyle = COLOR.gray;
     ctx.font = `700 ${sz(19, tierK, 13)}px ${FONT}`;
-    ctx.fillText(`${up ? "+" : ""}${session.perfDeltaPct}% volume vs last ${data.planName}`, leftX, y);
+    ctx.fillText(`Volume ${sign}${session.perfDeltaPct}% vs last ${data.planName}${qualifier ? ` — ${qualifier}` : ""}`, leftX, y);
     y += sz(34, tierK, 22);
   }
   y += sz(14, tierK, 8);
@@ -1721,7 +1735,7 @@ export function renderWorkoutShareCard({ session, exMap, state, template = "perf
   if (template === "minimal") {
     drawMinimalCard(ctx, size.width, size.height, session, featured);
   } else {
-    drawPerformanceCard(ctx, size.width, size.height, session, exMap, featured);
+    drawPerformanceCard(ctx, size.width, size.height, session, exMap, featured, state);
   }
 
   return canvas.toDataURL("image/png");

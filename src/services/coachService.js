@@ -16,6 +16,8 @@ import { computeWeeklyReview } from "../utils/weeklyReview.js";
 import { DAY_TYPE_LABEL, computeScheduleAdherence } from "../utils/weeklySchedule.js";
 import { sessionPRCount } from "../utils/prSummary.js";
 import { PHYSIQUE_MUSCLE_PARENT } from "../utils/athleteProfile.js";
+import { buildWorkoutRecap } from "../utils/workoutRecap.js";
+import { matchedExerciseLines } from "../utils/sessionComparison.js";
 
 const SAFETY_PATTERN =
   /\b(injur(y|ed|ies)|hurt|sharp pain|numb(ness)?|tingling|dizzy|dizziness|chest pain|can'?t breathe|shortness of breath|medication|prescri|steroid|anabolic|\bpeds?\b|sarms?|hgh|clenbuterol|starv(e|ing)|purg(e|ing)|dehydrat)\b/i;
@@ -128,10 +130,18 @@ export function generatePreWorkoutAdvice(context, focus) {
 }
 
 // ---------- Post-workout ----------
-// summary: a state.workoutSessions record (see buildSessionSummary in App.jsx).
-export function generatePostWorkoutReview(summary) {
+// summary: a state.workoutSessions record (see buildSessionSummary in App.jsx). `evidence` is
+// optional ({ logs, exMap, state }) — every real caller supplies it; when present this leads with
+// matched-exercise (same exercise + same equipment) progression, exactly like the active-workout
+// suggestion engine and the Auto Post-Workout Recap do, rather than a raw session.totalVolume
+// delta. Total tonnage is never treated as proof of progress or regression on its own — see
+// utils/sessionComparison.js for why (different exercises, equipment, warm-ups, drop sets, and
+// bodyweight work all change total volume for reasons that have nothing to do with getting
+// stronger). The old perfDeltaPct-only branch is kept as a defensive fallback for the one caller
+// that doesn't have logs/exMap handy, never as the primary path.
+export function generatePostWorkoutReview(summary, evidence = null) {
   if (!summary) return { message: "Session data not found." };
-  const { perfDeltaPct, avgRir } = summary;
+  const { avgRir } = summary;
   // Counts by exercise, not raw PR-type occurrence — one improved set can trip weight + e1RM +
   // volume PRs at once, which is one meaningful event, not three (see utils/prSummary.js).
   const prCount = sessionPRCount(summary);
@@ -139,12 +149,39 @@ export function generatePostWorkoutReview(summary) {
   if (prCount > 0) {
     lines.push(`${prCount} PR${prCount > 1 ? "s" : ""} this session. Strength is trending the right way.`);
   }
-  if (perfDeltaPct != null) {
-    if (perfDeltaPct > 5) lines.push(`Volume is up ${perfDeltaPct}% versus last time on this plan. Real progress, not noise.`);
-    else if (perfDeltaPct < -10)
-      lines.push(`Volume dropped ${Math.abs(perfDeltaPct)}% versus last time. Worth a look — check readiness, sleep, and whether the plan needs adjusting.`);
-    else lines.push("Performance held steady versus last time on this plan. That's a fine outcome on its own.");
+
+  const recap = evidence?.logs && evidence?.exMap ? buildWorkoutRecap({ session: summary, logs: evidence.logs, exMap: evidence.exMap, state: evidence.state }) : null;
+
+  if (recap) {
+    // Priority order: a real matched-exercise win leads, same as the spec's own example
+    // ("Incline Smith Press improved from 275x4 to 275x6 on the same setup."). PRs already
+    // covered above never duplicate here.
+    if (recap.wins.length > 0) {
+      const [lead] = matchedExerciseLines(recap.perExercise, 1);
+      if (lead) {
+        const setup = lead.equipmentLabel && lead.equipmentLabel !== "Default Machine" ? ` on the same setup (${lead.equipmentLabel})` : "";
+        lines.push(`${lead.name} improved${setup}: ${lead.change}.`);
+        if (recap.wins.length > 1) {
+          lines.push(`${recap.wins.length - 1} other lift${recap.wins.length - 1 === 1 ? "" : "s"} also improved this session.`);
+        }
+      }
+    } else if (recap.declines.length > 0) {
+      // No win to lead with, but a real same-equipment decline exists — neutral language, and
+      // only ever cites context actually logged for this session (declineNotes), never a guess.
+      const d = recap.declines[0];
+      const ctx = d.declineNotes.length > 0 ? ` (${d.declineNotes.join(", ")})` : "";
+      lines.push(`${d.name} was lower than your last comparable exposure on this equipment${ctx}.`);
+    } else if (prCount === 0) {
+      // Task "NO MATCHED EXERCISES": never manufacture a progression/regression claim when there
+      // genuinely isn't one to make.
+      lines.push("No directly comparable lifts this session.");
+    }
+
+    if (recap.volumeLine) lines.push(recap.volumeLine);
+  } else if (summary.perfDeltaPct != null) {
+    lines.push(`Total volume ${summary.perfDeltaPct >= 0 ? "+" : ""}${summary.perfDeltaPct}% vs last time on this plan.`);
   }
+
   if (avgRir != null && avgRir <= 0.5) {
     lines.push("Average effort was right at failure across the board — fine occasionally, not every session.");
   }
@@ -338,7 +375,9 @@ function answerReviewToday(context, state) {
   const todayKey = new Date().toISOString().slice(0, 10);
   const today = (state.workoutSessions || []).find((s) => s.finishedAt.slice(0, 10) === todayKey);
   if (!today) return { message: "No session logged yet today." };
-  return generatePostWorkoutReview(today);
+  // No exMap available on this path — generatePostWorkoutReview falls back to its defensive
+  // volume-only branch rather than the full matched-exercise recap when exMap is missing.
+  return generatePostWorkoutReview(today, { logs: state.logs, state });
 }
 
 function answerReview30(context, state) {

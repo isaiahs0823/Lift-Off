@@ -316,12 +316,27 @@ export default function FullWorkoutRecap({ session, state, exMap, onClose }) {
 
         {/* ---- vs last comparable session ---- */}
         {data.comparison && (
-          <div className="border border-white/10 bg-v5-elevated p-4 space-y-2">
+          <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
             <div className="text-[11px] uppercase tracking-widest text-v5-subtext font-bold">Vs Last {data.comparison.planName}</div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              {data.comparison.deltaVolumePct != null && (
-                <Delta label="Volume" value={`${data.comparison.deltaVolumePct >= 0 ? "+" : ""}${data.comparison.deltaVolumePct}%`} positive={data.comparison.deltaVolumePct >= 0} />
-              )}
+
+            {/* Matched exercises (same exercise + same equipment, most recent comparable
+                exposure) lead — this is the real answer to "did I get stronger," not a raw
+                session.totalVolume delta, and never two different exercises' "best lift"
+                compared as if they were the same one. */}
+            {data.comparison.matched.length > 0 ? (
+              <div className="space-y-1.5">
+                {data.comparison.matched.map((m) => (
+                  <div key={m.name} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="text-v5-subtext truncate">{m.name}</span>
+                    <span className="text-green-500 font-bold text-xs shrink-0">{m.change}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-v5-subtext">No directly comparable lifts this session.</div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 text-sm pt-1 border-t border-white/[0.06]">
               {data.comparison.deltaWorkingSets != null && (
                 <Delta label="Working sets" value={`${data.comparison.deltaWorkingSets >= 0 ? "+" : ""}${data.comparison.deltaWorkingSets}`} positive={data.comparison.deltaWorkingSets >= 0} />
               )}
@@ -330,12 +345,7 @@ export default function FullWorkoutRecap({ session, state, exMap, onClose }) {
               )}
               <Delta label="PRs" value={String(data.comparison.prCount)} positive={data.comparison.prCount > 0} />
             </div>
-            {data.comparison.bestLift && (
-              <div className="text-xs text-v5-subtext pt-1">
-                Best lift: <span className="text-white font-bold">{data.comparison.bestLift.current.weight} × {data.comparison.bestLift.current.reps}</span>{" "}
-                vs {data.comparison.bestLift.previous.weight} × {data.comparison.bestLift.previous.reps}
-              </div>
-            )}
+            {data.comparison.volumeLine && <div className="text-xs text-v5-subtext">{data.comparison.volumeLine}</div>}
           </div>
         )}
 

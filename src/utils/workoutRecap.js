@@ -10,8 +10,9 @@
 // here reads like a coach's note, not a cheer.
 
 import { topSetOf, countedSets, suggestNext } from "./progression.js";
-import { sameEquipmentBucket, equipmentDisplayLabel, TEMPORARY_EQUIPMENT_CONTEXT } from "./equipmentProfiles.js";
+import { equipmentDisplayLabel, TEMPORARY_EQUIPMENT_CONTEXT } from "./equipmentProfiles.js";
 import { isConcerningQuality, qualityAttentionLabel, summarizePainFlags } from "./workoutQuality.js";
+import { matchExerciseEntry, computeSessionConfidence, describeSessionVolume, declineContext } from "./sessionComparison.js";
 
 function increment(exType) {
   return exType === "compound" ? 5 : 2.5;
@@ -66,40 +67,6 @@ function nextTimeTargetFromEntry(entry, exMap) {
   };
 }
 
-// Categorizes one exercise entry against the most recent PRIOR entry for the same exercise +
-// equipment bucket (task section 5) — "only compare directly when the progression context is
-// valid." A temporary/alternate-machine entry is never compared, and never explained as a
-// decline; a brand-new saved profile with no history yet is its own distinct status rather than
-// silently falling through to "first time."
-function progressionStatusFor(entry, priorEntry) {
-  if (entry.equipmentContext === TEMPORARY_EQUIPMENT_CONTEXT) {
-    return { status: "equipment_different", message: "Different equipment used — direct load comparison excluded." };
-  }
-  if (!priorEntry) {
-    return entry.equipmentProfileId
-      ? { status: "new_profile_no_history", message: "New equipment profile — no prior comparison yet." }
-      : { status: "first_time", message: "First time logged." };
-  }
-  // Task section 10: a prior entry with zero counted (non-warmup) working sets is not usable
-  // comparison data — comparing against it can only ever produce a misleading "0 × 0 → X × Y"
-  // line. Treat it exactly like having no prior entry at all rather than as evidence of decline.
-  if (countedSets(priorEntry.sets).length === 0) {
-    return { status: "no_comparable_prior", message: "No comparable prior performance." };
-  }
-  const newTop = topSetOf(entry.sets);
-  const priorTop = topSetOf(priorEntry.sets);
-  if (newTop.weight > priorTop.weight) {
-    return { status: "increased_load", message: `+${Math.round((newTop.weight - priorTop.weight) * 10) / 10} lb at ${newTop.reps} reps`, priorTop, newTop };
-  }
-  if (newTop.weight === priorTop.weight && newTop.reps > priorTop.reps) {
-    return { status: "increased_reps", message: `+${newTop.reps - priorTop.reps} rep${newTop.reps - priorTop.reps === 1 ? "" : "s"} at the same load`, priorTop, newTop };
-  }
-  if (newTop.weight === priorTop.weight && newTop.reps === priorTop.reps) {
-    return { status: "matched", message: "Matched last session", priorTop, newTop };
-  }
-  return { status: "declined", message: `${priorTop.weight} × ${priorTop.reps} → ${newTop.weight} × ${newTop.reps}`, priorTop, newTop };
-}
-
 // `logs` should be the athlete's full state.logs (or any superset covering this exercise) —
 // filtered internally to entries strictly BEFORE this session's own start time, which is what
 // makes the recap reproducible regardless of what gets logged afterward. `state` is passed
@@ -111,16 +78,14 @@ export function buildWorkoutRecap({ session, logs, exMap, state }) {
   const sessionStartMs = new Date(session.startedAt || session.finishedAt).getTime();
   const priorLogsAll = (logs || []).filter((l) => new Date(l.date).getTime() < sessionStartMs);
 
-  const perExercise = entries.map((entry) => {
-    const priorForEx = priorLogsAll
-      .filter((l) => l.exId === entry.exId && sameEquipmentBucket(l, entry.equipmentProfileId ?? null, entry.equipmentContext ?? null))
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-    const priorEntry = priorForEx[0] || null;
-    // Task section 2 (CRITICAL): comparability is decided ABOVE, by sameEquipmentBucket alone —
-    // never by session.sessionContext.locationMode. Alternate Gym is where the athlete trained,
-    // not whether today's numbers are comparable to a saved profile's own history; a saved
-    // profile used before at that same gym compares normally here.
-    const progression = progressionStatusFor(entry, priorEntry);
+  const sessionDateKey = (session.startedAt || session.finishedAt || "").slice(0, 10);
+
+  const perExercise = entries.map((entry, entryIndex) => {
+    // Task section 2 (CRITICAL): comparability is decided by sameEquipmentBucket alone (inside
+    // matchExerciseEntry) — never by session.sessionContext.locationMode. Alternate Gym is where
+    // the athlete trained, not whether today's numbers are comparable to a saved profile's own
+    // history; a saved profile used before at that same gym compares normally here.
+    const progression = matchExerciseEntry(entry, priorLogsAll);
     const counted = countedSets(entry.sets);
     const qualityCounts = { grind: 0, form_breakdown: 0, pain: 0 };
     entry.sets.forEach((s) => {
@@ -131,6 +96,9 @@ export function buildWorkoutRecap({ session, logs, exMap, state }) {
     // One condensed pain line per exercise (task section 13/14) instead of one per set/jointNote
     // — see summarizePainFlags for why a detail-free pain-flagged set still produces a summary.
     const painSummary = summarizePainFlags(entry);
+    // Only ever built from data actually logged for this session (exercise position, readiness)
+    // — never an invented explanation. Empty array is the honest default, not a placeholder.
+    const declineNotes = progression.status === "declined" ? declineContext({ entryIndex, totalEntries: entries.length, state, sessionDateKey }) : [];
 
     return {
       exId: entry.exId,
@@ -140,6 +108,7 @@ export function buildWorkoutRecap({ session, logs, exMap, state }) {
       workingSetCount: counted.length,
       topSet: counted.length > 0 ? topSetOf(entry.sets) : null,
       progression,
+      declineNotes,
       qualityCounts,
       painSummary,
       hasAttention: qualityCounts.grind > 0 || qualityCounts.form_breakdown > 0 || qualityCounts.pain > 0 || !!painSummary,
@@ -159,18 +128,29 @@ export function buildWorkoutRecap({ session, logs, exMap, state }) {
   // "new_profile_no_history") rather than inflating this count.
   const differentEquipmentCount = perExercise.filter((e) => e.progression.status === "equipment_different").length;
 
+  // Session comparison confidence (see sessionComparison.js header) and the volume line it
+  // gates — total tonnage is never the headline, and increased tonnage never stands in for
+  // "stronger" on its own. perfDeltaPct/planName come straight from session (buildSessionSummary
+  // already computes the raw delta against the most recent same-plan session); this only changes
+  // how that number gets INTERPRETED, never how it's calculated.
+  const sessionConfidence = computeSessionConfidence(perExercise);
+  const volumeLine = describeSessionVolume({ perfDeltaPct: session.perfDeltaPct ?? null, planName: session.planName, confidence: sessionConfidence });
+
   return {
     planName: session.planName,
     durationSec: session.durationSec,
     exerciseCount: entries.length,
     workingSets: session.workingSets,
     totalVolume: session.totalVolume,
+    perfDeltaPct: session.perfDeltaPct ?? null,
     prs: session.prs || [],
     bestLift: session.bestLift || null,
     perExercise,
     wins,
     declines,
     attention,
+    sessionConfidence,
+    volumeLine,
     alternateGym:
       session.sessionContext?.locationMode === "alternate_gym"
         ? { locationLabel: session.sessionContext.locationLabel || null, differentEquipmentCount }

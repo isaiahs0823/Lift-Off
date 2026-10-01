@@ -2321,8 +2321,10 @@ export default function LiftLog() {
   const finishRun = () => {
     const summary = buildSessionSummary(activeRun, state.logs, state.workoutSessions || [], exMap);
     // Only worth a coach review when something was actually logged — an empty session has
-    // nothing to grade.
-    const coachMessage = summary.exerciseCount > 0 ? generatePostWorkoutReview(summary).message : null;
+    // nothing to grade. Passing logs/exMap/state lets the review lead with real matched-exercise
+    // (same exercise + same equipment) progression instead of a raw total-volume delta — see
+    // generatePostWorkoutReview's own header and utils/sessionComparison.js.
+    const coachMessage = summary.exerciseCount > 0 ? generatePostWorkoutReview(summary, { logs: state.logs, exMap, state }).message : null;
     const summaryWithCoach = coachMessage ? { ...summary, coachMessage } : summary;
     const coachHistoryId = coachMessage ? `coach_${Date.now()}` : null;
     updateState((prev) => ({
@@ -5878,14 +5880,20 @@ function GuidedRunView({
                 </div>
               </div>
 
-              {summary.perfDeltaPct != null && (
-                <div className="text-sm text-v5-text/90 text-center">
-                  Performance vs last {summary.planName}:{" "}
-                  <span className={summary.perfDeltaPct >= 0 ? "text-v5-success font-bold" : "text-v5-red font-bold"}>
-                    {summary.perfDeltaPct >= 0 ? "+" : ""}
-                    {summary.perfDeltaPct}%
-                  </span>
-                </div>
+              {/* "VS LAST WORKOUT" — descriptive only, never a progress/regression verdict on its
+                  own (bug: total tonnage swings for reasons that have nothing to do with getting
+                  stronger — different exercises, equipment, warm-ups, drop sets, bodyweight work).
+                  recap.volumeLine is confidence-gated text from sessionComparison.js: plainly
+                  stated when today's lineup/equipment closely matches last time, hedged when it's
+                  a mixed match, explicitly flagged as not-comparable when it isn't — the real
+                  matched-exercise progression lives in the "Progression" section below, which is
+                  the actual answer to "did I get stronger," not this number. */}
+              {recap?.volumeLine ? (
+                <div className="text-sm text-v5-text/90 text-center">{recap.volumeLine}</div>
+              ) : (
+                recap && recap.wins.length === 0 && recap.declines.length === 0 && (
+                  <div className="text-sm text-v5-subtext text-center">No directly comparable lifts this session.</div>
+                )
               )}
               {summary.avgRir != null && (
                 <div className="text-sm text-v5-text/90 text-center">
