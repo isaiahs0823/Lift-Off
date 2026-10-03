@@ -26,7 +26,7 @@
 
 import { countedSets, topSetOf } from "./progression.js";
 import { featuredAndOtherPRs, sessionPRCount, PR_TYPE_LABEL, prDeltaLabel, prPreviousLabel } from "./prSummary.js";
-import { formatSessionDuration } from "./workoutSets.js";
+import { formatSessionDuration, getSetDisplayDesignation } from "./workoutSets.js";
 import { matchExerciseEntry, computeSessionConfidence, describeSessionVolume } from "./sessionComparison.js";
 import { getMuscleDisplay } from "./muscleDisplay.js";
 import {
@@ -708,6 +708,16 @@ function drawExerciseRows(ctx, { x, y, width, rows, rowH, k, exMap, prsByExId, s
     const setText = top ? `${top.weight} × ${top.reps}` : "—";
     ctx.fillText(setText, x + width - padX, midY + sz(8, k, 5));
 
+    // A role/technique on the featured top set (Top Set, AMRAP, ...) is worth a small tag here —
+    // skipped when the PR "Previous: X" sub-line is already showing, so the row never stacks two
+    // sub-lines into the limited space below the main value.
+    const topNotable = top && (top.setType && top.setType !== "working" || top.programRole);
+    if (topNotable && !willShowPrev) {
+      ctx.font = `700 ${sz(13, k, 10)}px ${FONT}`;
+      ctx.fillStyle = COLOR.dimGray;
+      ctx.fillText(getSetDisplayDesignation(top).toUpperCase(), x + width - padX, rowY + h * 0.76);
+    }
+
     if (willShowPrev) {
       const pr = exPRs[0];
       const grayPart = `Previous: ${pr.prev} lb `;
@@ -1042,7 +1052,8 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured, state) {
   // with getting stronger (different exercises, equipment, warm-ups, drop sets, bodyweight work).
   // One neutral-toned line with the real number plus how comparable today's session actually was,
   // never a judgment. ----
-  if (session.perfDeltaPct != null) {
+  const hasComparison = session.perfDeltaPct != null;
+  if (hasComparison) {
     const sign = session.perfDeltaPct >= 0 ? "+" : "";
     const level = volCtx?.confidence?.level;
     const qualifier = level === "high" ? "similar session" : level === "moderate" ? "mixed session" : level === "low" ? "different session" : null;
@@ -1214,10 +1225,13 @@ function drawMinimalCard(ctx, W, H, session, featured) {
 function buildWorkoutRecapRows(data) {
   return data.exercises.map((ex) => {
     const working = ex.setRows.filter((r) => !r.isWarmup);
-    const lines = working.map((r) => ({
-      text: [`${r.weight}×${r.reps}`, ...r.drops.map((d) => `${d.weight}×${d.reps}`)].join(" → "),
-      isPR: r.prs.length > 0,
-    }));
+    const lines = working.map((r) => {
+      const chain = [`${r.weight}×${r.reps}`, ...r.drops.map((d) => `${d.weight}×${d.reps}`)].join(" → ");
+      // A plain working set says nothing extra here (same convention as the in-app Full Recap);
+      // a role/technique (Top Set, AMRAP, ...) is worth the extra width on a shareable card.
+      const notable = r.setType !== "working" || r.programRole;
+      return { text: notable ? `${chain} · ${r.setTypeLabel.toUpperCase()}` : chain, isPR: r.prs.length > 0 };
+    });
     return { name: ex.name, hasPR: ex.prs.length > 0, lines, bestSet: ex.bestSet, workingCount: ex.workingSetCount };
   });
 }
@@ -1249,7 +1263,7 @@ function layoutWorkoutRecapRows(ctx, { x, width, y, rows, mode, k }) {
       row.lines.forEach((line) => {
         ctx.fillStyle = line.isPR ? COLOR.red : COLOR.white;
         ctx.font = `${line.isPR ? 800 : 700} ${sz(18, k, 13)}px ${FONT}`;
-        ctx.fillText(line.text, x + numW, cy);
+        ctx.fillText(truncateToWidth(ctx, line.text, width - numW), x + numW, cy);
         cy += sz(24, k, 17);
       });
     } else if (row.bestSet) {
@@ -1428,7 +1442,7 @@ function drawRecapSetRow(ctx, { x, width, y, row }) {
     ctx.fillText(t, cursorX, y);
     cursorX += ctx.measureText(t).width + 16;
   }
-  if (row.setType !== "working" && row.setType !== "warmup") {
+  if (!isWarm && !(row.setType === "working" && !row.programRole)) {
     cursorX += drawBadgeInline(ctx, cursorX, y - 20, row.setTypeLabel.toUpperCase()) + 10;
   }
   if (row.qualityLabel) {

@@ -12,7 +12,7 @@
 // were always stored on the session itself), just not toward the Exercises tab or the
 // per-set Exercise Performance sheet.
 import { isWithinRange } from "./dateRange.js";
-import { countedSets, formatSessionDuration, SET_TYPE_LABEL } from "./workoutSets.js";
+import { countedSets, formatSessionDuration, getSetDisplayDesignation } from "./workoutSets.js";
 import { computeReadinessScore } from "./readiness.js";
 import { dailyTotals } from "./nutrition.js";
 import { dayAdherence } from "./nutritionAdherence.js";
@@ -216,7 +216,7 @@ export function computeSetRows(state, range, exMap) {
           exId: entry.exId,
           exerciseName: resolveExerciseName(entry.exId, exMap),
           setNumber: idx + 1,
-          setType: SET_TYPE_LABEL[s.setType || "working"] || "Working",
+          setType: getSetDisplayDesignation(s),
           weight: s.weight,
           reps: s.reps,
           rir: s.rir ?? null,

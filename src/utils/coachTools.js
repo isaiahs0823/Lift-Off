@@ -12,7 +12,7 @@
 // don't need every param, so coachToolRunner.js can dispatch generically without a per-tool
 // special case.
 import { resolveProfile } from "./athleteProfile.js";
-import { formatSetVerbose, SET_TYPE_LABEL, formatSessionDuration } from "./workoutSets.js";
+import { formatSetVerbose, getSetDisplayDesignation, formatSessionDuration } from "./workoutSets.js";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "./bodyweightMath.js";
 import { computeReadinessScore, readinessBand } from "./readiness.js";
 import { MEAL_SLOT_LABEL } from "./nutrition.js";
@@ -141,7 +141,7 @@ export const COACH_TOOL_EXECUTORS = {
       coachReviewAlreadyGiven: session.coachMessage || null,
       exercises: (session.entries || []).map((e) => ({
         exercise: exMap[e.exId]?.name || e.exId,
-        sets: e.sets.map((s) => ({ text: formatSetVerbose(s), setType: SET_TYPE_LABEL[s.setType || "working"] })),
+        sets: e.sets.map((s) => ({ text: formatSetVerbose(s), setType: getSetDisplayDesignation(s) })),
       })),
       prs: (session.prs || []).map((pr) => ({ exercise: exMap[pr.exId]?.name || pr.exId, type: PR_TYPE_LABEL[pr.type], result: prHeroLabel(pr), improvement: prDeltaLabel(pr) })),
       detailedSetDataAvailable: Array.isArray(session.entries) && session.entries.length > 0,
@@ -175,7 +175,7 @@ export const COACH_TOOL_EXECUTORS = {
       entryCount: logs.length,
       history: logs.slice(0, 10).map((l) => ({
         date: l.date,
-        sets: l.sets.map((s) => formatSetVerbose(s)),
+        sets: l.sets.map((s) => ({ text: formatSetVerbose(s), setType: getSetDisplayDesignation(s) })),
         equipment: equipmentDisplayLabel(state, l.equipmentProfileId, l.equipmentContext),
         // Present only when a set was actually flagged — most sets have nothing here.
         ...(l.sets.some((s) => s.quality && s.quality !== "clean") ? { qualityFlags: l.sets.map((s) => s.quality || "clean") } : {}),

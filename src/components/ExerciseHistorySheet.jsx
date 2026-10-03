@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { profilesForExercise, equipmentDisplayLabel, sameEquipmentBucket, TEMPORARY_EQUIPMENT_CONTEXT, DEFAULT_MACHINE_LABEL } from "../utils/equipmentProfiles.js";
 import { topSetOf } from "../utils/progression.js";
+import { getSetDisplayDesignation } from "../utils/workoutSets.js";
 
 // Athlete-facing "every prior instance of this movement" (task: "BRK Workout History — Exercise
 // History"). Reads state.logs directly by exId — the same durable history every progression/PR
@@ -119,8 +120,8 @@ export default function ExerciseHistorySheet({ exId, exMap, state, onClose }) {
                 <div className="space-y-0.5">
                   {log.sets.map((s, i) => (
                     <div key={i} className="text-sm text-v5-text tabular-nums flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-v5-subtext/60 shrink-0">{getSetDisplayDesignation(s)}</span>
                       <span>{s.weight} × {s.reps}</span>
-                      {s.setType === "warmup" && <span className="text-[10px] uppercase tracking-wide text-v5-subtext/60">warm-up</span>}
                       {s.drops?.length > 0 && <span className="text-[10px] uppercase tracking-wide text-v5-subtext/60">+{s.drops.length} drop</span>}
                     </div>
                   ))}

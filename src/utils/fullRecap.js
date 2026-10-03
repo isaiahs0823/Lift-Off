@@ -9,7 +9,7 @@
 // One rule above all others: never fabricate. A field with no real data is omitted, not guessed —
 // see buildFullRecapData below. This file only reads state; nothing is mutated.
 
-import { countedSets, formatSessionDuration, formatSetVerbose, isWarmup, SET_TYPE_LABEL } from "./workoutSets.js";
+import { countedSets, formatSessionDuration, formatSetVerbose, isWarmup, getSetDisplayDesignation } from "./workoutSets.js";
 import { topSetOf } from "./progression.js";
 import { setVolume } from "./dataWorkbook.js";
 import { equipmentDisplayLabel, DEFAULT_MACHINE_LABEL } from "./equipmentProfiles.js";
@@ -32,7 +32,8 @@ function buildSetRow(set, index, exPrs) {
   return {
     index: index + 1,
     setType: set.setType || "working",
-    setTypeLabel: SET_TYPE_LABEL[set.setType || "working"],
+    programRole: set.programRole || null,
+    setTypeLabel: getSetDisplayDesignation(set),
     isWarmup: isWarmup(set),
     weight: set.weight,
     reps: set.reps,
@@ -191,7 +192,10 @@ function fmtDateLong(iso) {
 function setLineForText(row) {
   const base = formatSetVerbose(row.raw);
   const suffixes = [];
-  if (row.setType !== "working" && row.setType !== "warmup") suffixes.push(row.setTypeLabel.toUpperCase());
+  // Warm-up rows are already grouped under their own "Warm-up:" header, and a plain working set
+  // with no role adds nothing beyond what the "Working Sets:" header already says — both stay
+  // unlabeled per-line; anything else (a role, a technique, or both) is worth calling out.
+  if (!row.isWarmup && !(row.setType === "working" && !row.programRole)) suffixes.push(row.setTypeLabel.toUpperCase());
   if (row.qualityLabel) suffixes.push(row.pain?.bodyArea ? `${row.qualityLabel.toUpperCase()} (${row.pain.bodyArea}${row.pain.severity != null ? `, ${row.pain.severity}/10` : ""})` : row.qualityLabel.toUpperCase());
   if (row.prs.length > 0) suffixes.push(row.prs.map((pr) => PR_TYPE_LABEL[pr.type].toUpperCase()).join(", "));
   return suffixes.length > 0 ? `${base} — ${suffixes.join(" — ")}` : base;

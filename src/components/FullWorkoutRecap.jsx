@@ -17,7 +17,7 @@ function fmtTime(iso) {
 // (task section 4: "do not flatten this into one fake set") rather than one run-on string.
 function SetRow({ row }) {
   const badges = [];
-  if (row.setType !== "working" && row.setType !== "warmup") badges.push({ text: row.setTypeLabel.toUpperCase(), tone: "neutral" });
+  if (!row.isWarmup && !(row.setType === "working" && !row.programRole)) badges.push({ text: row.setTypeLabel.toUpperCase(), tone: "neutral" });
   if (row.qualityLabel) badges.push({ text: row.qualityLabel.toUpperCase(), tone: row.quality === "pain" || row.quality === "form_breakdown" ? "warn" : "neutral" });
   if (row.prs.length > 0) badges.push({ text: "PR", tone: "pr" });
 

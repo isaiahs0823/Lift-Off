@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { ChevronDown, ChevronUp, Award, MessageCircle, Share2 } from "lucide-react";
-import { formatSetVerbose, formatSessionDuration, SET_TYPE_LABEL } from "../utils/workoutSets.js";
+import { formatSetVerbose, formatSessionDuration, getSetDisplayDesignation } from "../utils/workoutSets.js";
 import { featuredAndOtherPRs, sessionPRCount, PR_TYPE_LABEL, prDeltaLabel, prHeroLabel } from "../utils/prSummary.js";
 import WorkoutSharePreview from "./WorkoutSharePreview.jsx";
 import WorkoutNotesSection from "./WorkoutNotesSection.jsx";
@@ -153,7 +153,7 @@ export default function WorkoutHistoryDetail({ session, state, exMap, onBack, on
                               {SET_QUALITY_GLYPH[s.quality]} {SET_QUALITY_LABEL[s.quality]}
                             </span>
                           )}
-                          <span className="text-[11px] uppercase tracking-widest text-v5-subtext/70 shrink-0">{SET_TYPE_LABEL[s.setType || "working"]}</span>
+                          <span className="text-[11px] uppercase tracking-widest text-v5-subtext/70 shrink-0">{getSetDisplayDesignation(s)}</span>
                         </div>
                       ))}
                     </div>

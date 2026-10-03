@@ -118,7 +118,18 @@ import { todayDateKey } from "./utils/nutrition.js";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
 import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
-import { SET_TYPES, isWarmup, countedSets, formatSetCompact, rirRpeSuffix, formatSetVerbose, formatSessionDuration } from "./utils/workoutSets.js";
+import {
+  SET_TYPES,
+  PROGRAM_ROLES,
+  isWarmup,
+  countedSets,
+  formatSetCompact,
+  rirRpeSuffix,
+  formatSetVerbose,
+  formatSessionDuration,
+  getSetDisplayDesignation,
+  hasNotableDesignation,
+} from "./utils/workoutSets.js";
 import WorkoutHistoryDetail from "./components/WorkoutHistoryDetail.jsx";
 import WorkoutNotesSection from "./components/WorkoutNotesSection.jsx";
 import { findMostRecentSessionForPlan } from "./utils/workoutHistory.js";
@@ -1400,6 +1411,7 @@ function toEditableSetRow(s) {
     reps: String(s.reps),
     drops: (s.drops || []).map((d) => ({ weight: String(d.weight), reps: String(d.reps) })),
     setType: s.setType || "working",
+    programRole: s.programRole || "",
     rir: s.rir != null ? String(s.rir) : "",
     rpe: s.rpe != null ? String(s.rpe) : "",
     quality: s.quality ?? null,
@@ -1424,6 +1436,7 @@ function cleanSetsInput(sets) {
         reps: Number(s.reps),
         ...(cleanDrops.length > 0 ? { drops: cleanDrops } : {}),
         ...(s.setType && s.setType !== "working" ? { setType: s.setType } : {}),
+        ...(s.programRole ? { programRole: s.programRole } : {}),
         ...(s.rir !== "" && s.rir != null ? { rir: Number(s.rir) } : {}),
         ...(s.rpe !== "" && s.rpe != null ? { rpe: Number(s.rpe) } : {}),
         // Passthrough only — no UI here builds these from scratch (see TrainingExerciseCard's
@@ -3188,7 +3201,7 @@ function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onB
 // (that would change set count/order, which section 6 explicitly rules out for this flow).
 function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false, allowAddRemove = true }) {
   const updateSetRow = (idx, field, val) => onChange(sets.map((row, i) => (i === idx ? { ...row, [field]: val } : row)));
-  const addSetRow = () => onChange([...sets, { weight: "", reps: "", drops: [], setType: "working", rir: "", rpe: "" }]);
+  const addSetRow = () => onChange([...sets, { weight: "", reps: "", drops: [], setType: "working", programRole: "", rir: "", rpe: "" }]);
   const removeSetRow = (idx) => onChange(sets.filter((_, i) => i !== idx));
   // Quick logging: nudge a row's weight/reps without retyping, or clone it as the next set —
   // the common case mid-workout is "same weight, one more rep" or "just repeat that."
@@ -3277,6 +3290,24 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false, allo
                   onFocus={selectOnFocus}
                   className="shrink-0 w-14 bg-v5-elevated border border-white/10 text-v5-text px-1.5 py-0.5 text-[11px] text-center focus:outline-none focus:border-v5-red"
                 />
+              </div>
+              {/* Independent of Set type above — a program role (Top set/Backoff) can combine
+                  with a technique (e.g. AMRAP) on the same set; see PROGRAM_ROLES. */}
+              <div className="flex items-center gap-1 pl-7 overflow-x-auto">
+                {PROGRAM_ROLES.map((r) => {
+                  const active = (row.programRole || "") === r.value;
+                  return (
+                    <button
+                      key={r.value || "none"}
+                      onClick={() => updateSetRow(idx, "programRole", r.value)}
+                      className={`shrink-0 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide border ${
+                        active ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
+                      }`}
+                    >
+                      {r.short || r.label}
+                    </button>
+                  );
+                })}
               </div>
               {(row.drops || []).map((drop, dIdx) => (
                 <div key={dIdx} className="flex items-center gap-2 pl-7">
@@ -3624,8 +3655,11 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
           <div className="text-[11px] uppercase tracking-widest text-v5-subtext mb-2">Last time</div>
           <div className="space-y-1">
             {recentForEx[0].sets.map((s, i) => (
-              <div key={i} className="text-lg text-v5-text/90">
-                {formatSetCompact(s)}
+              <div key={i} className="text-lg text-v5-text/90 flex items-baseline gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-v5-subtext/70 shrink-0">
+                  {getSetDisplayDesignation(s)}
+                </span>
+                <span>{formatSetCompact(s)}</span>
               </div>
             ))}
           </div>
@@ -3691,6 +3725,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
                     reps: String(s.reps),
                     drops: (s.drops || []).map((d) => ({ weight: String(d.weight), reps: String(d.reps) })),
                     setType: s.setType || "working",
+                    programRole: s.programRole || "",
                     rir: s.rir != null ? String(s.rir) : "",
                     rpe: s.rpe != null ? String(s.rpe) : "",
                   }))
@@ -3760,7 +3795,11 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
                     <span className="block text-v5-subtext/70">{equipmentDisplayLabel(state, l.equipmentProfileId, l.equipmentContext)}</span>
                   )}
                 </span>
-                <span className="text-sm text-v5-text/90 text-right">{l.sets.map(formatSetCompact).join(", ")}</span>
+                <span className="text-sm text-v5-text/90 text-right">
+                  {l.sets
+                    .map((s) => (isWarmup(s) || hasNotableDesignation(s) ? `${formatSetCompact(s)} (${getSetDisplayDesignation(s)})` : formatSetCompact(s)))
+                    .join(", ")}
+                </span>
               </button>
             ))}
           </div>
@@ -4545,6 +4584,7 @@ function TrainingExerciseCard({
   const [reps, setReps] = useState(() => (draft && draft.reps !== undefined ? draft.reps : suggestion.targetReps ?? 8));
   const [rirVal, setRirVal] = useState(() => draft?.rir ?? "");
   const [setType, setSetType] = useState(() => draft?.setType ?? "working");
+  const [programRole, setProgramRole] = useState(() => draft?.programRole ?? "");
   const [drops, setDrops] = useState(() => draft?.drops ?? []);
   // Progressive disclosure state — every one of these defaults closed. This component gets a
   // fresh `key={currentExId}` from GuidedRunView on every exercise switch, so there's no need
@@ -4609,6 +4649,7 @@ function TrainingExerciseCard({
       reps,
       rir: rirVal,
       setType,
+      programRole,
       drops,
       equipmentProfileId,
       equipmentContext,
@@ -4656,6 +4697,7 @@ function TrainingExerciseCard({
     reps,
     rirVal,
     setType,
+    programRole,
     drops,
     equipmentProfileId,
     equipmentContext,
@@ -4704,7 +4746,8 @@ function TrainingExerciseCard({
   const lastTopSet = lastEntry ? topSetOf(lastEntry.sets) : null;
   const notesSaved = state.exerciseNotes?.[exId];
   const hasNotes = !!(notesSaved && (notesSaved.general || notesSaved.machine || notesSaved.cue));
-  const optionsHasContent = (!isSimple && (rirVal !== "" || setType !== "working" || drops.length > 0)) || hasNotes || !!quality || !!jointNoteArea;
+  const optionsHasContent =
+    (!isSimple && (rirVal !== "" || setType !== "working" || !!programRole || drops.length > 0)) || hasNotes || !!quality || !!jointNoteArea;
 
   // Mid-exercise correction (a fat-fingered weight/reps entry — or a mis-typed drop set —
   // shouldn't have to wait until the whole workout is finished and edited from history) — edits
@@ -4752,6 +4795,7 @@ function TrainingExerciseCard({
       reps,
       drops,
       setType,
+      programRole,
       rir: rirSystem === "rir" ? rirVal : "",
       rpe: rirSystem === "rpe" ? rirVal : "",
       quality,
@@ -4769,6 +4813,7 @@ function TrainingExerciseCard({
     onSetSaved?.({ weight, reps });
     setRirVal("");
     setSetType("working");
+    setProgramRole("");
     setDrops([]);
     // Quality/pain is per-set, not sticky across sets — each one starts clean again, matching
     // the task's "no flag / clean enough" default (never carried forward as an assumption).
@@ -5180,7 +5225,10 @@ function TrainingExerciseCard({
               >
                 <Check size={13} className="text-v5-success shrink-0" />
                 <span className="text-v5-subtext shrink-0">Set {i + 1}</span>
-                <span className="flex-1 text-left text-v5-text font-bold">{formatSetCompact(s)}</span>
+                <span className="shrink-0 max-w-[150px] truncate text-[11px] font-bold uppercase tracking-wide text-v5-subtext/80">
+                  {getSetDisplayDesignation(s)}
+                </span>
+                <span className="flex-1 text-left text-v5-text font-bold truncate">{formatSetCompact(s)}</span>
                 {isBest && (
                   <span className="shrink-0 text-[11px] uppercase tracking-widest font-bold bg-v5-red/15 text-v5-red px-1.5 py-0.5 rounded-full">
                     Best
@@ -5324,6 +5372,28 @@ function TrainingExerciseCard({
                         }`}
                       >
                         {t.short}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Program role is independent of Set type above (task: "do not collapse the data
+                  model back into one mutually exclusive setType") — a Top Set finished as an
+                  AMRAP needs both to stay true at once, which one chip row could never express. */}
+              {!isSimple && (
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-v5-subtext mb-1.5">Program role</div>
+                  <div className="flex items-center gap-1 overflow-x-auto">
+                    {PROGRAM_ROLES.map((r) => (
+                      <button
+                        key={r.value || "none"}
+                        onClick={() => setProgramRole(r.value)}
+                        className={`shrink-0 px-2 py-1 text-[11px] font-bold uppercase tracking-wide rounded ${
+                          programRole === r.value ? "bg-v5-red text-white" : "bg-v5-muted text-v5-subtext hover:text-v5-text"
+                        }`}
+                      >
+                        {r.short || r.label}
                       </button>
                     ))}
                   </div>
@@ -6142,7 +6212,11 @@ function GuidedRunView({
                           {top ? formatSetCompact(top) : `Target ${entry.targetReps}`}
                         </span>
                       </div>
-                      <div className="text-xs text-v5-subtext mt-1 pl-[26px]">{entry.sets.map(formatSetCompact).join(", ")}</div>
+                      <div className="text-xs text-v5-subtext mt-1 pl-[26px]">
+                        {entry.sets
+                          .map((s) => (isWarmup(s) || hasNotableDesignation(s) ? `${formatSetCompact(s)} (${getSetDisplayDesignation(s)})` : formatSetCompact(s)))
+                          .join(", ")}
+                      </div>
                     </Card>
                   );
                 })}
