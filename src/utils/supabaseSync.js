@@ -325,6 +325,14 @@ const COLLECTIONS = [
     toRow: (r, userId) => ({ id: r.id, user_id: userId, date: r.date, activity: r.activity ?? null, notes: r.notes ?? null }),
     fromRow: (r) => ({ id: r.id, date: r.date, activity: r.activity, notes: r.notes }),
   },
+  {
+    // Whole snapshot round-trips through the jsonb `data` column — see
+    // supabase_schema_athlete_rating.sql for why this one isn't column-normalized.
+    key: "athleteRatingSnapshots",
+    table: "athlete_rating_snapshots",
+    toRow: (s, userId) => ({ id: s.id, user_id: userId, computed_at: s.computedAt, ovr: s.ovr ?? null, rank_label: s.rank?.label ?? null, data: s }),
+    fromRow: (r) => r.data,
+  },
 ];
 
 function requireUser() {

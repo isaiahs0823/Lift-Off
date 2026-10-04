@@ -115,6 +115,8 @@ import AddFoodScreen from "./components/AddFoodScreen.jsx";
 import FoodDetailScreen from "./components/FoodDetailScreen.jsx";
 import { NUTRITION_FOOD_LOGGING_ENABLED } from "./utils/nutritionFeatureFlags.js";
 import { todayDateKey } from "./utils/nutrition.js";
+import { recalcAthleteRatingState, detectRatingEvent } from "./utils/athleteRating.js";
+import LevelUpScreen from "./components/LevelUpScreen.jsx";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
 import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
@@ -1342,6 +1344,11 @@ function loadInitialState() {
     // profiles here, or a log entry with no equipmentProfileId, behaves exactly as BRK always
     // has (bucket "Default Machine"). { id, exerciseId, label, gymLabel, isDefault, createdAt }
     equipmentProfiles: [],
+    // Athlete Rating history — one entry per recalculation (workout completion/edit/delete), each
+    // a full computeAthleteRating() snapshot. Only the latest is shown live; the rest back the
+    // OVR/category/muscle trend charts and rank history. Never recomputed retroactively — each
+    // snapshot reflects what BRK actually calculated at that moment. See utils/athleteRating.js.
+    athleteRatingSnapshots: [],
   };
 }
 
@@ -1871,6 +1878,31 @@ export default function LiftLog() {
   const auth = useSupabaseAuth();
   const cloudSyncTimerRef = useRef(null);
   const pulledForUserIdRef = useRef(null);
+  // Athlete Rating — a genuine Level Up / Rank Up / first-rating-ready moment to show, set only
+  // right after a recalculation that actually crosses a level. Never persisted — purely a
+  // one-shot UI moment, cleared once shown.
+  const [ratingEvent, setRatingEvent] = useState(null);
+  // true right before a celebration-eligible recalculation (finishRun) so the effect below knows
+  // to actually surface the event it detects, vs. a quiet recalculation elsewhere (editing a
+  // historical log entry) whose new snapshot should apply silently. Reset once consumed.
+  const ratingCelebrationPendingRef = useRef(false);
+  const ratingSnapshotsSeenRef = useRef(state.athleteRatingSnapshots);
+  // Detecting the event here (rather than synchronously right after calling updateState) is
+  // deliberate — updater functions run asynchronously, so a value captured via closure right
+  // after updateState() is called would be read before that updater has actually executed. This
+  // effect instead fires once React has genuinely applied the new snapshot to `state`.
+  useEffect(() => {
+    const seen = ratingSnapshotsSeenRef.current || [];
+    const current = state.athleteRatingSnapshots || [];
+    ratingSnapshotsSeenRef.current = current;
+    if (current.length > seen.length && ratingCelebrationPendingRef.current) {
+      ratingCelebrationPendingRef.current = false;
+      const prior = current.length >= 2 ? current[current.length - 2] : null;
+      const fresh = current[current.length - 1];
+      const event = detectRatingEvent(prior, fresh);
+      if (event) setRatingEvent(event);
+    }
+  }, [state.athleteRatingSnapshots]);
   // Lazy-initted straight from localStorage (not loaded in an effect like `state` below) so
   // an in-progress workout is already in place on the very first render — no flash back to
   // the plan-picker tab, and no race with the persist effect right below.
@@ -2424,6 +2456,13 @@ export default function LiftLog() {
       const ctx = activeRun.programContext;
       updateState((prev) => applyProgramDayAdvance(prev, ctx));
     }
+    // Athlete Rating recalculates right after the new session lands (and after the program-day
+    // advance above, so it sees fully up-to-date state) — never on every render. Flagging this
+    // recalculation as celebration-eligible (see the athleteRatingSnapshots effect below) is
+    // what lets a genuine Level Up / Rank Up / first-rating moment surface after finishing a
+    // workout, but never after a quiet historical edit elsewhere.
+    ratingCelebrationPendingRef.current = true;
+    updateState((prev) => recalcAthleteRatingState(prev, exMap));
   };
 
   // Recovery-session counterpart to finishRun — deliberately does NOT touch state.workoutSessions,
@@ -2601,6 +2640,7 @@ export default function LiftLog() {
 
   return (
     <div className="w-full bg-v5-bg text-v5-text font-sans min-h-[600px]">
+      {ratingEvent && <LevelUpScreen event={ratingEvent} onDismiss={() => setRatingEvent(null)} />}
       <Header />
       {/* Only mounted on screens where logging a set is actually possible — an active (not yet
           finished) guided run, the standalone Log tab, or Cardio/conditioning, the three places
@@ -3617,15 +3657,21 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         simple={isSimple}
         onBack={() => setEditingEntryId(null)}
         onSave={(changes) => {
-          updateState((prev) => ({
-            ...prev,
-            logs: prev.logs.map((l) => (l.id === editingEntryId ? { ...l, ...changes } : l)),
-          }));
+          updateState((prev) => {
+            const edited = { ...prev, logs: prev.logs.map((l) => (l.id === editingEntryId ? { ...l, ...changes } : l)) };
+            // A correction to historical data should eventually be reflected in Athlete Rating —
+            // recalculated silently here (no Level Up moment for a quiet data correction, that
+            // celebration is reserved for actually finishing a workout; see finishRun).
+            return recalcAthleteRatingState(edited, exMap);
+          });
           setEditingEntryId(null);
         }}
         onDelete={() => {
           if (!window.confirm("Delete this logged entry? This can't be undone.")) return;
-          updateState((prev) => ({ ...prev, logs: prev.logs.filter((l) => l.id !== editingEntryId) }));
+          updateState((prev) => {
+            const edited = { ...prev, logs: prev.logs.filter((l) => l.id !== editingEntryId) };
+            return recalcAthleteRatingState(edited, exMap);
+          });
           setEditingEntryId(null);
         }}
       />

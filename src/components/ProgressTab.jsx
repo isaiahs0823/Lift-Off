@@ -4,6 +4,12 @@ import BodyweightTab from "./BodyweightTab.jsx";
 import TrainingCalendar from "./TrainingCalendar.jsx";
 import AnalyticsTab from "./AnalyticsTab.jsx";
 import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
+import AthleteMuscleMap from "./AthleteMuscleMap.jsx";
+import AthleteRatingCard from "./AthleteRatingCard.jsx";
+import AthleteRatingDetail from "./AthleteRatingDetail.jsx";
+import MuscleMapScreen from "./MuscleMapScreen.jsx";
+import MuscleDetailScreen from "./MuscleDetailScreen.jsx";
+import RecentProgressFeed from "./RecentProgressFeed.jsx";
 import { ScreenHeader, SectionLabel, Card, MetricTile, ProgressBar, ListRow, RingGauge, MiniBarChart, LineChart, PeriodSelect, SegmentedTabs } from "./ui/Kit.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue } from "../utils/goalData.js";
@@ -67,9 +73,11 @@ const PROGRESS_TABS = [
 // drill-ins (which already house the deeper PR history/per-exercise stats). Calendar and
 // Analytics remain one tap away rather than fully inlined — they're their own screens with their
 // own real depth, not content that would fit compactly in a tab.
-function ProgressLanding({ state, exMap, onDrillDown, onNavigate, onViewAllHistory }) {
+function ProgressLanding({ state, exMap, onDrillDown, onNavigate, onViewAllHistory, onOpenRating, onOpenMuscleMap }) {
   const [period, setPeriod] = useState("month");
   const [tab, setTab] = useState("overview");
+  const ratingSnapshots = state.athleteRatingSnapshots || [];
+  const latestRating = ratingSnapshots[ratingSnapshots.length - 1] || null;
   const entries = state.bodyweightLogs || [];
   const currentWeight = latestValue(entries, "weight");
   const avg7 = rollingAverage(entries, "weight", 7);
@@ -142,6 +150,25 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate, onViewAllHisto
 
       {tab === "overview" && (
         <>
+          {/* Athlete Rating leads Overview (task: "Main Progress Overview should prioritize: 1.
+              Athlete Rating, 2. Anatomy/muscle map, 3. current muscle trends, 4. Recent
+              Progress") — everything below it is pre-existing Progress content, unchanged. */}
+          <AthleteRatingCard snapshot={latestRating} onOpen={onOpenRating} />
+
+          {/* Compact entry point into the full Muscle Map — a thumbnail, not the full-size
+              figure, so Overview stays scannable (task: "do not cram every mockup card onto one
+              mobile screen... progressive disclosure"). */}
+          <Card onClick={onOpenMuscleMap} className="flex items-center gap-3">
+            <div className="shrink-0 w-10 h-16 rounded-lg bg-v5-elevated flex items-center justify-center overflow-hidden">
+              <AthleteMuscleMap ratings={latestRating?.muscles || {}} view="front" width={34} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-v5-text">Muscle Map</div>
+              <div className="text-xs text-v5-subtext">Performance development by muscle group</div>
+            </div>
+            <ChevronRight size={16} className="text-v5-subtext shrink-0" />
+          </Card>
+
           {/* Top metric row — compact tiles, never the focal point themselves (mockup section 8). */}
           <div className="grid grid-cols-3 gap-2.5">
             <MetricTile label="Bodyweight" value={currentWeight != null ? fmt1(currentWeight) : "—"} sublabel={currentWeight != null ? "lb" : undefined} />
@@ -212,6 +239,8 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate, onViewAllHisto
               )}
             </div>
           )}
+
+          <RecentProgressFeed state={state} exMap={exMap} limit={4} />
 
           {adherence?.overall != null &&
             (() => {
@@ -298,6 +327,39 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate, onViewAllHisto
 
 export default function ProgressTab({ state, updateState, allExercises, exMap, onNavigate, onViewWorkout, onViewAllHistory }) {
   const [view, setView] = useState("landing");
+  const [selectedMuscle, setSelectedMuscle] = useState(null);
+  const ratingSnapshots = state.athleteRatingSnapshots || [];
+  const latestRating = ratingSnapshots[ratingSnapshots.length - 1] || null;
+
+  // Athlete Rating / Muscle Map screens own their own back button (ScreenHeader + ChevronLeft,
+  // matching every other full-screen drill-down in the app) rather than the generic "← Progress"
+  // strip the older BodyweightTab/Calendar/Analytics views use — so they're excluded from that
+  // shared wrapper below.
+  if (view === "athleteRating") {
+    return <AthleteRatingDetail snapshot={latestRating} onBack={() => setView("landing")} />;
+  }
+  if (view === "muscleMap") {
+    return (
+      <MuscleMapScreen
+        snapshot={latestRating}
+        onBack={() => setView("landing")}
+        onSelectMuscle={(group) => {
+          setSelectedMuscle(group);
+          setView("muscleDetail");
+        }}
+      />
+    );
+  }
+  if (view === "muscleDetail" && selectedMuscle) {
+    return (
+      <MuscleDetailScreen
+        group={selectedMuscle}
+        state={state}
+        exMap={exMap}
+        onBack={() => setView("muscleMap")}
+      />
+    );
+  }
 
   if (view !== "landing") {
     return (
@@ -312,5 +374,15 @@ export default function ProgressTab({ state, updateState, allExercises, exMap, o
     );
   }
 
-  return <ProgressLanding state={state} exMap={exMap} onDrillDown={setView} onNavigate={onNavigate} onViewAllHistory={onViewAllHistory} />;
+  return (
+    <ProgressLanding
+      state={state}
+      exMap={exMap}
+      onDrillDown={setView}
+      onNavigate={onNavigate}
+      onViewAllHistory={onViewAllHistory}
+      onOpenRating={() => setView("athleteRating")}
+      onOpenMuscleMap={() => setView("muscleMap")}
+    />
+  );
 }

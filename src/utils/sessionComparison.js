@@ -114,7 +114,7 @@ function progressionStatusFor(entry, priorEntry) {
   };
 }
 
-const MATCHED_STATUSES = new Set(["increased_load", "increased_reps", "matched", "declined"]);
+export const MATCHED_STATUSES = new Set(["increased_load", "increased_reps", "matched", "declined"]);
 
 // Whole-session roll-up: HIGH/MODERATE/LOW confidence that total-session numbers (volume, set
 // count) mean anything, derived from the SAME per-exercise matches above rather than a separate
