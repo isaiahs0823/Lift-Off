@@ -79,10 +79,20 @@ export default function AthleteRatingDetail({ snapshot, onBack }) {
             <span className="text-[11px] uppercase tracking-widest text-v5-subtext font-bold">OVR</span>
             <span className="text-5xl font-black text-v5-text tabular-nums">{ovr}</span>
           </div>
-          <div className="text-sm font-black uppercase tracking-wide text-v5-red">{rank.label}</div>
+          {rank ? (
+            <div className="text-sm font-black uppercase tracking-wide text-v5-red">{rank.label}</div>
+          ) : (
+            <div className="text-sm font-black uppercase tracking-wide text-v5-subtext">Provisional</div>
+          )}
           <div className="text-[11px] text-v5-subtext">
-            Based on {qualifiedCount} of 6 rating categories
-            {ovrConfidence === CONFIDENCE.LOW ? " — still establishing confidence" : ""}
+            {rank ? (
+              <>
+                Based on {qualifiedCount} of 6 rating categories
+                {ovrConfidence === CONFIDENCE.LOW ? " — still establishing confidence" : ""}
+              </>
+            ) : (
+              "A real first read on limited evidence — Rank unlocks with a bit more training data."
+            )}
           </div>
         </Card>
       ) : (

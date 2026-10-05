@@ -435,16 +435,38 @@ export function computeAthleteRating(state, exMap, priorSnapshot = null) {
   });
 
   // ---- OVR ----
-  // Minimum evidence bar before BRK shows ANY number at all (spec Test A/B): needs Consistency
-  // (basically "has this athlete logged anything") plus at least 2 of the 3 hardest-to-fake core
-  // categories. A single workout can qualify Consistency but rarely clears this bar alone.
+  // Three-tier evidence model (not a single pass/fail gate):
+  //
+  //   ESTABLISHING_BASELINE — ovr stays null. Needs Consistency (basically "has this athlete
+  //     logged anything against an intended schedule") AND at least ONE of the three hardest-
+  //     to-fake training categories (Strength/Progression/Training Quality). Below this, BRK
+  //     genuinely has nothing to say yet — never a fabricated number.
+  //
+  //   PROVISIONAL — ovr IS shown (renormalized across whatever's qualified, same math as
+  //     ESTABLISHED below), but flagged provisional: fewer than 2 of the 3 core categories
+  //     qualified, or fewer than 3 total categories qualified overall. An athlete clears
+  //     ESTABLISHING_BASELINE the moment they have ONE real signal — they don't have to wait for
+  //     a second category just to see a number, they just see it caveated as still thin.
+  //
+  //   ESTABLISHED — ovr shown normally with full Rank treatment: at least 2 of the 3 core
+  //     categories qualified AND at least 3 total categories qualified.
+  //
+  // Recovery/Nutrition participation is never required for any tier — both are BONUS_CATEGORIES,
+  // so an athlete who never logs readiness/nutrition can still reach ESTABLISHED on training
+  // data alone. Missing categories are never scored as zero: the weighted average below only
+  // ever sums over QUALIFIED categories, with weightSum renormalized to match (see
+  // CATEGORY_WEIGHTS/CORE_CATEGORIES/BONUS_CATEGORIES above) — a category with no evidence
+  // simply isn't in the average, it doesn't drag it down.
   const hasConsistency = categories.consistency.score != null;
-  const strongCoreCount = ["strength", "progression", "trainingQuality"].filter((k) => categories[k].score != null).length;
-  const meetsOvrBar = hasConsistency && strongCoreCount >= 2;
+  const qualifiedCoreCount = ["strength", "progression", "trainingQuality"].filter((k) => categories[k].score != null).length;
+  const totalQualifiedCount = [...CORE_CATEGORIES, ...BONUS_CATEGORIES].filter((k) => categories[k].score != null).length;
+  const meetsBaselineBar = hasConsistency && qualifiedCoreCount >= 1;
+  const meetsEstablishedBar = hasConsistency && qualifiedCoreCount >= 2 && totalQualifiedCount >= 3;
 
   let ovr = null;
+  let ovrTier = "establishing_baseline";
   let ovrConfidence = CONFIDENCE.INSUFFICIENT;
-  if (meetsOvrBar) {
+  if (meetsBaselineBar) {
     let weightSum = 0;
     let scoreSum = 0;
     [...CORE_CATEGORIES, ...BONUS_CATEGORIES].forEach((key) => {
@@ -455,15 +477,17 @@ export function computeAthleteRating(state, exMap, priorSnapshot = null) {
     const rawOvr = weightSum > 0 ? scoreSum / weightSum : null;
     if (rawOvr != null) {
       ovr = clamp(smooth(rawOvr, priorSnapshot?.ovr ?? null), 0, 100);
-      const qualifiedCount = CORE_CATEGORIES.filter((k) => categories[k].score != null).length + BONUS_CATEGORIES.filter((k) => categories[k].score != null).length;
-      ovrConfidence = qualifiedCount >= 5 ? CONFIDENCE.HIGH : qualifiedCount >= 3 ? CONFIDENCE.MODERATE : CONFIDENCE.LOW;
+      ovrTier = meetsEstablishedBar ? "established" : "provisional";
+      ovrConfidence = ovrTier === "provisional" ? CONFIDENCE.LOW : totalQualifiedCount >= 5 ? CONFIDENCE.HIGH : CONFIDENCE.MODERATE;
     }
   }
 
-  const rank = ovr != null ? rankForOvr(ovr) : null;
+  // Rank only displays at the ESTABLISHED tier — a Provisional number is real but too thin to
+  // anchor a Rank claim yet (spec: "once sufficient OVR evidence exists, show Rank").
+  const rank = ovr != null && ovrTier === "established" ? rankForOvr(ovr) : null;
   const ovrDelta = ovr != null && priorSnapshot?.ovr != null ? ovr - priorSnapshot.ovr : null;
 
-  return { computedAt: new Date(now).toISOString(), ovr, ovrConfidence, ovrDelta, rank, categories, muscles };
+  return { computedAt: new Date(now).toISOString(), ovr, ovrTier, ovrConfidence, ovrDelta, rank, categories, muscles };
 }
 
 // ---------------- Recent Progress feed ----------------

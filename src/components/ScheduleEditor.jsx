@@ -153,8 +153,16 @@ export default function ScheduleEditor({ state, updateState, onBack }) {
   const programDayCount = programDay?.totalDays || 0;
 
   const [mode, setMode] = useState(existing?.mode || "fixed");
-  const [fixedDays, setFixedDays] = useState(existing?.fixedDays || defaultFixedDays());
-  const [rollingSequence, setRollingSequence] = useState(existing?.rollingSequence || []);
+  // First-time setup (no saved schedule yet) with an active program opens ALREADY populated from
+  // that program — task: "add a scheduling step to program setup" — rather than a blank week the
+  // athlete has to build from scratch. Editing/removing an already-saved schedule is untouched;
+  // this only changes what a brand-new schedule starts from.
+  const [fixedDays, setFixedDays] = useState(() =>
+    existing?.fixedDays || (hasCurrentProgram ? suggestFixedScheduleForCurrentProgram(programDayCount) : defaultFixedDays())
+  );
+  const [rollingSequence, setRollingSequence] = useState(() =>
+    existing?.rollingSequence || (hasCurrentProgram ? suggestRollingSequenceForProgram(programDayCount) : [])
+  );
   const [expandedKey, setExpandedKey] = useState(null);
   const [saved, setSaved] = useState(false);
 

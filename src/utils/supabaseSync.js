@@ -361,6 +361,7 @@ export async function pushWorkoutDataToSupabase(state, userId) {
     current_program: state.currentProgram ?? null,
     weekly_schedule: state.weeklySchedule ?? null,
     schedule_log: state.scheduleLog ?? [],
+    reminder_settings: state.reminderSettings ?? null,
     settings: state.settings ?? {},
     has_seen_onboarding: !!state.hasSeenOnboarding,
     updated_at: new Date().toISOString(),
@@ -400,6 +401,7 @@ export async function pullWorkoutDataFromSupabase(userId) {
       currentProgram: profileRow.current_program,
       weeklySchedule: profileRow.weekly_schedule,
       scheduleLog: profileRow.schedule_log,
+      reminderSettings: profileRow.reminder_settings,
       settings: profileRow.settings,
       hasSeenOnboarding: profileRow.has_seen_onboarding,
     };
@@ -432,6 +434,7 @@ export function mergeRemoteIntoLocal(localState, remoteData) {
       currentProgram: next.currentProgram ?? profile.currentProgram ?? null,
       weeklySchedule: next.weeklySchedule ?? profile.weeklySchedule ?? null,
       scheduleLog: next.scheduleLog && next.scheduleLog.length > 0 ? next.scheduleLog : profile.scheduleLog || next.scheduleLog,
+      reminderSettings: next.reminderSettings ?? profile.reminderSettings ?? null,
       hasSeenOnboarding: next.hasSeenOnboarding || !!profile.hasSeenOnboarding,
     };
   }

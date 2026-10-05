@@ -1,6 +1,8 @@
 import React, { useRef, useState } from "react";
 import { ChevronRight, Download, Upload, FileSpreadsheet } from "lucide-react";
 import { DEFAULT_REST_DEFAULTS, BACKUP_DATA_KEYS, exportBackupFile, parseBackupFile } from "../utils/backup.js";
+import { hasSchedule } from "../utils/weeklySchedule.js";
+import { getReminderSettings, DEFAULT_REMINDER_TIME } from "../utils/workoutReminders.js";
 
 // ---------------- SETTINGS TAB ----------------
 // Extracted from App.jsx as part of a safe, incremental decomposition pass — this component
@@ -27,6 +29,24 @@ export default function SettingsTab({ state, updateState, onNavigate }) {
     } catch {
       setNotifPermission(notificationPermissionState());
     }
+  };
+  // Same browser permission as above (Notification.permission is global, not per-feature) — a
+  // second named entry point because it's reached from a different gesture (the Workout
+  // Reminders toggle, not Background alerts), each with its own contextual explanation shown
+  // right next to its own button (task Part 3: never request permission without that context).
+  const requestWorkoutReminderAlerts = async () => {
+    if (typeof Notification === "undefined") return;
+    try {
+      const result = await Notification.requestPermission();
+      setNotifPermission(result);
+    } catch {
+      setNotifPermission(notificationPermissionState());
+    }
+  };
+
+  const reminderSettings = getReminderSettings(state);
+  const updateReminderSettings = (patch) => {
+    updateState((prev) => ({ ...prev, reminderSettings: { ...getReminderSettings(prev), ...patch } }));
   };
 
   const handleExport = () => {
@@ -248,6 +268,78 @@ export default function SettingsTab({ state, updateState, onNavigate }) {
           {notifPermission === "denied" && <p className="text-xs text-v5-subtext/70 mt-1">OFF — Notification permission denied</p>}
           {notifPermission === "unsupported" && <p className="text-xs text-v5-subtext/70 mt-1">Not supported in this browser. Foreground sound still works.</p>}
         </div>
+      </div>
+
+      <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Workout Reminders</div>
+        {!hasSchedule(state) ? (
+          <div className="space-y-2">
+            <p className="text-xs text-v5-subtext">Set up your training week first — reminders are tied to your scheduled workout days.</p>
+            <button
+              onClick={() => onNavigate("schedule")}
+              className="px-4 py-2 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
+            >
+              Set up schedule
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-v5-text/90">Remind me on training days</div>
+              <div className="flex gap-1.5 shrink-0 ml-3">
+                <button
+                  onClick={() => updateReminderSettings({ enabled: true, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone })}
+                  className={`px-3 py-1.5 text-[11px] font-bold border ${reminderSettings.enabled ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
+                >
+                  ON
+                </button>
+                <button
+                  onClick={() => updateReminderSettings({ enabled: false })}
+                  className={`px-3 py-1.5 text-[11px] font-bold border ${!reminderSettings.enabled ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"}`}
+                >
+                  OFF
+                </button>
+              </div>
+            </div>
+
+            {reminderSettings.enabled && (
+              <>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-v5-text/90">Reminder time</div>
+                  <input
+                    type="time"
+                    value={reminderSettings.time || DEFAULT_REMINDER_TIME}
+                    onChange={(e) => updateReminderSettings({ time: e.target.value })}
+                    className="bg-v5-dark border border-white/10 text-v5-text text-sm px-3 py-1.5 focus:outline-none focus:border-v5-red/60"
+                  />
+                </div>
+
+                {notifPermission === "default" && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-v5-subtext">
+                      BRK can send a reminder at this time on days you're scheduled to train. It stays quiet on rest days and never fires once that
+                      day's workout is already logged.
+                    </p>
+                    <button
+                      onClick={requestWorkoutReminderAlerts}
+                      className="px-4 py-2 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
+                    >
+                      Allow notifications
+                    </button>
+                  </div>
+                )}
+                {notifPermission === "granted" && <p className="text-xs text-v5-subtext/70">You'll be reminded on scheduled training days.</p>}
+                {notifPermission === "denied" && (
+                  <p className="text-xs text-v5-subtext/70">
+                    Notifications are blocked in your browser settings — BRK will still track your schedule, it just can't alert you until that's
+                    re-enabled.
+                  </p>
+                )}
+                {notifPermission === "unsupported" && <p className="text-xs text-v5-subtext/70">Not supported in this browser.</p>}
+              </>
+            )}
+          </>
+        )}
       </div>
 
       <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">

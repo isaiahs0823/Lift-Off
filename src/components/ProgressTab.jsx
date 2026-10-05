@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ChevronRight, Award, Calendar, TrendingUp, ClipboardCheck, Flame } from "lucide-react";
 import BodyweightTab from "./BodyweightTab.jsx";
 import TrainingCalendar from "./TrainingCalendar.jsx";
@@ -325,9 +325,26 @@ function ProgressLanding({ state, exMap, onDrillDown, onNavigate, onViewAllHisto
   );
 }
 
-export default function ProgressTab({ state, updateState, allExercises, exMap, onNavigate, onViewWorkout, onViewAllHistory }) {
-  const [view, setView] = useState("landing");
+export default function ProgressTab({
+  state,
+  updateState,
+  allExercises,
+  exMap,
+  onNavigate,
+  onViewWorkout,
+  onViewAllHistory,
+  initialView,
+  onConsumedInitialView,
+}) {
+  const [view, setView] = useState(() => initialView || "landing");
   const [selectedMuscle, setSelectedMuscle] = useState(null);
+  // Deep link consumed exactly once at mount — a later direct tap on the Progress nav icon
+  // remounts this component fresh (App.jsx's {tab === "progress" && <ProgressTab/>}), so a stale
+  // initialView from a previous visit is never silently reapplied.
+  useEffect(() => {
+    if (initialView) onConsumedInitialView?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const ratingSnapshots = state.athleteRatingSnapshots || [];
   const latestRating = ratingSnapshots[ratingSnapshots.length - 1] || null;
 

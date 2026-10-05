@@ -30,6 +30,7 @@ import {
   computeScheduleStreak,
   DAY_TYPE_LABEL,
 } from "../utils/weeklySchedule.js";
+import AthleteRatingCard from "./AthleteRatingCard.jsx";
 
 function greeting() {
   const h = new Date().getHours();
@@ -176,6 +177,83 @@ function MissedWorkoutBanner({ missed, state, updateState, onStartRun }) {
         </div>
       )}
     </HeroCard>
+  );
+}
+
+// Reschedule/skip TODAY's own not-yet-missed slot — distinct from MissedWorkoutBanner, which
+// only ever looks backward at already-missed days (getMissedEntry). This never cascades the
+// rest of the week: buildMovePatch/buildSkipPatch only ever touch `today`'s own date entry (plus
+// the single target date for a move), and reuse the exact same skip-vs-move_out/move_in
+// mechanism as the missed-day flow, so SKIP and RESCHEDULE stay two different scheduleLog kinds
+// internally (task Part 2: "these should not be identical internally").
+function TodayRescheduleRow({ today, updateState }) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState(null); // null | "choose" | "skip"
+
+  const moveTo = (dateStr) => {
+    updateState((prev) => ({ ...prev, scheduleLog: [...(prev.scheduleLog || []), ...buildMovePatch(today, dateStr)] }));
+    setOpen(false);
+    setMode(null);
+  };
+  const moveTomorrow = () => moveTo(addDaysStr(new Date().toISOString().slice(0, 10), 1));
+  const confirmSkip = () => {
+    updateState((prev) => ({ ...prev, scheduleLog: [...(prev.scheduleLog || []), buildSkipPatch(today)] }));
+    setOpen(false);
+    setMode(null);
+  };
+
+  const dayOptions = Array.from({ length: 6 }, (_, i) => addDaysStr(new Date().toISOString().slice(0, 10), i + 1));
+
+  if (!open) {
+    return (
+      <div className="flex justify-center">
+        <ButtonText tone="muted" onClick={() => setOpen(true)}>Can't train today?</ButtonText>
+      </div>
+    );
+  }
+
+  return (
+    <Card padding="p-3.5" className="space-y-3">
+      {mode === "skip" ? (
+        <div className="space-y-3">
+          <div className="text-sm text-v5-subtext">
+            Skip {today.label || DAY_TYPE_LABEL[today.type]}? This counts as a missed scheduled session.
+          </div>
+          <div className="flex gap-2">
+            <ButtonPrimary size="sm" onClick={confirmSkip} className="flex-1">Confirm skip</ButtonPrimary>
+            <ButtonSecondary size="sm" onClick={() => setMode(null)} className="flex-1">Cancel</ButtonSecondary>
+          </div>
+        </div>
+      ) : mode === "choose" ? (
+        <div className="space-y-3">
+          <SectionLabel tone="muted">Move to</SectionLabel>
+          <div className="flex flex-wrap gap-2">
+            {dayOptions.map((d) => (
+              <button
+                key={d}
+                onClick={() => moveTo(d)}
+                className="px-3 py-2 rounded-lg text-xs uppercase tracking-widest font-bold bg-v5-elevated text-v5-subtext hover:text-v5-text"
+              >
+                {new Date(d + "T12:00:00").toLocaleDateString(undefined, { weekday: "short" })}
+              </button>
+            ))}
+          </div>
+          <ButtonText tone="muted" onClick={() => setMode(null)}>Cancel</ButtonText>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <SectionLabel tone="muted">Reschedule today</SectionLabel>
+          <div className="flex gap-2">
+            <ButtonSecondary size="sm" onClick={moveTomorrow} className="flex-1">Move to tomorrow</ButtonSecondary>
+            <ButtonSecondary size="sm" onClick={() => setMode("choose")} className="flex-1">Choose another day</ButtonSecondary>
+          </div>
+          <div className="flex items-center justify-between pt-1">
+            <ButtonText tone="muted" onClick={() => setMode("skip")}>Skip session</ButtonText>
+            <ButtonText tone="muted" onClick={() => setOpen(false)}>Cancel</ButtonText>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -468,7 +546,22 @@ function SetupSchedulePrompt({ onSetup, onLater }) {
   );
 }
 
-export default function TodayTab({ state, updateState, exMap, allExercises, activeRun, onStartRun, onStartRecovery, onNavigate, onViewWorkout, onOpenNutrition }) {
+export default function TodayTab({
+  state,
+  updateState,
+  exMap,
+  allExercises,
+  activeRun,
+  onStartRun,
+  onStartRecovery,
+  onNavigate,
+  onViewWorkout,
+  onOpenNutrition,
+  onOpenAthleteRating,
+}) {
+  const ratingSnapshots = state.athleteRatingSnapshots || [];
+  const latestRatingSnapshot = ratingSnapshots[ratingSnapshots.length - 1] || null;
+
   const entries = state.bodyweightLogs || [];
   const currentWeight = latestValue(entries, "weight");
   const avg7 = rollingAverage(entries, "weight", 7);
@@ -587,6 +680,12 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
         <div className="text-2xl font-black text-v5-text tracking-tight">{greeting()}</div>
         <div className="text-xs text-v5-subtext mt-0.5">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
       </div>
+
+      {/* "WHO / WHERE AM I" — the first of Today's two dominant concepts (task Part 1). Compact
+          by design: a one-line status, never the full category/muscle breakdown that lives in
+          Progress (task: "TODAY: quick status, PROGRESS: deep analysis — do not duplicate the
+          full rating dashboard here"). */}
+      <AthleteRatingCard snapshot={latestRatingSnapshot} onOpen={onOpenAthleteRating} compact />
 
       {missedEntry && <MissedWorkoutBanner missed={missedEntry} state={state} updateState={updateState} onStartRun={onStartRun} />}
 
@@ -858,6 +957,10 @@ export default function TodayTab({ state, updateState, exMap, allExercises, acti
             </ButtonText>
           )}
         </HeroCard>
+      )}
+
+      {scheduleOn && todaySchedule && todaySchedule.type && todaySchedule.type !== "rest" && todaySchedule.status !== "completed" && !activeRun && (
+        <TodayRescheduleRow today={todaySchedule} updateState={updateState} />
       )}
 
       {!scheduleOn && !dismissedPrompt && (

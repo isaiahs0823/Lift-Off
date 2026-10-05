@@ -116,6 +116,7 @@ import FoodDetailScreen from "./components/FoodDetailScreen.jsx";
 import { NUTRITION_FOOD_LOGGING_ENABLED } from "./utils/nutritionFeatureFlags.js";
 import { todayDateKey } from "./utils/nutrition.js";
 import { recalcAthleteRatingState, detectRatingEvent } from "./utils/athleteRating.js";
+import { reminderIsDue, getReminderSettings } from "./utils/workoutReminders.js";
 import LevelUpScreen from "./components/LevelUpScreen.jsx";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
 import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
@@ -1305,6 +1306,13 @@ function loadInitialState() {
     coachHistory: [], // { id, date, type: "morning_checkin"|"pre_workout"|"post_workout"|"weekly_review"|"question", question?, message }
     weeklySchedule: null, // { mode: "fixed"|"rolling", fixedDays?, rollingSequence?, rollingCursor?, createdAt } — see src/utils/weeklySchedule.js
     scheduleLog: [], // sparse per-date overrides (skip/move/resolved) — see src/utils/weeklySchedule.js
+    // Workout reminder preferences — only ever set by an explicit opt-in from Settings (task
+    // Part 3: never request notification permission or schedule a reminder on first launch).
+    // null until the athlete opts in. { enabled, time: "HH:MM" (local wall clock), timeZone: IANA
+    // string, lastFiredDateKey } — see src/utils/workoutReminders.js. Deliberately provider-
+    // agnostic: this is "when the athlete wants reminding," not "how BRK delivers it," so a
+    // future Capacitor build's local-notifications scheduler reads the exact same shape.
+    reminderSettings: null,
     recoveryLogs: [], // { id, date, activity, notes } — logged from an Active Recovery scheduled day
     athleteProfile: null, // Coach memory Layer 1 — see src/utils/athleteProfile.js
     coachMemories: [], // Coach memory Layer 3, persisted/evolving — see src/utils/coachMemoryStore.js
@@ -1969,6 +1977,16 @@ export default function LiftLog() {
   // local state would silently reset to "Workout" on every "View Workout" + Back round trip,
   // so a two-tap "Train > History > session" flow would land back on the Workout landing
   // screen instead of History (task: "Train → History → tap session = two taps").
+  // Deep link from Today's compact Athlete Status card straight into Progress's Athlete Rating
+  // detail screen (task: "Tapping Athlete Status should open the full existing Athlete Rating
+  // experience... do NOT duplicate the full rating dashboard on Today"). Consumed once on mount
+  // by ProgressTab, then cleared — otherwise a later direct tap on the Progress nav icon would
+  // incorrectly reopen whatever view was last deep-linked to instead of the normal landing page.
+  const [progressInitialView, setProgressInitialView] = useState(null);
+  const openAthleteRatingFromToday = () => {
+    setProgressInitialView("athleteRating");
+    setTab("progress");
+  };
   const [trainSection, setTrainSection] = useState("workout");
   // Which History filter chip is pre-applied the moment Train > History mounts — "all" for a
   // plain visit, "pr" when arriving via Progress's PRs tile deep link (see viewWorkoutHistory).
@@ -2150,6 +2168,31 @@ export default function LiftLog() {
       }
     })();
   }, [loaded, auth.user, persist]);
+
+  // Workout reminder check — the "strongest reliable architecture the current stack supports"
+  // (task Part 3): BRK has no deployed backend/cron to trigger a real Web Push send while the
+  // app is fully closed (see sw.js and supabase_schema_reminders.sql for that scaffolded-but-
+  // dormant path), so this is the same tier as the existing rest-timer background alert —
+  // reliable whenever BRK is open or backgrounded-but-alive in a live tab, honestly not while
+  // fully closed/suspended. Polls every 20s rather than reacting to state changes, since what
+  // makes a reminder due is the CLOCK, not an edit to state. Reads via a ref so the interval
+  // itself never needs to restart on every state update.
+  const reminderStateRef = useRef(state);
+  useEffect(() => {
+    reminderStateRef.current = state;
+  }, [state]);
+  useEffect(() => {
+    const check = () => {
+      const current = reminderStateRef.current;
+      const plan = reminderIsDue(current);
+      if (!plan) return;
+      showWorkoutReminderNotification(plan);
+      updateState((prev) => ({ ...prev, reminderSettings: { ...getReminderSettings(prev), lastFiredDateKey: plan.dateKey } }));
+    };
+    check();
+    const id = setInterval(check, 20000);
+    return () => clearInterval(id);
+  }, [updateState]);
 
   const allExercises = useMemo(
     () => [...EXERCISE_LIBRARY, ...(state.customExercises || [])],
@@ -2712,6 +2755,7 @@ export default function LiftLog() {
                   onNavigate={setTab}
                   onViewWorkout={viewWorkout}
                   onOpenNutrition={(dest) => goToNutrition("today", dest)}
+                  onOpenAthleteRating={openAthleteRatingFromToday}
                 />
               ))}
             {tab === "workoutDetail" && (
@@ -2918,6 +2962,8 @@ export default function LiftLog() {
                 onNavigate={setTab}
                 onViewWorkout={(sessionId) => viewWorkout(sessionId, "progress")}
                 onViewAllHistory={viewWorkoutHistory}
+                initialView={progressInitialView}
+                onConsumedInitialView={() => setProgressInitialView(null)}
               />
             )}
             {tab === "templates" && (
@@ -4197,6 +4243,33 @@ async function showBackgroundNotification() {
     new Notification(title, options);
   } catch {
     // Best-effort only — never let a notification failure affect the rest timer itself.
+  }
+}
+
+// Workout-reminder notification — same delivery mechanism and the same honest limitation as
+// showBackgroundNotification above (only fires from live, running JS; cannot wake a fully
+// closed/suspended tab — that needs real Web Push, see sw.js's push handler and
+// supabase_schema_reminders.sql for the scaffolded-but-not-yet-deployed path). Kept as a
+// separate function rather than parameterizing showBackgroundNotification because the two have
+// different tags/icons and reminders carry a deepLink for notificationclick to route on.
+async function showWorkoutReminderNotification(plan) {
+  try {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    const options = {
+      body: plan.body,
+      icon: "/apple-touch-icon.png",
+      tag: plan.tag,
+      renotify: true,
+      data: { deepLink: plan.deepLink },
+    };
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(plan.title, options);
+      return;
+    }
+    new Notification(plan.title, options);
+  } catch {
+    // Best-effort only.
   }
 }
 

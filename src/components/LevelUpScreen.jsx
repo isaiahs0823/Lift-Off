@@ -41,8 +41,12 @@ export default function LevelUpScreen({ event, onDismiss }) {
         </div>
 
         {type === "first" && (
-          <div className="text-5xl font-black text-v5-text tabular-nums">
-            {snapshot.ovr} <span className="text-base align-middle text-v5-red uppercase tracking-wide">{snapshot.rank.label}</span>
+          <div className="space-y-1">
+            <div className="text-5xl font-black text-v5-text tabular-nums">
+              {snapshot.ovr}
+              {snapshot.rank && <span className="text-base align-middle text-v5-red uppercase tracking-wide ml-2">{snapshot.rank.label}</span>}
+            </div>
+            {!snapshot.rank && <div className="text-[11px] uppercase tracking-widest text-v5-subtext font-bold">Provisional</div>}
           </div>
         )}
 
