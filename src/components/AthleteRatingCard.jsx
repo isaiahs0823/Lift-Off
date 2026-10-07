@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { Card, SectionLabel, ProgressBar } from "./ui/Kit.jsx";
+import { tierTheme, tierCardStyle } from "../utils/rankTheme.js";
 
 const TIERS = ["Initiate", "Built", "Forged", "Relentless", "Elite", "Champion"];
 
@@ -52,6 +53,8 @@ export default function AthleteRatingCard({ snapshot, onOpen, compact = false })
     pointsToNext = rank.max + 1 - ovr;
   }
 
+  const tier = rank ? tierTheme(rank.tier) : null;
+
   if (compact) {
     return (
       <Card onClick={onOpen} className="flex items-center justify-between gap-2 py-2.5">
@@ -59,7 +62,10 @@ export default function AthleteRatingCard({ snapshot, onOpen, compact = false })
           <span className="text-2xl font-black text-v5-text tabular-nums shrink-0">{ovr}</span>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className={`text-xs font-black uppercase tracking-wide truncate ${isProvisional ? "text-v5-subtext" : "text-v5-red"}`}>
+              <span
+                className={`text-xs font-black uppercase tracking-wide truncate ${isProvisional ? "text-v5-subtext" : ""}`}
+                style={isProvisional ? undefined : { color: tier.color }}
+              >
                 {isProvisional ? "Provisional" : rank.label}
               </span>
               {ovrDelta != null && ovrDelta !== 0 && (
@@ -78,7 +84,12 @@ export default function AthleteRatingCard({ snapshot, onOpen, compact = false })
   }
 
   return (
-    <Card onClick={onOpen} tone="accent" className="space-y-3">
+    <Card
+      onClick={onOpen}
+      tone={tier ? "default" : "accent"}
+      style={tier ? tierCardStyle(rank.tier) : undefined}
+      className="space-y-3"
+    >
       <div className="flex items-center justify-between">
         <SectionLabel tone="red">BRK Athlete</SectionLabel>
         <ChevronRight size={15} className="text-v5-subtext shrink-0" />
@@ -95,7 +106,10 @@ export default function AthleteRatingCard({ snapshot, onOpen, compact = false })
           )}
         </div>
         <div className="text-right">
-          <div className={`text-sm font-black uppercase tracking-wide ${isProvisional ? "text-v5-subtext" : "text-v5-red"}`}>
+          <div
+            className={`text-sm font-black uppercase tracking-wide ${isProvisional ? "text-v5-subtext" : ""}`}
+            style={isProvisional ? undefined : { color: tier.color }}
+          >
             {isProvisional ? "Provisional" : rank.label}
           </div>
         </div>
@@ -105,7 +119,7 @@ export default function AthleteRatingCard({ snapshot, onOpen, compact = false })
       ) : (
         nextTier && (
           <div className="space-y-1">
-            <ProgressBar pct={pct} />
+            <ProgressBar pct={pct} color={tier.color} />
             <div className="text-[11px] text-v5-subtext">
               {pointsToNext} to {nextTier}
             </div>

@@ -73,12 +73,12 @@ const CARD_TONE = {
 // non-hero corner — rounded-lg on mobile, rounded-xl from `sm:` up — HeroCard below overrides it
 // to stay slightly more rounded at every size, per the density pass's "hero cards stay generous,
 // utility cards go tighter/more native" rule (section 9 of the mobile density pass).
-export function Card({ children, tone = "default", onClick, className = "", padding = "p-3.5", radius = "rounded-lg sm:rounded-xl", as }) {
+export function Card({ children, tone = "default", onClick, className = "", padding = "p-3.5", radius = "rounded-lg sm:rounded-xl", as, style }) {
   const base = `${padding} ${radius} text-left transition-colors ${CARD_TONE[tone] || CARD_TONE.default}`;
   const interactive = onClick ? "w-full hover:bg-v5-elevated active:opacity-90" : "";
   const Comp = as || (onClick ? "button" : "div");
   return (
-    <Comp onClick={onClick} className={`${base} ${interactive} ${className}`}>
+    <Comp onClick={onClick} className={`${base} ${interactive} ${className}`} style={style}>
       {children}
     </Comp>
   );
@@ -211,11 +211,14 @@ export function ListRow({ icon: Icon, title, subtitle, onClick, right, tone = "d
 }
 
 // Thin fill bar — mission/goal progress, workout progress, adherence.
-export function ProgressBar({ pct, className = "", trackClassName = "", barClassName = "" }) {
+export function ProgressBar({ pct, className = "", trackClassName = "", barClassName = "", color }) {
   const clamped = Math.max(0, Math.min(100, pct ?? 0));
   return (
     <div className={`h-1.5 bg-v5-muted rounded-full overflow-hidden ${className} ${trackClassName}`}>
-      <div className={`h-full bg-v5-red rounded-full transition-all ${barClassName}`} style={{ width: `${clamped}%` }} />
+      <div
+        className={`h-full rounded-full transition-all ${color ? "" : "bg-v5-red"} ${barClassName}`}
+        style={{ width: `${clamped}%`, ...(color ? { backgroundColor: color } : null) }}
+      />
     </div>
   );
 }

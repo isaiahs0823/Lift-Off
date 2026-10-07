@@ -1,4 +1,7 @@
 import { CATEGORY_WEIGHTS } from "../utils/athleteRating.js";
+import { tierTheme } from "../utils/rankTheme.js";
+
+const BRAND_RED = "#D2262E";
 
 const CATEGORY_LABEL = {
   strength: "Strength",
@@ -19,6 +22,13 @@ export default function LevelUpScreen({ event, onDismiss }) {
 
   const { type, snapshot } = event;
 
+  // The moment picks up the LANDED tier's color — a rank-up should visibly look different from
+  // crossing into a different tier (task: "a rank-up changes what color you are, not just the
+  // number next to it"). A same-tier level-up never changed tiers, so it stays BRK's constant
+  // red; so does a first rating that's still Provisional (no tier yet to color with).
+  const accentTier = type === "rankup" ? event.toRank.tier : type === "first" && snapshot.rank ? snapshot.rank.tier : null;
+  const accent = accentTier ? tierTheme(accentTier).color : BRAND_RED;
+
   // Contributing factors — the categories that actually moved, biggest first, so the athlete can
   // see WHY the number changed (task's closing "they should trust why the number changed").
   const factors =
@@ -32,8 +42,11 @@ export default function LevelUpScreen({ event, onDismiss }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-6">
-      <div className="w-full max-w-sm bg-gradient-to-b from-v5-red/20 via-v5-bg to-v5-bg border border-v5-red/40 rounded-2xl p-6 text-center space-y-5 shadow-[0_0_60px_-10px_rgba(210,38,46,0.5)]">
-        <div className="text-[11px] uppercase tracking-[0.3em] text-v5-red font-bold">
+      <div
+        className="w-full max-w-sm bg-gradient-to-b via-v5-bg to-v5-bg border rounded-2xl p-6 text-center space-y-5"
+        style={{ backgroundImage: `linear-gradient(to bottom, ${accent}33, #0A0A0B, #0A0A0B)`, borderColor: `${accent}66`, boxShadow: `0 0 60px -10px ${accent}80` }}
+      >
+        <div className="text-[11px] uppercase tracking-[0.3em] font-bold" style={{ color: accent }}>
           {type === "first" ? "Athlete Rating" : type === "rankup" ? "Rank Up" : "Athlete Rating"}
         </div>
         <div className="text-2xl font-black uppercase tracking-wide text-v5-text">
@@ -44,7 +57,11 @@ export default function LevelUpScreen({ event, onDismiss }) {
           <div className="space-y-1">
             <div className="text-5xl font-black text-v5-text tabular-nums">
               {snapshot.ovr}
-              {snapshot.rank && <span className="text-base align-middle text-v5-red uppercase tracking-wide ml-2">{snapshot.rank.label}</span>}
+              {snapshot.rank && (
+                <span className="text-base align-middle uppercase tracking-wide ml-2" style={{ color: accent }}>
+                  {snapshot.rank.label}
+                </span>
+              )}
             </div>
             {!snapshot.rank && <div className="text-[11px] uppercase tracking-widest text-v5-subtext font-bold">Provisional</div>}
           </div>
@@ -53,16 +70,20 @@ export default function LevelUpScreen({ event, onDismiss }) {
         {type === "levelup" && (
           <div className="flex items-center justify-center gap-3 text-4xl font-black text-v5-text tabular-nums">
             <span className="text-v5-subtext/60">{event.fromOvr}</span>
-            <span className="text-v5-red">→</span>
+            <span style={{ color: accent }}>→</span>
             <span>{event.toOvr}</span>
           </div>
         )}
 
         {type === "rankup" && (
           <div className="space-y-1">
-            <div className="text-base font-black uppercase tracking-wide text-v5-subtext">{event.fromRank.label}</div>
-            <div className="text-v5-red text-lg">↓</div>
-            <div className="text-xl font-black uppercase tracking-wide text-v5-text">{event.toRank.label}</div>
+            <div className="text-base font-black uppercase tracking-wide" style={{ color: tierTheme(event.fromRank.tier).color }}>
+              {event.fromRank.label}
+            </div>
+            <div className="text-lg" style={{ color: accent }}>↓</div>
+            <div className="text-xl font-black uppercase tracking-wide" style={{ color: accent }}>
+              {event.toRank.label}
+            </div>
           </div>
         )}
 

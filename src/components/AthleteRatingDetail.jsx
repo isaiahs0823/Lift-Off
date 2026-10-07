@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { ChevronLeft, Dumbbell, CalendarCheck, TrendingUp, Moon, Award, Utensils } from "lucide-react";
 import { ScreenHeader, Card, SectionLabel, ProgressBar } from "./ui/Kit.jsx";
 import { explainCategory, CONFIDENCE } from "../utils/athleteRating.js";
+import { tierTheme, tierCardStyle } from "../utils/rankTheme.js";
+import RankLadder from "./RankLadder.jsx";
 
 const CATEGORY_META = {
   strength: { label: "Strength", icon: Dumbbell },
@@ -74,26 +76,31 @@ export default function AthleteRatingDetail({ snapshot, onBack }) {
       </div>
 
       {ovr != null ? (
-        <Card tone="accent" className="text-center space-y-1 py-5">
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-[11px] uppercase tracking-widest text-v5-subtext font-bold">OVR</span>
-            <span className="text-5xl font-black text-v5-text tabular-nums">{ovr}</span>
-          </div>
-          {rank ? (
-            <div className="text-sm font-black uppercase tracking-wide text-v5-red">{rank.label}</div>
-          ) : (
-            <div className="text-sm font-black uppercase tracking-wide text-v5-subtext">Provisional</div>
-          )}
-          <div className="text-[11px] text-v5-subtext">
+        <Card tone={rank ? "default" : "accent"} style={rank ? tierCardStyle(rank.tier) : undefined} className="text-center space-y-3 py-5">
+          <div className="space-y-1">
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-[11px] uppercase tracking-widest text-v5-subtext font-bold">OVR</span>
+              <span className="text-5xl font-black text-v5-text tabular-nums">{ovr}</span>
+            </div>
             {rank ? (
-              <>
-                Based on {qualifiedCount} of 6 rating categories
-                {ovrConfidence === CONFIDENCE.LOW ? " — still establishing confidence" : ""}
-              </>
+              <div className="text-sm font-black uppercase tracking-wide" style={{ color: tierTheme(rank.tier).color }}>
+                {rank.label}
+              </div>
             ) : (
-              "A real first read on limited evidence — Rank unlocks with a bit more training data."
+              <div className="text-sm font-black uppercase tracking-wide text-v5-subtext">Provisional</div>
             )}
+            <div className="text-[11px] text-v5-subtext">
+              {rank ? (
+                <>
+                  Based on {qualifiedCount} of 6 rating categories
+                  {ovrConfidence === CONFIDENCE.LOW ? " — still establishing confidence" : ""}
+                </>
+              ) : (
+                "A real first read on limited evidence — Rank unlocks with a bit more training data."
+              )}
+            </div>
           </div>
+          {rank && <RankLadder currentTier={rank.tier} />}
         </Card>
       ) : (
         <Card className="text-center space-y-1 py-5">
