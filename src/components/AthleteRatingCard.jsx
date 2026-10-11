@@ -6,9 +6,12 @@ const TIERS = ["Initiate", "Built", "Forged", "Relentless", "Elite", "Champion"]
 
 // Shared "how am I doing, in one glance" card — used on both Progress Overview (full) and Today
 // (compact: task "the card should be compact enough that today's workout remains above the fold
-// or very close to it"). Reads the LATEST snapshot only; never computes anything itself. Three
-// states, matching the engine's ovrTier: establishing_baseline (no number at all), provisional
-// (a real but still-thin number, no Rank yet), established (full OVR + Rank + progress bar).
+// or very close to it"). Reads the LATEST snapshot only; never computes anything itself. Two
+// states now (v2 engine): establishing_baseline (no number at all — zero valid lifting history)
+// and a real OVR + Rank, tagged "Provisional" when the lifting evidence behind it is still thin.
+// Rank is never withheld while a number exists (task: "do not show rank as Calibrating when the
+// athlete has a valid provisional or established OVR") — Provisional is a tag ALONGSIDE the real
+// rank, never a replacement for it.
 export default function AthleteRatingCard({ snapshot, onOpen, compact = false }) {
   const ovrTier = snapshot?.ovrTier || "establishing_baseline";
 
@@ -31,29 +34,22 @@ export default function AthleteRatingCard({ snapshot, onOpen, compact = false })
           <ChevronRight size={15} className="text-v5-subtext shrink-0" />
         </div>
         <div className="text-lg font-black text-v5-text">Establishing baseline</div>
-        <p className="text-xs text-v5-subtext">
-          Keep logging workouts — your Athlete Rating reveals itself once BRK has enough real training evidence to trust.
-        </p>
+        <p className="text-xs text-v5-subtext">Log one completed workout — that's all BRK needs to give you a real rating.</p>
       </Card>
     );
   }
 
   const { ovr, ovrDelta, rank } = snapshot;
-  const isProvisional = ovrTier === "provisional" || !rank;
+  const isProvisional = ovrTier === "provisional";
+  const tier = tierTheme(rank.tier);
 
-  // Progress toward the next rank TIER (not sub-level) — only meaningful once established.
-  let nextTier = null;
-  let pct = null;
-  let pointsToNext = null;
-  if (rank) {
-    const tierIdx = TIERS.indexOf(rank.tier);
-    nextTier = tierIdx >= 0 && tierIdx < 5 ? TIERS[tierIdx + 1] : null;
-    const span = rank.max - rank.min + 1;
-    pct = Math.round(((ovr - rank.min) / span) * 100);
-    pointsToNext = rank.max + 1 - ovr;
-  }
-
-  const tier = rank ? tierTheme(rank.tier) : null;
+  // Progress toward the next rank TIER (not sub-level) — always meaningful now, provisional
+  // included, since rank is always computed whenever ovr exists.
+  const tierIdx = TIERS.indexOf(rank.tier);
+  const nextTier = tierIdx >= 0 && tierIdx < 5 ? TIERS[tierIdx + 1] : null;
+  const span = rank.max - rank.min + 1;
+  const pct = Math.round(((ovr - rank.min) / span) * 100);
+  const pointsToNext = rank.max + 1 - ovr;
 
   if (compact) {
     return (
@@ -62,12 +58,10 @@ export default function AthleteRatingCard({ snapshot, onOpen, compact = false })
           <span className="text-2xl font-black text-v5-text tabular-nums shrink-0">{ovr}</span>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span
-                className={`text-xs font-black uppercase tracking-wide truncate ${isProvisional ? "text-v5-subtext" : ""}`}
-                style={isProvisional ? undefined : { color: tier.color }}
-              >
-                {isProvisional ? "Provisional" : rank.label}
+              <span className="text-xs font-black uppercase tracking-wide truncate" style={{ color: tier.color }}>
+                {rank.label}
               </span>
+              {isProvisional && <span className="text-[9px] font-bold text-v5-subtext shrink-0">PROV</span>}
               {ovrDelta != null && ovrDelta !== 0 && (
                 <span className={`text-[11px] font-bold shrink-0 ${ovrDelta > 0 ? "text-v5-success" : "text-v5-red"}`}>
                   {ovrDelta > 0 ? "↑" : "↓"}
@@ -75,7 +69,11 @@ export default function AthleteRatingCard({ snapshot, onOpen, compact = false })
                 </span>
               )}
             </div>
-            {nextTier && <div className="text-[10px] text-v5-subtext truncate">{pointsToNext} to {nextTier}</div>}
+            {nextTier && (
+              <div className="text-[10px] text-v5-subtext truncate">
+                {pointsToNext} to {nextTier}
+              </div>
+            )}
           </div>
         </div>
         <ChevronRight size={15} className="text-v5-subtext shrink-0" />
@@ -84,12 +82,7 @@ export default function AthleteRatingCard({ snapshot, onOpen, compact = false })
   }
 
   return (
-    <Card
-      onClick={onOpen}
-      tone={tier ? "default" : "accent"}
-      style={tier ? tierCardStyle(rank.tier) : undefined}
-      className="space-y-3"
-    >
+    <Card onClick={onOpen} tone="default" style={tierCardStyle(rank.tier)} className="space-y-3">
       <div className="flex items-center justify-between">
         <SectionLabel tone="red">BRK Athlete</SectionLabel>
         <ChevronRight size={15} className="text-v5-subtext shrink-0" />
@@ -106,25 +99,19 @@ export default function AthleteRatingCard({ snapshot, onOpen, compact = false })
           )}
         </div>
         <div className="text-right">
-          <div
-            className={`text-sm font-black uppercase tracking-wide ${isProvisional ? "text-v5-subtext" : ""}`}
-            style={isProvisional ? undefined : { color: tier.color }}
-          >
-            {isProvisional ? "Provisional" : rank.label}
+          <div className="text-sm font-black uppercase tracking-wide" style={{ color: tier.color }}>
+            {rank.label}
           </div>
+          {isProvisional && <div className="text-[9px] uppercase tracking-widest font-bold text-v5-subtext">Provisional</div>}
         </div>
       </div>
-      {isProvisional ? (
-        <p className="text-[11px] text-v5-subtext">A real first read on limited evidence — Rank unlocks once BRK has a bit more to go on.</p>
-      ) : (
-        nextTier && (
-          <div className="space-y-1">
-            <ProgressBar pct={pct} color={tier.color} />
-            <div className="text-[11px] text-v5-subtext">
-              {pointsToNext} to {nextTier}
-            </div>
+      {nextTier && (
+        <div className="space-y-1">
+          <ProgressBar pct={pct} color={tier.color} />
+          <div className="text-[11px] text-v5-subtext">
+            {pointsToNext} to {nextTier}
           </div>
-        )
+        </div>
       )}
     </Card>
   );

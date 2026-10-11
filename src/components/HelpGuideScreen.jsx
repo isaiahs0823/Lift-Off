@@ -102,7 +102,7 @@ function ContactSupportPanel({ onBack }) {
 
 function AboutPanel({ onBack }) {
   return (
-    <SlideInPanel title="About BRK Lift" onBack={onBack}>
+    <SlideInPanel title="About BRK Fit" onBack={onBack}>
       <div className="space-y-2.5 text-sm">
         <div className="flex items-center justify-between">
           <span className="text-v5-subtext">Version</span>
@@ -185,7 +185,7 @@ export default function HelpGuideScreen({ onBack }) {
           <ListRow icon={Download} title="Download user guide" subtitle="Full guide as a PDF" right={<ChevronRight size={15} className="text-v5-subtext shrink-0" />} />
         </a>
         <ListRow icon={Mail} title="Contact support" subtitle="Get help from the BRK team" onClick={() => setScreen({ type: "support" })} />
-        <ListRow icon={Info} title="About BRK Lift" subtitle={`Version ${APP_VERSION}`} onClick={() => setScreen({ type: "about" })} />
+        <ListRow icon={Info} title="About BRK Fit" subtitle={`Version ${APP_VERSION}`} onClick={() => setScreen({ type: "about" })} />
       </div>
     </SlideInPanel>
   );

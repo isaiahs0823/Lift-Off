@@ -71,7 +71,7 @@ export function backupKeyDefault(key) {
 
 export function exportBackupFile(state) {
   const payload = {
-    app: "BRK - Lift",
+    app: "BRK - Fit",
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
     data: Object.fromEntries(BACKUP_DATA_KEYS.map((k) => [k, state[k] ?? backupKeyDefault(k)])),
@@ -81,7 +81,7 @@ export function exportBackupFile(state) {
   const a = document.createElement("a");
   const dateStr = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `brk-lift-backup-${dateStr}.json`;
+  a.download = `brk-fit-backup-${dateStr}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -98,11 +98,11 @@ export function parseBackupFile(text) {
   }
   const data = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed.data || parsed : null;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
-    return { ok: false, error: "That file doesn't look like a BRK - Lift backup." };
+    return { ok: false, error: "That file doesn't look like a BRK - Fit backup." };
   }
   const hasKnownKey = BACKUP_DATA_KEYS.some((k) => k in data);
   if (!hasKnownKey) {
-    return { ok: false, error: "That file doesn't contain any recognizable BRK - Lift data." };
+    return { ok: false, error: "That file doesn't contain any recognizable BRK - Fit data." };
   }
   return { ok: true, data };
 }

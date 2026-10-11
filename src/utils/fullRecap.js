@@ -204,7 +204,7 @@ function setLineForText(row) {
 export function buildFullRecapText(data) {
   if (!data) return "";
   const lines = [];
-  lines.push("BRK LIFT — FULL WORKOUT RECAP");
+  lines.push("BRK FIT — FULL WORKOUT RECAP");
   lines.push("");
   lines.push(`Workout: ${data.planName}`);
   const dateLabel = fmtDateLong(data.finishedAt || data.startedAt);

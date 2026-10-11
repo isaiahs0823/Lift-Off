@@ -1,4 +1,4 @@
-# Lift Log
+# BRK Fit
 
 A workout tracking app: templates, multi-day programs (Titan, Reaper, Berserker,
 Ragnar, Firefighter, Hybrid, Military/First Responder), a custom plan builder,

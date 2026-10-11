@@ -115,7 +115,7 @@ import AddFoodScreen from "./components/AddFoodScreen.jsx";
 import FoodDetailScreen from "./components/FoodDetailScreen.jsx";
 import { NUTRITION_FOOD_LOGGING_ENABLED } from "./utils/nutritionFeatureFlags.js";
 import { todayDateKey } from "./utils/nutrition.js";
-import { recalcAthleteRatingState, detectRatingEvent } from "./utils/athleteRating.js";
+import { recalcAthleteRatingState, detectRatingEvent, RATING_SCHEMA_VERSION } from "./utils/athleteRating.js";
 import { reminderIsDue, getReminderSettings } from "./utils/workoutReminders.js";
 import LevelUpScreen from "./components/LevelUpScreen.jsx";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
@@ -1911,6 +1911,32 @@ export default function LiftLog() {
       if (event) setRatingEvent(event);
     }
   }, [state.athleteRatingSnapshots]);
+  // Bootstraps an Athlete Rating snapshot for an athlete whose local state already has real
+  // lifting history but no snapshot reflecting the CURRENT scoring model yet — covers: a fresh
+  // install reading an existing backup/localStorage, a device that's never finished a workout in
+  // this browser but has history from elsewhere, or simply the first load after a scoring-engine
+  // version bump (RATING_SCHEMA_VERSION in athleteRating.js). Previously `recalcAthleteRatingState`
+  // only ever ran from finishRun/log-edit/log-delete, so an athlete whose history arrived any
+  // other way (restored backup, this exact v1->v2 rewrite) stayed on "Establishing baseline"
+  // forever despite having months of real logs — see the v2 engine's file banner for the full
+  // diagnosis. Deliberately does NOT touch ratingCelebrationPendingRef — this is a silent
+  // backfill, never a celebration (task: never trigger a fake level-up/rank-up just because the
+  // formula changed or history was bulk-imported). Runs once per mount; idempotent by construction
+  // (recomputes from the same state produces the same snapshot), so it can never be farmed by
+  // repeated app opens.
+  const ratingBootstrapDoneRef = useRef(false);
+  useEffect(() => {
+    if (!loaded || ratingBootstrapDoneRef.current) return;
+    ratingBootstrapDoneRef.current = true;
+    const hasHistory = (state.workoutSessions || []).length > 0 || (state.logs || []).length > 0;
+    if (!hasHistory) return;
+    const snapshots = state.athleteRatingSnapshots || [];
+    const latest = snapshots[snapshots.length - 1] || null;
+    if (latest && latest.scoringVersion === RATING_SCHEMA_VERSION) return; // already current
+    updateState((prev) => recalcAthleteRatingState(prev, exMap));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on load by design; re-armed
+    // separately after Supabase hydration below, not by watching state here.
+  }, [loaded]);
   // Lazy-initted straight from localStorage (not loaded in an effect like `state` below) so
   // an in-progress workout is already in place on the very first render — no flash back to
   // the plan-picker tab, and no race with the persist effect right below.
@@ -2154,8 +2180,21 @@ export default function LiftLog() {
       const { data } = await pullWorkoutDataFromSupabase(userId);
       setState((prev) => {
         const merged = mergeRemoteIntoLocal(prev, data);
-        persist(merged);
-        return merged;
+        // Recompute the Athlete Rating when this pull materially changed canonical history (Part
+        // 12: "on cloud hydration or synchronization, recompute when newly available canonical
+        // history materially changes the inputs") or the latest local snapshot simply isn't
+        // current — e.g. a brand-new device whose only history just arrived from the cloud.
+        // Folded into this same updater (not a separate effect) so it reads the actual merged
+        // result, never a stale closure. Silent — never a celebration, this isn't a moment the
+        // athlete "just earned" by opening the app.
+        const addedHistory =
+          (merged.workoutSessions || []).length !== (prev.workoutSessions || []).length ||
+          (merged.logs || []).length !== (prev.logs || []).length;
+        const latestSnap = (merged.athleteRatingSnapshots || [])[(merged.athleteRatingSnapshots || []).length - 1] || null;
+        const needsRecalc = addedHistory || !latestSnap || latestSnap.scoringVersion !== RATING_SCHEMA_VERSION;
+        const next = needsRecalc ? recalcAthleteRatingState(merged, exMap) : merged;
+        persist(next);
+        return next;
       });
       const localPhotoIds = new Set((state.photos || []).map((p) => p.id));
       const newPhotos = await pullNewPhotosFromSupabase(userId, localPhotoIds);
@@ -3071,7 +3110,7 @@ function Header() {
         <img src={BREAK_LOGO} alt="B.R.E.A.K. logo" className="w-7 h-7 rounded-full object-cover ring-1 ring-v5-red/50" />
         <div className="min-w-0">
           <div className="text-v5-text font-black tracking-wide text-sm leading-none">
-            BRK <span className="text-v5-red">-</span> LIFT
+            BRK <span className="text-v5-red">-</span> FIT
           </div>
           {/* truncate (rather than letting the tagline wrap) keeps the header a fixed one-line
               height at every width — at 375px the wide letter-tracking was pushing it to two
@@ -3918,7 +3957,7 @@ function OnboardingView({ state, onStartRun, onGoToTemplates }) {
           className="w-16 h-16 rounded-full object-cover ring-1 ring-red-700/60 mx-auto"
         />
         <div>
-          <div className="text-xl font-bold text-white">Welcome to BRK - Lift</div>
+          <div className="text-xl font-bold text-white">Welcome to BRK - Fit</div>
           <p className="text-sm text-v5-subtext mt-2 max-w-sm mx-auto">
             Log every set, follow a structured multi-day program, and let the app tell you what to lift next. Pick a
             program below to start Day 1 right now.
@@ -4019,7 +4058,7 @@ function PRCallout({ exMap, exId, prs, state, onDismiss }) {
         ))}
       </div>
       <div className="pt-1">
-        <ShareCardButton buildDataUrl={() => buildPRShareCard(exMap[exId]?.name || exId, prs)} filename="brk-lift-pr.png" />
+        <ShareCardButton buildDataUrl={() => buildPRShareCard(exMap[exId]?.name || exId, prs)} filename="brk-fit-pr.png" />
       </div>
     </div>
   );
@@ -8441,11 +8480,11 @@ function PhotoFullView({ photo, onBack, onDelete }) {
     try {
       const res = await fetch(photo.dataUrl);
       const blob = await res.blob();
-      const file = new File([blob], `brk-lift-${photo.date.slice(0, 10)}.jpg`, { type: "image/jpeg" });
+      const file = new File([blob], `brk-fit-${photo.date.slice(0, 10)}.jpg`, { type: "image/jpeg" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "BRK - Lift progress photo" });
+        await navigator.share({ files: [file], title: "BRK - Fit progress photo" });
       } else {
-        await navigator.share({ title: "BRK - Lift progress photo", text: photo.context || "" });
+        await navigator.share({ title: "BRK - Fit progress photo", text: photo.context || "" });
       }
     } catch (e) {
       // user cancelled the share sheet, or sharing failed — nothing to do
@@ -8455,7 +8494,7 @@ function PhotoFullView({ photo, onBack, onDelete }) {
   const handleDownload = () => {
     const a = document.createElement("a");
     a.href = photo.dataUrl;
-    a.download = `brk-lift-${photo.date.slice(0, 10)}.jpg`;
+    a.download = `brk-fit-${photo.date.slice(0, 10)}.jpg`;
     document.body.appendChild(a);
     a.click();
     a.remove();

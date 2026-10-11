@@ -5,7 +5,7 @@ import { Share2, Download, X } from "lucide-react";
 // actually taps Share, since canvas rendering is wasted work otherwise) and previews it in a
 // simple overlay with Save/Share actions. Tries the native share sheet (Web Share API with a
 // file) first on platforms that support it, falls back to a plain download otherwise.
-export default function ShareCardButton({ buildDataUrl, filename = "brk-lift-share.png", label = "Share" }) {
+export default function ShareCardButton({ buildDataUrl, filename = "brk-fit-share.png", label = "Share" }) {
   const [preview, setPreview] = useState(null);
 
   const open = () => {
@@ -23,7 +23,7 @@ export default function ShareCardButton({ buildDataUrl, filename = "brk-lift-sha
       const blob = await res.blob();
       const file = new File([blob], filename, { type: "image/png" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "BRK - Lift" });
+        await navigator.share({ files: [file], title: "BRK - Fit" });
         return;
       }
     } catch (e) {

@@ -52,13 +52,13 @@ export default function WorkoutSharePreview({ session, exMap, state, onClose }) 
 
   const save = async () => {
     if (!dataUrl) return;
-    const filename = `brk-lift-${template}-${sizeId}.png`;
+    const filename = `brk-fit-${template}-${sizeId}.png`;
     try {
       const res = await fetch(dataUrl);
       const blob = await res.blob();
       const file = new File([blob], filename, { type: "image/png" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "BRK - Lift", text: session.planName || "Workout" });
+        await navigator.share({ files: [file], title: "BRK - Fit", text: session.planName || "Workout" });
         return;
       }
     } catch (e) {

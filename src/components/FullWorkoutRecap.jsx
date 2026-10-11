@@ -163,7 +163,7 @@ export default function FullWorkoutRecap({ session, state, exMap, onClose }) {
     try {
       const dataUrl = renderFullRecapImage({ session, exMap, state });
       if (!dataUrl) return;
-      const filename = `brk-lift-full-recap.png`;
+      const filename = `brk-fit-full-recap.png`;
       const res = await fetch(dataUrl);
       const blob = await res.blob();
       const file = new File([blob], filename, { type: "image/png" });
@@ -214,7 +214,7 @@ export default function FullWorkoutRecap({ session, state, exMap, onClose }) {
     <div className="fixed inset-0 z-50 bg-v5-bg flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] shrink-0 bg-v5-bg">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-v5-red font-bold">BRK Lift</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red font-bold">BRK Fit</div>
           <div className="text-sm font-bold text-white">Full Workout Recap</div>
         </div>
         <div className="flex items-center gap-3">

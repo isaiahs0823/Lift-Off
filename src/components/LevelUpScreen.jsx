@@ -1,16 +1,8 @@
-import { CATEGORY_WEIGHTS } from "../utils/athleteRating.js";
 import { tierTheme } from "../utils/rankTheme.js";
 
 const BRAND_RED = "#D2262E";
 
-const CATEGORY_LABEL = {
-  strength: "Strength",
-  consistency: "Consistency",
-  progression: "Progression",
-  recovery: "Recovery",
-  trainingQuality: "Training Quality",
-  nutrition: "Nutrition",
-};
+const BONUS_LABEL = { consistency: "Consistency", trainingQuality: "Training Quality", recovery: "Recovery", nutrition: "Nutrition" };
 
 // The one moment this feature gets dramatic (task: "one place the visual design can become
 // slightly more dramatic") — but still restrained: a static BRK-red glow card, no confetti, no
@@ -26,15 +18,19 @@ export default function LevelUpScreen({ event, onDismiss }) {
   // crossing into a different tier (task: "a rank-up changes what color you are, not just the
   // number next to it"). A same-tier level-up never changed tiers, so it stays BRK's constant
   // red; so does a first rating that's still Provisional (no tier yet to color with).
-  const accentTier = type === "rankup" ? event.toRank.tier : type === "first" && snapshot.rank ? snapshot.rank.tier : null;
+  const accentTier = type === "rankup" ? event.toRank.tier : type === "first" ? snapshot.rank?.tier : null;
   const accent = accentTier ? tierTheme(accentTier).color : BRAND_RED;
 
-  // Contributing factors — the categories that actually moved, biggest first, so the athlete can
-  // see WHY the number changed (task's closing "they should trust why the number changed").
+  // Contributing factors — Lifting Foundation plus whichever bonuses actually moved, biggest
+  // first, so the athlete can see WHY the number changed (task's closing "they should trust why
+  // the number changed"). Foundation's own delta always leads when present — it's the one thing
+  // that can move OVR by more than a point or two.
   const factors =
     type !== "first" && event.priorSnapshot
-      ? Object.keys(CATEGORY_WEIGHTS)
-          .map((key) => ({ key, delta: snapshot.categories[key]?.delta }))
+      ? [
+          { key: "foundation", label: "Lifting Foundation", delta: snapshot.foundation?.delta },
+          ...Object.keys(BONUS_LABEL).map((key) => ({ key, label: `${BONUS_LABEL[key]} Bonus`, delta: snapshot.bonuses?.[key]?.delta })),
+        ]
           .filter((f) => f.delta != null && f.delta !== 0)
           .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
           .slice(0, 3)
@@ -57,13 +53,13 @@ export default function LevelUpScreen({ event, onDismiss }) {
           <div className="space-y-1">
             <div className="text-5xl font-black text-v5-text tabular-nums">
               {snapshot.ovr}
-              {snapshot.rank && (
-                <span className="text-base align-middle uppercase tracking-wide ml-2" style={{ color: accent }}>
-                  {snapshot.rank.label}
-                </span>
-              )}
+              <span className="text-base align-middle uppercase tracking-wide ml-2" style={{ color: accent }}>
+                {snapshot.rank.label}
+              </span>
             </div>
-            {!snapshot.rank && <div className="text-[11px] uppercase tracking-widest text-v5-subtext font-bold">Provisional</div>}
+            {snapshot.ovrTier === "provisional" && (
+              <div className="text-[11px] uppercase tracking-widest text-v5-subtext font-bold">Provisional</div>
+            )}
           </div>
         )}
 
@@ -91,7 +87,7 @@ export default function LevelUpScreen({ event, onDismiss }) {
           <div className="space-y-1.5 text-left bg-v5-elevated/60 rounded-xl p-3">
             {factors.map((f) => (
               <div key={f.key} className="flex items-center justify-between text-xs">
-                <span className="text-v5-subtext">{CATEGORY_LABEL[f.key]}</span>
+                <span className="text-v5-subtext">{f.label}</span>
                 <span className={`font-bold ${f.delta > 0 ? "text-v5-success" : "text-v5-red"}`}>
                   {f.delta > 0 ? "+" : ""}
                   {f.delta}

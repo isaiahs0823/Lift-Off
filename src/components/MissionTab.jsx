@@ -72,7 +72,7 @@ function GoalCard({ goal, state, onOpen, primary }) {
           </div>
         </div>
         <div onClick={(e) => e.stopPropagation()}>
-          <ShareCardButton buildDataUrl={() => buildGoalShareCard(g, pct)} filename="brk-lift-goal.png" />
+          <ShareCardButton buildDataUrl={() => buildGoalShareCard(g, pct)} filename="brk-fit-goal.png" />
         </div>
       </HeroCard>
     );

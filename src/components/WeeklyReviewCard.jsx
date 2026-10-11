@@ -153,7 +153,7 @@ export default function WeeklyReviewCard({ state, exMap }) {
       </div>
 
       <div className="border-t border-white/[0.06] pt-3">
-        <ShareCardButton buildDataUrl={() => buildWeeklyReviewShareCard(review)} filename="brk-lift-weekly-review.png" />
+        <ShareCardButton buildDataUrl={() => buildWeeklyReviewShareCard(review)} filename="brk-fit-weekly-review.png" />
       </div>
     </div>
   );

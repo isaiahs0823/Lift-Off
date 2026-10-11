@@ -41,6 +41,9 @@ export default function MuscleDetailScreen({ group, state, exMap, onBack }) {
                 </span>
               )}
             </div>
+            {data.tier === "provisional" && (
+              <div className="text-[9px] uppercase tracking-widest font-bold text-v5-subtext">Provisional</div>
+            )}
             <p className="text-[11px] text-v5-subtext">{explainMuscle(group, data)}</p>
           </>
         ) : (
