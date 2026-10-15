@@ -148,6 +148,7 @@ import StartWorkoutChoice from "./components/StartWorkoutChoice.jsx";
 import RepeatRecentWorkoutPicker from "./components/RepeatRecentWorkoutPicker.jsx";
 import BreakMeaningPage from "./components/BreakMeaningPage.jsx";
 import ExerciseHistorySheet from "./components/ExerciseHistorySheet.jsx";
+import ProgramBuilder from "./components/ProgramBuilder.jsx";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained).
 // Exported so any screen that needs the official mark (e.g. BreakMeaningPage) reuses this exact
@@ -3079,6 +3080,7 @@ export default function LiftLog() {
                 state={state}
                 updateState={updateState}
                 exMap={exMap}
+                allExercises={allExercises}
                 onStartRun={(plan, programContext) => startRun(plan, "templates", programContext)}
                 onStartRecovery={(routine, programContext) => startRecoverySession(routine, programContext, "templates")}
                 onLogManualRecovery={logManualRecovery}
@@ -3272,7 +3274,7 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, state, updateSta
 // "Recent" and "Custom" are both cheap to derive from state that already exists — usage
 // timestamps from state.logs, and the `custom` flag already carried on every custom exercise —
 // so surfacing them here doesn't need any new stored data.
-function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onBack, onSelect }) {
+export function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onBack, onSelect, subtitle = "This session only — added to the end of your workout" }) {
   const [query, setQuery] = useState("");
   const [muscle, setMuscle] = useState(null); // a muscleGroups value, or the sentinel "Custom"
   const [creatingCustom, setCreatingCustom] = useState(false);
@@ -3325,7 +3327,7 @@ function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onB
   const browsing = !query && !muscle;
 
   return (
-    <SlideInPanel title="Add exercise" subtitle="This session only — added to the end of your workout" onBack={onBack}>
+    <SlideInPanel title="Add exercise" subtitle={subtitle} onBack={onBack}>
       <input
         type="text"
         value={query}
@@ -7331,8 +7333,13 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
 // formatSetPrescription now lives in utils/exercisePrescription.js so TrainTab.jsx (the
 // workout/day preview) can share the exact same formatting instead of reimplementing it.
 
-function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, onLogManualRecovery, onRestartCompletedProgram, onGoToBuild, onViewWorkout, onBack }) {
+function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onStartRecovery, onLogManualRecovery, onRestartCompletedProgram, onGoToBuild, onViewWorkout, onBack }) {
   const [detail, setDetail] = useState(null); // { kind: "program" | "template" | "customPlan" | "customProgram", id }
+  // Program Builder (task: "fully editable training splits") — { programId } to edit an existing
+  // custom program, or { startFrom: <template or program object> } to fork a new editable copy
+  // from a built-in template / blank starting point. Set by the entry points below; cleared by
+  // the builder's own "Done" action, which returns here (never auto-navigates further).
+  const [builderTarget, setBuilderTarget] = useState(null);
   // Frequency-aware program picker (Part 2) — selectedDays starts from the athlete's saved
   // preference (or a pending review's proposed frequency) but is local UI state, never written
   // back to the profile just by browsing. reviewCompare only exists while the athlete arrived via
@@ -7475,6 +7482,22 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
     );
   };
 
+  if (builderTarget) {
+    return (
+      <ProgramBuilder
+        state={state}
+        updateState={updateState}
+        exMap={exMap}
+        allExercises={allExercises}
+        muscleGroups={MUSCLE_GROUPS}
+        programId={builderTarget.programId}
+        startFrom={builderTarget.startFrom}
+        onBack={() => setBuilderTarget(null)}
+        onDone={() => setBuilderTarget(null)}
+      />
+    );
+  }
+
   if (detail?.kind === "customPlan") {
     const p = state.customPlans.find((pl) => pl.id === detail.id);
     if (!p) return null;
@@ -7513,6 +7536,12 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
         subtitle={prog.weeks ? `${prog.days.length} days · ${prog.weeks} weeks` : `${prog.days.length} days`}
         onBack={() => setDetail(null)}
       >
+        <button
+          onClick={() => setBuilderTarget({ programId: prog.id })}
+          className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30 flex items-center justify-center gap-1.5"
+        >
+          <Pencil size={12} /> Edit program
+        </button>
         {prog.days.map((day, di) => (
           <div key={di} className="border-t border-white/[0.06] pt-3">
             <div className="flex items-center justify-between mb-2">
@@ -7662,6 +7691,12 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
         >
           <Plus size={12} /> Add to my program
         </button>
+        <button
+          onClick={() => setBuilderTarget({ startFrom: prog })}
+          className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
+        >
+          <Pencil size={12} /> Edit this program
+        </button>
         {prog.days.map((day, di) =>
           day.type === "recovery" ? (
             recoveryDayRow(prog, day, di, { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: di, totalDays: prog.days.length })
@@ -7797,9 +7832,15 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
         </div>
       )}
 
-      {(state.customPrograms || []).length > 0 && (
-        <div className="space-y-2.5">
-          <SectionLabel>My programs</SectionLabel>
+      <div className="space-y-2.5">
+        {(state.customPrograms || []).length > 0 && <SectionLabel>My programs</SectionLabel>}
+        <button
+          onClick={() => setBuilderTarget({ startFrom: { id: "blank", name: "New Program", days: [] } })}
+          className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-dashed border-white/15 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
+        >
+          <Plus size={12} /> Build a program
+        </button>
+        {(state.customPrograms || []).length > 0 && (
           <div className="space-y-2">
             {state.customPrograms.map((prog) => (
               <ListRow
@@ -7819,8 +7860,8 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
               />
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Frequency-aware picker (Part 2) — "available days -> best-fit split," not "force the
           same split into N days." Built-in/custom programs matching the selected day count are

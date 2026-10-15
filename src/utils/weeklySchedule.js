@@ -10,6 +10,7 @@
 //       createdAt }
 //   DaySlot = { type: "workout"|"conditioning"|"recovery"|"rest", source: Source|null, label }
 //   Source = { kind: "currentProgram" } | { kind: "plan", id } | { kind: "template", id }
+//          | { kind: "programDay", programId, dayId }
 //
 //   state.scheduleLog — sparse, append-only overrides layered on top of the recurring plan:
 //   one entry per calendar date that ever needed something other than the default lookup
@@ -113,6 +114,41 @@ export function buildFixedScheduleFromProgramDays(programDays, existingFixedDays
   return fixedDays;
 }
 
+// Program Builder's own weekday assignment (a program whose days were authored/edited through
+// ProgramBuilder.jsx — see src/utils/programBuilder.js). Unlike suggestFixedScheduleForCurrentProgram
+// above, this pins each weekday to a SPECIFIC day by stable id ({ kind: "programDay", programId,
+// dayId }), never resolveCurrentProgramDay's sequential dayIndex clock — correct by construction
+// (no drift to accept) because a Program Builder program has no "next in sequence" at all: every
+// weekday already names its own day explicitly. A day with `type: "rest"` in the program's own
+// day list becomes a rest slot directly; the remaining weekdays get the program's workout days in
+// order, with a rest day spliced in every 2 to keep the default spacing sane — exactly like
+// suggestFixedScheduleForCurrentProgram's own spacing, just addressed at specific days. Always
+// shown for the athlete to edit afterward (task Part 9/4: calendar assignment stays independently
+// editable from the program's own day content).
+export function suggestWeekdaysForProgramDays(program) {
+  const order = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  const fixedDays = defaultFixedDays();
+  const workDays = (program.days || []).filter((d) => d.type !== "rest");
+  let idx = 0;
+  let sinceRest = 0;
+  for (const key of order) {
+    if (idx >= workDays.length) {
+      fixedDays[key] = emptySlot("rest");
+      continue;
+    }
+    if (sinceRest === 2) {
+      fixedDays[key] = emptySlot("rest");
+      sinceRest = 0;
+      continue;
+    }
+    const day = workDays[idx];
+    fixedDays[key] = { type: "workout", source: { kind: "programDay", programId: program.id, dayId: day.id }, label: day.label };
+    idx++;
+    sinceRest++;
+  }
+  return fixedDays;
+}
+
 export function suggestRollingSequenceForProgram(programDayCount) {
   const seq = [];
   let sinceRest = 0;
@@ -148,6 +184,22 @@ export function buildRunFromSource(state, source) {
     const p = (state.customPlans || []).find((pl) => pl.id === source.id);
     if (!p) return null;
     return { plan: { name: p.name, exercises: p.exercises }, programContext: null };
+  }
+  if (source.kind === "programDay") {
+    const prog = (state.customPrograms || []).find((pr) => pr.id === source.programId);
+    if (!prog) return null;
+    const day = (prog.days || []).find((d) => d.id === source.dayId);
+    if (!day || day.type === "rest") return null;
+    // programContext stays null (same as the "plan" source above) — a Program Builder program has
+    // no sequential dayIndex to advance (every weekday already names its own day explicitly), so
+    // this must never overwrite state.currentProgram the way a real sequential program's
+    // programContext does in startRun(). Session attribution instead rides on the plan's own
+    // sourceProgramId/sourceProgramName/sourceDayLabel fields, which startRun already reads as a
+    // fallback for exactly this case.
+    return {
+      plan: { name: `${prog.name} — ${day.label}`, exercises: day.exercises, sourceProgramId: prog.id, sourceProgramName: prog.name, sourceDayLabel: day.label },
+      programContext: null,
+    };
   }
   if (source.kind === "template") {
     const t = (state.templates || []).find((tp) => tp.id === source.id);
