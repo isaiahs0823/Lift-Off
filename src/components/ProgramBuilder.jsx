@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Minus, GripVertical, MoreHorizontal, Copy, Trash2, ChevronRight, Dumbbell, Calendar, X } from "lucide-react";
+import { Plus, Minus, ChevronUp, ChevronDown, MoreHorizontal, Copy, Trash2, ChevronRight, Dumbbell, Calendar, X } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
 import { Card, SectionLabel, ScreenHeader, ButtonPrimary, ButtonSecondary, ButtonText, Pill } from "./ui/Kit.jsx";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
@@ -24,10 +24,12 @@ import {
   addSuggestedDay,
   SUGGESTED_DAY_FOCUSES,
   suggestDayFocusesForProgram,
+  countTrainingDays,
+  countRestDays,
 } from "../utils/programBuilder.js";
 import { plannedWeeklyVolumeByMuscle } from "../utils/programProposal.js";
-import { WEEKDAYS, WEEKDAY_LABELS, hasSchedule, suggestWeekdaysForProgramDays, defaultFixedDays, emptySlot } from "../utils/weeklySchedule.js";
-import { getReminderSettings, DEFAULT_REMINDER_TIME } from "../utils/workoutReminders.js";
+import { WEEKDAYS, WEEKDAY_LABELS } from "../utils/weeklySchedule.js";
+import ScheduleEditor from "./ScheduleEditor.jsx";
 
 const MIN_DAYS = 1;
 const MAX_DAYS = 7;
@@ -44,15 +46,35 @@ function weekdaysForDay(state, programId, dayId) {
 }
 
 // ---------------- DAY LIST ROW (home screen) ----------------
-function DayRow({ day, index, state, programId, onEdit, onDuplicate, onDelete, dragHandleProps }) {
+// Move-up/move-down buttons, not drag-and-drop (UX audit Phase 1, item 3) — the native HTML5 drag
+// API these replaced (draggable/onDragStart/onDragOver/onDrop) never fires from a real touchscreen
+// tap-and-hold, so reordering was effectively broken on mobile despite working in a mouse-driven
+// browser or a test harness that dispatches synthetic drag events. Buttons work identically on
+// every input type and double as the "clear visual feedback" the row's new position already gives.
+function DayRow({ day, index, state, programId, onEdit, onDuplicate, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const isRest = day.type === "rest";
   const assignedDays = weekdaysForDay(state, programId, day.id);
   return (
     <Card className="flex items-start gap-2.5">
-      <span {...dragHandleProps} className="shrink-0 pt-1 text-v5-subtext/50 cursor-grab active:cursor-grabbing" aria-label="Drag to reorder">
-        <GripVertical size={16} />
-      </span>
+      <div className="shrink-0 flex flex-col -my-1">
+        <button
+          onClick={onMoveUp}
+          disabled={!canMoveUp}
+          className="p-1 text-v5-subtext/70 hover:text-v5-text disabled:opacity-20 disabled:pointer-events-none"
+          aria-label={`Move "${day.label}" up`}
+        >
+          <ChevronUp size={16} />
+        </button>
+        <button
+          onClick={onMoveDown}
+          disabled={!canMoveDown}
+          className="p-1 text-v5-subtext/70 hover:text-v5-text disabled:opacity-20 disabled:pointer-events-none"
+          aria-label={`Move "${day.label}" down`}
+        >
+          <ChevronDown size={16} />
+        </button>
+      </div>
       <button onClick={() => !isRest && onEdit(day.id)} disabled={isRest} className="flex-1 min-w-0 text-left">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-bold text-v5-subtext shrink-0">{index + 1}.</span>
@@ -106,18 +128,22 @@ function DayRow({ day, index, state, programId, onEdit, onDuplicate, onDelete, d
 
 // ---------------- HOME ----------------
 function BuilderHome({ program, state, updateState, onEdit, onAddDay, onOpenSchedule, onClose, setProgram, persist }) {
-  const [dragIndex, setDragIndex] = useState(null);
+  const trainingCount = countTrainingDays(program.days);
+  const restCount = countRestDays(program.days);
+  const atMaxDays = program.days.length >= MAX_DAYS;
 
-  const setDayCount = (next) => {
-    const clamped = Math.max(MIN_DAYS, Math.min(MAX_DAYS, next));
-    if (clamped === program.days.length) return;
-    if (clamped > program.days.length) {
-      persist(addBlankDay(program, `Day ${program.days.length + 1}`));
-      return;
-    }
-    // Removing via the stepper always removes the LAST day — simplest, most predictable rule
-    // (task: "never silently delete programmed exercises").
-    const last = program.days[program.days.length - 1];
+  // "−" always removes a TRAINING day specifically (searching back from the end), never a rest
+  // day, so the number shown always matches what it says — "N Training Days" (UX audit Phase 1,
+  // item 5: "the frequency selector must represent actual training sessions, not the total number
+  // of program entries"). "+" no longer creates a blank day on its own (item 4: it used to, which
+  // meant the stepper and the "Add Day" button right below it looked like two controls for the
+  // same thing but behaved differently) — it now opens the exact same Add Day sheet Add Day does,
+  // so every way of growing the program offers Blank/Duplicate/Suggested/Rest every time.
+  const removeLastTrainingDay = () => {
+    if (trainingCount <= MIN_DAYS) return;
+    const idx = [...program.days].reverse().findIndex((d) => d.type !== "rest");
+    if (idx === -1) return;
+    const last = program.days[program.days.length - 1 - idx];
     if (dayHasContent(last)) {
       if (!window.confirm(`Remove "${last.label}"? It has ${last.exercises.length} exercise${last.exercises.length === 1 ? "" : "s"} programmed — this can't be undone.`)) return;
     }
@@ -133,13 +159,12 @@ function BuilderHome({ program, state, updateState, onEdit, onAddDay, onOpenSche
     persist(removeDay(program, dayId));
   };
 
-  const handleDrop = (toIndex) => {
-    if (dragIndex == null || dragIndex === toIndex) {
-      setDragIndex(null);
-      return;
-    }
-    persist(reorderDays(program, dragIndex, toIndex));
-    setDragIndex(null);
+  // Move-up/move-down (UX audit Phase 1, item 3) — see DayRow's comment for why this replaced
+  // native HTML5 drag-and-drop outright rather than keeping both.
+  const moveDay = (index, delta) => {
+    const toIndex = index + delta;
+    if (toIndex < 0 || toIndex >= program.days.length) return;
+    persist(reorderDays(program, index, toIndex));
   };
 
   return (
@@ -161,43 +186,51 @@ function BuilderHome({ program, state, updateState, onEdit, onAddDay, onOpenSche
         </SectionLabel>
         <div className="flex items-center justify-center gap-5 bg-v5-elevated rounded-xl py-3">
           <button
-            onClick={() => setDayCount(program.days.length - 1)}
-            disabled={program.days.length <= MIN_DAYS}
+            onClick={removeLastTrainingDay}
+            disabled={trainingCount <= MIN_DAYS}
             className="w-10 h-10 rounded-full bg-v5-surface flex items-center justify-center text-v5-text disabled:opacity-30"
             aria-label="Remove a training day"
           >
             <Minus size={18} />
           </button>
-          <span className="text-3xl font-black text-v5-text tabular-nums w-10 text-center">{program.days.length}</span>
+          <span className="text-3xl font-black text-v5-text tabular-nums w-10 text-center">{trainingCount}</span>
           <button
-            onClick={() => setDayCount(program.days.length + 1)}
-            disabled={program.days.length >= MAX_DAYS}
+            onClick={onAddDay}
+            disabled={atMaxDays}
             className="w-10 h-10 rounded-full bg-v5-red flex items-center justify-center text-white disabled:opacity-30"
             aria-label="Add a training day"
           >
             <Plus size={18} />
           </button>
         </div>
+        <div className="text-center text-[11px] text-v5-subtext mt-1.5">
+          {restCount > 0 ? `${trainingCount} Training · ${restCount} Rest Day${restCount === 1 ? "" : "s"}` : "No rest days scheduled yet"}
+        </div>
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-2">
           <SectionLabel tone="muted">Training Days</SectionLabel>
-          <ButtonText icon={Plus} onClick={onAddDay}>
+          <ButtonText icon={Plus} onClick={onAddDay} disabled={atMaxDays} className="disabled:opacity-30 disabled:pointer-events-none">
             Add Day
           </ButtonText>
         </div>
         <div className="space-y-2">
           {program.days.map((day, i) => (
-            <div
+            <DayRow
               key={day.id}
-              draggable
-              onDragStart={() => setDragIndex(i)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => handleDrop(i)}
-            >
-              <DayRow day={day} index={i} state={state} programId={program.id} onEdit={onEdit} onDuplicate={handleDuplicate} onDelete={handleDelete} />
-            </div>
+              day={day}
+              index={i}
+              state={state}
+              programId={program.id}
+              onEdit={onEdit}
+              onDuplicate={handleDuplicate}
+              onDelete={handleDelete}
+              onMoveUp={() => moveDay(i, -1)}
+              onMoveDown={() => moveDay(i, 1)}
+              canMoveUp={i > 0}
+              canMoveDown={i < program.days.length - 1}
+            />
           ))}
           {program.days.length === 0 && (
             <Card className="text-center py-6 text-sm text-v5-subtext">No training days yet — tap "Add Day" to start.</Card>
@@ -309,13 +342,28 @@ function AddDaySheet({ program, state, exMap, allExercises, onBack, onAdded, per
 }
 
 // ---------------- EDIT DAY ----------------
-function ExerciseEditRow({ exercise, index, exMap, onChange, onRemove, dragHandleProps }) {
+function ExerciseEditRow({ exercise, index, exMap, onChange, onRemove, onMoveUp, onMoveDown, canMoveUp, canMoveDown }) {
   const ex = exMap[exercise.exId];
   return (
     <Card className="flex items-start gap-2.5">
-      <span {...dragHandleProps} className="shrink-0 pt-1 text-v5-subtext/50 cursor-grab active:cursor-grabbing">
-        <GripVertical size={15} />
-      </span>
+      <div className="shrink-0 flex flex-col -my-1">
+        <button
+          onClick={onMoveUp}
+          disabled={!canMoveUp}
+          className="p-1 text-v5-subtext/70 hover:text-v5-text disabled:opacity-20 disabled:pointer-events-none"
+          aria-label={`Move ${ex?.name || exercise.exId} up`}
+        >
+          <ChevronUp size={15} />
+        </button>
+        <button
+          onClick={onMoveDown}
+          disabled={!canMoveDown}
+          className="p-1 text-v5-subtext/70 hover:text-v5-text disabled:opacity-20 disabled:pointer-events-none"
+          aria-label={`Move ${ex?.name || exercise.exId} down`}
+        >
+          <ChevronDown size={15} />
+        </button>
+      </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-bold text-v5-text truncate">{ex?.name || exercise.exId}</div>
         <div className="text-[11px] text-v5-subtext">{ex?.muscle}</div>
@@ -354,7 +402,6 @@ function ExerciseEditRow({ exercise, index, exMap, onChange, onRemove, dragHandl
 
 function EditDayScreen({ program, dayId, state, updateState, exMap, allExercises, muscleGroups, onBack, persist }) {
   const [picking, setPicking] = useState(false);
-  const [dragIndex, setDragIndex] = useState(null);
   const day = program.days.find((d) => d.id === dayId);
   if (!day) return null;
 
@@ -364,13 +411,11 @@ function EditDayScreen({ program, dayId, state, updateState, exMap, allExercises
     persist(addExerciseToDay(program, dayId, { exId, sets: 3, reps: 10 }));
     setPicking(false);
   };
-  const handleDrop = (toIndex) => {
-    if (dragIndex == null || dragIndex === toIndex) {
-      setDragIndex(null);
-      return;
-    }
-    persist(reorderExercisesInDay(program, dayId, dragIndex, toIndex));
-    setDragIndex(null);
+  // Move-up/move-down, not drag-and-drop — see DayRow's comment (UX audit Phase 1, item 3).
+  const moveExercise = (index, delta) => {
+    const toIndex = index + delta;
+    if (toIndex < 0 || toIndex >= day.exercises.length) return;
+    persist(reorderExercisesInDay(program, dayId, index, toIndex));
   };
   const handleDuplicateDay = () => {
     persist(duplicateDay(program, dayId));
@@ -419,9 +464,18 @@ function EditDayScreen({ program, dayId, state, updateState, exMap, allExercises
         </div>
         <div className="space-y-2">
           {day.exercises.map((e, i) => (
-            <div key={i} draggable onDragStart={() => setDragIndex(i)} onDragOver={(ev) => ev.preventDefault()} onDrop={() => handleDrop(i)}>
-              <ExerciseEditRow exercise={e} index={i} exMap={exMap} onChange={patchExercise} onRemove={removeExercise} />
-            </div>
+            <ExerciseEditRow
+              key={i}
+              exercise={e}
+              index={i}
+              exMap={exMap}
+              onChange={patchExercise}
+              onRemove={removeExercise}
+              onMoveUp={() => moveExercise(i, -1)}
+              onMoveDown={() => moveExercise(i, 1)}
+              canMoveUp={i > 0}
+              canMoveDown={i < day.exercises.length - 1}
+            />
           ))}
           {day.exercises.length === 0 && <Card className="text-center py-5 text-sm text-v5-subtext">No exercises yet — tap "Add Exercise."</Card>}
         </div>
@@ -440,122 +494,18 @@ function EditDayScreen({ program, dayId, state, updateState, exMap, allExercises
 }
 
 // ---------------- WEEKLY SCHEDULE (scoped to this program) ----------------
-function WeekdayRow({ weekday, slot, program, onChange }) {
-  const [open, setOpen] = useState(false);
-  const label = slot.type === "rest" ? "Rest Day" : slot.label || "Unassigned";
-  return (
-    <div className="border-b border-white/[0.06] last:border-0 py-2.5">
-      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between">
-        <span className="text-sm font-bold text-v5-text w-12 text-left">{WEEKDAY_LABELS[weekday]}</span>
-        <span className="flex-1 text-sm text-v5-subtext text-left">{label}</span>
-        <ChevronRight size={14} className={`text-v5-subtext shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
-      </button>
-      {open && (
-        <div className="mt-2 flex flex-wrap gap-1.5 pl-14">
-          <button
-            onClick={() => {
-              onChange(weekday, emptySlot("rest"));
-              setOpen(false);
-            }}
-            className={`px-2.5 py-1.5 text-xs font-bold border rounded-lg ${
-              slot.type === "rest" ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
-            }`}
-          >
-            Rest
-          </button>
-          {program.days
-            .filter((d) => d.type !== "rest")
-            .map((d) => {
-              const active = slot.source?.kind === "programDay" && slot.source.dayId === d.id;
-              return (
-                <button
-                  key={d.id}
-                  onClick={() => {
-                    onChange(weekday, { type: "workout", source: { kind: "programDay", programId: program.id, dayId: d.id }, label: d.label });
-                    setOpen(false);
-                  }}
-                  className={`px-2.5 py-1.5 text-xs font-bold border rounded-lg truncate max-w-[140px] ${
-                    active ? "bg-v5-red border-v5-red text-white" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
-                  }`}
-                >
-                  {d.label}
-                </button>
-              );
-            })}
-        </div>
-      )}
-    </div>
-  );
-}
-
+// Delegates straight to ScheduleEditor — the ONE scheduling UI in the app (UX audit Phase 1, item
+// 2). This used to be its own hand-rolled Mon-Sun picker with its own autosave behavior, separate
+// from More > Weekly schedule's Fixed/Rolling editor with its explicit Save button — two different
+// interfaces quietly editing the exact same state.weeklySchedule. Passing `program` is what makes
+// ScheduleEditor offer this program's own days (by stable id) as the "workout" source instead of
+// the generic currentProgram/plan/template list it shows everywhere else.
 function ScheduleScreen({ program, state, updateState, onBack }) {
-  const fixedDays = state.weeklySchedule?.mode === "fixed" ? state.weeklySchedule.fixedDays : defaultFixedDays();
-  const reminderSettings = getReminderSettings(state);
-
-  const setSlot = (weekday, slot) => {
-    updateState((prev) => {
-      const prevFixed = prev.weeklySchedule?.mode === "fixed" ? prev.weeklySchedule.fixedDays : defaultFixedDays();
-      return {
-        ...prev,
-        weeklySchedule: { mode: "fixed", fixedDays: { ...prevFixed, [weekday]: slot }, createdAt: prev.weeklySchedule?.createdAt || new Date().toISOString() },
-      };
-    });
-  };
-
-  const applySuggestion = () => {
-    const suggested = suggestWeekdaysForProgramDays(program);
-    updateState((prev) => ({
-      ...prev,
-      weeklySchedule: { mode: "fixed", fixedDays: suggested, createdAt: prev.weeklySchedule?.createdAt || new Date().toISOString() },
-    }));
-  };
-
-  const toggleReminders = () => {
-    updateState((prev) => ({ ...prev, reminderSettings: { ...getReminderSettings(prev), enabled: !getReminderSettings(prev).enabled } }));
-  };
-  const setReminderTime = (time) => {
-    updateState((prev) => ({ ...prev, reminderSettings: { ...getReminderSettings(prev), time } }));
-  };
-
   return (
-    <SlideInPanel title="Edit Schedule" subtitle="Assign your training days to specific weekdays — change this anytime" onBack={onBack}>
-      <div>
-        {WEEKDAYS.filter((w) => w !== "sun").concat("sun").map((weekday) => (
-          <WeekdayRow key={weekday} weekday={weekday} slot={fixedDays[weekday] || emptySlot("rest")} program={program} onChange={setSlot} />
-        ))}
-      </div>
-
-      <ButtonSecondary onClick={applySuggestion}>Suggest a schedule from this program</ButtonSecondary>
-
-      <Card className="space-y-2.5">
-        <div className="flex items-center gap-2">
-          <Calendar size={15} className="text-v5-red" />
-          <div className="text-sm font-bold text-v5-text">Schedule &amp; Reminders</div>
-        </div>
-        <p className="text-[11px] text-v5-subtext">Set workout reminders for your training days.</p>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-v5-text/90">Enable reminders</span>
-          <button
-            onClick={toggleReminders}
-            className={`relative w-11 h-6 rounded-full transition-colors ${reminderSettings.enabled ? "bg-v5-red" : "bg-v5-muted"}`}
-            aria-pressed={reminderSettings.enabled}
-          >
-            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${reminderSettings.enabled ? "translate-x-5" : "translate-x-0.5"}`} />
-          </button>
-        </div>
-        {reminderSettings.enabled && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-v5-text/90">Reminder time</span>
-            <input
-              type="time"
-              value={reminderSettings.time || DEFAULT_REMINDER_TIME}
-              onChange={(e) => setReminderTime(e.target.value)}
-              className="bg-v5-elevated border border-white/10 text-v5-text text-sm px-2.5 py-1.5 rounded focus:outline-none focus:border-v5-red/60"
-            />
-          </div>
-        )}
-      </Card>
-    </SlideInPanel>
+    <div className="space-y-4">
+      <ScheduleEditor state={state} updateState={updateState} program={program} onBack={onBack} />
+      <p className="text-[11px] text-v5-subtext/70 text-center">Workout reminders are set in More → Settings.</p>
+    </div>
   );
 }
 

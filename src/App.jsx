@@ -149,6 +149,7 @@ import RepeatRecentWorkoutPicker from "./components/RepeatRecentWorkoutPicker.js
 import BreakMeaningPage from "./components/BreakMeaningPage.jsx";
 import ExerciseHistorySheet from "./components/ExerciseHistorySheet.jsx";
 import ProgramBuilder from "./components/ProgramBuilder.jsx";
+import { trainingDayCountLabel, countTrainingDays } from "./utils/programBuilder.js";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained).
 // Exported so any screen that needs the official mark (e.g. BreakMeaningPage) reuses this exact
@@ -1950,6 +1951,11 @@ export default function LiftLog() {
   const [state, setState] = useState(loadInitialState());
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("today");
+  // "Start This Program" success feedback (UX audit Phase 1, item 1) — deliberately NOT part of
+  // `state`/localStorage: it's a one-shot "you just did this" banner for Today, not durable data,
+  // and never needs to survive a reload or sync to another device. TodayTab clears it itself after
+  // a few seconds or on manual dismiss.
+  const [activationNotice, setActivationNotice] = useState(null); // { programName, dayLabel } | null
   // Optional cloud sync (hybrid: localStorage stays the source of truth signed-out AND
   // signed-in — this only ever backs state up to Supabase and fills in gaps from other
   // devices, never replaces what's already here). See src/utils/supabaseSync.js.
@@ -2384,6 +2390,44 @@ export default function LiftLog() {
         return { ...prev, currentProgram: { ...programContext, startDate, selectedForDays }, programDayOverride, hasSeenOnboarding: true };
       });
     }
+  };
+  // "Start This Program" (UX audit Phase 1, item 1) — the ONE action that makes a program the
+  // athlete's active program, replacing the old "Add to my program" button that copied a program
+  // into customPrograms without ever activating anything or saying so. Deliberately separate from
+  // startRun: activating a program must never begin a workout logging session (no activeRun) —
+  // Today picks up the new currentProgram on its own via resolveTodayWorkout, same as it already
+  // does after a per-day "Start workout" tap. Always starts at day 0; an athlete reactivating a
+  // program they're mid-way through uses "Set as today"/a day's own "Start workout" instead, not
+  // this (the detail screen swaps this button for a "Currently active" state once it's reactivated
+  // this is the first time for it, matching the pre-existing isCurrent/isCurrentCustom checks).
+  const activateProgram = (program, source) => {
+    const prevCP = state.currentProgram;
+    const isReplacing = prevCP && (prevCP.programId !== program.id || prevCP.source !== source);
+    if (isReplacing) {
+      const ok = window.confirm(
+        `Make "${program.name}" your active program?\n\nThis replaces "${prevCP.programName}" as your active program assignment. Nothing is deleted — your workout history and "${prevCP.programName}"'s own progress are kept exactly as they are.`
+      );
+      if (!ok) return;
+    }
+    updateState((prev) => ({
+      ...prev,
+      currentProgram: {
+        programId: program.id,
+        programName: program.name,
+        source,
+        dayIndex: 0,
+        totalDays: program.days.length,
+        startDate: new Date().toISOString(),
+        lastCompletedAt: null,
+        lastCompletedDayIndex: null,
+        selectedForDays: prev.athleteProfile?.preferredDays ?? null,
+      },
+      programDayOverride: null,
+      pendingFrequencyReview: null,
+      hasSeenOnboarding: true,
+    }));
+    setActivationNotice({ programName: program.name, dayLabel: program.days[0]?.label ?? null });
+    setTab("today");
   };
   // Naming is entirely optional (see StartWorkoutChoice/GuidedRunView) — this just lets an
   // athlete who started a Blank/Repeat workout give it a real name at any point, right up to
@@ -2865,6 +2909,8 @@ export default function LiftLog() {
                   onViewWorkout={viewWorkout}
                   onOpenNutrition={(dest) => goToNutrition("today", dest)}
                   onOpenAthleteRating={openAthleteRatingFromToday}
+                  activationNotice={activationNotice}
+                  onDismissActivationNotice={() => setActivationNotice(null)}
                 />
               ))}
             {tab === "workoutDetail" && (
@@ -3086,6 +3132,7 @@ export default function LiftLog() {
                 onLogManualRecovery={logManualRecovery}
                 onRestartCompletedProgram={restartProgramById}
                 onGoToBuild={() => setTab("build")}
+                onActivateProgram={activateProgram}
                 onViewWorkout={(sessionId) => viewWorkout(sessionId, "templates")}
                 onBack={() => setTab("train")}
               />
@@ -7333,7 +7380,7 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
 // formatSetPrescription now lives in utils/exercisePrescription.js so TrainTab.jsx (the
 // workout/day preview) can share the exact same formatting instead of reimplementing it.
 
-function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onStartRecovery, onLogManualRecovery, onRestartCompletedProgram, onGoToBuild, onViewWorkout, onBack }) {
+function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onStartRecovery, onLogManualRecovery, onRestartCompletedProgram, onGoToBuild, onActivateProgram, onViewWorkout, onBack }) {
   const [detail, setDetail] = useState(null); // { kind: "program" | "template" | "customPlan" | "customProgram", id }
   // Program Builder (task: "fully editable training splits") — { programId } to edit an existing
   // custom program, or { startFrom: <template or program object> } to fork a new editable copy
@@ -7380,18 +7427,6 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
       isCustom: true,
     };
     updateState((prev) => ({ ...prev, customPlans: [...prev.customPlans, newPlan] }));
-  };
-
-  const copyProgramToCustom = (program) => {
-    const newProgram = {
-      id: `program_${Date.now()}`,
-      name: program.name,
-      tagline: program.tagline,
-      weeks: program.weeks,
-      days: program.days,
-      isCustom: true,
-    };
-    updateState((prev) => ({ ...prev, customPrograms: [...(prev.customPrograms || []), newProgram] }));
   };
 
   const currentProgramDay = useMemo(() => resolveCurrentProgramDay(state), [state]);
@@ -7533,15 +7568,29 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
     return (
       <SlideInPanel
         title={prog.name}
-        subtitle={prog.weeks ? `${prog.days.length} days · ${prog.weeks} weeks` : `${prog.days.length} days`}
+        subtitle={trainingDayCountLabel(prog.days)}
         onBack={() => setDetail(null)}
       >
-        <button
-          onClick={() => setBuilderTarget({ programId: prog.id })}
-          className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30 flex items-center justify-center gap-1.5"
-        >
-          <Pencil size={12} /> Edit program
-        </button>
+        <div className="space-y-2">
+          {isCurrentCustom(prog.id) ? (
+            <div className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red/40 bg-v5-red/10 text-v5-red flex items-center justify-center gap-1.5">
+              <Check size={12} /> Currently active
+            </div>
+          ) : (
+            <button
+              onClick={() => onActivateProgram(prog, "custom")}
+              className="w-full py-2.5 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 flex items-center justify-center gap-1.5"
+            >
+              <Play size={12} /> Start this program
+            </button>
+          )}
+          <button
+            onClick={() => setBuilderTarget({ programId: prog.id })}
+            className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
+          >
+            <Pencil size={12} /> Customize program
+          </button>
+        </div>
         {prog.days.map((day, di) => (
           <div key={di} className="border-t border-white/[0.06] pt-3">
             <div className="flex items-center justify-between mb-2">
@@ -7671,9 +7720,11 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
               <span className="text-v5-subtext">{state.currentProgram?.programName || "No active program"}</span>
               {` (${reviewCompare.fromDays} days) → `}
               <span className="text-white font-bold">{prog.name}</span>
-              {` (${prog.days.length} days)`}
+              {` (${countTrainingDays(prog.days)} days)`}
             </div>
-            <div className="text-xs text-v5-subtext">Approximate weekly volume: {totalWeeklySets(prog)} sets across {prog.days.length} sessions</div>
+            <div className="text-xs text-v5-subtext">
+              Approximate weekly volume: {totalWeeklySets(prog)} sets across {countTrainingDays(prog.days)} sessions
+            </div>
             <button
               onClick={() => {
                 setReviewCompare(null);
@@ -7685,18 +7736,26 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
             </button>
           </div>
         )}
-        <button
-          onClick={() => copyProgramToCustom(prog)}
-          className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30 flex items-center justify-center gap-1.5"
-        >
-          <Plus size={12} /> Add to my program
-        </button>
-        <button
-          onClick={() => setBuilderTarget({ startFrom: prog })}
-          className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
-        >
-          <Pencil size={12} /> Edit this program
-        </button>
+        <div className="space-y-2">
+          {isCurrent(prog.id) ? (
+            <div className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red/40 bg-v5-red/10 text-v5-red flex items-center justify-center gap-1.5">
+              <Check size={12} /> Currently active
+            </div>
+          ) : (
+            <button
+              onClick={() => onActivateProgram(prog, "builtin")}
+              className="w-full py-2.5 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 flex items-center justify-center gap-1.5"
+            >
+              <Play size={12} /> Start this program
+            </button>
+          )}
+          <button
+            onClick={() => setBuilderTarget({ startFrom: prog })}
+            className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
+          >
+            <Pencil size={12} /> Customize program
+          </button>
+        </div>
         {prog.days.map((day, di) =>
           day.type === "recovery" ? (
             recoveryDayRow(prog, day, di, { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: di, totalDays: prog.days.length })
@@ -7856,7 +7915,7 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
                     )}
                   </span>
                 }
-                subtitle={`${prog.days.length} days${prog.weeks ? ` · ${prog.weeks} weeks` : ""}`}
+                subtitle={`${trainingDayCountLabel(prog.days)}${prog.weeks ? ` · ${prog.weeks} weeks` : ""}`}
               />
             ))}
           </div>
@@ -7962,7 +8021,7 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
         }
         if (!featured) featured = all[0];
         const others = all.filter((p) => p.id !== featured.id);
-        const daysPerWeek = (prog) => prog.trainingDays || prog.days?.length || null;
+        const daysPerWeek = (prog) => prog.trainingDays || countTrainingDays(prog.days) || null;
         return (
           <>
             <div className="space-y-2.5">

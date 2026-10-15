@@ -8,17 +8,20 @@ import {
   defaultFixedDays,
   suggestFixedScheduleForCurrentProgram,
   suggestRollingSequenceForProgram,
+  suggestWeekdaysForProgramDays,
+  suggestRollingSequenceForProgramDays,
 } from "../utils/weeklySchedule.js";
 import { resolveCurrentProgramDay } from "../utils/programSchedule.js";
 
 const DISPLAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const TYPE_ICON = { workout: Dumbbell, conditioning: Timer, recovery: Wind, rest: Moon };
 
-function defaultLabelFor(type, source, state) {
+function defaultLabelFor(type, source, state, program) {
   if (type === "rest") return "Rest";
   if (type === "recovery") return "Active Recovery";
   if (!source) return type === "conditioning" ? "Conditioning" : "Training day";
   if (source.kind === "currentProgram") return "Training day";
+  if (source.kind === "programDay") return (program?.days || []).find((d) => d.id === source.dayId)?.label || "Training day";
   if (source.kind === "plan") return (state.customPlans || []).find((p) => p.id === source.id)?.name || "Training day";
   if (source.kind === "template") return (state.templates || []).find((t) => t.id === source.id)?.name || "Training day";
   return type === "conditioning" ? "Conditioning" : "Training day";
@@ -28,14 +31,21 @@ function defaultLabelFor(type, source, state) {
 // flat list of sources to pick from, then an editable label. Used for both a fixed weekday row
 // and a rolling sequence-position row, so the "tap to replace assignment" flow feels identical
 // either way per the spec.
-function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
+function SlotEditor({ slot, onChange, state, hasCurrentProgram, program }) {
   const setType = (type) => {
     const source = type === "workout" || type === "conditioning" ? slot.source : null;
-    onChange({ type, source, label: defaultLabelFor(type, source, state) });
+    onChange({ type, source, label: defaultLabelFor(type, source, state, program) });
   };
-  const setSource = (source) => onChange({ ...slot, source, label: defaultLabelFor(slot.type, source, state) });
+  const setSource = (source) => onChange({ ...slot, source, label: defaultLabelFor(slot.type, source, state, program) });
 
   const showSource = slot.type === "workout" || slot.type === "conditioning";
+  // Scoped to one program (opened from its own Program Builder) — the only meaningful "workout"
+  // sources are THIS program's own days, pinned by stable id (UX audit Phase 1, item 2: "Program
+  // structure and calendar scheduling must remain separate... Upper A remains Upper A regardless
+  // of whether it's scheduled for Monday or Wednesday" — picking a specific day here never touches
+  // that day's own exercises). Falls back to the generic currentProgram/plan/template list below
+  // when there's no program in scope, e.g. opened from More > Weekly schedule.
+  const programDays = program ? (program.days || []).filter((d) => d.type !== "rest") : [];
 
   return (
     <div className="space-y-3 pt-3">
@@ -61,47 +71,69 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
       {showSource && (
         <div className="space-y-1.5">
           <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">Source</div>
-          <button
-            onClick={() => setSource(null)}
-            disabled={!hasCurrentProgram && slot.type === "workout"}
-            className={`w-full text-left px-3 py-2 text-sm border ${
-              !slot.source ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
-            } ${!hasCurrentProgram && slot.type === "workout" ? "opacity-40 cursor-not-allowed" : ""}`}
-          >
-            {slot.type === "conditioning" ? "No specific plan — open Cardio when it's due" : "Whatever's next — no specific plan"}
-          </button>
-          {hasCurrentProgram && (
-            <button
-              onClick={() => setSource({ kind: "currentProgram" })}
-              className={`w-full text-left px-3 py-2 text-sm border ${
-                slot.source?.kind === "currentProgram" ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
-              }`}
-            >
-              Current program — next day in rotation
-            </button>
+          {program && slot.type === "workout" ? (
+            programDays.length === 0 ? (
+              <div className="text-xs text-v5-subtext/70 px-3 py-2 border border-white/10">This program has no training days to assign yet.</div>
+            ) : (
+              programDays.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => setSource({ kind: "programDay", programId: program.id, dayId: d.id })}
+                  className={`w-full text-left px-3 py-2 text-sm border truncate ${
+                    slot.source?.kind === "programDay" && slot.source.dayId === d.id ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))
+            )
+          ) : (
+            <>
+              <button
+                onClick={() => setSource(null)}
+                disabled={!hasCurrentProgram && slot.type === "workout"}
+                className={`w-full text-left px-3 py-2 text-sm border ${
+                  !slot.source ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
+                } ${!hasCurrentProgram && slot.type === "workout" ? "opacity-40 cursor-not-allowed" : ""}`}
+              >
+                {slot.type === "conditioning" ? "No specific plan — open Cardio when it's due" : "Whatever's next — no specific plan"}
+              </button>
+              {hasCurrentProgram && (
+                <button
+                  onClick={() => setSource({ kind: "currentProgram" })}
+                  className={`w-full text-left px-3 py-2 text-sm border ${
+                    slot.source?.kind === "currentProgram" ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
+                  }`}
+                >
+                  Current program — next day in rotation
+                </button>
+              )}
+            </>
           )}
-          {(state.customPlans || []).map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setSource({ kind: "plan", id: p.id })}
-              className={`w-full text-left px-3 py-2 text-sm border truncate ${
-                slot.source?.kind === "plan" && slot.source.id === p.id ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
-              }`}
-            >
-              {p.name}
-            </button>
-          ))}
-          {(state.templates || []).map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setSource({ kind: "template", id: t.id })}
-              className={`w-full text-left px-3 py-2 text-sm border truncate ${
-                slot.source?.kind === "template" && slot.source.id === t.id ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
-              }`}
-            >
-              {t.name}
-            </button>
-          ))}
+          {!(program && slot.type === "workout") &&
+            (state.customPlans || []).map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setSource({ kind: "plan", id: p.id })}
+                className={`w-full text-left px-3 py-2 text-sm border truncate ${
+                  slot.source?.kind === "plan" && slot.source.id === p.id ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
+                }`}
+              >
+                {p.name}
+              </button>
+            ))}
+          {!(program && slot.type === "workout") &&
+            (state.templates || []).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setSource({ kind: "template", id: t.id })}
+                className={`w-full text-left px-3 py-2 text-sm border truncate ${
+                  slot.source?.kind === "template" && slot.source.id === t.id ? "border-v5-red text-white bg-v5-red/20" : "border-white/10 text-v5-subtext hover:border-v5-red/40"
+                }`}
+              >
+                {t.name}
+              </button>
+            ))}
         </div>
       )}
 
@@ -118,7 +150,7 @@ function SlotEditor({ slot, onChange, state, hasCurrentProgram }) {
   );
 }
 
-function SlotRow({ title, slot, expanded, onToggle, onChange, onRemove, state, hasCurrentProgram }) {
+function SlotRow({ title, slot, expanded, onToggle, onChange, onRemove, state, hasCurrentProgram, program }) {
   const Icon = TYPE_ICON[slot.type];
   return (
     <div className="border border-white/10 bg-v5-elevated">
@@ -139,37 +171,53 @@ function SlotRow({ title, slot, expanded, onToggle, onChange, onRemove, state, h
       </button>
       {expanded && (
         <div className="px-4 pb-4">
-          <SlotEditor slot={slot} onChange={onChange} state={state} hasCurrentProgram={hasCurrentProgram} />
+          <SlotEditor slot={slot} onChange={onChange} state={state} hasCurrentProgram={hasCurrentProgram} program={program} />
         </div>
       )}
     </div>
   );
 }
 
-export default function ScheduleEditor({ state, updateState, onBack }) {
+// The ONE scheduling UI in the app (UX audit Phase 1, item 2 — "Consolidate scheduling into a
+// reusable component... Athletes should be able to access scheduling from the Program Builder and
+// their active program without encountering different interfaces"). Opened from More > Weekly
+// schedule with no `program` prop, it behaves exactly as it always has — generic sources
+// (currentProgram/plan/template). Opened from a specific program's own Program Builder with
+// `program` passed, its "workout" source list becomes that program's own days instead (pinned by
+// stable id via the `programDay` source kind — see weeklySchedule.js), so assigning a weekday to
+// Upper A never touches Upper A's own exercises (task Part 4/item 2's "Upper A remains Upper A").
+// Either way: one component, one save mechanism (the explicit Save button below, with the same
+// "Schedule saved." confirmation both contexts already shared before this consolidation).
+export default function ScheduleEditor({ state, updateState, onBack, program }) {
   const existing = state.weeklySchedule;
   const programDay = useMemo(() => resolveCurrentProgramDay(state), [state]);
   const hasCurrentProgram = !!(programDay && !programDay.isComplete);
   const programDayCount = programDay?.totalDays || 0;
 
   const [mode, setMode] = useState(existing?.mode || "fixed");
-  // First-time setup (no saved schedule yet) with an active program opens ALREADY populated from
-  // that program — task: "add a scheduling step to program setup" — rather than a blank week the
-  // athlete has to build from scratch. Editing/removing an already-saved schedule is untouched;
-  // this only changes what a brand-new schedule starts from.
-  const [fixedDays, setFixedDays] = useState(() =>
-    existing?.fixedDays || (hasCurrentProgram ? suggestFixedScheduleForCurrentProgram(programDayCount) : defaultFixedDays())
-  );
-  const [rollingSequence, setRollingSequence] = useState(() =>
-    existing?.rollingSequence || (hasCurrentProgram ? suggestRollingSequenceForProgram(programDayCount) : [])
-  );
+  // First-time setup (no saved schedule yet) opens ALREADY populated with a suggestion — from the
+  // specific `program` in scope when there is one, else from whatever's currently active (task:
+  // "add a scheduling step to program setup") — rather than a blank week the athlete has to build
+  // from scratch. Editing/removing an already-saved schedule is untouched; this only changes what
+  // a brand-new schedule starts from.
+  const [fixedDays, setFixedDays] = useState(() => {
+    if (existing?.fixedDays) return existing.fixedDays;
+    if (program) return suggestWeekdaysForProgramDays(program);
+    return hasCurrentProgram ? suggestFixedScheduleForCurrentProgram(programDayCount) : defaultFixedDays();
+  });
+  const [rollingSequence, setRollingSequence] = useState(() => {
+    if (existing?.rollingSequence) return existing.rollingSequence;
+    if (program) return suggestRollingSequenceForProgramDays(program);
+    return hasCurrentProgram ? suggestRollingSequenceForProgram(programDayCount) : [];
+  });
   const [expandedKey, setExpandedKey] = useState(null);
   const [saved, setSaved] = useState(false);
 
+  const canSuggest = !!program || hasCurrentProgram;
   const applySuggestion = () => {
-    if (!hasCurrentProgram) return;
-    if (mode === "fixed") setFixedDays(suggestFixedScheduleForCurrentProgram(programDayCount));
-    else setRollingSequence(suggestRollingSequenceForProgram(programDayCount));
+    if (!canSuggest) return;
+    if (mode === "fixed") setFixedDays(program ? suggestWeekdaysForProgramDays(program) : suggestFixedScheduleForCurrentProgram(programDayCount));
+    else setRollingSequence(program ? suggestRollingSequenceForProgramDays(program) : suggestRollingSequenceForProgram(programDayCount));
     setSaved(false);
   };
 
@@ -222,6 +270,7 @@ export default function ScheduleEditor({ state, updateState, onBack }) {
         <div>
           <div className="text-[11px] uppercase tracking-widest text-v5-red">Weekly schedule</div>
           <div className="text-xl font-bold text-white mt-1">When do you train?</div>
+          {program && <div className="text-xs text-v5-subtext mt-0.5">Assigning weekdays for {program.name}</div>}
         </div>
         {onBack && (
           <button onClick={onBack} className="text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-red">
@@ -253,9 +302,9 @@ export default function ScheduleEditor({ state, updateState, onBack }) {
         </p>
       </div>
 
-      {hasCurrentProgram && (
+      {canSuggest && (
         <button onClick={applySuggestion} className="text-[11px] uppercase tracking-widest text-v5-red hover:text-v5-red">
-          Suggest a schedule from my current program
+          {program ? `Suggest a schedule from ${program.name}` : "Suggest a schedule from my current program"}
         </button>
       )}
 
@@ -271,6 +320,7 @@ export default function ScheduleEditor({ state, updateState, onBack }) {
               onChange={(patch) => updateFixedSlot(key, patch)}
               state={state}
               hasCurrentProgram={hasCurrentProgram}
+              program={program}
             />
           ))}
         </div>
@@ -301,6 +351,7 @@ export default function ScheduleEditor({ state, updateState, onBack }) {
                   onRemove={() => removeRollingSlot(idx)}
                   state={state}
                   hasCurrentProgram={hasCurrentProgram}
+                  program={program}
                 />
               </div>
             </div>

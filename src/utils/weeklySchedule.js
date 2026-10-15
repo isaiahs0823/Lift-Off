@@ -163,6 +163,26 @@ export function suggestRollingSequenceForProgram(programDayCount) {
   return seq;
 }
 
+// Rolling-mode counterpart to suggestWeekdaysForProgramDays — same "pin each slot to a specific
+// day by stable id" reasoning, just producing a sequence instead of a Mon-Sun map (UX audit Phase
+// 1, item 2: the schedule editor needs to offer this for a Program-Builder program under EITHER
+// mode, not just Fixed).
+export function suggestRollingSequenceForProgramDays(program) {
+  const workDays = (program.days || []).filter((d) => d.type !== "rest");
+  const seq = [];
+  let sinceRest = 0;
+  for (let i = 0; i < workDays.length; i++) {
+    const day = workDays[i];
+    seq.push({ type: "workout", source: { kind: "programDay", programId: program.id, dayId: day.id }, label: day.label });
+    sinceRest++;
+    if (sinceRest === 2 && i < workDays.length - 1) {
+      seq.push(emptySlot("rest"));
+      sinceRest = 0;
+    }
+  }
+  return seq;
+}
+
 // ---------- source resolution ----------
 // Turns a DaySlot's `source` into the same { plan, programContext } shape startRun() already
 // expects everywhere else in the app (TrainTab, TemplatesTab, BuildPlanTab) — so starting a

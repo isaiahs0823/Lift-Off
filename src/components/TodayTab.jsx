@@ -558,6 +558,8 @@ export default function TodayTab({
   onViewWorkout,
   onOpenNutrition,
   onOpenAthleteRating,
+  activationNotice,
+  onDismissActivationNotice,
 }) {
   const ratingSnapshots = state.athleteRatingSnapshots || [];
   const latestRatingSnapshot = ratingSnapshots[ratingSnapshots.length - 1] || null;
@@ -644,6 +646,14 @@ export default function TodayTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.workoutSessions, state.cardioLogs, state.logs, state.bodyweightLogs, state.readinessLogs, state.scheduleLog, state.weeklySchedule]);
 
+  // "Start This Program" success banner (UX audit Phase 1, item 1) — auto-dismisses itself after a
+  // few seconds so it never lingers as permanent clutter; the X lets the athlete clear it sooner.
+  useEffect(() => {
+    if (!activationNotice || !onDismissActivationNotice) return;
+    const t = setTimeout(onDismissActivationNotice, 6000);
+    return () => clearTimeout(t);
+  }, [activationNotice, onDismissActivationNotice]);
+
   const startScheduled = (source) => {
     const run = buildRunFromSource(state, source);
     if (run) onStartRun(run.plan, run.programContext);
@@ -680,6 +690,22 @@ export default function TodayTab({
         <div className="text-2xl font-black text-v5-text tracking-tight">{greeting()}</div>
         <div className="text-xs text-v5-subtext mt-0.5">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
       </div>
+
+      {activationNotice && (
+        <div className="border border-v5-red/30 bg-v5-red/10 px-4 py-3 flex items-start gap-2.5">
+          <Check size={16} className="text-v5-red shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 text-sm">
+            <span className="font-bold text-v5-text">{activationNotice.programName}</span>
+            <span className="text-v5-subtext"> is now your active program.</span>
+            {activationNotice.dayLabel && <div className="text-xs text-v5-subtext mt-0.5">Up next: {activationNotice.dayLabel}</div>}
+          </div>
+          {onDismissActivationNotice && (
+            <button onClick={onDismissActivationNotice} className="shrink-0 p-0.5 text-v5-subtext hover:text-v5-text" aria-label="Dismiss">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* "WHO / WHERE AM I" — the first of Today's two dominant concepts (task Part 1). Compact
           by design: a one-line status, never the full category/muscle breakdown that lives in

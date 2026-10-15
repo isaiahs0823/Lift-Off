@@ -145,6 +145,26 @@ export function dayHasContent(day) {
   return !!day && day.type !== "rest" && (day.exercises || []).length > 0;
 }
 
+// ---------------- training-day counts (UX audit Phase 1, item 5) ----------------
+// `program.days.length` was used as "the training frequency" everywhere in the app, which quietly
+// counts rest days as training days — a 5-lift/2-rest program showed "7 days." These give every
+// screen the same, correct split so the number an athlete sees always matches the number of
+// sessions they'll actually train.
+export function countTrainingDays(days) {
+  return (days || []).filter((d) => d.type !== "rest").length;
+}
+export function countRestDays(days) {
+  return (days || []).filter((d) => d.type === "rest").length;
+}
+// "5 Training Days" / "5 Training Days · 2 Rest Days" — rest days only get a mention when the
+// program actually has any, so an all-lifting program keeps the simpler one-line label.
+export function trainingDayCountLabel(days) {
+  const training = countTrainingDays(days);
+  const rest = countRestDays(days);
+  const trainingLabel = `${training} Training Day${training === 1 ? "" : "s"}`;
+  return rest > 0 ? `${trainingLabel} · ${rest} Rest Day${rest === 1 ? "" : "s"}` : trainingLabel;
+}
+
 // Appends a suggested day (see SUGGESTED_DAY_FOCUSES below) built from a focus template.
 export function addSuggestedDay(program, focusKey) {
   const focus = SUGGESTED_DAY_FOCUSES.find((f) => f.key === focusKey);
