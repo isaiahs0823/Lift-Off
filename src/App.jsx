@@ -1259,6 +1259,75 @@ const HERO_PROGRAMS = [
       },
     ],
   },
+  {
+    // A classic 5-day Upper/Lower split: two heavy strength days, two hypertrophy days, one
+    // optional cardio day. Same shape as every other static HERO_PROGRAMS entry above (Berserker,
+    // Valkyrie, etc.) — {id, name, tagline, programFocus, weeks, days: [{label, exercises:
+    // [{exId, sets, reps}]}]} — so it needs no special-casing anywhere downstream (program
+    // selection, Swap Workout, Today/scheduling, Athlete Rating's Foundation evidence all read
+    // this the same way they read every other program). Day 5 has no `type: "recovery"` —
+    // "optional" here is informational only (carried in the label, same convention Reaper's
+    // "Push & conditioning" day already uses for a mixed-intent day), since the program-day model
+    // only distinguishes `type: "recovery"` from an ordinary lifting day (see
+    // programSchedule.js's isRecoveryProgramDay) — skipping it is just like skipping any other
+    // day, no engine change required to express "optional."
+    id: "prog_upper_lower_5day",
+    name: "Upper Lower",
+    tagline: "Heavy strength early in the week, hypertrophy volume late — a classic 5-day Upper/Lower split",
+    programFocus: ["Chest", "Back", "Legs"],
+    weeks: 10,
+    days: [
+      {
+        label: "Day 1: Upper Heavy",
+        exercises: [
+          { exId: "bench", sets: 4, reps: 6 },
+          { exId: "barbell_row", sets: 4, reps: 6 },
+          { exId: "ohp", sets: 3, reps: 6 },
+          { exId: "weighted_dip", sets: 3, reps: 8 },
+          { exId: "seated_row", sets: 3, reps: 8 },
+          { exId: "barbell_curl", sets: 3, reps: 8 },
+        ],
+      },
+      {
+        label: "Day 2: Lower Heavy",
+        exercises: [
+          { exId: "squat", sets: 4, reps: 5 },
+          { exId: "rdl", sets: 4, reps: 6 },
+          { exId: "leg_press", sets: 3, reps: 8 },
+          { exId: "leg_curl_seated", sets: 3, reps: 8 },
+          { exId: "calf_raise_standing", sets: 4, reps: 12 },
+        ],
+      },
+      {
+        label: "Day 3: Upper Hypertrophy",
+        exercises: [
+          { exId: "incline_db_press", sets: 4, reps: 10 },
+          { exId: "lat_pulldown", sets: 4, reps: 10 },
+          { exId: "db_shoulder_press", sets: 3, reps: 12 },
+          { exId: "cable_fly", sets: 3, reps: 12 },
+          { exId: "single_arm_db_row", sets: 3, reps: 12 },
+          { exId: "cable_lat_raise", sets: 3, reps: 15 },
+          { exId: "tricep_pushdown", sets: 3, reps: 12 },
+          { exId: "incline_db_curl", sets: 3, reps: 12 },
+        ],
+      },
+      {
+        label: "Day 4: Lower Hypertrophy",
+        exercises: [
+          { exId: "hack_squat", sets: 4, reps: 10 },
+          { exId: "leg_extension", sets: 3, reps: 12 },
+          { exId: "leg_curl_lying", sets: 3, reps: 12 },
+          { exId: "hip_thrust", sets: 3, reps: 12 },
+          { exId: "bulgarian_split_squat", sets: 3, reps: 10 },
+          { exId: "calf_raise_seated", sets: 4, reps: 15 },
+        ],
+      },
+      {
+        label: "Day 5: Cardio (Optional) — Stairmaster 45 min",
+        exercises: [{ exId: "stairmaster", sets: 1, reps: 1 }],
+      },
+    ],
+  },
   // Titan (all 5 frequency variants), Athena, and Shape — see src/data/programFamilies.js.
   ...FAMILY_PROGRAMS,
 ];
