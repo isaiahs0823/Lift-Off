@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown, Target, Flame, Plus, X } from "lucide-react";
+import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown, Target, Flame, Plus, X, AlertTriangle, CloudOff } from "lucide-react";
 import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
 import NutritionCard from "./NutritionCard.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
@@ -15,6 +15,7 @@ import { buildCoachContext } from "../utils/coachContext.js";
 import { generateTodaySnapshot } from "../services/coachService.js";
 import { computeReadinessScore, readinessBand, BAND_LABEL, READINESS_SHORT } from "../utils/readiness.js";
 import { syncCoachMemory } from "../utils/coachMemory.js";
+import { friendlyAuthCallbackMessage } from "../utils/authCallback.js";
 import {
   hasSchedule,
   getTodaySchedule,
@@ -560,6 +561,11 @@ export default function TodayTab({
   onOpenAthleteRating,
   activationNotice,
   onDismissActivationNotice,
+  accountSyncNotice,
+  onDismissAccountSyncNotice,
+  authCallbackError,
+  onDismissAuthCallbackError,
+  onGoToAccount,
 }) {
   const ratingSnapshots = state.athleteRatingSnapshots || [];
   const latestRatingSnapshot = ratingSnapshots[ratingSnapshots.length - 1] || null;
@@ -654,6 +660,16 @@ export default function TodayTab({
     return () => clearTimeout(t);
   }, [activationNotice, onDismissActivationNotice]);
 
+  // "New vs. restored account" banner (P0 auth audit, item 8) — same auto-dismiss treatment.
+  // authCallbackError deliberately does NOT auto-dismiss — it's an action item (request a new
+  // link), not a one-shot confirmation, and it already clears itself the moment a sign-in
+  // actually succeeds (see useSupabaseAuth.js's onAuthStateChange handler).
+  useEffect(() => {
+    if (!accountSyncNotice || !onDismissAccountSyncNotice) return;
+    const t = setTimeout(onDismissAccountSyncNotice, 8000);
+    return () => clearTimeout(t);
+  }, [accountSyncNotice, onDismissAccountSyncNotice]);
+
   const startScheduled = (source) => {
     const run = buildRunFromSource(state, source);
     if (run) onStartRun(run.plan, run.programContext);
@@ -690,6 +706,57 @@ export default function TodayTab({
         <div className="text-2xl font-black text-v5-text tracking-tight">{greeting()}</div>
         <div className="text-xs text-v5-subtext mt-0.5">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
       </div>
+
+      {authCallbackError && (
+        <div className="border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 flex items-start gap-2.5">
+          <AlertTriangle size={16} className="text-yellow-500 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 text-sm">
+            <span className="font-bold text-v5-text">Sign-in link didn't work.</span>
+            <div className="text-xs text-v5-subtext mt-0.5">{friendlyAuthCallbackMessage(authCallbackError)}</div>
+            {onGoToAccount && (
+              <button onClick={onGoToAccount} className="text-[11px] uppercase tracking-widest text-v5-red hover:text-v5-red mt-1.5">
+                Go to Account →
+              </button>
+            )}
+          </div>
+          {onDismissAuthCallbackError && (
+            <button onClick={onDismissAuthCallbackError} className="shrink-0 p-0.5 text-v5-subtext hover:text-v5-text" aria-label="Dismiss">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {accountSyncNotice && (
+        <div className="border border-v5-red/30 bg-v5-red/10 px-4 py-3 flex items-start gap-2.5">
+          {accountSyncNotice.kind === "restored" ? (
+            <Check size={16} className="text-v5-red shrink-0 mt-0.5" />
+          ) : (
+            <CloudOff size={16} className="text-v5-red shrink-0 mt-0.5" />
+          )}
+          <div className="flex-1 min-w-0 text-sm">
+            {accountSyncNotice.kind === "restored" ? (
+              <>
+                <span className="font-bold text-v5-text">Welcome back.</span>
+                <span className="text-v5-subtext"> Restored your history from {accountSyncNotice.email}.</span>
+              </>
+            ) : (
+              <>
+                <span className="font-bold text-v5-text">No cloud history found</span>
+                <span className="text-v5-subtext"> for {accountSyncNotice.email}.</span>
+                <div className="text-xs text-v5-subtext mt-0.5">
+                  If this isn't the email you meant to use, sign out and try again — your data on this device is safe either way and will sync up now.
+                </div>
+              </>
+            )}
+          </div>
+          {onDismissAccountSyncNotice && (
+            <button onClick={onDismissAccountSyncNotice} className="shrink-0 p-0.5 text-v5-subtext hover:text-v5-text" aria-label="Dismiss">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
 
       {activationNotice && (
         <div className="border border-v5-red/30 bg-v5-red/10 px-4 py-3 flex items-start gap-2.5">

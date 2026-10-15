@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays, HeartPulse, ShieldCheck, HelpCircle, Mail, LogOut } from "lucide-react";
+import { ChevronRight, Search, Flame, Settings as SettingsIcon, CalendarDays, HeartPulse, ShieldCheck, HelpCircle, Mail, LogOut, RefreshCw, AlertTriangle, Pencil } from "lucide-react";
 import { MORE_CARD_CONTENT } from "../utils/breakBrandContent.js";
 import { ScreenHeader, SectionLabel, Card, ListRow, ButtonPrimary, ButtonSecondary } from "./ui/Kit.jsx";
+import { formatLastSynced } from "../utils/syncStatus.js";
 
 // B.R.E.A.K. Meaning used to also have its own row here, duplicating the brand card below —
 // the card (with its "LEARN WHAT B.R.E.A.K. MEANS" CTA) is now the single entry point to that
@@ -88,8 +89,16 @@ function DataSafetyCard({ onNavigate, auth }) {
 // Email magic-link sign-in. Entirely optional — the app is fully usable signed-out, this only
 // adds cross-device sync for whoever opts in. Hidden outright if cloud sync isn't configured
 // (no Supabase env vars), so a build without them behaves exactly like before this existed.
-function AccountCard({ auth }) {
+//
+// P0 auth audit, items 7/8: signed-in now shows sync status (last successful sync, a visible
+// error with manual retry, never silently reported as successful) instead of just "Signed in as
+// X" with no way to tell whether anything actually synced. Signed-out now confirms the email
+// before sending — the one thing client code CAN do about a mistyped email, since there's no way
+// to know in advance whether it's a typo (Supabase will happily create a new account for any
+// address) — "appropriate user awareness" has to happen before the link goes out.
+function AccountCard({ auth, syncStatus, onRetrySync }) {
   const [email, setEmail] = useState("");
+  const [confirming, setConfirming] = useState(false);
   const [status, setStatus] = useState("idle"); // idle | sending | sent | error
   const [errorMsg, setErrorMsg] = useState(null);
 
@@ -100,16 +109,47 @@ function AccountCard({ auth }) {
       <Card className="space-y-2">
         <SectionLabel tone="muted">Account</SectionLabel>
         <p className="text-xs text-v5-text/90">Signed in as {auth.user.email}</p>
-        <ButtonSecondary size="sm" icon={LogOut} onClick={() => auth.signOut()} fullWidth={false}>
-          Sign out
-        </ButtonSecondary>
+        <div className="flex items-center gap-1.5 text-xs">
+          {syncStatus?.lastError ? (
+            <>
+              <AlertTriangle size={13} className="text-v5-red shrink-0" />
+              <span className="text-v5-red">{syncStatus.pending ? "Sync trouble — retrying…" : "Sync failed — "}</span>
+              {!syncStatus.pending && (
+                <button onClick={onRetrySync} className="text-v5-red underline underline-offset-2">
+                  retry now
+                </button>
+              )}
+            </>
+          ) : syncStatus?.pending ? (
+            <>
+              <RefreshCw size={13} className="text-v5-subtext shrink-0 animate-spin" />
+              <span className="text-v5-subtext">Syncing…</span>
+            </>
+          ) : (
+            <span className="text-v5-subtext">Last synced: {formatLastSynced(syncStatus?.lastSuccessAt)}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <ButtonSecondary size="sm" icon={LogOut} onClick={() => auth.signOut()} fullWidth={false}>
+            Sign out
+          </ButtonSecondary>
+          {!syncStatus?.pending && (
+            <ButtonSecondary size="sm" icon={RefreshCw} onClick={onRetrySync} fullWidth={false}>
+              Sync now
+            </ButtonSecondary>
+          )}
+        </div>
       </Card>
     );
   }
 
-  const handleSend = async (e) => {
+  const handleContinue = (e) => {
     e.preventDefault();
     if (!email.trim()) return;
+    setConfirming(true);
+  };
+
+  const handleSend = async () => {
     setStatus("sending");
     setErrorMsg(null);
     try {
@@ -126,10 +166,24 @@ function AccountCard({ auth }) {
       <SectionLabel tone="muted">Account</SectionLabel>
       {status === "sent" ? (
         <p className="text-xs text-v5-text/90">Check your email for a sign-in link — it'll bring you right back here, signed in.</p>
+      ) : confirming ? (
+        <>
+          <p className="text-xs text-v5-subtext">
+            We'll send a sign-in link to <span className="text-v5-text font-bold">{email.trim()}</span>. Not the right address?
+          </p>
+          <div className="flex gap-2">
+            <ButtonSecondary size="sm" icon={Pencil} onClick={() => setConfirming(false)} fullWidth={false}>
+              Edit
+            </ButtonSecondary>
+            <ButtonPrimary size="sm" icon={Mail} onClick={handleSend} disabled={status === "sending"} fullWidth={false}>
+              {status === "sending" ? "Sending…" : "Looks right, send it"}
+            </ButtonPrimary>
+          </div>
+        </>
       ) : (
         <>
           <p className="text-xs text-v5-subtext">Sign in with email to sync your training data across devices. No password needed.</p>
-          <form onSubmit={handleSend} className="flex gap-2">
+          <form onSubmit={handleContinue} className="flex gap-2">
             <input
               type="email"
               inputMode="email"
@@ -139,18 +193,18 @@ function AccountCard({ auth }) {
               placeholder="you@example.com"
               className="flex-1 bg-v5-muted rounded-lg text-v5-text px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-v5-red placeholder:text-v5-subtext/50"
             />
-            <ButtonPrimary size="sm" icon={Mail} type="submit" disabled={status === "sending"} fullWidth={false}>
-              {status === "sending" ? "Sending…" : "Send link"}
+            <ButtonPrimary size="sm" icon={Mail} type="submit" fullWidth={false}>
+              Continue
             </ButtonPrimary>
           </form>
-          {status === "error" && <p className="text-xs text-v5-red">{errorMsg}</p>}
         </>
       )}
+      {status === "error" && <p className="text-xs text-v5-red">{errorMsg}</p>}
     </Card>
   );
 }
 
-export default function MoreTab({ state, updateState, onNavigate, auth }) {
+export default function MoreTab({ state, updateState, onNavigate, auth, syncStatus, onRetrySync }) {
   return (
     <div className="space-y-4">
       <ScreenHeader eyebrow="More" title="Tools & settings" />
@@ -161,7 +215,7 @@ export default function MoreTab({ state, updateState, onNavigate, auth }) {
         ))}
       </div>
 
-      <AccountCard auth={auth} />
+      <AccountCard auth={auth} syncStatus={syncStatus} onRetrySync={onRetrySync} />
 
       <DataSafetyCard onNavigate={onNavigate} auth={auth} />
 

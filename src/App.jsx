@@ -120,6 +120,7 @@ import { reminderIsDue, getReminderSettings } from "./utils/workoutReminders.js"
 import LevelUpScreen from "./components/LevelUpScreen.jsx";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
 import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
+import { initialSyncStatus, markSyncStarted, markSyncSuccess, markSyncFailure, MAX_SYNC_ATTEMPTS, retryDelayMs } from "./utils/syncStatus.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
 import {
   SET_TYPES,
@@ -1962,7 +1963,33 @@ export default function LiftLog() {
   // devices, never replaces what's already here). See src/utils/supabaseSync.js.
   const auth = useSupabaseAuth();
   const cloudSyncTimerRef = useRef(null);
+  const cloudSyncRetryTimerRef = useRef(null);
   const pulledForUserIdRef = useRef(null);
+  // Cloud sync status (P0 auth audit, item 6/7) — "visible, retried safely, never falsely
+  // reported as successful." Its own localStorage key, deliberately separate from `state` (the
+  // thing that actually gets synced): tracking sync status must never itself be something that
+  // needs syncing, and it has to survive a reload independently so "last synced 2 hours ago"
+  // still means something after closing and reopening the app.
+  const [syncStatus, setSyncStatus] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem("liftlog-sync-status");
+      return raw ? JSON.parse(raw) : initialSyncStatus();
+    } catch (e) {
+      return initialSyncStatus();
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("liftlog-sync-status", JSON.stringify(syncStatus));
+    } catch (e) {
+      // storage unavailable — status just won't survive a reload, not worth surfacing an error
+      // about an error-tracking mechanism
+    }
+  }, [syncStatus]);
+  // One-shot "no cloud history found for this account" vs "welcome back" notice (P0 auth audit,
+  // item 8 — mistyped-email awareness) — set once after the post-sign-in pull resolves, shown on
+  // Today the same way activationNotice is, cleared on dismiss/timeout. Never persisted.
+  const [accountSyncNotice, setAccountSyncNotice] = useState(null); // { kind: "new"|"restored", email, counts } | null
   // Athlete Rating — a genuine Level Up / Rank Up / first-rating-ready moment to show, set only
   // right after a recalculation that actually crosses a level. Never persisted — purely a
   // one-shot UI moment, cleared once shown.
@@ -2197,13 +2224,38 @@ export default function LiftLog() {
   // Debounced background push — fires at most once per 1.5s of inactivity rather than on
   // every single set logged, since bursts of updateState calls (e.g. rapid set entry) would
   // otherwise fire a network request per keystroke. Never runs signed-out.
+  // Pushes `next` to Supabase and tracks what actually happened (P0 auth audit, item 6) — the
+  // previous version called pushWorkoutDataToSupabase and threw its {ok, errors} result straight
+  // away, so a failed push (expired token, RLS denial, a network blip) produced zero feedback,
+  // ever, and was never retried until some unrelated later edit happened to trigger another push.
+  // Upserts are idempotent by primary key (onConflict: "id"), so retrying — even with a `next`
+  // that's gone slightly stale because a newer edit landed in between — is always safe: it can
+  // never duplicate or lose a row, worst case it's immediately superseded by the next real push.
+  const pushWithRetry = useCallback(async (next, userId, attempt = 1) => {
+    setSyncStatus((s) => markSyncStarted(s, attempt));
+    const result = await pushWorkoutDataToSupabase(next, userId);
+    if (result.ok) {
+      setSyncStatus((s) => markSyncSuccess(s));
+      return;
+    }
+    const willRetry = attempt < MAX_SYNC_ATTEMPTS;
+    setSyncStatus((s) => markSyncFailure(s, result.errors, willRetry));
+    if (willRetry) {
+      if (cloudSyncRetryTimerRef.current) clearTimeout(cloudSyncRetryTimerRef.current);
+      cloudSyncRetryTimerRef.current = setTimeout(() => {
+        pushWithRetry(next, userId, attempt + 1);
+      }, retryDelayMs(attempt));
+    }
+  }, []);
+
   const scheduleCloudSync = useCallback(
     (next) => {
       if (!auth.user) return;
       if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
+      if (cloudSyncRetryTimerRef.current) clearTimeout(cloudSyncRetryTimerRef.current);
       const userId = auth.user.id;
       cloudSyncTimerRef.current = setTimeout(() => {
-        pushWorkoutDataToSupabase(next, userId);
+        pushWithRetry(next, userId);
         pushPhotosToSupabase(next.photos, userId).then(({ uploadedIds }) => {
           if (uploadedIds && uploadedIds.length > 0) {
             setState((prev) => ({
@@ -2214,8 +2266,16 @@ export default function LiftLog() {
         });
       }, 1500);
     },
-    [auth.user]
+    [auth.user, pushWithRetry]
   );
+  // Manual "Retry sync now" (P0 auth audit, item 7) — same push path, just triggered on demand
+  // instead of waiting for the next edit or the next backoff attempt. Re-sends current `state`,
+  // which upserts harmlessly even if nothing actually changed since the last successful push.
+  const retrySyncNow = useCallback(() => {
+    if (!auth.user) return;
+    if (cloudSyncRetryTimerRef.current) clearTimeout(cloudSyncRetryTimerRef.current);
+    pushWithRetry(state, auth.user.id);
+  }, [auth.user, pushWithRetry, state]);
 
   const persist = useCallback(
     (next) => {
@@ -2253,8 +2313,23 @@ export default function LiftLog() {
     if (pulledForUserIdRef.current === auth.user.id) return;
     pulledForUserIdRef.current = auth.user.id;
     const userId = auth.user.id;
+    const email = auth.user.email;
     (async () => {
-      const { data } = await pullWorkoutDataFromSupabase(userId);
+      const { data, errors, ok } = await pullWorkoutDataFromSupabase(userId);
+      // "Never falsely report success" (P0 auth audit, item 6) — a pull failure is data-safe by
+      // construction (mergeRemoteIntoLocal only ever adds, so partial/empty data just means
+      // nothing new arrives), but it must still be visible rather than silently doing nothing.
+      if (!ok) setSyncStatus((s) => markSyncFailure(s, errors, false));
+      // "A mistyped email cannot silently create a separate account without appropriate user
+      // awareness" (item 8) — this account's cloud data came back completely empty, which is
+      // either a genuinely first-ever sign-in or a typo that just created a brand-new account
+      // under the wrong address. Either way the athlete needs an explicit signal, not an app
+      // that simply looks unchanged.
+      const workoutSessionCount = Array.isArray(data.workoutSessions) ? data.workoutSessions.length : 0;
+      const hasAnyRemoteData = Object.keys(data).some((key) =>
+        key === "workoutProfile" ? !!data.workoutProfile : Array.isArray(data[key]) && data[key].length > 0
+      );
+      setAccountSyncNotice({ kind: hasAnyRemoteData ? "restored" : "new", email, workoutSessionCount });
       setState((prev) => {
         const merged = mergeRemoteIntoLocal(prev, data);
         // Recompute the Athlete Rating when this pull materially changed canonical history (Part
@@ -2894,6 +2969,11 @@ export default function LiftLog() {
                   onOpenAthleteRating={openAthleteRatingFromToday}
                   activationNotice={activationNotice}
                   onDismissActivationNotice={() => setActivationNotice(null)}
+                  accountSyncNotice={accountSyncNotice}
+                  onDismissAccountSyncNotice={() => setAccountSyncNotice(null)}
+                  authCallbackError={auth.authCallbackError}
+                  onDismissAuthCallbackError={auth.dismissAuthCallbackError}
+                  onGoToAccount={() => setTab("more")}
                 />
               ))}
             {tab === "workoutDetail" && (
@@ -2961,7 +3041,9 @@ export default function LiftLog() {
                 onBack={() => setTab("startWorkout")}
               />
             )}
-            {tab === "more" && <MoreTab state={state} updateState={updateState} onNavigate={setTab} auth={auth} />}
+            {tab === "more" && (
+              <MoreTab state={state} updateState={updateState} onNavigate={setTab} auth={auth} syncStatus={syncStatus} onRetrySync={retrySyncNow} />
+            )}
             {tab === "log" && (
               <LogTab
                 state={state}
