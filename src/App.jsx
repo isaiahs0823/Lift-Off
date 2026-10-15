@@ -150,6 +150,7 @@ import BreakMeaningPage from "./components/BreakMeaningPage.jsx";
 import ExerciseHistorySheet from "./components/ExerciseHistorySheet.jsx";
 import ProgramBuilder from "./components/ProgramBuilder.jsx";
 import { trainingDayCountLabel, countTrainingDays } from "./utils/programBuilder.js";
+import { isReplacingActiveProgram, applyProgramActivation } from "./utils/programActivation.js";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained).
 // Exported so any screen that needs the official mark (e.g. BreakMeaningPage) reuses this exact
@@ -2401,31 +2402,13 @@ export default function LiftLog() {
   // this (the detail screen swaps this button for a "Currently active" state once it's reactivated
   // this is the first time for it, matching the pre-existing isCurrent/isCurrentCustom checks).
   const activateProgram = (program, source) => {
-    const prevCP = state.currentProgram;
-    const isReplacing = prevCP && (prevCP.programId !== program.id || prevCP.source !== source);
-    if (isReplacing) {
+    if (isReplacingActiveProgram(state, program, source)) {
       const ok = window.confirm(
-        `Make "${program.name}" your active program?\n\nThis replaces "${prevCP.programName}" as your active program assignment. Nothing is deleted — your workout history and "${prevCP.programName}"'s own progress are kept exactly as they are.`
+        `Make "${program.name}" your active program?\n\nThis replaces "${state.currentProgram.programName}" as your active program assignment. Nothing is deleted — your workout history and "${state.currentProgram.programName}"'s own progress are kept exactly as they are.`
       );
       if (!ok) return;
     }
-    updateState((prev) => ({
-      ...prev,
-      currentProgram: {
-        programId: program.id,
-        programName: program.name,
-        source,
-        dayIndex: 0,
-        totalDays: program.days.length,
-        startDate: new Date().toISOString(),
-        lastCompletedAt: null,
-        lastCompletedDayIndex: null,
-        selectedForDays: prev.athleteProfile?.preferredDays ?? null,
-      },
-      programDayOverride: null,
-      pendingFrequencyReview: null,
-      hasSeenOnboarding: true,
-    }));
+    updateState((prev) => applyProgramActivation(prev, program, source));
     setActivationNotice({ programName: program.name, dayLabel: program.days[0]?.label ?? null });
     setTab("today");
   };
