@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, ChevronRight, Check, X } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight, Check, X, ArrowLeftRight, XCircle } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 import { resolveProgramTimeline, programWeekAdherence, programTotalAdherence } from "../utils/programSchedule.js";
@@ -129,7 +129,7 @@ function DayPreview({ day, weekNumber, programName, exMap, onBack, onViewWorkout
 // never writes anything (see resolveProgramTimeline's own header comment). Reads the single
 // active program directly rather than taking an id prop, since there's only ever one at a time —
 // every entry point (Train's Current Program card, Today's compact card) just navigates here.
-export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWorkout }) {
+export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWorkout, onSwitchProgram, onEndProgram }) {
   const [openDay, setOpenDay] = useState(null); // { day, weekNumber } | null
   const timeline = resolveProgramTimeline(state);
   const weekAdherence = programWeekAdherence(state);
@@ -149,6 +149,14 @@ export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWork
           )}
         </div>
         <div className="text-sm text-v5-subtext">No active program.</div>
+        {onSwitchProgram && (
+          <button
+            onClick={onSwitchProgram}
+            className="w-full py-2.5 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 flex items-center justify-center gap-1.5"
+          >
+            <ArrowLeftRight size={14} /> Choose a Program
+          </button>
+        )}
       </div>
     );
   }
@@ -192,6 +200,34 @@ export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWork
           </div>
         )}
       </div>
+
+      {/* Obvious program-management actions (active-program-management fix, items 1/2) — this
+          screen was previously entirely read-only, with no way to stop or change the running
+          program short of the Templates/Builder detail screens' own "Start This Program," which
+          nothing here ever pointed to. Switch is pure navigation: the program library's own
+          "Start This Program" already confirms the replacement and activates (see activateProgram
+          in App.jsx). End is the new action — its confirmation + what it actually does to state
+          live in App.jsx's endCurrentProgram. */}
+      {(onSwitchProgram || onEndProgram) && (
+        <div className="flex gap-2">
+          {onSwitchProgram && (
+            <button
+              onClick={onSwitchProgram}
+              className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40 flex items-center justify-center gap-1.5"
+            >
+              <ArrowLeftRight size={13} /> Switch Program
+            </button>
+          )}
+          {onEndProgram && (
+            <button
+              onClick={onEndProgram}
+              className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-red flex items-center justify-center gap-1.5"
+            >
+              <XCircle size={13} /> End Program
+            </button>
+          )}
+        </div>
+      )}
 
       {(timeline.programFocus?.length > 0 || yourPriorityLabels.length > 0) && (
         <div className="border border-white/10 bg-v5-elevated p-4 space-y-2">

@@ -66,6 +66,44 @@ export function defaultFixedDays() {
   }, {});
 }
 
+// Ending (or, in principle, otherwise losing) the active program leaves any `{kind:
+// "currentProgram"}` slot pointing at nothing — resolveCurrentProgramDay needs a currentProgram
+// to resolve against, so a dangling one of these would still be LABELED "workout" and still get
+// silently marked "missed" the moment a date passes with no session logged for it (getScheduleDay
+// doesn't need the source to actually resolve to check that), even though the athlete explicitly
+// chose to stop training that program (active-program-management fix, item 5: "never silently
+// retain incompatible assignments"). Converts exactly those slots to rest — nothing else: a
+// `{kind:"programDay"}` slot stays pointed at its own specific custom-program day regardless of
+// what's "current" (that's the whole point of that source kind), and every rest/recovery slot,
+// every OTHER weekday, and the schedule's mode are left completely untouched (item 5's other
+// half: "never erase unrelated user preferences"). Pure — returns a new weeklySchedule, writes
+// nothing itself.
+export function clearCurrentProgramSlots(weeklySchedule) {
+  if (!weeklySchedule) return weeklySchedule;
+  const isDanglingCurrentProgramSlot = (slot) => !!slot && slot.source?.kind === "currentProgram";
+  let changed = false;
+
+  const fixedDays = weeklySchedule.fixedDays
+    ? Object.fromEntries(
+        Object.entries(weeklySchedule.fixedDays).map(([day, slot]) => {
+          if (!isDanglingCurrentProgramSlot(slot)) return [day, slot];
+          changed = true;
+          return [day, emptySlot("rest")];
+        })
+      )
+    : weeklySchedule.fixedDays;
+
+  const rollingSequence = weeklySchedule.rollingSequence
+    ? weeklySchedule.rollingSequence.map((slot) => {
+        if (!isDanglingCurrentProgramSlot(slot)) return slot;
+        changed = true;
+        return emptySlot("rest");
+      })
+    : weeklySchedule.rollingSequence;
+
+  return changed ? { ...weeklySchedule, fixedDays, rollingSequence } : weeklySchedule;
+}
+
 // ---------- suggested starting points (never auto-saved — always shown for the user to edit) ----------
 // Deliberately generic: workout slots point at { kind: "currentProgram" } rather than pinning a
 // specific program day-index to a specific weekday, since resolveCurrentProgramDay already owns

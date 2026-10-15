@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { getTodaySchedule, buildRunFromSource, suggestWeekdaysForProgramDays, suggestRollingSequenceForProgramDays, emptySlot, defaultFixedDays } from "../weeklySchedule.js";
+import { getTodaySchedule, buildRunFromSource, suggestWeekdaysForProgramDays, suggestRollingSequenceForProgramDays, emptySlot, defaultFixedDays, clearCurrentProgramSlots } from "../weeklySchedule.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -169,5 +169,34 @@ describe("suggestWeekdaysForProgramDays / suggestRollingSequenceForProgramDays",
     // Sanity: suggestedA really did reference A, proving the two calls aren't coincidentally identical.
     const aProgramIds = Object.values(suggestedA).filter((s) => s.source).map((s) => s.source.programId);
     expect(aProgramIds.every((id) => id === "program_A")).toBe(true);
+  });
+});
+
+describe("clearCurrentProgramSlots (active-program-management fix, item 5)", () => {
+  it("converts only {kind:'currentProgram'} slots to rest, in both fixedDays and rollingSequence", () => {
+    const schedule = {
+      mode: "fixed",
+      fixedDays: {
+        ...defaultFixedDays(),
+        mon: { type: "workout", source: { kind: "currentProgram" }, label: "Training day" },
+        wed: { type: "workout", source: { kind: "programDay", programId: "p1", dayId: "d1" }, label: "Leg Day" },
+      },
+      rollingSequence: [{ type: "workout", source: { kind: "currentProgram" }, label: "Training day" }],
+      createdAt: "2026-01-01T00:00:00Z",
+    };
+    const next = clearCurrentProgramSlots(schedule);
+    expect(next.fixedDays.mon).toEqual(emptySlot("rest"));
+    expect(next.fixedDays.wed).toBe(schedule.fixedDays.wed); // untouched reference
+    expect(next.rollingSequence[0]).toEqual(emptySlot("rest"));
+  });
+
+  it("returns the same reference when there is nothing to clean up — never a needless write", () => {
+    const schedule = { mode: "fixed", fixedDays: defaultFixedDays(), createdAt: "2026-01-01T00:00:00Z" };
+    expect(clearCurrentProgramSlots(schedule)).toBe(schedule);
+  });
+
+  it("handles a null/missing schedule without throwing", () => {
+    expect(clearCurrentProgramSlots(null)).toBeNull();
+    expect(clearCurrentProgramSlots(undefined)).toBeUndefined();
   });
 });

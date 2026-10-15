@@ -566,6 +566,9 @@ export default function TodayTab({
   authCallbackError,
   onDismissAuthCallbackError,
   onGoToAccount,
+  programEndedNotice,
+  onDismissProgramEndedNotice,
+  onChooseProgram,
 }) {
   const ratingSnapshots = state.athleteRatingSnapshots || [];
   const latestRatingSnapshot = ratingSnapshots[ratingSnapshots.length - 1] || null;
@@ -670,6 +673,13 @@ export default function TodayTab({
     return () => clearTimeout(t);
   }, [accountSyncNotice, onDismissAccountSyncNotice]);
 
+  // "End Current Program" success banner (active-program-management fix).
+  useEffect(() => {
+    if (!programEndedNotice || !onDismissProgramEndedNotice) return;
+    const t = setTimeout(onDismissProgramEndedNotice, 6000);
+    return () => clearTimeout(t);
+  }, [programEndedNotice, onDismissProgramEndedNotice]);
+
   const startScheduled = (source) => {
     const run = buildRunFromSource(state, source);
     if (run) onStartRun(run.plan, run.programContext);
@@ -758,6 +768,22 @@ export default function TodayTab({
         </div>
       )}
 
+      {programEndedNotice && (
+        <div className="border border-white/10 bg-v5-elevated px-4 py-3 flex items-start gap-2.5">
+          <Check size={16} className="text-v5-subtext shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 text-sm">
+            <span className="font-bold text-v5-text">{programEndedNotice.programName}</span>
+            <span className="text-v5-subtext"> is no longer your active program.</span>
+            <div className="text-xs text-v5-subtext mt-0.5">Its history is saved — pick up a new program whenever you're ready.</div>
+          </div>
+          {onDismissProgramEndedNotice && (
+            <button onClick={onDismissProgramEndedNotice} className="shrink-0 p-0.5 text-v5-subtext hover:text-v5-text" aria-label="Dismiss">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
       {activationNotice && (
         <div className="border border-v5-red/30 bg-v5-red/10 px-4 py-3 flex items-start gap-2.5">
           <Check size={16} className="text-v5-red shrink-0 mt-0.5" />
@@ -781,6 +807,27 @@ export default function TodayTab({
       <AthleteRatingCard snapshot={latestRatingSnapshot} onOpen={onOpenAthleteRating} compact />
 
       {missedEntry && <MissedWorkoutBanner missed={missedEntry} state={state} updateState={updateState} onStartRun={onStartRun} />}
+
+      {/* Standing "no active program" prompt (active-program-management fix, item 7) — separate
+          from the dominant card below on purpose: an athlete can validly run a weekly schedule of
+          standalone plans/templates with no "program" at all, and today's schedule slot (rest,
+          recovery, a standalone plan) stays exactly as accurate and useful as it already was for
+          that athlete. But when there's genuinely no active program, that fact needs to be
+          visible and actionable every time Today renders — not just in the one-shot banner right
+          after ending one (that auto-dismisses in 6s) or buried behind whatever today happens to
+          be scheduled as. Unlike that banner, this never auto-dismisses; it's simply absent the
+          moment a program is active again. */}
+      {!state.currentProgram && (
+        <Card className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-v5-text">No active program</div>
+            <div className="text-xs text-v5-subtext mt-0.5">Follow a structured multi-day plan again whenever you're ready.</div>
+          </div>
+          <ButtonPrimary size="sm" fullWidth={false} onClick={onChooseProgram || (() => onNavigate("train"))}>
+            Choose a Program
+          </ButtonPrimary>
+        </Card>
+      )}
 
       {/* Today's training — the dominant card on the page. */}
       {scheduleOn && todaySchedule?.type === "rest" ? (
@@ -1036,6 +1083,17 @@ export default function TodayTab({
                 </>
               );
             })()
+          ) : !state.currentProgram ? (
+            // No active program at all (active-program-management fix, item 7) — the athlete
+            // either never had one or just ended one via Program Timeline's "End Program." The
+            // useful next step is picking a program, not the generic single-workout picker.
+            <>
+              <div className="text-sm text-v5-subtext">No active program.</div>
+              <ButtonPrimary size="lg" onClick={onChooseProgram || (() => onNavigate("train"))}>Choose a Program</ButtonPrimary>
+              <ButtonText tone="muted" onClick={() => onNavigate("train")} className="pt-1">
+                Or start a single workout
+              </ButtonText>
+            </>
           ) : (
             <>
               <div className="text-sm text-v5-subtext">No workout queued up.</div>

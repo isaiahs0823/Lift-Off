@@ -152,7 +152,7 @@ import BreakMeaningPage from "./components/BreakMeaningPage.jsx";
 import ExerciseHistorySheet from "./components/ExerciseHistorySheet.jsx";
 import ProgramBuilder from "./components/ProgramBuilder.jsx";
 import { trainingDayCountLabel, countTrainingDays, renameProgram } from "./utils/programBuilder.js";
-import { isReplacingActiveProgram, applyProgramActivation } from "./utils/programActivation.js";
+import { isReplacingActiveProgram, applyProgramActivation, applyProgramEnd } from "./utils/programActivation.js";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained).
 // Exported so any screen that needs the official mark (e.g. BreakMeaningPage) reuses this exact
@@ -1959,6 +1959,9 @@ export default function LiftLog() {
   // and never needs to survive a reload or sync to another device. TodayTab clears it itself after
   // a few seconds or on manual dismiss.
   const [activationNotice, setActivationNotice] = useState(null); // { programName, dayLabel } | null
+  // "End Current Program" success feedback (active-program-management fix) — same one-shot,
+  // never-persisted treatment as activationNotice above.
+  const [programEndedNotice, setProgramEndedNotice] = useState(null); // { programName } | null
   // Optional cloud sync (hybrid: localStorage stays the source of truth signed-out AND
   // signed-in — this only ever backs state up to Supabase and fills in gaps from other
   // devices, never replaces what's already here). See src/utils/supabaseSync.js.
@@ -2477,15 +2480,46 @@ export default function LiftLog() {
   // program they're mid-way through uses "Set as today"/a day's own "Start workout" instead, not
   // this (the detail screen swaps this button for a "Currently active" state once it's reactivated
   // this is the first time for it, matching the pre-existing isCurrent/isCurrentCustom checks).
+  // An unfinished workout logging session (active-program-management fix, item 6) is never
+  // touched by anything below — it lives in its own activeRun/liftlog-active-run state entirely
+  // independent of currentProgram, so switching or ending a program can't silently discard or
+  // replace it structurally. This is just the heads-up line added to the confirmation text so the
+  // athlete knows that before they commit, rather than them having to just trust it.
+  const activeSessionNote =
+    activeRun && !activeRun.finished ? `\n\nYour in-progress workout ("${activeRun.planName}") isn't affected — it stays right where you left it.` : "";
+
   const activateProgram = (program, source) => {
     if (isReplacingActiveProgram(state, program, source)) {
       const ok = window.confirm(
-        `Make "${program.name}" your active program?\n\nThis replaces "${state.currentProgram.programName}" as your active program assignment. Nothing is deleted — your workout history and "${state.currentProgram.programName}"'s own progress are kept exactly as they are.`
+        `Make "${program.name}" your active program?\n\nThis replaces "${state.currentProgram.programName}" as your active program assignment. Nothing is deleted — your workout history and "${state.currentProgram.programName}"'s own progress are kept exactly as they are.${activeSessionNote}`
       );
       if (!ok) return;
     }
     updateState((prev) => applyProgramActivation(prev, program, source));
     setActivationNotice({ programName: program.name, dayLabel: program.days[0]?.label ?? null });
+    setTab("today");
+  };
+  // "End Current Program" (active-program-management fix, items 2/3/5) — the counterpart to
+  // activateProgram for an athlete who wants to stop a program without immediately picking a
+  // replacement. Deliberately NOT the same path as the auto-completion effect below: ending early
+  // records a completedPrograms entry tagged status: "ended_early" (never "completed" — item 3),
+  // touches nothing but currentProgram/completedPrograms/weeklySchedule/programDayOverride/
+  // pendingFrequencyReview, and in particular never writes to workoutSessions/logs/customPrograms
+  // (item 9) — the program's own identity and every session already logged against it stay
+  // exactly as they are, readable from its completedPrograms entry's startDate/endDate the same
+  // way a normally-finished program's history already is.
+  const endCurrentProgram = () => {
+    const cp = state.currentProgram;
+    if (!cp) return;
+    const resolved = resolveCurrentProgramDay(state);
+    const programName = resolved?.programName || cp.programName;
+    const ok = window.confirm(
+      `End "${programName}"?\n\nIt will no longer be your active program, but nothing is deleted — every workout you've logged and all your progress on it stay saved for reference.${activeSessionNote}`
+    );
+    if (!ok) return;
+    updateState((prev) => applyProgramEnd(prev));
+    setActivationNotice(null);
+    setProgramEndedNotice({ programName });
     setTab("today");
   };
   // Naming is entirely optional (see StartWorkoutChoice/GuidedRunView) — this just lets an
@@ -2865,6 +2899,9 @@ export default function LiftLog() {
       weeks: resolved.totalWeeks,
       startDate: cp.startDate,
       endDate: new Date().toISOString(),
+      // Explicit, matching endCurrentProgram's "ended_early" tag below — a program that actually
+      // ran its full assigned length (item 3's distinction from ending early).
+      status: "completed",
     };
     updateState((prev) => {
       if (!prev.currentProgram || prev.currentProgram.programId !== cp.programId || prev.currentProgram.startDate !== cp.startDate) {
@@ -2975,6 +3012,9 @@ export default function LiftLog() {
                   authCallbackError={auth.authCallbackError}
                   onDismissAuthCallbackError={auth.dismissAuthCallbackError}
                   onGoToAccount={() => setTab("more")}
+                  programEndedNotice={programEndedNotice}
+                  onDismissProgramEndedNotice={() => setProgramEndedNotice(null)}
+                  onChooseProgram={() => setTab("templates")}
                 />
               ))}
             {tab === "workoutDetail" && (
@@ -3240,7 +3280,14 @@ export default function LiftLog() {
               />
             )}
             {tab === "programTimeline" && (
-              <ProgramTimelineScreen state={state} exMap={exMap} onBack={() => setTab("train")} onViewWorkout={(sessionId) => viewWorkout(sessionId, "train")} />
+              <ProgramTimelineScreen
+                state={state}
+                exMap={exMap}
+                onBack={() => setTab("train")}
+                onViewWorkout={(sessionId) => viewWorkout(sessionId, "train")}
+                onSwitchProgram={() => setTab("templates")}
+                onEndProgram={endCurrentProgram}
+              />
             )}
             {tab === "developmentPriorities" && (
               <DevelopmentPrioritiesScreen state={state} updateState={updateState} onBack={() => setTab("coach")} />
@@ -8237,24 +8284,34 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
 
       {(state.completedPrograms || []).length > 0 && (
         <div className="space-y-2.5">
-          <SectionLabel tone="muted">Completed programs</SectionLabel>
-          <p className="text-xs text-v5-subtext">Every program you've finished — earned, not reset silently.</p>
+          <SectionLabel tone="muted">Program history</SectionLabel>
+          <p className="text-xs text-v5-subtext">Every program you've run — earned, not reset silently.</p>
           <div className="space-y-2">
-            {state.completedPrograms.map((c) => (
-              // Plain (non-button) Card — its only action is the sibling Restart button, so
-              // there's no outer click target competing with it.
-              <Card key={c.id} className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-v5-text truncate">{c.programName}</div>
-                  <div className="text-xs text-v5-subtext mt-0.5">
-                    {c.weeks} weeks · {new Date(c.startDate).toLocaleDateString()} – {new Date(c.endDate).toLocaleDateString()}
+            {state.completedPrograms.map((c) => {
+              // Missing status = a legacy entry recorded before this field existed, which only
+              // ever happened on an actual full completion — defaults to "completed", never
+              // "ended_early" (active-program-management fix, item 3's distinction).
+              const endedEarly = c.status === "ended_early";
+              return (
+                // Plain (non-button) Card — its only action is the sibling Restart button, so
+                // there's no outer click target competing with it.
+                <Card key={c.id} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <div className="text-sm font-bold text-v5-text truncate">{c.programName}</div>
+                      <Pill tone={endedEarly ? "inactive" : undefined}>{endedEarly ? "Ended early" : "Completed"}</Pill>
+                    </div>
+                    <div className="text-xs text-v5-subtext mt-0.5">
+                      {c.weeks ? `${c.weeks} weeks · ` : ""}
+                      {new Date(c.startDate).toLocaleDateString()} – {new Date(c.endDate).toLocaleDateString()}
+                    </div>
                   </div>
-                </div>
-                <ButtonText icon={ChevronRight} onClick={() => onRestartCompletedProgram(c.programId, c.programSource)} className="shrink-0">
-                  Restart
-                </ButtonText>
-              </Card>
-            ))}
+                  <ButtonText icon={ChevronRight} onClick={() => onRestartCompletedProgram(c.programId, c.programSource)} className="shrink-0">
+                    Restart
+                  </ButtonText>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}
