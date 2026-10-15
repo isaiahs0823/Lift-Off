@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Minus, ChevronUp, ChevronDown, MoreHorizontal, Copy, Trash2, ChevronRight, Dumbbell, Calendar, X } from "lucide-react";
+import { Plus, Minus, ChevronUp, ChevronDown, MoreHorizontal, Copy, Trash2, ChevronRight, Dumbbell, Calendar, X, Check } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
 import { Card, SectionLabel, ScreenHeader, ButtonPrimary, ButtonSecondary, ButtonText, Pill } from "./ui/Kit.jsx";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
@@ -128,6 +128,7 @@ function DayRow({ day, index, state, programId, onEdit, onDuplicate, onDelete, o
 
 // ---------------- HOME ----------------
 function BuilderHome({ program, state, updateState, onEdit, onAddDay, onOpenSchedule, onClose, setProgram, persist }) {
+  const [nameJustSaved, setNameJustSaved] = useState(false);
   const trainingCount = countTrainingDays(program.days);
   const restCount = countRestDays(program.days);
   const atMaxDays = program.days.length >= MAX_DAYS;
@@ -170,11 +171,26 @@ function BuilderHome({ program, state, updateState, onEdit, onAddDay, onOpenSche
   return (
     <div className="space-y-5">
       <div>
-        <SectionLabel tone="muted">Program Builder</SectionLabel>
+        <div className="flex items-center gap-2">
+          <SectionLabel tone="muted">Program Name</SectionLabel>
+          {/* "Clear saved feedback" (program renaming UX fix, item 3) — every keystroke already
+              persists immediately (local-first, unchanged), this just confirms it visually once
+              the athlete stops typing rather than flashing on every character. */}
+          {nameJustSaved && (
+            <span className="text-[11px] text-v5-subtext/70 flex items-center gap-1">
+              <Check size={11} className="text-v5-red" /> Saved
+            </span>
+          )}
+        </div>
         <input
           type="text"
           value={program.name}
           onChange={(e) => persist(renameProgram(program, e.target.value))}
+          onBlur={() => {
+            if (!program.name.trim()) return;
+            setNameJustSaved(true);
+            setTimeout(() => setNameJustSaved(false), 2000);
+          }}
           placeholder="Program name"
           className="w-full bg-transparent text-2xl font-black text-v5-text focus:outline-none border-b border-transparent focus:border-v5-red/40 pb-1 mt-1"
         />

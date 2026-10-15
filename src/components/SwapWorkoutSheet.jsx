@@ -4,7 +4,7 @@ import { SlideInPanel } from "./SlideInPanel.jsx";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
-import { programDaysOverview, allProgramWorkouts, myWorkouts, buildOverrideFromRow } from "../utils/programSchedule.js";
+import { programDaysOverview, allProgramWorkouts, myWorkouts, buildOverrideFromRow, activeProgramAndCP } from "../utils/programSchedule.js";
 
 // Chips mix real muscle-group tags (matched against each exercise's exMap muscle) and split/
 // theme keywords (matched against the day/program name) — a workout day doesn't carry its own
@@ -263,7 +263,14 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
   ].filter(Boolean);
 
   return (
-    <SlideInPanel title="Choose Today's Workout" subtitle={state.currentProgram?.programName || null} onBack={onClose}>
+    <SlideInPanel
+      title="Choose Today's Workout"
+      // Live-resolved (program renaming UX fix, item 4) — state.currentProgram.programName is a
+      // snapshot from activation time and would keep showing a program's old name after a rename
+      // until the next sign-out/sign-in.
+      subtitle={activeProgramAndCP(state)?.prog?.name ?? state.currentProgram?.programName ?? null}
+      onBack={onClose}
+    >
       <div className="flex gap-1.5 border-b border-white/10 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
         {TABS.map((t) => (
           <button

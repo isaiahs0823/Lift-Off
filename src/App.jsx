@@ -37,6 +37,7 @@ import {
   Clock,
   Layers,
   BarChart3,
+  Type,
 } from "lucide-react";
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
@@ -140,7 +141,7 @@ import { findMostRecentSessionForPlan } from "./utils/workoutHistory.js";
 import { buildPRShareCard } from "./utils/shareCard.js";
 import WorkoutSharePreview from "./components/WorkoutSharePreview.jsx";
 import { suggestNext, topSetOf } from "./utils/progression.js";
-import { resolveCurrentProgramDay, programWeekAdherence } from "./utils/programSchedule.js";
+import { resolveCurrentProgramDay, programWeekAdherence, activeProgramAndCP } from "./utils/programSchedule.js";
 import { ScreenHeader, SectionLabel, Card, HeroCard, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, Pill, ListRow, ProgressBar, LineChart, PeriodSelect } from "./components/ui/Kit.jsx";
 import { featuredAndOtherPRs, sessionPRCount, prDeltaLabel, prHeroLabel, prPreviousLabel, PR_TYPE_LABEL } from "./utils/prSummary.js";
 import CustomExerciseForm from "./components/CustomExerciseForm.jsx";
@@ -150,7 +151,7 @@ import RepeatRecentWorkoutPicker from "./components/RepeatRecentWorkoutPicker.js
 import BreakMeaningPage from "./components/BreakMeaningPage.jsx";
 import ExerciseHistorySheet from "./components/ExerciseHistorySheet.jsx";
 import ProgramBuilder from "./components/ProgramBuilder.jsx";
-import { trainingDayCountLabel, countTrainingDays } from "./utils/programBuilder.js";
+import { trainingDayCountLabel, countTrainingDays, renameProgram } from "./utils/programBuilder.js";
 import { isReplacingActiveProgram, applyProgramActivation } from "./utils/programActivation.js";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained).
@@ -7446,12 +7447,48 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
 // workout/day preview) can share the exact same formatting instead of reimplementing it.
 
 function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onStartRecovery, onLogManualRecovery, onRestartCompletedProgram, onGoToBuild, onActivateProgram, onViewWorkout, onBack }) {
+  // Live-resolved active-program name (program renaming UX fix, item 4) — state.currentProgram.
+  // programName is a snapshot taken at activation time; reading it directly anywhere a rename
+  // should show up immediately would keep displaying the OLD name until the next sign-in.
+  const activeProgramName = activeProgramAndCP(state)?.prog?.name ?? state.currentProgram?.programName;
   const [detail, setDetail] = useState(null); // { kind: "program" | "template" | "customPlan" | "customProgram", id }
   // Program Builder (task: "fully editable training splits") — { programId } to edit an existing
   // custom program, or { startFrom: <template or program object> } to fork a new editable copy
   // from a built-in template / blank starting point. Set by the entry points below; cleared by
   // the builder's own "Done" action, which returns here (never auto-navigates further).
   const [builderTarget, setBuilderTarget] = useState(null);
+  // Inline "Rename program" (program renaming UX fix) — an expand-in-place row on the custom
+  // program detail screen, not a separate screen. renamingProgramId tracks which program's
+  // detail view currently has the input open (null = none); renameJustSavedId briefly flashes
+  // "Saved" on the program that was just renamed, then clears itself.
+  const [renamingProgramId, setRenamingProgramId] = useState(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renameJustSavedId, setRenameJustSavedId] = useState(null);
+  const startRenaming = (prog) => {
+    setRenamingProgramId(prog.id);
+    setRenameDraft(prog.name);
+  };
+  const cancelRenaming = () => setRenamingProgramId(null);
+  const saveRename = (prog) => {
+    const trimmed = renameDraft.trim();
+    // Never save an empty name, and a no-op edit (retyped the same name, or just whitespace
+    // around it) closes the row without writing anything — "in seconds," not a confirmation gate.
+    if (!trimmed || trimmed === prog.name) {
+      setRenamingProgramId(null);
+      return;
+    }
+    // renameProgram only ever touches `.name` — id, days, exercises, and every other field on
+    // this exact object are untouched, so history/schedules keyed by id are never affected (task
+    // items 5-7). Scoped to THIS program's id in the map, so no other custom program or the
+    // built-in template it may have been forked from is ever touched.
+    updateState((prev) => ({
+      ...prev,
+      customPrograms: (prev.customPrograms || []).map((p) => (p.id === prog.id ? renameProgram(p, trimmed) : p)),
+    }));
+    setRenamingProgramId(null);
+    setRenameJustSavedId(prog.id);
+    setTimeout(() => setRenameJustSavedId((id) => (id === prog.id ? null : id)), 2000);
+  };
   // Frequency-aware program picker (Part 2) — selectedDays starts from the athlete's saved
   // preference (or a pending review's proposed frequency) but is local UI state, never written
   // back to the profile just by browsing. reviewCompare only exists while the athlete arrived via
@@ -7636,26 +7673,69 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
         subtitle={trainingDayCountLabel(prog.days)}
         onBack={() => setDetail(null)}
       >
-        <div className="space-y-2">
-          {isCurrentCustom(prog.id) ? (
-            <div className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red/40 bg-v5-red/10 text-v5-red flex items-center justify-center gap-1.5">
-              <Check size={12} /> Currently active
+        {renamingProgramId === prog.id ? (
+          <div className="space-y-2">
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext">Program name</label>
+            <input
+              type="text"
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveRename(prog);
+                if (e.key === "Escape") cancelRenaming();
+              }}
+              autoFocus
+              className="w-full bg-v5-elevated text-v5-text rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-1 focus:ring-v5-red"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={cancelRenaming}
+                className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:text-v5-text/90"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => saveRename(prog)}
+                disabled={!renameDraft.trim()}
+                className="flex-1 py-2 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 disabled:opacity-40"
+              >
+                Save name
+              </button>
             </div>
-          ) : (
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {isCurrentCustom(prog.id) ? (
+              <div className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red/40 bg-v5-red/10 text-v5-red flex items-center justify-center gap-1.5">
+                <Check size={12} /> Currently active
+              </div>
+            ) : (
+              <button
+                onClick={() => onActivateProgram(prog, "custom")}
+                className="w-full py-2.5 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 flex items-center justify-center gap-1.5"
+              >
+                <Play size={12} /> Start this program
+              </button>
+            )}
             <button
-              onClick={() => onActivateProgram(prog, "custom")}
-              className="w-full py-2.5 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 flex items-center justify-center gap-1.5"
+              onClick={() => setBuilderTarget({ programId: prog.id })}
+              className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
             >
-              <Play size={12} /> Start this program
+              <Pencil size={12} /> Customize program
             </button>
-          )}
-          <button
-            onClick={() => setBuilderTarget({ programId: prog.id })}
-            className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
-          >
-            <Pencil size={12} /> Customize program
-          </button>
-        </div>
+            <button
+              onClick={() => startRenaming(prog)}
+              className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
+            >
+              <Type size={12} /> Rename program
+            </button>
+            {renameJustSavedId === prog.id && (
+              <div className="text-center text-xs text-v5-text/70 flex items-center justify-center gap-1.5">
+                <Check size={12} className="text-v5-red" /> Name saved
+              </div>
+            )}
+          </div>
+        )}
         {prog.days.map((day, di) => (
           <div key={di} className="border-t border-white/[0.06] pt-3">
             <div className="flex items-center justify-between mb-2">
@@ -7782,7 +7862,7 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
           <div className="border border-v5-red/25 bg-v5-elevated px-4 py-3 space-y-1.5">
             <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">Current → Proposed</div>
             <div className="text-sm text-v5-text/90">
-              <span className="text-v5-subtext">{state.currentProgram?.programName || "No active program"}</span>
+              <span className="text-v5-subtext">{activeProgramName || "No active program"}</span>
               {` (${reviewCompare.fromDays} days) → `}
               <span className="text-white font-bold">{prog.name}</span>
               {` (${countTrainingDays(prog.days)} days)`}
@@ -7820,6 +7900,14 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
           >
             <Pencil size={12} /> Customize program
           </button>
+          {/* "Clearly explain that the athlete is creating their own editable version" (program
+              renaming UX fix, item 2) — inline, not a confirmation dialog: Customize forks {prog}
+              into a brand-new customPrograms entry the instant it's tapped (forkProgramForEditing
+              in programBuilder.js), and this template object is never touched by that fork or
+              anything done to it afterward (item 7). */}
+          <p className="text-[11px] text-v5-subtext/60 text-center px-2">
+            Creates your own editable copy — rename it, change the days, add exercises. {prog.name} itself never changes.
+          </p>
         </div>
         {prog.days.map((day, di) =>
           day.type === "recovery" ? (
@@ -7997,7 +8085,7 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
         <SectionLabel>Find a program for your schedule</SectionLabel>
         {reviewCompare && (
           <div className="text-xs text-v5-subtext border-l-2 border-v5-red pl-2.5">
-            Current: <span className="text-v5-text/90">{state.currentProgram?.programName || "No active program"}</span> (
+            Current: <span className="text-v5-text/90">{activeProgramName || "No active program"}</span> (
             {reviewCompare.fromDays} days) → Proposed: {reviewCompare.toDays} days
           </div>
         )}
