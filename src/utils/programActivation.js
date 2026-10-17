@@ -7,6 +7,7 @@
 // regression test actually needs to pin down.
 import { resolveCurrentProgramDay } from "./programSchedule.js";
 import { clearCurrentProgramSlots } from "./weeklySchedule.js";
+import { renameProgram, forkProgramForEditing } from "./programBuilder.js";
 
 // Whether activating `program` would replace a DIFFERENT program as the active one — the signal
 // App.jsx uses to decide whether to show the "this replaces X" confirmation at all. Activating the
@@ -82,5 +83,56 @@ export function applyProgramEnd(prevState) {
     pendingFrequencyReview: null,
     weeklySchedule: clearCurrentProgramSlots(prevState.weeklySchedule),
     completedPrograms: [entry, ...(prevState.completedPrograms || [])],
+  };
+}
+
+// Renames the ACTIVE program in place, from wherever it's currently displayed (Program Timeline).
+// A no-op (returns prevState unchanged) when nothing is active or the trimmed name is empty/
+// unchanged.
+//
+// For an already-custom active program this is identical to the existing custom-program-detail
+// rename (renameProgram only ever touches `.name` — id, days, exercises, history all untouched;
+// `currentProgram.programName` is updated too since we're already producing a new object here, but
+// nothing actually depends on it being fresh — every display still resolves the name live via
+// activeProgramAndCP, same as before).
+//
+// For an active BUILT-IN program there is no field to rename — HERO_PROGRAMS/family templates are
+// static source data, not user state. "Renaming" one therefore means forking a personal copy
+// (forkProgramForEditing) the same way "Customize program" already does elsewhere — but unlike
+// that flow, this one also reassigns currentProgram to the fork's id, carrying over dayIndex/
+// totalDays/startDate/lastCompletedAt/lastCompletedDayIndex/selectedForDays byte-for-byte. This is
+// deliberately NOT the same thing as switching programs (applyProgramActivation): a switch always
+// restarts at day 0 because it's a genuinely different program; a rename is the same run, same
+// progress, just a new name, so nothing about where the athlete actually is should move. No
+// completedPrograms entry is written either — nothing has ended.
+//
+// Either branch leaves workoutSessions/logs/customExercises/weeklySchedule/completedPrograms
+// completely untouched, and session-completion matching (programSchedule.js's
+// sessionCompletesDay) keys off sourceProgramId+sourceDayLabel rather than the display name, so a
+// rename can never zero out "sessions completed" or a day's checkmark for history logged under the
+// old name.
+export function applyActiveProgramRename(prevState, newName) {
+  const cp = prevState.currentProgram;
+  if (!cp) return prevState;
+  const trimmed = (newName || "").trim();
+  if (!trimmed) return prevState;
+
+  if (cp.source === "custom") {
+    const existing = (prevState.customPrograms || []).find((p) => p.id === cp.programId);
+    if (!existing || existing.name === trimmed) return prevState;
+    return {
+      ...prevState,
+      customPrograms: prevState.customPrograms.map((p) => (p.id === cp.programId ? renameProgram(p, trimmed) : p)),
+      currentProgram: { ...cp, programName: trimmed },
+    };
+  }
+
+  const template = (prevState.programs || []).find((p) => p.id === cp.programId);
+  if (!template || template.name === trimmed) return prevState;
+  const fork = renameProgram(forkProgramForEditing(template), trimmed);
+  return {
+    ...prevState,
+    customPrograms: [...(prevState.customPrograms || []), fork],
+    currentProgram: { ...cp, programId: fork.id, programName: trimmed, source: "custom" },
   };
 }

@@ -152,7 +152,7 @@ import BreakMeaningPage from "./components/BreakMeaningPage.jsx";
 import ExerciseHistorySheet from "./components/ExerciseHistorySheet.jsx";
 import ProgramBuilder from "./components/ProgramBuilder.jsx";
 import { trainingDayCountLabel, countTrainingDays, renameProgram } from "./utils/programBuilder.js";
-import { isReplacingActiveProgram, applyProgramActivation, applyProgramEnd } from "./utils/programActivation.js";
+import { isReplacingActiveProgram, applyProgramActivation, applyProgramEnd, applyActiveProgramRename } from "./utils/programActivation.js";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained).
 // Exported so any screen that needs the official mark (e.g. BreakMeaningPage) reuses this exact
@@ -2522,6 +2522,13 @@ export default function LiftLog() {
     setProgramEndedNotice({ programName });
     setTab("today");
   };
+  // Rename the ACTIVE program directly from Program Timeline — the one screen built for managing
+  // the program you're currently running had no path to renaming at all (built-in or custom). The
+  // actual state transition (including the built-in-forks-to-a-named-copy case, which preserves
+  // dayIndex/progress rather than restarting at day 0) lives in applyActiveProgramRename in
+  // programActivation.js; this is just the thin updateState wrapper, same pattern as
+  // activateProgram/endCurrentProgram above.
+  const renameActiveProgram = (name) => updateState((prev) => applyActiveProgramRename(prev, name));
   // Naming is entirely optional (see StartWorkoutChoice/GuidedRunView) — this just lets an
   // athlete who started a Blank/Repeat workout give it a real name at any point, right up to
   // Finish Workout, without ever being asked for one up front.
@@ -3287,6 +3294,7 @@ export default function LiftLog() {
                 onViewWorkout={(sessionId) => viewWorkout(sessionId, "train")}
                 onSwitchProgram={() => setTab("templates")}
                 onEndProgram={endCurrentProgram}
+                onRenameProgram={renameActiveProgram}
               />
             )}
             {tab === "developmentPriorities" && (

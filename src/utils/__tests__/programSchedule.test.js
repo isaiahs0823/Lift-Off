@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { activeProgramAndCP, resolveCurrentProgramDay, resolveTodayWorkout } from "../programSchedule.js";
+import { activeProgramAndCP, resolveCurrentProgramDay, resolveTodayWorkout, programWeekAdherence, programTotalAdherence, resolveProgramTimeline } from "../programSchedule.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -98,5 +98,119 @@ describe("resolveTodayWorkout", () => {
 
   it("returns null cleanly when nothing is active — never throws", () => {
     expect(resolveTodayWorkout({ currentProgram: null })).toBeNull();
+  });
+});
+
+// A rename only ever changes prog.name — these three functions used to rebuild a match string
+// from the CURRENT name (`${prog.name} — ${day.label}`), which meant renaming an active program
+// silently un-completed every day logged under its previous name. They now match primarily via
+// each session's own sourceProgramId/sourceDayLabel (set at log time, immune to a later rename),
+// falling back to the legacy name match only for sessions that predate those fields.
+describe("adherence/timeline survive a program rename (regression)", () => {
+  const renamedProgram = {
+    id: "program_shape_fork",
+    name: "My Shape Plan", // the CURRENT, post-rename name
+    weeks: 10,
+    days: [
+      { label: "Day 1 — Lower: Glutes", exercises: [{ exId: "rdl", sets: 3, reps: 10 }] },
+      { label: "Day 2 — Upper: Push", exercises: [{ exId: "bench", sets: 3, reps: 8 }] },
+    ],
+  };
+  const cp = { programId: "program_shape_fork", programName: "My Shape Plan", source: "custom", dayIndex: 1, totalDays: 2, startDate: "2026-10-16T00:00:00Z" };
+
+  it("programTotalAdherence still counts a session logged under the program's OLD name, via sourceProgramId+sourceDayLabel", () => {
+    const state = {
+      currentProgram: cp,
+      customPrograms: [renamedProgram],
+      programs: [],
+      recoverySessions: [],
+      workoutSessions: [
+        { id: "s1", planName: "Shape — Day 1 — Lower: Glutes", finishedAt: "2026-10-16T12:00:00Z", sourceProgramId: "program_shape_fork", sourceDayLabel: "Day 1 — Lower: Glutes" },
+      ],
+    };
+    const adherence = programTotalAdherence(state);
+    expect(adherence.lifting.completed).toBe(1); // NOT 0 — this is the exact bug a naive rename feature would reintroduce
+  });
+
+  it("programWeekAdherence does the same for the trailing-window count", () => {
+    const state = {
+      currentProgram: cp,
+      customPrograms: [renamedProgram],
+      programs: [],
+      recoverySessions: [],
+      workoutSessions: [
+        { id: "s1", planName: "Shape — Day 1 — Lower: Glutes", finishedAt: new Date().toISOString(), sourceProgramId: "program_shape_fork", sourceDayLabel: "Day 1 — Lower: Glutes" },
+      ],
+    };
+    const adherence = programWeekAdherence(state);
+    expect(adherence.lifting.completed).toBe(1);
+  });
+
+  it("resolveProgramTimeline still shows the day as completed (green check), not missed", () => {
+    const state = {
+      currentProgram: cp,
+      customPrograms: [renamedProgram],
+      programs: [],
+      recoverySessions: [],
+      workoutSessions: [
+        { id: "s1", planName: "Shape — Day 1 — Lower: Glutes", finishedAt: cp.startDate, sourceProgramId: "program_shape_fork", sourceDayLabel: "Day 1 — Lower: Glutes" },
+      ],
+    };
+    const timeline = resolveProgramTimeline(state);
+    const day1 = timeline.weeks[0].days[0];
+    expect(day1.status).toBe("completed");
+    expect(day1.completedSession.id).toBe("s1");
+  });
+
+  it("legacy sessions with no sourceProgramId still match by name, as long as the name hasn't changed (backward compatibility)", () => {
+    const stillNamedShape = { ...renamedProgram, name: "Shape" };
+    const state = {
+      currentProgram: { ...cp, programName: "Shape" },
+      customPrograms: [stillNamedShape],
+      programs: [],
+      recoverySessions: [],
+      workoutSessions: [{ id: "s1", planName: "Shape — Day 1 — Lower: Glutes", finishedAt: "2026-10-16T12:00:00Z" }], // no sourceProgramId at all
+    };
+    const adherence = programTotalAdherence(state);
+    expect(adherence.lifting.completed).toBe(1);
+  });
+
+  it("still counts a session logged BEFORE a built-in program was forked-and-renamed, via the fork's createdFrom.templateId", () => {
+    // This is the real scenario: athlete runs built-in "Shape" (id prog_shape_5day), logs Day 1,
+    // THEN renames it from Program Timeline — applyActiveProgramRename forks Shape into a NEW
+    // custom program id, so the session's sourceProgramId (still prog_shape_5day) no longer equals
+    // the active program's new id directly; it must match via the fork's own createdFrom record.
+    const forkOfShape = {
+      ...renamedProgram,
+      id: "program_fork_of_shape",
+      createdFrom: { kind: "template", templateId: "prog_shape_5day", name: "Shape" },
+    };
+    const state = {
+      currentProgram: { ...cp, programId: "program_fork_of_shape", programName: "My Shape Plan" },
+      customPrograms: [forkOfShape],
+      programs: [],
+      recoverySessions: [],
+      workoutSessions: [
+        { id: "s1", planName: "Shape — Day 1 — Lower: Glutes", finishedAt: "2026-10-16T12:00:00Z", sourceProgramId: "prog_shape_5day", sourceDayLabel: "Day 1 — Lower: Glutes" },
+      ],
+    };
+    const adherence = programTotalAdherence(state);
+    expect(adherence.lifting.completed).toBe(1);
+    const timeline = resolveProgramTimeline(state);
+    expect(timeline.weeks[0].days[0].status).toBe("completed");
+  });
+
+  it("a session belonging to a DIFFERENT program is never counted, even with a matching old-name string", () => {
+    const state = {
+      currentProgram: cp,
+      customPrograms: [renamedProgram],
+      programs: [],
+      recoverySessions: [],
+      workoutSessions: [
+        { id: "s1", planName: "Shape — Day 1 — Lower: Glutes", finishedAt: "2026-10-16T12:00:00Z", sourceProgramId: "some_other_program", sourceDayLabel: "Day 1 — Lower: Glutes" },
+      ],
+    };
+    const adherence = programTotalAdherence(state);
+    expect(adherence.lifting.completed).toBe(0);
   });
 });
