@@ -415,6 +415,29 @@ export function buildOverrideFromRow(row) {
   return { ...base, sourceType: "custom", planId: row.planId ?? null, planSource: row.planSource ?? "custom" };
 }
 
+// The full state patch for "swap today to this workout row" — extracted from SwapWorkoutSheet's
+// own commitRow so the exact same rule (set the override, log the displaced day as SWAPPED rather
+// than letting it silently read as missed) is available to any other UI that lets an athlete pick
+// a different day of their own program to run today, e.g. Program Timeline's "Start this workout"
+// on a day that isn't the one actually up next. Picking the day that's already planned is a no-op
+// that just clears any stale override, exactly as before.
+export function applyProgramDaySwap(state, row) {
+  const cp = state.currentProgram;
+  const isPlannedNoOp = cp && row.sourceType === "program" && row.programId === cp.programId && row.source === cp.source && row.dayIndex === cp.dayIndex;
+  if (isPlannedNoOp) return { ...state, programDayOverride: null };
+  const overview = programDaysOverview(state);
+  const plannedRow = overview ? overview.days.find((d) => d.isPlanned) : null;
+  const swapLogEntry =
+    cp && plannedRow
+      ? { date: todayDateStr(), programId: cp.programId, source: cp.source, dayIndex: plannedRow.index, dayLabel: plannedRow.label }
+      : null;
+  return {
+    ...state,
+    programDayOverride: buildOverrideFromRow(row),
+    programSwapLog: swapLogEntry ? [swapLogEntry, ...(state.programSwapLog || [])].slice(0, 200) : state.programSwapLog,
+  };
+}
+
 // Whether a completed/pending override's actually-performed workout has already logged a
 // session today — used for "outside program" overrides, whose completion is tracked by exact
 // plan-name match (same rule every other "is this day done" check already uses) rather than by

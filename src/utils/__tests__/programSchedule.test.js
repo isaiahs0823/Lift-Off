@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { activeProgramAndCP, resolveCurrentProgramDay, resolveTodayWorkout, programWeekAdherence, programTotalAdherence, resolveProgramTimeline } from "../programSchedule.js";
+import { activeProgramAndCP, resolveCurrentProgramDay, resolveTodayWorkout, programWeekAdherence, programTotalAdherence, resolveProgramTimeline, applyProgramDaySwap } from "../programSchedule.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -212,5 +212,45 @@ describe("adherence/timeline survive a program rename (regression)", () => {
     };
     const adherence = programTotalAdherence(state);
     expect(adherence.lifting.completed).toBe(0);
+  });
+});
+
+// "Swap Workout" from Program Timeline (and the same mechanism Program Timeline's new "Start This
+// Workout" button uses for a non-current day) — extracted from SwapWorkoutSheet's own commitRow so
+// both share one rule.
+describe("applyProgramDaySwap", () => {
+  const cp = { programId: "program_A", programName: "Program A", source: "custom", dayIndex: 0, totalDays: 2, startDate: "2026-01-01T00:00:00Z" };
+
+  it("sets programDayOverride to the chosen day and logs the displaced (planned) day as swapped", () => {
+    const state = { currentProgram: cp, customPrograms: [programA, programB], programs: [], workoutSessions: [], recoverySessions: [], programSwapLog: [] };
+    const row = { sourceType: "program", programId: "program_A", source: "custom", dayIndex: 1, programName: "Program A", dayLabel: "A Day 2", exercises: programA.days[1].exercises };
+    const next = applyProgramDaySwap(state, row);
+    expect(next.programDayOverride).toEqual({ date: expect.any(String), exercises: row.exercises, programName: "Program A", dayLabel: "A Day 2", sourceType: "program", programId: "program_A", source: "custom", dayIndex: 1 });
+    expect(next.programSwapLog[0]).toMatchObject({ programId: "program_A", source: "custom", dayIndex: 0, dayLabel: "A Day 1" }); // the displaced, originally-planned day
+  });
+
+  it("swapping to a DIFFERENT program's day works the same way (cross-program swap)", () => {
+    const state = { currentProgram: cp, customPrograms: [programA, programB], programs: [], workoutSessions: [], recoverySessions: [], programSwapLog: [] };
+    const row = { sourceType: "program", programId: "program_B", source: "custom", dayIndex: 2, programName: "Program B", dayLabel: "B Day 3", exercises: programB.days[2].exercises };
+    const next = applyProgramDaySwap(state, row);
+    expect(next.programDayOverride.programId).toBe("program_B");
+    expect(next.programDayOverride.dayIndex).toBe(2);
+  });
+
+  it("picking the already-planned day is a no-op that clears any existing override, not a redundant one", () => {
+    const state = { currentProgram: cp, customPrograms: [programA, programB], programs: [], workoutSessions: [], recoverySessions: [], programSwapLog: [], programDayOverride: { sourceType: "program", programId: "program_B", source: "custom", dayIndex: 1 } };
+    const row = { sourceType: "program", programId: "program_A", source: "custom", dayIndex: 0, programName: "Program A", dayLabel: "A Day 1", exercises: programA.days[0].exercises };
+    const next = applyProgramDaySwap(state, row);
+    expect(next.programDayOverride).toBeNull();
+    expect(next.programSwapLog).toEqual([]); // untouched — nothing was actually displaced
+  });
+
+  it("never touches workoutSessions, logs, or any program's own day data", () => {
+    const sessions = [{ id: "s1", planName: "x" }];
+    const state = { currentProgram: cp, customPrograms: [programA, programB], programs: [], workoutSessions: sessions, recoverySessions: [], programSwapLog: [] };
+    const row = { sourceType: "program", programId: "program_A", source: "custom", dayIndex: 1, programName: "Program A", dayLabel: "A Day 2", exercises: programA.days[1].exercises };
+    const next = applyProgramDaySwap(state, row);
+    expect(next.workoutSessions).toBe(sessions);
+    expect(next.customPrograms).toBe(state.customPrograms);
   });
 });

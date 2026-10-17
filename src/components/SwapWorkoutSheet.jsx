@@ -4,7 +4,7 @@ import { SlideInPanel } from "./SlideInPanel.jsx";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 import MuscleBodyOutline from "./MuscleBodyOutline.jsx";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
-import { programDaysOverview, allProgramWorkouts, myWorkouts, buildOverrideFromRow, activeProgramAndCP } from "../utils/programSchedule.js";
+import { programDaysOverview, allProgramWorkouts, myWorkouts, applyProgramDaySwap, activeProgramAndCP } from "../utils/programSchedule.js";
 
 // Chips mix real muscle-group tags (matched against each exercise's exMap muscle) and split/
 // theme keywords (matched against the day/program name) — a workout day doesn't carry its own
@@ -188,30 +188,11 @@ export default function SwapWorkoutSheet({ state, updateState, exMap, onClose, o
 
   if (!overview && allRows.length === 0 && mineRows.length === 0) return null; // nothing to swap to at all
 
+  // The actual state patch (set the override, log the displaced day as SWAPPED rather than
+  // letting it silently read as missed) is shared with any other UI that lets an athlete pick a
+  // different day of their own program to run today — see applyProgramDaySwap's own comment.
   const commitRow = (row) => {
-    updateState((prev) => {
-      const cp = prev.currentProgram;
-      // Picking the day BRK already had planned just clears any existing override rather than
-      // storing a redundant one that points at the same place.
-      const isPlannedNoOp = cp && row.sourceType === "program" && row.programId === cp.programId && row.source === cp.source && row.dayIndex === cp.dayIndex;
-      if (isPlannedNoOp) return { ...prev, programDayOverride: null };
-      // Record that the active program's own planned day for today was deliberately displaced —
-      // an additive, append-only annotation (see programSwapLog's own comment in
-      // loadInitialState) read only by resolveProgramTimeline so that day's slot reads as
-      // SWAPPED rather than MISSED once its week concludes, instead of silently looking like it
-      // was skipped. currentRows/overview reflect the active program at open time, so
-      // `plannedRow` here is always the day actually being displaced by this commit.
-      const plannedRow = overview ? currentRows.find((r) => r.isPlanned) : null;
-      const swapLogEntry =
-        cp && plannedRow
-          ? { date: new Date().toISOString().slice(0, 10), programId: cp.programId, source: cp.source, dayIndex: plannedRow.dayIndex, dayLabel: plannedRow.dayLabel }
-          : null;
-      return {
-        ...prev,
-        programDayOverride: buildOverrideFromRow(row),
-        programSwapLog: swapLogEntry ? [swapLogEntry, ...(prev.programSwapLog || [])].slice(0, 200) : prev.programSwapLog,
-      };
-    });
+    updateState((prev) => applyProgramDaySwap(prev, row));
     onClose();
   };
 

@@ -9,6 +9,25 @@ import { resolveCurrentProgramDay } from "./programSchedule.js";
 import { clearCurrentProgramSlots } from "./weeklySchedule.js";
 import { renameProgram, forkProgramForEditing } from "./programBuilder.js";
 
+// The currentProgram patch behind startRun's own programContext handling — extracted so the exact
+// rule (preserve the athlete's real sequential position when starting a SWAPPED day of the
+// already-active program; only take dayIndex/totalDays fresh from programContext when a different
+// program is actually becoming active) is independently testable. programDayOverride is a
+// deliberate one-day substitution that — per its own module comment in programSchedule.js — must
+// never touch cp.dayIndex; before this existed, starting a swapped non-current day (Program
+// Timeline's "Start This Workout," or the pre-existing Swap Workout → Today → Start path) silently
+// overwrote dayIndex with whatever day was swapped to, corrupting the athlete's actual progress
+// through the program the moment they did anything but today's literal next day.
+export function nextCurrentProgramForStartRun(prevCurrentProgram, programContext, preferredDays) {
+  const isSameProgram = !!(prevCurrentProgram && prevCurrentProgram.programId === programContext.programId && prevCurrentProgram.source === programContext.source);
+  const startDate = isSameProgram ? prevCurrentProgram.startDate : new Date().toISOString();
+  const selectedForDays = isSameProgram ? prevCurrentProgram.selectedForDays ?? null : preferredDays ?? null;
+  if (isSameProgram) {
+    return { ...programContext, dayIndex: prevCurrentProgram.dayIndex, totalDays: prevCurrentProgram.totalDays, startDate, selectedForDays };
+  }
+  return { ...programContext, startDate, selectedForDays };
+}
+
 // Whether activating `program` would replace a DIFFERENT program as the active one — the signal
 // App.jsx uses to decide whether to show the "this replaces X" confirmation at all. Activating the
 // same program that's already active (e.g. re-tapping Start on it) is never a replacement.

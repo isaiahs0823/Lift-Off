@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
-import { ChevronDown, ChevronUp, ChevronRight, Check, X, ArrowLeftRight, XCircle, Type } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight, Check, X, ArrowLeftRight, XCircle, Type, Play, RefreshCw } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
-import { resolveProgramTimeline, programWeekAdherence, programTotalAdherence } from "../utils/programSchedule.js";
+import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
+import { resolveProgramTimeline, programWeekAdherence, programTotalAdherence, applyProgramDaySwap } from "../utils/programSchedule.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import { groupedPriorities, sanitizeDevelopmentPriorities, labelFor } from "../utils/developmentPriorities.js";
 
@@ -74,7 +75,14 @@ function WeekBlock({ week, defaultOpen, onTapDay }) {
   );
 }
 
-function DayPreview({ day, weekNumber, programName, exMap, onBack, onViewWorkout }) {
+function DayPreview({ day, weekNumber, programName, exMap, onBack, onViewWorkout, onStart }) {
+  // "Start this workout" (item 1 of the check-off/swap feedback) — any day that isn't already
+  // completed and isn't a recovery day (recovery has its own Start Recovery Session entry point
+  // elsewhere, out of scope here) can be logged for real, right from its own preview. onStart
+  // (built by the parent) already knows whether this is literally today's planned day — if it
+  // isn't, it quietly swaps today to this day first (the same programDayOverride mechanism Swap
+  // Workout uses) before starting, so tapping an upcoming/missed day here is one tap, not two.
+  const canStart = !day.isRecovery && day.status !== "completed" && !!onStart;
   return (
     <SlideInPanel title={`Week ${weekNumber} — ${day.label}`} subtitle={programName} onBack={onBack}>
       {day.status === "completed" && day.completedSession && (
@@ -121,6 +129,14 @@ function DayPreview({ day, weekNumber, programName, exMap, onBack, onViewWorkout
           View Session
         </button>
       )}
+      {canStart && (
+        <button
+          onClick={() => onStart(day)}
+          className="w-full py-3 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 flex items-center justify-center gap-1.5"
+        >
+          <Play size={14} /> Start This Workout
+        </button>
+      )}
     </SlideInPanel>
   );
 }
@@ -129,8 +145,12 @@ function DayPreview({ day, weekNumber, programName, exMap, onBack, onViewWorkout
 // never writes anything (see resolveProgramTimeline's own header comment). Reads the single
 // active program directly rather than taking an id prop, since there's only ever one at a time —
 // every entry point (Train's Current Program card, Today's compact card) just navigates here.
-export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWorkout, onSwitchProgram, onEndProgram, onRenameProgram }) {
+export default function ProgramTimelineScreen({ state, updateState, exMap, onBack, onViewWorkout, onSwitchProgram, onEndProgram, onRenameProgram, onStartRun, onNavigate }) {
   const [openDay, setOpenDay] = useState(null); // { day, weekNumber } | null
+  // "Swap Workout" (item 2 — swap which day, not Switch Program's swap which PROGRAM) opens the
+  // exact same sheet Today/Train already use, so picking a different day of this same program to
+  // run today behaves identically everywhere it's offered.
+  const [swapOpen, setSwapOpen] = useState(false);
   // Inline "rename the program I'm actually running" (same expand-in-place pattern already used
   // for custom programs' own detail screen) — this was the one obvious place in the app with no
   // path to renaming at all: an athlete looking at THIS screen, the one built for managing their
@@ -163,6 +183,32 @@ export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWork
       savedTimeoutRef.current = setTimeout(() => setJustSaved(false), 2500);
     }
     setRenaming(false);
+  };
+
+  // "Start This Workout" from a day's own preview (item 1). day.status === "current" means this
+  // IS the day already up next — just start it, same single-tap convenience Today/Train give.
+  // Anything else (an upcoming day later that week, a missed day, another week's row entirely)
+  // first swaps today to point at it via applyProgramDaySwap — the exact same mechanism Swap
+  // Workout uses — then starts it, so logging a non-default day is one tap here instead of a
+  // separate swap-then-go-to-Today round trip.
+  const startDay = (day) => {
+    if (day.isRecovery || !onStartRun) return;
+    const plan = { name: `${timeline.programName} — ${day.label}`, exercises: day.exercises };
+    const programContext = { programId: timeline.programId, programName: timeline.programName, source: timeline.source, dayIndex: day.dayIndex, totalDays: timeline.totalDaysPerCycle };
+    if (day.status !== "current" && updateState) {
+      const row = {
+        sourceType: "program",
+        programId: timeline.programId,
+        source: timeline.source,
+        dayIndex: day.dayIndex,
+        programName: timeline.programName,
+        dayLabel: day.label,
+        exercises: day.exercises,
+      };
+      updateState((prev) => applyProgramDaySwap(prev, row));
+    }
+    setOpenDay(null);
+    onStartRun(plan, programContext);
   };
 
   if (!timeline) {
@@ -198,8 +244,13 @@ export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWork
         exMap={exMap}
         onBack={() => setOpenDay(null)}
         onViewWorkout={onViewWorkout}
+        onStart={startDay}
       />
     );
+  }
+
+  if (swapOpen && updateState) {
+    return <SwapWorkoutSheet state={state} updateState={updateState} exMap={exMap} onClose={() => setSwapOpen(false)} onNavigate={onNavigate} />;
   }
 
   return (
@@ -259,6 +310,14 @@ export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWork
           {" · "}
           Day {timeline.currentDayIndex + 1} of {timeline.totalDaysPerCycle}
         </div>
+        {/* "Swap Workout" (do a different day of THIS program today) — deliberately distinct from
+            "Switch Program" below (which replaces the whole active program). Same understated
+            text-link treatment Today/Train already use for it, same underlying sheet. */}
+        {updateState && (
+          <button onClick={() => setSwapOpen(true)} className="flex items-center gap-1.5 text-xs text-v5-subtext hover:text-v5-red mt-1.5">
+            <RefreshCw size={12} /> Swap workout
+          </button>
+        )}
         {(timeline.startDate || timeline.projectedCompletionDate) && (
           <div className="text-xs text-v5-subtext/70 mt-0.5">
             {timeline.startDate && `Started ${fmtDate(timeline.startDate)}`}
