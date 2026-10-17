@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown, Target, Flame, Plus, X } from "lucide-react";
+import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown, Target, Flame, Plus, X, AlertTriangle, CloudOff } from "lucide-react";
 import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
 import NutritionCard from "./NutritionCard.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
@@ -15,6 +15,7 @@ import { buildCoachContext } from "../utils/coachContext.js";
 import { generateTodaySnapshot } from "../services/coachService.js";
 import { computeReadinessScore, readinessBand, BAND_LABEL, READINESS_SHORT } from "../utils/readiness.js";
 import { syncCoachMemory } from "../utils/coachMemory.js";
+import { friendlyAuthCallbackMessage } from "../utils/authCallback.js";
 import {
   hasSchedule,
   getTodaySchedule,
@@ -558,6 +559,16 @@ export default function TodayTab({
   onViewWorkout,
   onOpenNutrition,
   onOpenAthleteRating,
+  activationNotice,
+  onDismissActivationNotice,
+  accountSyncNotice,
+  onDismissAccountSyncNotice,
+  authCallbackError,
+  onDismissAuthCallbackError,
+  onGoToAccount,
+  programEndedNotice,
+  onDismissProgramEndedNotice,
+  onChooseProgram,
 }) {
   const ratingSnapshots = state.athleteRatingSnapshots || [];
   const latestRatingSnapshot = ratingSnapshots[ratingSnapshots.length - 1] || null;
@@ -644,6 +655,31 @@ export default function TodayTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.workoutSessions, state.cardioLogs, state.logs, state.bodyweightLogs, state.readinessLogs, state.scheduleLog, state.weeklySchedule]);
 
+  // "Start This Program" success banner (UX audit Phase 1, item 1) — auto-dismisses itself after a
+  // few seconds so it never lingers as permanent clutter; the X lets the athlete clear it sooner.
+  useEffect(() => {
+    if (!activationNotice || !onDismissActivationNotice) return;
+    const t = setTimeout(onDismissActivationNotice, 6000);
+    return () => clearTimeout(t);
+  }, [activationNotice, onDismissActivationNotice]);
+
+  // "New vs. restored account" banner (P0 auth audit, item 8) — same auto-dismiss treatment.
+  // authCallbackError deliberately does NOT auto-dismiss — it's an action item (request a new
+  // link), not a one-shot confirmation, and it already clears itself the moment a sign-in
+  // actually succeeds (see useSupabaseAuth.js's onAuthStateChange handler).
+  useEffect(() => {
+    if (!accountSyncNotice || !onDismissAccountSyncNotice) return;
+    const t = setTimeout(onDismissAccountSyncNotice, 8000);
+    return () => clearTimeout(t);
+  }, [accountSyncNotice, onDismissAccountSyncNotice]);
+
+  // "End Current Program" success banner (active-program-management fix).
+  useEffect(() => {
+    if (!programEndedNotice || !onDismissProgramEndedNotice) return;
+    const t = setTimeout(onDismissProgramEndedNotice, 6000);
+    return () => clearTimeout(t);
+  }, [programEndedNotice, onDismissProgramEndedNotice]);
+
   const startScheduled = (source) => {
     const run = buildRunFromSource(state, source);
     if (run) onStartRun(run.plan, run.programContext);
@@ -681,6 +717,89 @@ export default function TodayTab({
         <div className="text-xs text-v5-subtext mt-0.5">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
       </div>
 
+      {authCallbackError && (
+        <div className="border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 flex items-start gap-2.5">
+          <AlertTriangle size={16} className="text-yellow-500 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 text-sm">
+            <span className="font-bold text-v5-text">Sign-in link didn't work.</span>
+            <div className="text-xs text-v5-subtext mt-0.5">{friendlyAuthCallbackMessage(authCallbackError)}</div>
+            {onGoToAccount && (
+              <button onClick={onGoToAccount} className="text-[11px] uppercase tracking-widest text-v5-red hover:text-v5-red mt-1.5">
+                Go to Account →
+              </button>
+            )}
+          </div>
+          {onDismissAuthCallbackError && (
+            <button onClick={onDismissAuthCallbackError} className="shrink-0 p-0.5 text-v5-subtext hover:text-v5-text" aria-label="Dismiss">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {accountSyncNotice && (
+        <div className="border border-v5-red/30 bg-v5-red/10 px-4 py-3 flex items-start gap-2.5">
+          {accountSyncNotice.kind === "restored" ? (
+            <Check size={16} className="text-v5-red shrink-0 mt-0.5" />
+          ) : (
+            <CloudOff size={16} className="text-v5-red shrink-0 mt-0.5" />
+          )}
+          <div className="flex-1 min-w-0 text-sm">
+            {accountSyncNotice.kind === "restored" ? (
+              <>
+                <span className="font-bold text-v5-text">Welcome back.</span>
+                <span className="text-v5-subtext"> Restored your history from {accountSyncNotice.email}.</span>
+              </>
+            ) : (
+              <>
+                <span className="font-bold text-v5-text">No cloud history found</span>
+                <span className="text-v5-subtext"> for {accountSyncNotice.email}.</span>
+                <div className="text-xs text-v5-subtext mt-0.5">
+                  If this isn't the email you meant to use, sign out and try again — your data on this device is safe either way and will sync up now.
+                </div>
+              </>
+            )}
+          </div>
+          {onDismissAccountSyncNotice && (
+            <button onClick={onDismissAccountSyncNotice} className="shrink-0 p-0.5 text-v5-subtext hover:text-v5-text" aria-label="Dismiss">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {programEndedNotice && (
+        <div className="border border-white/10 bg-v5-elevated px-4 py-3 flex items-start gap-2.5">
+          <Check size={16} className="text-v5-subtext shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 text-sm">
+            <span className="font-bold text-v5-text">{programEndedNotice.programName}</span>
+            <span className="text-v5-subtext"> is no longer your active program.</span>
+            <div className="text-xs text-v5-subtext mt-0.5">Its history is saved — pick up a new program whenever you're ready.</div>
+          </div>
+          {onDismissProgramEndedNotice && (
+            <button onClick={onDismissProgramEndedNotice} className="shrink-0 p-0.5 text-v5-subtext hover:text-v5-text" aria-label="Dismiss">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {activationNotice && (
+        <div className="border border-v5-red/30 bg-v5-red/10 px-4 py-3 flex items-start gap-2.5">
+          <Check size={16} className="text-v5-red shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 text-sm">
+            <span className="font-bold text-v5-text">{activationNotice.programName}</span>
+            <span className="text-v5-subtext"> is now your active program.</span>
+            {activationNotice.dayLabel && <div className="text-xs text-v5-subtext mt-0.5">Up next: {activationNotice.dayLabel}</div>}
+          </div>
+          {onDismissActivationNotice && (
+            <button onClick={onDismissActivationNotice} className="shrink-0 p-0.5 text-v5-subtext hover:text-v5-text" aria-label="Dismiss">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* "WHO / WHERE AM I" — the first of Today's two dominant concepts (task Part 1). Compact
           by design: a one-line status, never the full category/muscle breakdown that lives in
           Progress (task: "TODAY: quick status, PROGRESS: deep analysis — do not duplicate the
@@ -688,6 +807,27 @@ export default function TodayTab({
       <AthleteRatingCard snapshot={latestRatingSnapshot} onOpen={onOpenAthleteRating} compact />
 
       {missedEntry && <MissedWorkoutBanner missed={missedEntry} state={state} updateState={updateState} onStartRun={onStartRun} />}
+
+      {/* Standing "no active program" prompt (active-program-management fix, item 7) — separate
+          from the dominant card below on purpose: an athlete can validly run a weekly schedule of
+          standalone plans/templates with no "program" at all, and today's schedule slot (rest,
+          recovery, a standalone plan) stays exactly as accurate and useful as it already was for
+          that athlete. But when there's genuinely no active program, that fact needs to be
+          visible and actionable every time Today renders — not just in the one-shot banner right
+          after ending one (that auto-dismisses in 6s) or buried behind whatever today happens to
+          be scheduled as. Unlike that banner, this never auto-dismisses; it's simply absent the
+          moment a program is active again. */}
+      {!state.currentProgram && (
+        <Card className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-v5-text">No active program</div>
+            <div className="text-xs text-v5-subtext mt-0.5">Follow a structured multi-day plan again whenever you're ready.</div>
+          </div>
+          <ButtonPrimary size="sm" fullWidth={false} onClick={onChooseProgram || (() => onNavigate("train"))}>
+            Choose a Program
+          </ButtonPrimary>
+        </Card>
+      )}
 
       {/* Today's training — the dominant card on the page. */}
       {scheduleOn && todaySchedule?.type === "rest" ? (
@@ -943,6 +1083,17 @@ export default function TodayTab({
                 </>
               );
             })()
+          ) : !state.currentProgram ? (
+            // No active program at all (active-program-management fix, item 7) — the athlete
+            // either never had one or just ended one via Program Timeline's "End Program." The
+            // useful next step is picking a program, not the generic single-workout picker.
+            <>
+              <div className="text-sm text-v5-subtext">No active program.</div>
+              <ButtonPrimary size="lg" onClick={onChooseProgram || (() => onNavigate("train"))}>Choose a Program</ButtonPrimary>
+              <ButtonText tone="muted" onClick={() => onNavigate("train")} className="pt-1">
+                Or start a single workout
+              </ButtonText>
+            </>
           ) : (
             <>
               <div className="text-sm text-v5-subtext">No workout queued up.</div>

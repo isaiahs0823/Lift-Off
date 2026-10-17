@@ -25,6 +25,33 @@ function isRecoveryProgramDay(day) {
   return !!day && day.type === "recovery";
 }
 
+// Whether a logged session "completes" a given program day-slot — the one rule
+// programWeekAdherence, programTotalAdherence, and resolveProgramTimeline all share, so a program
+// rename can never change the answer. Prefers the session's own sourceProgramId/sourceDayLabel
+// (set at log time, never touched by a later rename — see programActivation.js's
+// applyActiveProgramRename) over a name-string match, since `${prog.name} — ${day.label}` is only
+// ever the CURRENT name: matching on it would silently un-complete every day logged under a
+// program's previous name the instant it's renamed.
+//
+// Renaming an active BUILT-IN program forks it into a new custom program with its OWN id (static
+// template data can't be renamed in place — see applyActiveProgramRename) — so a session logged
+// before that rename carries the ORIGINAL built-in's id, not the fork's. forkProgramForEditing
+// always records where a fork came from (`createdFrom.templateId`), so this also accepts a session
+// whose sourceProgramId matches THAT — otherwise every session logged before a built-in-program
+// rename would silently drop out of "sessions completed" the instant the rename happened, the
+// exact bug this whole function exists to prevent, just one level deeper (by id instead of by
+// name). Falls back to the legacy name match only for sessions that predate sourceProgramId being
+// reliably set, so nothing already counting stops counting.
+function sessionCompletesDay(session, cp, prog, day) {
+  if (session.sourceProgramId != null && session.sourceDayLabel != null) {
+    if (session.sourceDayLabel !== day.label) return false;
+    if (cp?.programId != null && session.sourceProgramId === cp.programId) return true;
+    if (prog?.createdFrom?.templateId != null && session.sourceProgramId === prog.createdFrom.templateId) return true;
+    return false;
+  }
+  return session.planName === `${prog.name} — ${day.label}`;
+}
+
 function todayDateStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -410,16 +437,15 @@ export function overrideCompletedTodaySession(state, ov) {
 export function programWeekAdherence(state, windowDays = 7) {
   const active = activeProgramAndCP(state);
   if (!active) return null;
-  const { prog } = active;
+  const { cp, prog } = active;
   const cutoffMs = Date.now() - windowDays * MS_PER_DAY;
   const lifting = { scheduled: 0, completed: 0 };
   const recovery = { scheduled: 0, completed: 0 };
   prog.days.forEach((day) => {
-    const planName = `${prog.name} — ${day.label}`;
     const bucket = isRecoveryProgramDay(day) ? recovery : lifting;
     const sessions = isRecoveryProgramDay(day) ? state.recoverySessions : state.workoutSessions;
     bucket.scheduled += 1;
-    const done = (sessions || []).some((s) => s.planName === planName && new Date(s.finishedAt).getTime() >= cutoffMs);
+    const done = (sessions || []).some((s) => sessionCompletesDay(s, cp, prog, day) && new Date(s.finishedAt).getTime() >= cutoffMs);
     if (done) bucket.completed += 1;
   });
   return {
@@ -452,10 +478,9 @@ export function programTotalAdherence(state) {
     const isRecovery = isRecoveryProgramDay(day);
     if (isRecovery) recoveryPerCycle += 1;
     else liftingPerCycle += 1;
-    const planName = `${prog.name} — ${day.label}`;
     const bucket = isRecovery ? recovery : lifting;
     const sessions = isRecovery ? state.recoverySessions : state.workoutSessions;
-    bucket.completed += (sessions || []).filter((s) => s.planName === planName && new Date(s.finishedAt).getTime() >= startMs).length;
+    bucket.completed += (sessions || []).filter((s) => sessionCompletesDay(s, cp, prog, day) && new Date(s.finishedAt).getTime() >= startMs).length;
   });
   if (totalWeeks) {
     lifting.scheduled = liftingPerCycle * totalWeeks;
@@ -516,7 +541,7 @@ export function resolveProgramTimeline(state) {
       const sessions = isRecovery ? state.recoverySessions : state.workoutSessions;
       const completedSession =
         (sessions || [])
-          .filter((s) => s.planName === planName && new Date(s.finishedAt).getTime() >= weekStartMs && new Date(s.finishedAt).getTime() < weekEndMs)
+          .filter((s) => sessionCompletesDay(s, cp, prog, day) && new Date(s.finishedAt).getTime() >= weekStartMs && new Date(s.finishedAt).getTime() < weekEndMs)
           .sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt))[0] || null;
 
       // A deliberate swap (see programSwapLog, written only by SwapWorkoutSheet's commitRow)

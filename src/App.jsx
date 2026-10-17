@@ -37,6 +37,7 @@ import {
   Clock,
   Layers,
   BarChart3,
+  Type,
 } from "lucide-react";
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
@@ -120,6 +121,7 @@ import { reminderIsDue, getReminderSettings } from "./utils/workoutReminders.js"
 import LevelUpScreen from "./components/LevelUpScreen.jsx";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
 import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
+import { initialSyncStatus, markSyncStarted, markSyncSuccess, markSyncFailure, MAX_SYNC_ATTEMPTS, retryDelayMs } from "./utils/syncStatus.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
 import {
   SET_TYPES,
@@ -139,7 +141,7 @@ import { findMostRecentSessionForPlan } from "./utils/workoutHistory.js";
 import { buildPRShareCard } from "./utils/shareCard.js";
 import WorkoutSharePreview from "./components/WorkoutSharePreview.jsx";
 import { suggestNext, topSetOf } from "./utils/progression.js";
-import { resolveCurrentProgramDay, programWeekAdherence } from "./utils/programSchedule.js";
+import { resolveCurrentProgramDay, programWeekAdherence, activeProgramAndCP } from "./utils/programSchedule.js";
 import { ScreenHeader, SectionLabel, Card, HeroCard, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, StatTile, Pill, ListRow, ProgressBar, LineChart, PeriodSelect } from "./components/ui/Kit.jsx";
 import { featuredAndOtherPRs, sessionPRCount, prDeltaLabel, prHeroLabel, prPreviousLabel, PR_TYPE_LABEL } from "./utils/prSummary.js";
 import CustomExerciseForm from "./components/CustomExerciseForm.jsx";
@@ -148,6 +150,9 @@ import StartWorkoutChoice from "./components/StartWorkoutChoice.jsx";
 import RepeatRecentWorkoutPicker from "./components/RepeatRecentWorkoutPicker.jsx";
 import BreakMeaningPage from "./components/BreakMeaningPage.jsx";
 import ExerciseHistorySheet from "./components/ExerciseHistorySheet.jsx";
+import ProgramBuilder from "./components/ProgramBuilder.jsx";
+import { trainingDayCountLabel, countTrainingDays, renameProgram } from "./utils/programBuilder.js";
+import { isReplacingActiveProgram, applyProgramActivation, applyProgramEnd, applyActiveProgramRename } from "./utils/programActivation.js";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained).
 // Exported so any screen that needs the official mark (e.g. BreakMeaningPage) reuses this exact
@@ -1259,6 +1264,75 @@ const HERO_PROGRAMS = [
       },
     ],
   },
+  {
+    // A classic 5-day Upper/Lower split: two heavy strength days, two hypertrophy days, one
+    // optional cardio day. Same shape as every other static HERO_PROGRAMS entry above (Berserker,
+    // Valkyrie, etc.) — {id, name, tagline, programFocus, weeks, days: [{label, exercises:
+    // [{exId, sets, reps}]}]} — so it needs no special-casing anywhere downstream (program
+    // selection, Swap Workout, Today/scheduling, Athlete Rating's Foundation evidence all read
+    // this the same way they read every other program). Day 5 has no `type: "recovery"` —
+    // "optional" here is informational only (carried in the label, same convention Reaper's
+    // "Push & conditioning" day already uses for a mixed-intent day), since the program-day model
+    // only distinguishes `type: "recovery"` from an ordinary lifting day (see
+    // programSchedule.js's isRecoveryProgramDay) — skipping it is just like skipping any other
+    // day, no engine change required to express "optional."
+    id: "prog_upper_lower_5day",
+    name: "Upper Lower",
+    tagline: "Heavy strength early in the week, hypertrophy volume late — a classic 5-day Upper/Lower split",
+    programFocus: ["Chest", "Back", "Legs"],
+    weeks: 10,
+    days: [
+      {
+        label: "Day 1: Upper Heavy",
+        exercises: [
+          { exId: "bench", sets: 4, reps: 6 },
+          { exId: "barbell_row", sets: 4, reps: 6 },
+          { exId: "ohp", sets: 3, reps: 6 },
+          { exId: "weighted_dip", sets: 3, reps: 8 },
+          { exId: "seated_row", sets: 3, reps: 8 },
+          { exId: "barbell_curl", sets: 3, reps: 8 },
+        ],
+      },
+      {
+        label: "Day 2: Lower Heavy",
+        exercises: [
+          { exId: "squat", sets: 4, reps: 5 },
+          { exId: "rdl", sets: 4, reps: 6 },
+          { exId: "leg_press", sets: 3, reps: 8 },
+          { exId: "leg_curl_seated", sets: 3, reps: 8 },
+          { exId: "calf_raise_standing", sets: 4, reps: 12 },
+        ],
+      },
+      {
+        label: "Day 3: Upper Hypertrophy",
+        exercises: [
+          { exId: "incline_db_press", sets: 4, reps: 10 },
+          { exId: "lat_pulldown", sets: 4, reps: 10 },
+          { exId: "db_shoulder_press", sets: 3, reps: 12 },
+          { exId: "cable_fly", sets: 3, reps: 12 },
+          { exId: "single_arm_db_row", sets: 3, reps: 12 },
+          { exId: "cable_lat_raise", sets: 3, reps: 15 },
+          { exId: "tricep_pushdown", sets: 3, reps: 12 },
+          { exId: "incline_db_curl", sets: 3, reps: 12 },
+        ],
+      },
+      {
+        label: "Day 4: Lower Hypertrophy",
+        exercises: [
+          { exId: "hack_squat", sets: 4, reps: 10 },
+          { exId: "leg_extension", sets: 3, reps: 12 },
+          { exId: "leg_curl_lying", sets: 3, reps: 12 },
+          { exId: "hip_thrust", sets: 3, reps: 12 },
+          { exId: "bulgarian_split_squat", sets: 3, reps: 10 },
+          { exId: "calf_raise_seated", sets: 4, reps: 15 },
+        ],
+      },
+      {
+        label: "Day 5: Cardio (Optional) — Stairmaster 45 min",
+        exercises: [{ exId: "stairmaster", sets: 1, reps: 1 }],
+      },
+    ],
+  },
   // Titan (all 5 frequency variants), Athena, and Shape — see src/data/programFamilies.js.
   ...FAMILY_PROGRAMS,
 ];
@@ -1880,12 +1954,46 @@ export default function LiftLog() {
   const [state, setState] = useState(loadInitialState());
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("today");
+  // "Start This Program" success feedback (UX audit Phase 1, item 1) — deliberately NOT part of
+  // `state`/localStorage: it's a one-shot "you just did this" banner for Today, not durable data,
+  // and never needs to survive a reload or sync to another device. TodayTab clears it itself after
+  // a few seconds or on manual dismiss.
+  const [activationNotice, setActivationNotice] = useState(null); // { programName, dayLabel } | null
+  // "End Current Program" success feedback (active-program-management fix) — same one-shot,
+  // never-persisted treatment as activationNotice above.
+  const [programEndedNotice, setProgramEndedNotice] = useState(null); // { programName } | null
   // Optional cloud sync (hybrid: localStorage stays the source of truth signed-out AND
   // signed-in — this only ever backs state up to Supabase and fills in gaps from other
   // devices, never replaces what's already here). See src/utils/supabaseSync.js.
   const auth = useSupabaseAuth();
   const cloudSyncTimerRef = useRef(null);
+  const cloudSyncRetryTimerRef = useRef(null);
   const pulledForUserIdRef = useRef(null);
+  // Cloud sync status (P0 auth audit, item 6/7) — "visible, retried safely, never falsely
+  // reported as successful." Its own localStorage key, deliberately separate from `state` (the
+  // thing that actually gets synced): tracking sync status must never itself be something that
+  // needs syncing, and it has to survive a reload independently so "last synced 2 hours ago"
+  // still means something after closing and reopening the app.
+  const [syncStatus, setSyncStatus] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem("liftlog-sync-status");
+      return raw ? JSON.parse(raw) : initialSyncStatus();
+    } catch (e) {
+      return initialSyncStatus();
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("liftlog-sync-status", JSON.stringify(syncStatus));
+    } catch (e) {
+      // storage unavailable — status just won't survive a reload, not worth surfacing an error
+      // about an error-tracking mechanism
+    }
+  }, [syncStatus]);
+  // One-shot "no cloud history found for this account" vs "welcome back" notice (P0 auth audit,
+  // item 8 — mistyped-email awareness) — set once after the post-sign-in pull resolves, shown on
+  // Today the same way activationNotice is, cleared on dismiss/timeout. Never persisted.
+  const [accountSyncNotice, setAccountSyncNotice] = useState(null); // { kind: "new"|"restored", email, counts } | null
   // Athlete Rating — a genuine Level Up / Rank Up / first-rating-ready moment to show, set only
   // right after a recalculation that actually crosses a level. Never persisted — purely a
   // one-shot UI moment, cleared once shown.
@@ -2120,13 +2228,38 @@ export default function LiftLog() {
   // Debounced background push — fires at most once per 1.5s of inactivity rather than on
   // every single set logged, since bursts of updateState calls (e.g. rapid set entry) would
   // otherwise fire a network request per keystroke. Never runs signed-out.
+  // Pushes `next` to Supabase and tracks what actually happened (P0 auth audit, item 6) — the
+  // previous version called pushWorkoutDataToSupabase and threw its {ok, errors} result straight
+  // away, so a failed push (expired token, RLS denial, a network blip) produced zero feedback,
+  // ever, and was never retried until some unrelated later edit happened to trigger another push.
+  // Upserts are idempotent by primary key (onConflict: "id"), so retrying — even with a `next`
+  // that's gone slightly stale because a newer edit landed in between — is always safe: it can
+  // never duplicate or lose a row, worst case it's immediately superseded by the next real push.
+  const pushWithRetry = useCallback(async (next, userId, attempt = 1) => {
+    setSyncStatus((s) => markSyncStarted(s, attempt));
+    const result = await pushWorkoutDataToSupabase(next, userId);
+    if (result.ok) {
+      setSyncStatus((s) => markSyncSuccess(s));
+      return;
+    }
+    const willRetry = attempt < MAX_SYNC_ATTEMPTS;
+    setSyncStatus((s) => markSyncFailure(s, result.errors, willRetry));
+    if (willRetry) {
+      if (cloudSyncRetryTimerRef.current) clearTimeout(cloudSyncRetryTimerRef.current);
+      cloudSyncRetryTimerRef.current = setTimeout(() => {
+        pushWithRetry(next, userId, attempt + 1);
+      }, retryDelayMs(attempt));
+    }
+  }, []);
+
   const scheduleCloudSync = useCallback(
     (next) => {
       if (!auth.user) return;
       if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
+      if (cloudSyncRetryTimerRef.current) clearTimeout(cloudSyncRetryTimerRef.current);
       const userId = auth.user.id;
       cloudSyncTimerRef.current = setTimeout(() => {
-        pushWorkoutDataToSupabase(next, userId);
+        pushWithRetry(next, userId);
         pushPhotosToSupabase(next.photos, userId).then(({ uploadedIds }) => {
           if (uploadedIds && uploadedIds.length > 0) {
             setState((prev) => ({
@@ -2137,8 +2270,16 @@ export default function LiftLog() {
         });
       }, 1500);
     },
-    [auth.user]
+    [auth.user, pushWithRetry]
   );
+  // Manual "Retry sync now" (P0 auth audit, item 7) — same push path, just triggered on demand
+  // instead of waiting for the next edit or the next backoff attempt. Re-sends current `state`,
+  // which upserts harmlessly even if nothing actually changed since the last successful push.
+  const retrySyncNow = useCallback(() => {
+    if (!auth.user) return;
+    if (cloudSyncRetryTimerRef.current) clearTimeout(cloudSyncRetryTimerRef.current);
+    pushWithRetry(state, auth.user.id);
+  }, [auth.user, pushWithRetry, state]);
 
   const persist = useCallback(
     (next) => {
@@ -2176,8 +2317,23 @@ export default function LiftLog() {
     if (pulledForUserIdRef.current === auth.user.id) return;
     pulledForUserIdRef.current = auth.user.id;
     const userId = auth.user.id;
+    const email = auth.user.email;
     (async () => {
-      const { data } = await pullWorkoutDataFromSupabase(userId);
+      const { data, errors, ok } = await pullWorkoutDataFromSupabase(userId);
+      // "Never falsely report success" (P0 auth audit, item 6) — a pull failure is data-safe by
+      // construction (mergeRemoteIntoLocal only ever adds, so partial/empty data just means
+      // nothing new arrives), but it must still be visible rather than silently doing nothing.
+      if (!ok) setSyncStatus((s) => markSyncFailure(s, errors, false));
+      // "A mistyped email cannot silently create a separate account without appropriate user
+      // awareness" (item 8) — this account's cloud data came back completely empty, which is
+      // either a genuinely first-ever sign-in or a typo that just created a brand-new account
+      // under the wrong address. Either way the athlete needs an explicit signal, not an app
+      // that simply looks unchanged.
+      const workoutSessionCount = Array.isArray(data.workoutSessions) ? data.workoutSessions.length : 0;
+      const hasAnyRemoteData = Object.keys(data).some((key) =>
+        key === "workoutProfile" ? !!data.workoutProfile : Array.isArray(data[key]) && data[key].length > 0
+      );
+      setAccountSyncNotice({ kind: hasAnyRemoteData ? "restored" : "new", email, workoutSessionCount });
       setState((prev) => {
         const merged = mergeRemoteIntoLocal(prev, data);
         // Recompute the Athlete Rating when this pull materially changed canonical history (Part
@@ -2315,6 +2471,64 @@ export default function LiftLog() {
       });
     }
   };
+  // "Start This Program" (UX audit Phase 1, item 1) — the ONE action that makes a program the
+  // athlete's active program, replacing the old "Add to my program" button that copied a program
+  // into customPrograms without ever activating anything or saying so. Deliberately separate from
+  // startRun: activating a program must never begin a workout logging session (no activeRun) —
+  // Today picks up the new currentProgram on its own via resolveTodayWorkout, same as it already
+  // does after a per-day "Start workout" tap. Always starts at day 0; an athlete reactivating a
+  // program they're mid-way through uses "Set as today"/a day's own "Start workout" instead, not
+  // this (the detail screen swaps this button for a "Currently active" state once it's reactivated
+  // this is the first time for it, matching the pre-existing isCurrent/isCurrentCustom checks).
+  // An unfinished workout logging session (active-program-management fix, item 6) is never
+  // touched by anything below — it lives in its own activeRun/liftlog-active-run state entirely
+  // independent of currentProgram, so switching or ending a program can't silently discard or
+  // replace it structurally. This is just the heads-up line added to the confirmation text so the
+  // athlete knows that before they commit, rather than them having to just trust it.
+  const activeSessionNote =
+    activeRun && !activeRun.finished ? `\n\nYour in-progress workout ("${activeRun.planName}") isn't affected — it stays right where you left it.` : "";
+
+  const activateProgram = (program, source) => {
+    if (isReplacingActiveProgram(state, program, source)) {
+      const ok = window.confirm(
+        `Make "${program.name}" your active program?\n\nThis replaces "${state.currentProgram.programName}" as your active program assignment. Nothing is deleted — your workout history and "${state.currentProgram.programName}"'s own progress are kept exactly as they are.${activeSessionNote}`
+      );
+      if (!ok) return;
+    }
+    updateState((prev) => applyProgramActivation(prev, program, source));
+    setActivationNotice({ programName: program.name, dayLabel: program.days[0]?.label ?? null });
+    setTab("today");
+  };
+  // "End Current Program" (active-program-management fix, items 2/3/5) — the counterpart to
+  // activateProgram for an athlete who wants to stop a program without immediately picking a
+  // replacement. Deliberately NOT the same path as the auto-completion effect below: ending early
+  // records a completedPrograms entry tagged status: "ended_early" (never "completed" — item 3),
+  // touches nothing but currentProgram/completedPrograms/weeklySchedule/programDayOverride/
+  // pendingFrequencyReview, and in particular never writes to workoutSessions/logs/customPrograms
+  // (item 9) — the program's own identity and every session already logged against it stay
+  // exactly as they are, readable from its completedPrograms entry's startDate/endDate the same
+  // way a normally-finished program's history already is.
+  const endCurrentProgram = () => {
+    const cp = state.currentProgram;
+    if (!cp) return;
+    const resolved = resolveCurrentProgramDay(state);
+    const programName = resolved?.programName || cp.programName;
+    const ok = window.confirm(
+      `End "${programName}"?\n\nIt will no longer be your active program, but nothing is deleted — every workout you've logged and all your progress on it stay saved for reference.${activeSessionNote}`
+    );
+    if (!ok) return;
+    updateState((prev) => applyProgramEnd(prev));
+    setActivationNotice(null);
+    setProgramEndedNotice({ programName });
+    setTab("today");
+  };
+  // Rename the ACTIVE program directly from Program Timeline — the one screen built for managing
+  // the program you're currently running had no path to renaming at all (built-in or custom). The
+  // actual state transition (including the built-in-forks-to-a-named-copy case, which preserves
+  // dayIndex/progress rather than restarting at day 0) lives in applyActiveProgramRename in
+  // programActivation.js; this is just the thin updateState wrapper, same pattern as
+  // activateProgram/endCurrentProgram above.
+  const renameActiveProgram = (name) => updateState((prev) => applyActiveProgramRename(prev, name));
   // Naming is entirely optional (see StartWorkoutChoice/GuidedRunView) — this just lets an
   // athlete who started a Blank/Repeat workout give it a real name at any point, right up to
   // Finish Workout, without ever being asked for one up front.
@@ -2692,6 +2906,9 @@ export default function LiftLog() {
       weeks: resolved.totalWeeks,
       startDate: cp.startDate,
       endDate: new Date().toISOString(),
+      // Explicit, matching endCurrentProgram's "ended_early" tag below — a program that actually
+      // ran its full assigned length (item 3's distinction from ending early).
+      status: "completed",
     };
     updateState((prev) => {
       if (!prev.currentProgram || prev.currentProgram.programId !== cp.programId || prev.currentProgram.startDate !== cp.startDate) {
@@ -2795,6 +3012,16 @@ export default function LiftLog() {
                   onViewWorkout={viewWorkout}
                   onOpenNutrition={(dest) => goToNutrition("today", dest)}
                   onOpenAthleteRating={openAthleteRatingFromToday}
+                  activationNotice={activationNotice}
+                  onDismissActivationNotice={() => setActivationNotice(null)}
+                  accountSyncNotice={accountSyncNotice}
+                  onDismissAccountSyncNotice={() => setAccountSyncNotice(null)}
+                  authCallbackError={auth.authCallbackError}
+                  onDismissAuthCallbackError={auth.dismissAuthCallbackError}
+                  onGoToAccount={() => setTab("more")}
+                  programEndedNotice={programEndedNotice}
+                  onDismissProgramEndedNotice={() => setProgramEndedNotice(null)}
+                  onChooseProgram={() => setTab("templates")}
                 />
               ))}
             {tab === "workoutDetail" && (
@@ -2862,7 +3089,9 @@ export default function LiftLog() {
                 onBack={() => setTab("startWorkout")}
               />
             )}
-            {tab === "more" && <MoreTab state={state} updateState={updateState} onNavigate={setTab} auth={auth} />}
+            {tab === "more" && (
+              <MoreTab state={state} updateState={updateState} onNavigate={setTab} auth={auth} syncStatus={syncStatus} onRetrySync={retrySyncNow} />
+            )}
             {tab === "log" && (
               <LogTab
                 state={state}
@@ -3010,11 +3239,13 @@ export default function LiftLog() {
                 state={state}
                 updateState={updateState}
                 exMap={exMap}
+                allExercises={allExercises}
                 onStartRun={(plan, programContext) => startRun(plan, "templates", programContext)}
                 onStartRecovery={(routine, programContext) => startRecoverySession(routine, programContext, "templates")}
                 onLogManualRecovery={logManualRecovery}
                 onRestartCompletedProgram={restartProgramById}
                 onGoToBuild={() => setTab("build")}
+                onActivateProgram={activateProgram}
                 onViewWorkout={(sessionId) => viewWorkout(sessionId, "templates")}
                 onBack={() => setTab("train")}
               />
@@ -3056,7 +3287,15 @@ export default function LiftLog() {
               />
             )}
             {tab === "programTimeline" && (
-              <ProgramTimelineScreen state={state} exMap={exMap} onBack={() => setTab("train")} onViewWorkout={(sessionId) => viewWorkout(sessionId, "train")} />
+              <ProgramTimelineScreen
+                state={state}
+                exMap={exMap}
+                onBack={() => setTab("train")}
+                onViewWorkout={(sessionId) => viewWorkout(sessionId, "train")}
+                onSwitchProgram={() => setTab("templates")}
+                onEndProgram={endCurrentProgram}
+                onRenameProgram={renameActiveProgram}
+              />
             )}
             {tab === "developmentPriorities" && (
               <DevelopmentPrioritiesScreen state={state} updateState={updateState} onBack={() => setTab("coach")} />
@@ -3203,7 +3442,7 @@ function ExerciseSwapPicker({ currentExId, allExercises, exMap, state, updateSta
 // "Recent" and "Custom" are both cheap to derive from state that already exists — usage
 // timestamps from state.logs, and the `custom` flag already carried on every custom exercise —
 // so surfacing them here doesn't need any new stored data.
-function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onBack, onSelect }) {
+export function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onBack, onSelect, subtitle = "This session only — added to the end of your workout" }) {
   const [query, setQuery] = useState("");
   const [muscle, setMuscle] = useState(null); // a muscleGroups value, or the sentinel "Custom"
   const [creatingCustom, setCreatingCustom] = useState(false);
@@ -3256,7 +3495,7 @@ function AddExercisePicker({ allExercises, state, updateState, muscleGroups, onB
   const browsing = !query && !muscle;
 
   return (
-    <SlideInPanel title="Add exercise" subtitle="This session only — added to the end of your workout" onBack={onBack}>
+    <SlideInPanel title="Add exercise" subtitle={subtitle} onBack={onBack}>
       <input
         type="text"
         value={query}
@@ -7262,8 +7501,49 @@ function CardioTab({ state, updateState, allExercises, exMap, onLoggedSet, onNav
 // formatSetPrescription now lives in utils/exercisePrescription.js so TrainTab.jsx (the
 // workout/day preview) can share the exact same formatting instead of reimplementing it.
 
-function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, onLogManualRecovery, onRestartCompletedProgram, onGoToBuild, onViewWorkout, onBack }) {
+function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onStartRecovery, onLogManualRecovery, onRestartCompletedProgram, onGoToBuild, onActivateProgram, onViewWorkout, onBack }) {
+  // Live-resolved active-program name (program renaming UX fix, item 4) — state.currentProgram.
+  // programName is a snapshot taken at activation time; reading it directly anywhere a rename
+  // should show up immediately would keep displaying the OLD name until the next sign-in.
+  const activeProgramName = activeProgramAndCP(state)?.prog?.name ?? state.currentProgram?.programName;
   const [detail, setDetail] = useState(null); // { kind: "program" | "template" | "customPlan" | "customProgram", id }
+  // Program Builder (task: "fully editable training splits") — { programId } to edit an existing
+  // custom program, or { startFrom: <template or program object> } to fork a new editable copy
+  // from a built-in template / blank starting point. Set by the entry points below; cleared by
+  // the builder's own "Done" action, which returns here (never auto-navigates further).
+  const [builderTarget, setBuilderTarget] = useState(null);
+  // Inline "Rename program" (program renaming UX fix) — an expand-in-place row on the custom
+  // program detail screen, not a separate screen. renamingProgramId tracks which program's
+  // detail view currently has the input open (null = none); renameJustSavedId briefly flashes
+  // "Saved" on the program that was just renamed, then clears itself.
+  const [renamingProgramId, setRenamingProgramId] = useState(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renameJustSavedId, setRenameJustSavedId] = useState(null);
+  const startRenaming = (prog) => {
+    setRenamingProgramId(prog.id);
+    setRenameDraft(prog.name);
+  };
+  const cancelRenaming = () => setRenamingProgramId(null);
+  const saveRename = (prog) => {
+    const trimmed = renameDraft.trim();
+    // Never save an empty name, and a no-op edit (retyped the same name, or just whitespace
+    // around it) closes the row without writing anything — "in seconds," not a confirmation gate.
+    if (!trimmed || trimmed === prog.name) {
+      setRenamingProgramId(null);
+      return;
+    }
+    // renameProgram only ever touches `.name` — id, days, exercises, and every other field on
+    // this exact object are untouched, so history/schedules keyed by id are never affected (task
+    // items 5-7). Scoped to THIS program's id in the map, so no other custom program or the
+    // built-in template it may have been forked from is ever touched.
+    updateState((prev) => ({
+      ...prev,
+      customPrograms: (prev.customPrograms || []).map((p) => (p.id === prog.id ? renameProgram(p, trimmed) : p)),
+    }));
+    setRenamingProgramId(null);
+    setRenameJustSavedId(prog.id);
+    setTimeout(() => setRenameJustSavedId((id) => (id === prog.id ? null : id)), 2000);
+  };
   // Frequency-aware program picker (Part 2) — selectedDays starts from the athlete's saved
   // preference (or a pending review's proposed frequency) but is local UI state, never written
   // back to the profile just by browsing. reviewCompare only exists while the athlete arrived via
@@ -7304,18 +7584,6 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
       isCustom: true,
     };
     updateState((prev) => ({ ...prev, customPlans: [...prev.customPlans, newPlan] }));
-  };
-
-  const copyProgramToCustom = (program) => {
-    const newProgram = {
-      id: `program_${Date.now()}`,
-      name: program.name,
-      tagline: program.tagline,
-      weeks: program.weeks,
-      days: program.days,
-      isCustom: true,
-    };
-    updateState((prev) => ({ ...prev, customPrograms: [...(prev.customPrograms || []), newProgram] }));
   };
 
   const currentProgramDay = useMemo(() => resolveCurrentProgramDay(state), [state]);
@@ -7406,6 +7674,22 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
     );
   };
 
+  if (builderTarget) {
+    return (
+      <ProgramBuilder
+        state={state}
+        updateState={updateState}
+        exMap={exMap}
+        allExercises={allExercises}
+        muscleGroups={MUSCLE_GROUPS}
+        programId={builderTarget.programId}
+        startFrom={builderTarget.startFrom}
+        onBack={() => setBuilderTarget(null)}
+        onDone={() => setBuilderTarget(null)}
+      />
+    );
+  }
+
   if (detail?.kind === "customPlan") {
     const p = state.customPlans.find((pl) => pl.id === detail.id);
     if (!p) return null;
@@ -7441,9 +7725,72 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
     return (
       <SlideInPanel
         title={prog.name}
-        subtitle={prog.weeks ? `${prog.days.length} days · ${prog.weeks} weeks` : `${prog.days.length} days`}
+        subtitle={trainingDayCountLabel(prog.days)}
         onBack={() => setDetail(null)}
       >
+        {renamingProgramId === prog.id ? (
+          <div className="space-y-2">
+            <label className="block text-[11px] uppercase tracking-widest text-v5-subtext">Program name</label>
+            <input
+              type="text"
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveRename(prog);
+                if (e.key === "Escape") cancelRenaming();
+              }}
+              autoFocus
+              className="w-full bg-v5-elevated text-v5-text rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-1 focus:ring-v5-red"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={cancelRenaming}
+                className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:text-v5-text/90"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => saveRename(prog)}
+                disabled={!renameDraft.trim()}
+                className="flex-1 py-2 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 disabled:opacity-40"
+              >
+                Save name
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {isCurrentCustom(prog.id) ? (
+              <div className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red/40 bg-v5-red/10 text-v5-red flex items-center justify-center gap-1.5">
+                <Check size={12} /> Currently active
+              </div>
+            ) : (
+              <button
+                onClick={() => onActivateProgram(prog, "custom")}
+                className="w-full py-2.5 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 flex items-center justify-center gap-1.5"
+              >
+                <Play size={12} /> Start this program
+              </button>
+            )}
+            <button
+              onClick={() => setBuilderTarget({ programId: prog.id })}
+              className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
+            >
+              <Pencil size={12} /> Customize program
+            </button>
+            <button
+              onClick={() => startRenaming(prog)}
+              className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
+            >
+              <Type size={12} /> Rename program
+            </button>
+            {renameJustSavedId === prog.id && (
+              <div className="text-center text-xs text-v5-text/70 flex items-center justify-center gap-1.5">
+                <Check size={12} className="text-v5-red" /> Name saved
+              </div>
+            )}
+          </div>
+        )}
         {prog.days.map((day, di) => (
           <div key={di} className="border-t border-white/[0.06] pt-3">
             <div className="flex items-center justify-between mb-2">
@@ -7570,12 +7917,14 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
           <div className="border border-v5-red/25 bg-v5-elevated px-4 py-3 space-y-1.5">
             <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">Current → Proposed</div>
             <div className="text-sm text-v5-text/90">
-              <span className="text-v5-subtext">{state.currentProgram?.programName || "No active program"}</span>
+              <span className="text-v5-subtext">{activeProgramName || "No active program"}</span>
               {` (${reviewCompare.fromDays} days) → `}
               <span className="text-white font-bold">{prog.name}</span>
-              {` (${prog.days.length} days)`}
+              {` (${countTrainingDays(prog.days)} days)`}
             </div>
-            <div className="text-xs text-v5-subtext">Approximate weekly volume: {totalWeeklySets(prog)} sets across {prog.days.length} sessions</div>
+            <div className="text-xs text-v5-subtext">
+              Approximate weekly volume: {totalWeeklySets(prog)} sets across {countTrainingDays(prog.days)} sessions
+            </div>
             <button
               onClick={() => {
                 setReviewCompare(null);
@@ -7587,12 +7936,34 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
             </button>
           </div>
         )}
-        <button
-          onClick={() => copyProgramToCustom(prog)}
-          className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-v5-red text-v5-red hover:bg-v5-red/30 flex items-center justify-center gap-1.5"
-        >
-          <Plus size={12} /> Add to my program
-        </button>
+        <div className="space-y-2">
+          {isCurrent(prog.id) ? (
+            <div className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-v5-red/40 bg-v5-red/10 text-v5-red flex items-center justify-center gap-1.5">
+              <Check size={12} /> Currently active
+            </div>
+          ) : (
+            <button
+              onClick={() => onActivateProgram(prog, "builtin")}
+              className="w-full py-2.5 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 flex items-center justify-center gap-1.5"
+            >
+              <Play size={12} /> Start this program
+            </button>
+          )}
+          <button
+            onClick={() => setBuilderTarget({ startFrom: prog })}
+            className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
+          >
+            <Pencil size={12} /> Customize program
+          </button>
+          {/* "Clearly explain that the athlete is creating their own editable version" (program
+              renaming UX fix, item 2) — inline, not a confirmation dialog: Customize forks {prog}
+              into a brand-new customPrograms entry the instant it's tapped (forkProgramForEditing
+              in programBuilder.js), and this template object is never touched by that fork or
+              anything done to it afterward (item 7). */}
+          <p className="text-[11px] text-v5-subtext/60 text-center px-2">
+            Creates your own editable copy — rename it, change the days, add exercises. {prog.name} itself never changes.
+          </p>
+        </div>
         {prog.days.map((day, di) =>
           day.type === "recovery" ? (
             recoveryDayRow(prog, day, di, { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: di, totalDays: prog.days.length })
@@ -7728,9 +8099,15 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
         </div>
       )}
 
-      {(state.customPrograms || []).length > 0 && (
-        <div className="space-y-2.5">
-          <SectionLabel>My programs</SectionLabel>
+      <div className="space-y-2.5">
+        {(state.customPrograms || []).length > 0 && <SectionLabel>My programs</SectionLabel>}
+        <button
+          onClick={() => setBuilderTarget({ startFrom: { id: "blank", name: "New Program", days: [] } })}
+          className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-dashed border-white/15 text-v5-subtext hover:border-v5-red/40 hover:text-v5-text/90 flex items-center justify-center gap-1.5"
+        >
+          <Plus size={12} /> Build a program
+        </button>
+        {(state.customPrograms || []).length > 0 && (
           <div className="space-y-2">
             {state.customPrograms.map((prog) => (
               <ListRow
@@ -7746,12 +8123,12 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
                     )}
                   </span>
                 }
-                subtitle={`${prog.days.length} days${prog.weeks ? ` · ${prog.weeks} weeks` : ""}`}
+                subtitle={`${trainingDayCountLabel(prog.days)}${prog.weeks ? ` · ${prog.weeks} weeks` : ""}`}
               />
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Frequency-aware picker (Part 2) — "available days -> best-fit split," not "force the
           same split into N days." Built-in/custom programs matching the selected day count are
@@ -7763,7 +8140,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
         <SectionLabel>Find a program for your schedule</SectionLabel>
         {reviewCompare && (
           <div className="text-xs text-v5-subtext border-l-2 border-v5-red pl-2.5">
-            Current: <span className="text-v5-text/90">{state.currentProgram?.programName || "No active program"}</span> (
+            Current: <span className="text-v5-text/90">{activeProgramName || "No active program"}</span> (
             {reviewCompare.fromDays} days) → Proposed: {reviewCompare.toDays} days
           </div>
         )}
@@ -7852,7 +8229,7 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
         }
         if (!featured) featured = all[0];
         const others = all.filter((p) => p.id !== featured.id);
-        const daysPerWeek = (prog) => prog.trainingDays || prog.days?.length || null;
+        const daysPerWeek = (prog) => prog.trainingDays || countTrainingDays(prog.days) || null;
         return (
           <>
             <div className="space-y-2.5">
@@ -7915,24 +8292,34 @@ function TemplatesTab({ state, updateState, exMap, onStartRun, onStartRecovery, 
 
       {(state.completedPrograms || []).length > 0 && (
         <div className="space-y-2.5">
-          <SectionLabel tone="muted">Completed programs</SectionLabel>
-          <p className="text-xs text-v5-subtext">Every program you've finished — earned, not reset silently.</p>
+          <SectionLabel tone="muted">Program history</SectionLabel>
+          <p className="text-xs text-v5-subtext">Every program you've run — earned, not reset silently.</p>
           <div className="space-y-2">
-            {state.completedPrograms.map((c) => (
-              // Plain (non-button) Card — its only action is the sibling Restart button, so
-              // there's no outer click target competing with it.
-              <Card key={c.id} className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-v5-text truncate">{c.programName}</div>
-                  <div className="text-xs text-v5-subtext mt-0.5">
-                    {c.weeks} weeks · {new Date(c.startDate).toLocaleDateString()} – {new Date(c.endDate).toLocaleDateString()}
+            {state.completedPrograms.map((c) => {
+              // Missing status = a legacy entry recorded before this field existed, which only
+              // ever happened on an actual full completion — defaults to "completed", never
+              // "ended_early" (active-program-management fix, item 3's distinction).
+              const endedEarly = c.status === "ended_early";
+              return (
+                // Plain (non-button) Card — its only action is the sibling Restart button, so
+                // there's no outer click target competing with it.
+                <Card key={c.id} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <div className="text-sm font-bold text-v5-text truncate">{c.programName}</div>
+                      <Pill tone={endedEarly ? "inactive" : undefined}>{endedEarly ? "Ended early" : "Completed"}</Pill>
+                    </div>
+                    <div className="text-xs text-v5-subtext mt-0.5">
+                      {c.weeks ? `${c.weeks} weeks · ` : ""}
+                      {new Date(c.startDate).toLocaleDateString()} – {new Date(c.endDate).toLocaleDateString()}
+                    </div>
                   </div>
-                </div>
-                <ButtonText icon={ChevronRight} onClick={() => onRestartCompletedProgram(c.programId, c.programSource)} className="shrink-0">
-                  Restart
-                </ButtonText>
-              </Card>
-            ))}
+                  <ButtonText icon={ChevronRight} onClick={() => onRestartCompletedProgram(c.programId, c.programSource)} className="shrink-0">
+                    Restart
+                  </ButtonText>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}

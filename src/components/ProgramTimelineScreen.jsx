@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ChevronDown, ChevronUp, ChevronRight, Check, X } from "lucide-react";
+import { useState, useRef } from "react";
+import { ChevronDown, ChevronUp, ChevronRight, Check, X, ArrowLeftRight, XCircle, Type } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 import { resolveProgramTimeline, programWeekAdherence, programTotalAdherence } from "../utils/programSchedule.js";
@@ -129,13 +129,41 @@ function DayPreview({ day, weekNumber, programName, exMap, onBack, onViewWorkout
 // never writes anything (see resolveProgramTimeline's own header comment). Reads the single
 // active program directly rather than taking an id prop, since there's only ever one at a time —
 // every entry point (Train's Current Program card, Today's compact card) just navigates here.
-export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWorkout }) {
+export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWorkout, onSwitchProgram, onEndProgram, onRenameProgram }) {
   const [openDay, setOpenDay] = useState(null); // { day, weekNumber } | null
+  // Inline "rename the program I'm actually running" (same expand-in-place pattern already used
+  // for custom programs' own detail screen) — this was the one obvious place in the app with no
+  // path to renaming at all: an athlete looking at THIS screen, the one built for managing their
+  // active program, had nowhere to do it short of backing out to Train and finding their program's
+  // card again (and no path whatsoever if it was a built-in they hadn't already forked). The actual
+  // state transition (including the built-in-forks-to-a-named-copy case) lives in
+  // applyActiveProgramRename in programActivation.js; this component only owns the input's open/
+  // closed state and a brief "Saved" flash.
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [justSaved, setJustSaved] = useState(false);
+  const savedTimeoutRef = useRef(null);
   const timeline = resolveProgramTimeline(state);
   const weekAdherence = programWeekAdherence(state);
   const totalAdherence = programTotalAdherence(state);
   const priorities = sanitizeDevelopmentPriorities(state.developmentPriorities);
   const yourPriorityLabels = groupedPriorities(priorities).prioritize.map(labelFor);
+
+  const startRenaming = () => {
+    setDraft(timeline.programName);
+    setRenaming(true);
+  };
+  const cancelRenaming = () => setRenaming(false);
+  const saveRename = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== timeline.programName) {
+      onRenameProgram?.(trimmed);
+      clearTimeout(savedTimeoutRef.current);
+      setJustSaved(true);
+      savedTimeoutRef.current = setTimeout(() => setJustSaved(false), 2500);
+    }
+    setRenaming(false);
+  };
 
   if (!timeline) {
     return (
@@ -149,6 +177,14 @@ export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWork
           )}
         </div>
         <div className="text-sm text-v5-subtext">No active program.</div>
+        {onSwitchProgram && (
+          <button
+            onClick={onSwitchProgram}
+            className="w-full py-2.5 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 flex items-center justify-center gap-1.5"
+          >
+            <ArrowLeftRight size={14} /> Choose a Program
+          </button>
+        )}
       </div>
     );
   }
@@ -178,7 +214,46 @@ export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWork
       </div>
 
       <div>
-        <div className="text-2xl font-bold text-white">{timeline.programName}</div>
+        {renaming ? (
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveRename();
+                if (e.key === "Escape") cancelRenaming();
+              }}
+              autoFocus
+              className="w-full bg-v5-elevated text-white text-xl font-bold rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-v5-red"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={cancelRenaming}
+                className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:text-v5-text/90"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveRename}
+                disabled={!draft.trim()}
+                className="flex-1 py-2 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 disabled:opacity-40"
+              >
+                Save name
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={startRenaming} className="flex items-center gap-2 text-left group">
+            <span className="text-2xl font-bold text-white">{timeline.programName}</span>
+            <Type size={15} className="text-v5-subtext/50 group-hover:text-v5-red shrink-0" />
+          </button>
+        )}
+        {justSaved && (
+          <div className="text-xs text-v5-text/70 flex items-center gap-1.5 mt-1">
+            <Check size={12} className="text-v5-red" /> Name saved
+          </div>
+        )}
         <div className="text-sm text-v5-subtext mt-1">
           {timeline.totalWeeks ? `Week ${timeline.currentWeekNumber} of ${timeline.totalWeeks}` : `Week ${timeline.currentWeekNumber}`}
           {" · "}
@@ -192,6 +267,34 @@ export default function ProgramTimelineScreen({ state, exMap, onBack, onViewWork
           </div>
         )}
       </div>
+
+      {/* Obvious program-management actions (active-program-management fix, items 1/2) — this
+          screen was previously entirely read-only, with no way to stop or change the running
+          program short of the Templates/Builder detail screens' own "Start This Program," which
+          nothing here ever pointed to. Switch is pure navigation: the program library's own
+          "Start This Program" already confirms the replacement and activates (see activateProgram
+          in App.jsx). End is the new action — its confirmation + what it actually does to state
+          live in App.jsx's endCurrentProgram. */}
+      {(onSwitchProgram || onEndProgram) && (
+        <div className="flex gap-2">
+          {onSwitchProgram && (
+            <button
+              onClick={onSwitchProgram}
+              className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-text/90 hover:border-v5-red/40 flex items-center justify-center gap-1.5"
+            >
+              <ArrowLeftRight size={13} /> Switch Program
+            </button>
+          )}
+          {onEndProgram && (
+            <button
+              onClick={onEndProgram}
+              className="flex-1 py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 hover:text-v5-red flex items-center justify-center gap-1.5"
+            >
+              <XCircle size={13} /> End Program
+            </button>
+          )}
+        </div>
+      )}
 
       {(timeline.programFocus?.length > 0 || yourPriorityLabels.length > 0) && (
         <div className="border border-white/10 bg-v5-elevated p-4 space-y-2">

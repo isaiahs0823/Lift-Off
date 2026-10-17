@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { ClipboardList, Timer, Dumbbell, Plus, Play, RefreshCw, Map, AlarmClock } from "lucide-react";
-import { resolveTodayWorkout } from "../utils/programSchedule.js";
+import { resolveTodayWorkout, activeProgramAndCP } from "../utils/programSchedule.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
@@ -53,6 +53,12 @@ function elapsedLabel(startedAt) {
 // through workout-selection flows again."
 export default function TrainTab({ state, updateState, exMap, activeRun, onStartRun, onStartRecovery, onResumeWorkout, onDiscardWorkout, onNavigate, onViewWorkout, section, onSectionChange, historyFilter }) {
   const programDay = resolveTodayWorkout(state);
+  // The active program's name, resolved LIVE from state.customPrograms/programs every render
+  // (program renaming UX fix, item 4) — state.currentProgram.programName is a snapshot taken at
+  // activation time, so reading it directly here would keep showing the old name after a rename
+  // until the next sign-out/sign-in. Falls back to the snapshot only if the program itself was
+  // since deleted (activeProgramAndCP returns null) so this card never goes blank.
+  const activeProgramName = activeProgramAndCP(state)?.prog?.name ?? state.currentProgram?.programName;
   const [swapOpen, setSwapOpen] = useState(false);
   // Collapsed by default — Train is a "decide what to do" screen, not a place to scroll through
   // a full per-exercise breakdown before reaching Start (task section 7/16). Expands in place
@@ -160,7 +166,7 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
           {/* The headline always names the ACTUAL active program (from currentProgram itself,
               not today's resolved workout) — an outside-program override must never make this
               card read as if the active program changed; see resolveTodayWorkout's isOutsideProgram. */}
-          <div className="text-xl sm:text-2xl font-black text-v5-text">{state.currentProgram?.programName}</div>
+          <div className="text-xl sm:text-2xl font-black text-v5-text">{activeProgramName}</div>
           {programDay.isRecoveryDay ? (
             <div className="text-sm text-v5-subtext">
               {programDay.weekNumber ? `Week ${programDay.weekNumber} · ` : ""}
