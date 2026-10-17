@@ -152,7 +152,7 @@ import BreakMeaningPage from "./components/BreakMeaningPage.jsx";
 import ExerciseHistorySheet from "./components/ExerciseHistorySheet.jsx";
 import ProgramBuilder from "./components/ProgramBuilder.jsx";
 import { trainingDayCountLabel, countTrainingDays, renameProgram } from "./utils/programBuilder.js";
-import { isReplacingActiveProgram, applyProgramActivation, applyProgramEnd, applyActiveProgramRename } from "./utils/programActivation.js";
+import { isReplacingActiveProgram, applyProgramActivation, applyProgramEnd, applyActiveProgramRename, nextCurrentProgramForStartRun } from "./utils/programActivation.js";
 
 // B.R.E.A.K. logo (uploaded asset, embedded as data URI so the artifact stays self-contained).
 // Exported so any screen that needs the official mark (e.g. BreakMeaningPage) reuses this exact
@@ -2456,18 +2456,20 @@ export default function LiftLog() {
           prev.currentProgram &&
           prev.currentProgram.programId === programContext.programId &&
           prev.currentProgram.source === programContext.source;
-        const startDate = isSameProgram ? prev.currentProgram.startDate : new Date().toISOString();
-        // Records what planned-training-frequency was active when this program was picked, purely
-        // as future context (e.g. for Coach to later notice "you planned 5 days but this program
-        // assumes 3" — see programRecommendation.js). Never read to gate or block anything today,
-        // and stays null/undefined for anyone without a set preference — no behavior changes.
-        const selectedForDays = isSameProgram ? prev.currentProgram.selectedForDays ?? null : prev.athleteProfile?.preferredDays ?? null;
         // Starting a genuinely different program (not just a different day of the same one)
         // makes any existing swap-workout override stale — clear it proactively so it can never
         // leak into the new program (activeOverrideFor's programId/source check already prevents
         // it from being misread, but there's no reason to let dead state linger).
         const programDayOverride = isSameProgram ? prev.programDayOverride : null;
-        return { ...prev, currentProgram: { ...programContext, startDate, selectedForDays }, programDayOverride, hasSeenOnboarding: true };
+        return {
+          ...prev,
+          // Records what planned-training-frequency was active when this program was picked
+          // (see nextCurrentProgramForStartRun's own comment for why dayIndex/totalDays only ever
+          // come from programContext when a different program is actually becoming active).
+          currentProgram: nextCurrentProgramForStartRun(prev.currentProgram, programContext, prev.athleteProfile?.preferredDays),
+          programDayOverride,
+          hasSeenOnboarding: true,
+        };
       });
     }
   };
@@ -3289,12 +3291,15 @@ export default function LiftLog() {
             {tab === "programTimeline" && (
               <ProgramTimelineScreen
                 state={state}
+                updateState={updateState}
                 exMap={exMap}
                 onBack={() => setTab("train")}
                 onViewWorkout={(sessionId) => viewWorkout(sessionId, "train")}
                 onSwitchProgram={() => setTab("templates")}
                 onEndProgram={endCurrentProgram}
                 onRenameProgram={renameActiveProgram}
+                onStartRun={(plan, programContext) => startRun(plan, "train", programContext)}
+                onNavigate={setTab}
               />
             )}
             {tab === "developmentPriorities" && (

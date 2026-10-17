@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isReplacingActiveProgram, applyProgramActivation } from "../programActivation.js";
+import { isReplacingActiveProgram, applyProgramActivation, nextCurrentProgramForStartRun } from "../programActivation.js";
 
 function baseState(overrides = {}) {
   return {
@@ -89,5 +89,47 @@ describe("applyProgramActivation", () => {
     expect(next.currentProgram.lastCompletedDayIndex).toBeNull();
     // Program A's own history session is untouched (same reference, not just equal content).
     expect(next.workoutSessions).toBe(stateWithA.workoutSessions);
+  });
+});
+
+// The currentProgram patch startRun applies whenever a run carries a programContext — covers the
+// bug a non-current-day "Start This Workout" (Program Timeline) or a Swap Workout → Today → Start
+// round trip would otherwise reintroduce: starting a SWAPPED day of the already-active program
+// must never move the program's real sequential position.
+describe("nextCurrentProgramForStartRun", () => {
+  const activeCP = { programId: "program_1", programName: "Upper Lower", source: "custom", dayIndex: 1, totalDays: 3, startDate: "2026-01-01T00:00:00Z", selectedForDays: 4 };
+
+  it("starting a SWAPPED day of the SAME program preserves dayIndex/totalDays/startDate — only identity fields come from programContext", () => {
+    // Athlete is on Day 2 (index 1) of a 3-day program, but swapped today to Day 3 (index 2).
+    const programContext = { programId: "program_1", programName: "Upper Lower", source: "custom", dayIndex: 2, totalDays: 3 };
+    const next = nextCurrentProgramForStartRun(activeCP, programContext, null);
+    expect(next.dayIndex).toBe(1); // NOT 2 — real progress untouched by the one-day swap
+    expect(next.totalDays).toBe(3);
+    expect(next.startDate).toBe("2026-01-01T00:00:00Z");
+    expect(next.selectedForDays).toBe(4);
+    expect(next.programId).toBe("program_1");
+  });
+
+  it("starting the program's own literal CURRENT day (no swap) is a no-op in effect — same dayIndex either way", () => {
+    const programContext = { programId: "program_1", programName: "Upper Lower", source: "custom", dayIndex: 1, totalDays: 3 };
+    const next = nextCurrentProgramForStartRun(activeCP, programContext, null);
+    expect(next.dayIndex).toBe(1);
+  });
+
+  it("activating a genuinely DIFFERENT program (no prior currentProgram) takes dayIndex/totalDays fresh from programContext", () => {
+    const programContext = { programId: "program_new", programName: "New Program", source: "custom", dayIndex: 0, totalDays: 4 };
+    const next = nextCurrentProgramForStartRun(null, programContext, 5);
+    expect(next.dayIndex).toBe(0);
+    expect(next.totalDays).toBe(4);
+    expect(next.selectedForDays).toBe(5); // falls back to the athlete's stated preference
+    expect(next.startDate).toEqual(expect.any(String));
+  });
+
+  it("switching to a different program while one is already active also takes dayIndex fresh, not the old program's position", () => {
+    const programContext = { programId: "program_other", programName: "Other Program", source: "builtin", dayIndex: 0, totalDays: 5 };
+    const next = nextCurrentProgramForStartRun(activeCP, programContext, null);
+    expect(next.dayIndex).toBe(0);
+    expect(next.totalDays).toBe(5);
+    expect(next.selectedForDays).toBeNull(); // not the same program — old selectedForDays doesn't carry over
   });
 });
