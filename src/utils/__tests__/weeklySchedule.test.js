@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { getTodaySchedule, buildRunFromSource, suggestWeekdaysForProgramDays, suggestRollingSequenceForProgramDays, emptySlot, defaultFixedDays, clearCurrentProgramSlots } from "../weeklySchedule.js";
+import { getTodaySchedule, buildRunFromSource, suggestWeekdaysForProgramDays, suggestRollingSequenceForProgramDays, emptySlot, defaultFixedDays, clearCurrentProgramSlots, buildMovePatch, buildSwapTypePatch, getScheduleDay, todayKey } from "../weeklySchedule.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -198,5 +198,62 @@ describe("clearCurrentProgramSlots (active-program-management fix, item 5)", () 
   it("handles a null/missing schedule without throwing", () => {
     expect(clearCurrentProgramSlots(null)).toBeNull();
     expect(clearCurrentProgramSlots(undefined)).toBeUndefined();
+  });
+});
+
+describe("buildMovePatch override (Swap-for-a-different-type support)", () => {
+  const missedDay = { date: "2026-01-10", type: "workout", source: { kind: "currentProgram" }, label: "Upper" };
+
+  it("with no override, both entries carry the missed day's own type/label/source (existing Move/Do Today behavior, unchanged)", () => {
+    const [out, inEntry] = buildMovePatch(missedDay, "2026-01-12");
+    expect(out).toMatchObject({ date: "2026-01-10", kind: "move_out", type: "workout", label: "Upper" });
+    expect(inEntry).toMatchObject({ date: "2026-01-12", kind: "move_in", type: "workout", label: "Upper", source: { kind: "currentProgram" } });
+  });
+
+  it("with an override, the move_out entry still records the ORIGINAL type/label (history of what was actually scheduled is preserved)", () => {
+    const [out] = buildMovePatch(missedDay, "2026-01-10", { type: "conditioning", label: "Conditioning", source: null });
+    expect(out).toMatchObject({ type: "workout", label: "Upper" }); // not conditioning — this is the day that was displaced
+  });
+
+  it("with an override, the move_in entry carries the NEW type/label/source, not the missed day's own", () => {
+    const [, inEntry] = buildMovePatch(missedDay, "2026-01-10", { type: "conditioning", label: "Conditioning", source: null });
+    expect(inEntry).toMatchObject({ date: "2026-01-10", kind: "move_in", type: "conditioning", label: "Conditioning", source: null });
+  });
+});
+
+describe("buildSwapTypePatch", () => {
+  const missedDay = { date: "2026-01-05", type: "workout", source: { kind: "currentProgram" }, label: "Upper" };
+
+  it("always targets TODAY, regardless of how long ago the missed day was", () => {
+    const [, inEntry] = buildSwapTypePatch(missedDay, "conditioning", "Conditioning");
+    expect(inEntry.date).toBe(todayKey());
+  });
+
+  it("the swapped-in entry has no source — meant to be logged freely, not resolved from a pre-built plan", () => {
+    const [, inEntry] = buildSwapTypePatch(missedDay, "conditioning", "Conditioning");
+    expect(inEntry.source).toBeNull();
+  });
+
+  it("getScheduleDay resolves the swapped-in entry as a real 'conditioning' day, not 'workout'", () => {
+    const patch = buildSwapTypePatch(missedDay, "conditioning", "Conditioning");
+    const state = { weeklySchedule: { mode: "fixed", fixedDays: defaultFixedDays(), createdAt: "2020-01-01T00:00:00Z" }, scheduleLog: patch, workoutSessions: [], cardioLogs: [], recoveryLogs: [] };
+    const today = getScheduleDay(state, todayKey());
+    expect(today.type).toBe("conditioning");
+    expect(today.label).toBe("Conditioning");
+  });
+
+  it("the missed day's own entry still records 'workout' (what was originally scheduled), not 'conditioning'", () => {
+    const patch = buildSwapTypePatch(missedDay, "conditioning", "Conditioning");
+    const state = { weeklySchedule: { mode: "fixed", fixedDays: defaultFixedDays(), createdAt: "2020-01-01T00:00:00Z" }, scheduleLog: patch, workoutSessions: [], cardioLogs: [], recoveryLogs: [] };
+    const missedDate = getScheduleDay(state, "2026-01-05");
+    expect(missedDate.type).toBe("workout");
+    expect(missedDate.status).toBe("moved_away");
+  });
+
+  it("works for a recovery swap the same way", () => {
+    const patch = buildSwapTypePatch(missedDay, "recovery", "Active Recovery");
+    const state = { weeklySchedule: { mode: "fixed", fixedDays: defaultFixedDays(), createdAt: "2020-01-01T00:00:00Z" }, scheduleLog: patch, workoutSessions: [], cardioLogs: [], recoveryLogs: [] };
+    const today = getScheduleDay(state, todayKey());
+    expect(today.type).toBe("recovery");
   });
 });

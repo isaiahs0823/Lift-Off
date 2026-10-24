@@ -418,8 +418,17 @@ export function buildSkipPatch(missedDay) {
 // One move_out + one move_in entry — the missed date is marked resolved (so it stops showing
 // as missed) and the target date carries the moved slot, which getScheduleDay checks before
 // falling back to that date's normal weekday assignment, so nothing doubles up.
-export function buildMovePatch(missedDay, targetDateStr) {
+//
+// override lets the TARGET entry carry a different type/label/source than the missed day's own
+// (used by buildSwapTypePatch, below, for "swap to conditioning/recovery today" rather than
+// moving the same workout to a different date) — the missed date's own move_out entry always
+// keeps recording what was ACTUALLY originally scheduled there, regardless of override, so
+// history/adherence for the missed slot's original type is never rewritten.
+export function buildMovePatch(missedDay, targetDateStr, override) {
   const now = new Date().toISOString();
+  const type = override?.type ?? missedDay.type;
+  const label = override?.label ?? missedDay.label;
+  const source = override ? override.source ?? null : missedDay.source;
   return [
     {
       id: `sched_${Date.now()}_out`,
@@ -435,9 +444,9 @@ export function buildMovePatch(missedDay, targetDateStr) {
       id: `sched_${Date.now()}_in`,
       date: targetDateStr,
       kind: "move_in",
-      type: missedDay.type,
-      source: missedDay.source,
-      label: missedDay.label,
+      type,
+      source,
+      label,
       movedFrom: missedDay.date,
       createdAt: now,
     },
@@ -447,6 +456,15 @@ export function buildMovePatch(missedDay, targetDateStr) {
 // could create a duplicate workout.
 export function buildDoTodayPatch(missedDay) {
   return buildMovePatch(missedDay, todayKey());
+}
+// "Swap" (distinct from Move/Skip) — change WHAT kind of session resolves the missed slot rather
+// than WHEN. Always targets today specifically (swapping in a different session type for a future
+// date is just Move's job once that date arrives); source stays null since a swapped-in
+// conditioning/recovery day is meant to be logged freely (CardioTab/RecoveryLogCard), not resolved
+// from a pre-built exercise plan — see TodayTab's own "run ? startScheduled(...) : onNavigate
+// ('cardio')" fallback for the conditioning case, already built for exactly this.
+export function buildSwapTypePatch(missedDay, newType, newLabel) {
+  return buildMovePatch(missedDay, todayKey(), { type: newType, label: newLabel, source: null });
 }
 
 // ---------- adherence ----------
