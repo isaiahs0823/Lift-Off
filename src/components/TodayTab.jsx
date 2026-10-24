@@ -27,6 +27,7 @@ import {
   buildSkipPatch,
   buildMovePatch,
   buildDoTodayPatch,
+  buildSwapTypePatch,
   computeScheduleAdherence,
   computeScheduleStreak,
   DAY_TYPE_LABEL,
@@ -116,8 +117,19 @@ function WeekStrip({ strip }) {
 
 // Fixed-mode only (see weeklySchedule.js) — surfaces the single most recent unresolved day
 // with three low-drama options, never a stack of banners.
+// A missed LIFTING day can be substituted with one of these — deliberately not a free-form type
+// picker (rest isn't a session to swap to, and "workout" is already what Move/Do Today do): both
+// are already first-class, independently well-supported session types elsewhere in the app
+// (CardioTab/cardioLogs for conditioning, RecoveryLogCard/recoveryLogs for recovery), so swapping
+// to either needs no new logging surface, just a schedule entry those screens already know how to
+// read.
+const SWAP_TYPE_OPTIONS = [
+  { type: "conditioning", label: "Conditioning" },
+  { type: "recovery", label: "Active Recovery" },
+];
+
 function MissedWorkoutBanner({ missed, state, updateState, onStartRun, onResolved }) {
-  const [mode, setMode] = useState(null); // null | "move" | "skip"
+  const [mode, setMode] = useState(null); // null | "move" | "skip" | "swap"
 
   const doToday = () => {
     updateState((prev) => ({ ...prev, scheduleLog: [...(prev.scheduleLog || []), ...buildDoTodayPatch(missed)] }));
@@ -133,6 +145,14 @@ function MissedWorkoutBanner({ missed, state, updateState, onStartRun, onResolve
     updateState((prev) => ({ ...prev, scheduleLog: [...(prev.scheduleLog || []), buildSkipPatch(missed)] }));
     setMode(null);
     onResolved?.(`${missed.label || DAY_TYPE_LABEL[missed.type]} skipped.`);
+  };
+  // "Swap" — change WHAT today's session is, not WHEN. Always targets today (see
+  // buildSwapTypePatch's own comment); the missed day's own entry still records what was
+  // ORIGINALLY scheduled there, so history/adherence for it is never rewritten.
+  const swapType = (newType, newLabel) => {
+    updateState((prev) => ({ ...prev, scheduleLog: [...(prev.scheduleLog || []), ...buildSwapTypePatch(missed, newType, newLabel)] }));
+    setMode(null);
+    onResolved?.(`Swapped to ${newLabel} today.`);
   };
 
   const missedDate = new Date(missed.date + "T12:00:00");
@@ -174,12 +194,33 @@ function MissedWorkoutBanner({ missed, state, updateState, onStartRun, onResolve
           </div>
           <ButtonText tone="muted" onClick={() => setMode(null)}>Cancel</ButtonText>
         </div>
-      ) : (
-        <div className="flex gap-2">
-          <ButtonPrimary size="sm" onClick={doToday} className="flex-1">Do today</ButtonPrimary>
-          <ButtonSecondary size="sm" onClick={() => setMode("move")} className="flex-1">Move</ButtonSecondary>
-          <ButtonSecondary size="sm" onClick={() => setMode("skip")} className="flex-1">Skip</ButtonSecondary>
+      ) : mode === "swap" ? (
+        <div className="space-y-3">
+          <SectionLabel tone="muted">Swap today for</SectionLabel>
+          <div className="flex flex-wrap gap-2">
+            {SWAP_TYPE_OPTIONS.map((opt) => (
+              <button
+                key={opt.type}
+                onClick={() => swapType(opt.type, opt.label)}
+                className="px-3 py-2 rounded-lg text-xs uppercase tracking-widest font-bold bg-v5-elevated text-v5-subtext hover:text-v5-text"
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <ButtonText tone="muted" onClick={() => setMode(null)}>Cancel</ButtonText>
         </div>
+      ) : (
+        <>
+          <div className="flex gap-2">
+            <ButtonPrimary size="sm" onClick={doToday} className="flex-1">Do today</ButtonPrimary>
+            <ButtonSecondary size="sm" onClick={() => setMode("move")} className="flex-1">Move</ButtonSecondary>
+            <ButtonSecondary size="sm" onClick={() => setMode("skip")} className="flex-1">Skip</ButtonSecondary>
+          </div>
+          <ButtonText tone="muted" icon={RefreshCw} onClick={() => setMode("swap")} className="w-full justify-center pt-1">
+            Swap for conditioning or recovery instead
+          </ButtonText>
+        </>
       )}
     </HeroCard>
   );
