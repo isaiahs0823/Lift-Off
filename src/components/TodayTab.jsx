@@ -116,19 +116,23 @@ function WeekStrip({ strip }) {
 
 // Fixed-mode only (see weeklySchedule.js) — surfaces the single most recent unresolved day
 // with three low-drama options, never a stack of banners.
-function MissedWorkoutBanner({ missed, state, updateState, onStartRun }) {
+function MissedWorkoutBanner({ missed, state, updateState, onStartRun, onResolved }) {
   const [mode, setMode] = useState(null); // null | "move" | "skip"
 
   const doToday = () => {
     updateState((prev) => ({ ...prev, scheduleLog: [...(prev.scheduleLog || []), ...buildDoTodayPatch(missed)] }));
+    onResolved?.(`${missed.label || DAY_TYPE_LABEL[missed.type]} moved to today.`);
   };
   const moveTo = (dateStr) => {
     updateState((prev) => ({ ...prev, scheduleLog: [...(prev.scheduleLog || []), ...buildMovePatch(missed, dateStr)] }));
     setMode(null);
+    const weekday = new Date(dateStr + "T12:00:00").toLocaleDateString(undefined, { weekday: "long" });
+    onResolved?.(`${missed.label || DAY_TYPE_LABEL[missed.type]} moved to ${weekday}.`);
   };
   const confirmSkip = () => {
     updateState((prev) => ({ ...prev, scheduleLog: [...(prev.scheduleLog || []), buildSkipPatch(missed)] }));
     setMode(null);
+    onResolved?.(`${missed.label || DAY_TYPE_LABEL[missed.type]} skipped.`);
   };
 
   const missedDate = new Date(missed.date + "T12:00:00");
@@ -680,6 +684,19 @@ export default function TodayTab({
     return () => clearTimeout(t);
   }, [programEndedNotice, onDismissProgramEndedNotice]);
 
+  // Move/Skip/Do Today confirmation for the missed-workout banner — local state, not a prop,
+  // since the action itself (and its scheduleLog write) already lives entirely inside
+  // MissedWorkoutBanner via updateState. Needs to live HERE rather than inside that component
+  // because a successful move/skip correctly makes missedEntry null on the very next render,
+  // unmounting MissedWorkoutBanner — with no confirmation held above it, the banner would just
+  // silently vanish with nothing replacing it, which is exactly what read as "did nothing."
+  const [moveConfirm, setMoveConfirm] = useState(null); // { message } | null
+  useEffect(() => {
+    if (!moveConfirm) return;
+    const t = setTimeout(() => setMoveConfirm(null), 4000);
+    return () => clearTimeout(t);
+  }, [moveConfirm]);
+
   const startScheduled = (source) => {
     const run = buildRunFromSource(state, source);
     if (run) onStartRun(run.plan, run.programContext);
@@ -806,7 +823,18 @@ export default function TodayTab({
           full rating dashboard here"). */}
       <AthleteRatingCard snapshot={latestRatingSnapshot} onOpen={onOpenAthleteRating} compact />
 
-      {missedEntry && <MissedWorkoutBanner missed={missedEntry} state={state} updateState={updateState} onStartRun={onStartRun} />}
+      {/* Confirmation for Move/Skip/Do Today — rendered here, not inside MissedWorkoutBanner,
+          because a successful move/skip correctly makes missedEntry null on the very next
+          render, unmounting that banner. Without this, the banner just silently vanished with
+          nothing in its place, which is exactly what read as the action having done nothing. */}
+      {moveConfirm && (
+        <div className="border border-white/10 bg-v5-elevated px-4 py-3 flex items-center gap-2.5">
+          <Check size={16} className="text-green-500 shrink-0" />
+          <div className="flex-1 min-w-0 text-sm text-v5-text">{moveConfirm}</div>
+        </div>
+      )}
+
+      {missedEntry && <MissedWorkoutBanner missed={missedEntry} state={state} updateState={updateState} onStartRun={onStartRun} onResolved={setMoveConfirm} />}
 
       {/* Standing "no active program" prompt (active-program-management fix, item 7) — separate
           from the dominant card below on purpose: an athlete can validly run a weekly schedule of
@@ -1194,7 +1222,7 @@ export default function TodayTab({
               content edit, not a font shrink — at 4-up tile width, two words wrapped to two
               lines, quietly pushing the whole row's height past what one word needs. */}
           <ActionTile icon={Weight} label="Weight" onClick={() => setBodyweightSheetOpen(true)} />
-          <ActionTile icon={RefreshCw} label="Swap" onClick={() => onNavigate("train")} />
+          <ActionTile icon={RefreshCw} label="Swap" onClick={() => setSwapOpen(true)} />
           <ActionTile icon={TrendingUp} label="Progress" onClick={() => onNavigate("progress")} />
           <ActionTile icon={MessageCircle} label="Coach" onClick={() => onNavigate("coach")} />
         </div>
