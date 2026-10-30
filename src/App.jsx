@@ -123,7 +123,7 @@ import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
 import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
 import { initialSyncStatus, markSyncStarted, markSyncSuccess, markSyncFailure, MAX_SYNC_ATTEMPTS, retryDelayMs } from "./utils/syncStatus.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
-import { newWorkoutId, hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion, stampWorkoutDraft, workoutEntryKey, recoverWorkoutCheckpoint } from "./utils/workoutIntegrity.js";
+import { newWorkoutId, hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion, stampWorkoutDraft, workoutEntryKey, recoverWorkoutCheckpoint, swapWorkoutExercise } from "./utils/workoutIntegrity.js";
 import {
   SET_TYPES,
   PROGRAM_ROLES,
@@ -2663,13 +2663,11 @@ export default function LiftLog() {
     });
   };
   const swapRunExercise = (index, newExId) => {
-    setActiveRun((run) => {
-      // This slot's draft (if any) belonged to the exercise being swapped away from — carrying
-      // it forward would show the old exercise's typed weight/reps as the new exercise's own.
-      const draftByIndex = { ...(run.draftByIndex || {}) };
-      delete draftByIndex[index];
-      return { ...run, swaps: { ...(run.swaps || {}), [index]: newExId }, draftByIndex, updatedAt: new Date().toISOString() };
-    });
+    try {
+      setActiveRun((run) => swapWorkoutExercise(run, index, newExId, stateRef.current.logs));
+    } catch (error) {
+      preserveRecoveryConflict(error);
+    }
   };
   // Appends an exercise the plan never had (session-only, not saved back to the plan) — the
   // slot lands at the end of run.exercises, so it becomes the active card once everything
@@ -5441,10 +5439,8 @@ function TrainingExerciseCard({
         muscleGroups={MUSCLE_GROUPS}
         onBack={() => setSwapOpen(false)}
         onSelect={(newExId) => {
-          // Same reasoning as finishExercise: cancel any pending debounced draft for the
-          // exercise being swapped away from, so it can't leak into draftByIndex for this slot
-          // and resurface as the new exercise's initial weight/reps once swapRunExercise (which
-          // also clears this slot's draft) commits.
+          // Cancel typed-input autosave before the atomic swap transition. Confirmed work
+          // stays in its original slot; replacement input starts independently.
           if (draftTimerRef.current) {
             clearTimeout(draftTimerRef.current);
             draftTimerRef.current = null;
@@ -6276,7 +6272,7 @@ function GuidedRunView({
   const [removeConfirm, setRemoveConfirm] = useState(null);
   const requestRemoveExercise = (idx, exName, hasLoggedSets) => {
     setOpenSwipeIdx(null);
-    setRemoveConfirm({ idx, exName, hasLoggedSets });
+    setRemoveConfirm({ idx, exName, hasLoggedSets: hasLoggedSets || !!run.draftByIndex?.[idx]?.confirmedSets?.length });
   };
   const confirmRemoveExercise = () => {
     if (!removeConfirm) return;

@@ -411,3 +411,142 @@ test("failed canonical exercise write followed by another saved exercise recover
   assert.equal(state.logs.length, 2); assert.equal(state.workoutSessions[0].workingSets, 2);
   assert.equal(state.workoutSessions[0].totalVolume, 2000);
 });
+
+async function swapExercise(page, name = "Incline barbell bench press") {
+  await page.getByRole("button", { name: "Swap exercise", exact: true }).click();
+  await page.getByRole("button", { name: new RegExp(`^${name}`) }).click();
+}
+
+test("swapping before Save Set clears only unconfirmed input and keeps the slot count", async (t) => {
+  const page = await fixture(t); await start(page);
+  await page.locator('input[type="number"]').first().fill("175");
+  await swapExercise(page);
+  assert.equal((await run(page)).exercises.length, 2);
+  assert.equal((await run(page)).sessionEntries.length, 0);
+  await save(page, "150"); await finish(page);
+  const state = await data(page);
+  assert.equal(state.workoutSessions[0].workingSets, 1);
+  assert.notEqual(state.logs[0].exId, "bench");
+  assert.equal(state.logs[0].sets[0].weight, 150);
+});
+
+for (const count of [1, 3]) test(`swap preserves ${count} saved sets through reload and Finish`, async (t) => {
+  const page = await fixture(t); await start(page);
+  for (let i = 0; i < count; i++) await save(page);
+  const before = await run(page), history = (await data(page)).workoutSessions;
+  await swapExercise(page); await page.reload();
+  const preserved = (await run(page)).sessionEntries[0].entry;
+  assert.equal(preserved.exId, "bench");
+  assert.equal(preserved.date, before.draftByIndex[0].entryDate);
+  assert.deepEqual(preserved.sets, before.draftByIndex[0].confirmedSets);
+  await finish(page);
+  const state = await data(page), session = state.workoutSessions[0];
+  assert.equal(session.workingSets, count); assert.equal(session.totalVolume, count * 800);
+  assert.equal(state.logs.length, 1); assert.equal(session.entries[0].exId, "bench");
+  assert.deepEqual(state.workoutSessions.slice(1), history);
+});
+
+test("repeated swaps and replacement saves keep independent ordered logs without duplicates", async (t) => {
+  const page = await fixture(t); await start(page); await save(page); await save(page);
+  await swapExercise(page); await save(page, "150");
+  const first = await run(page), replacementId = first.exercises[1].exId;
+  await swapExercise(page, "Flat dumbbell press"); await save(page, "60");
+  await page.getByRole("button", { name: "Exit", exact: true }).click();
+  await page.getByRole("button", { name: "Resume workout", exact: true }).click();
+  await page.reload(); await finish(page);
+  const state = await data(page), session = state.workoutSessions[0];
+  assert.deepEqual(session.entries.map((e) => e.exId), ["bench", replacementId, (await run(page)).exercises[2].exId]);
+  assert.deepEqual(session.entries.map((e) => e.sets.length), [2, 1, 1]);
+  assert.equal(session.workingSets, 4); assert.equal(session.totalVolume, 3280);
+  assert.equal(state.logs.length, 3); assert.equal(new Set(state.logs.map((l) => l.id)).size, 3);
+  const before = structuredClone(session);
+  await page.getByRole("button", { name: "Reopen workout", exact: true }).click();
+  await finish(page);
+  assert.equal((await data(page)).workoutSessions[0].id, before.id);
+  assert.equal((await data(page)).workoutSessions[0].workingSets, 4);
+  assert.equal((await data(page)).logs.length, 3);
+});
+
+test("swap after interrupted exercise checkpoint reconciles older canonical work and later sets", async (t) => {
+  const page = await fixture(t); await start(page); await save(page);
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "liftlog-active-run" && JSON.parse(value).sessionEntries.length) throw new DOMException("Synthetic checkpoint failure", "QuotaExceededError");
+      return original.call(this, key, value);
+    };
+  });
+  await page.getByRole("button", { name: /Finish exercise now/ }).click();
+  await page.reload(); await save(page); await swapExercise(page);
+  await save(page, "150"); await page.reload(); await finish(page);
+  const state = await data(page);
+  assert.equal(state.workoutSessions[0].workingSets, 3);
+  assert.equal(state.workoutSessions[0].totalVolume, 2800);
+  assert.deepEqual(state.workoutSessions[0].entries.map((e) => e.sets.length), [2, 1]);
+  assert.equal(state.logs.length, 2);
+});
+
+test("failed swap checkpoint retains original durable work and recovers when storage returns", async (t) => {
+  const page = await fixture(t); await start(page); await save(page);
+  const before = await run(page);
+  await page.evaluate(() => {
+    window.restoreSwapStorage = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "liftlog-active-run") throw new DOMException("Synthetic swap failure", "QuotaExceededError");
+      return window.restoreSwapStorage.call(this, key, value);
+    };
+  });
+  await swapExercise(page);
+  assert.deepEqual((await run(page)).draftByIndex[0].confirmedSets, before.draftByIndex[0].confirmedSets);
+  await page.getByText(/not saved/i).waitFor();
+  await page.evaluate(() => { Storage.prototype.setItem = window.restoreSwapStorage; });
+  await save(page, "150"); await page.reload(); await finish(page);
+  assert.deepEqual((await data(page)).workoutSessions[0].entries.map((e) => e.sets.length), [1, 1]);
+  assert.equal((await data(page)).workoutSessions[0].totalVolume, 2000);
+});
+
+test("swap preserves historical logs and calculates PRs for the performed exercise", async (t) => {
+  const page = await fixture(t);
+  await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("liftlog-data"));
+    state.logs = [{ id: "old-bench", exId: "bench", date: "2025-01-01T10:00:00Z", sets: [{ weight: 50, reps: 8, setType: "working" }], targetReps: 8 }];
+    localStorage.setItem("liftlog-data", JSON.stringify(state));
+  });
+  await page.reload(); await page.getByRole("button", { name: "Train", exact: true }).last().click();
+  const old = await data(page); await start(page); await save(page); await swapExercise(page);
+  await save(page, "150"); await finish(page);
+  const state = await data(page), session = state.workoutSessions[0];
+  assert.equal(session.totalVolume, 2000); assert.equal(session.workingSets, 2);
+  assert.ok(session.prs.some((pr) => pr.exId === "bench"));
+  assert.deepEqual(state.logs.find((l) => l.id === "old-bench"), old.logs[0]);
+  assert.deepEqual(state.workoutSessions.slice(1), old.workoutSessions);
+});
+
+test("removing an exercise with saved draft sets explicitly warns and Cancel preserves them", async (t) => {
+  const page = await fixture(t); await start(page); await save(page);
+  const before = await run(page);
+  await page.getByRole("button", { name: "Remove Barbell bench press", exact: true }).click();
+  assert.match(await page.locator("body").innerText(), /remove the exercise and its logged sets/i);
+  await page.getByRole("button", { name: "Cancel", exact: true }).last().click();
+  assert.deepEqual((await run(page)).draftByIndex[0].confirmedSets, before.draftByIndex[0].confirmedSets);
+  await finish(page); assert.equal((await data(page)).workoutSessions[0].workingSets, 1);
+});
+
+test("reload after a rejected swap write restores the last durable original sets", async (t) => {
+  const page = await fixture(t); await start(page); await save(page); await save(page);
+  const before = await run(page);
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "liftlog-active-run") throw new DOMException("Synthetic unavailable storage", "QuotaExceededError");
+      return original.call(this, key, value);
+    };
+  });
+  await swapExercise(page); await page.reload();
+  assert.equal((await run(page)).exercises.length, 2); // rejected swap was never durable
+  assert.deepEqual((await run(page)).draftByIndex[0].confirmedSets, before.draftByIndex[0].confirmedSets);
+  await finish(page);
+  const state = await data(page);
+  assert.equal(state.workoutSessions[0].workingSets, 2);
+  assert.equal(state.logs.length, 1); assert.equal(state.logs[0].exId, "bench");
+});

@@ -117,6 +117,40 @@ function reconcileEntries(state, run, now) {
   }) };
 }
 
+// A replacement is new work, never a retagging of performed sets. Persist the
+// completed original slot and fresh replacement together in the active checkpoint.
+export function swapWorkoutExercise(run, index, newExId, logs = []) {
+  const slot = run?.exercises?.[index];
+  if (!slot || run.finished || run.completionPending || !newExId) return run;
+  if (newExId === (run.swaps?.[index] ?? slot.exId)) return run;
+  const selected = reconcileEntries({ logs: logs.filter((log) =>
+    log.id === workoutLogId(run, index) || run.sessionEntries?.some((se) => se.index === index && se.entry.id === log.id)
+  ) }, {
+    ...run,
+    sessionEntries: (run.sessionEntries || []).filter((se) => se.index === index),
+    draftByIndex: { [index]: run.draftByIndex?.[index] },
+  }, new Date().toISOString()).sessionEntries.find((se) => se.index === index);
+  const draftByIndex = { ...run.draftByIndex };
+  delete draftByIndex[index]; // Only unconfirmed input is abandoned; selected holds saved work.
+  if (!selected) return { ...run, draftByIndex, swaps: { ...run.swaps, [index]: newExId } };
+  const shift = (i) => i > index ? i + 1 : i;
+  const { group, ...replacement } = slot;
+  return {
+    ...run,
+    exercises: [
+      ...run.exercises.slice(0, index + 1),
+      { ...replacement, exId: newExId, workoutSlotId: newWorkoutId() },
+      ...run.exercises.slice(index + 1),
+    ],
+    sessionEntries: [
+      ...(run.sessionEntries || []).filter((se) => se.index !== index).map((se) => ({ ...se, index: shift(se.index) })),
+      selected,
+    ].sort((a, b) => a.index - b.index),
+    draftByIndex: Object.fromEntries(Object.entries(draftByIndex).map(([i, draft]) => [shift(Number(i)), draft])),
+    swaps: Object.fromEntries(Object.entries(run.swaps || {}).map(([i, exId]) => [shift(Number(i)), exId])),
+  };
+}
+
 export function advanceProgramForWorkout(state, run, now = new Date().toISOString()) {
   const cp = state.currentProgram, ctx = run.programContext;
   if (!cp || !ctx || cp.programId !== ctx.programId || cp.source !== ctx.source) return state;
