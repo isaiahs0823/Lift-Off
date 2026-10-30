@@ -1,3 +1,4 @@
+import { editorStorage } from "../persistence/editorSession.js";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause, RotateCcw, Plus, Minus } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
@@ -32,7 +33,7 @@ const STORAGE_KEY = "brk-standalone-rest-timer";
 
 function loadPersisted() {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = editorStorage().getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -41,9 +42,9 @@ function loadPersisted() {
 function persist({ duration, endsAt, pausedRemainingMs, autoRepeat }) {
   try {
     if (endsAt != null || pausedRemainingMs != null) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ duration, endsAt, pausedRemainingMs, autoRepeat }));
+      editorStorage().setItem(STORAGE_KEY, JSON.stringify({ duration, endsAt, pausedRemainingMs, autoRepeat }));
     } else {
-      window.localStorage.removeItem(STORAGE_KEY);
+      editorStorage().removeItem(STORAGE_KEY);
     }
   } catch {
     // storage unavailable — timer still works, it just won't survive a tab switch/reload

@@ -42,6 +42,7 @@ async function fixture(t, recovery = false) {
     }));
   }, { program, recovery });
   const page = await context.newPage();
+  page.on("dialog", (dialog) => { if (dialog.type() === "beforeunload") dialog.accept(); });
   await page.goto(origin);
   await page.getByRole("button", { name: "Train", exact: true }).last().click();
   return page;
@@ -327,23 +328,22 @@ test("unknown durable conflicts preserve both copies, persist on reload and expo
   await page.getByRole("button", { name: "Finish Anyway", exact: true }).click();
   await page.getByRole("alert").waitFor();
   assert.equal((await data(page)).logs[0].sets[0].weight, 999);
-  assert.equal((await run(page)).recoveryConflict.records.checkpoint.sets[0].weight, 100);
   assert.equal((await run(page)).finished, false);
+  assert.equal(await page.getByRole("button", { name: "Finish workout", exact: true }).isDisabled(), true);
   await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem("liftlog-data"));
     state.logs[0].sets[0].weight = 888;
     localStorage.setItem("liftlog-data", JSON.stringify(state));
   });
-  await page.getByRole("button", { name: "Finish workout", exact: true }).click();
-  await page.getByRole("button", { name: "Finish Anyway", exact: true }).click();
-  assert.equal((await run(page)).recoveryConflict.variants.length, 2);
   const downloading = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export workout recovery", exact: true }).click();
+  await page.getByRole("button", { name: "Export persistence recovery", exact: true }).click();
   const download = await downloading;
   const recovered = JSON.parse(await readFile(await download.path(), "utf8"));
-  assert.equal(recovered.run.recoveryConflict.records.canonical.sets[0].weight, 888);
-  assert.equal(recovered.run.recoveryConflict.variants[0].canonical.sets[0].weight, 999);
-  assert.equal(recovered.run.recoveryConflict.records.checkpoint.sets[0].weight, 100);
+  assert.equal(JSON.parse(recovered.conflicts[0].observed).logs[0].sets[0].weight, 999);
+  assert.equal(JSON.parse(recovered.observed.find(([key]) => key === "liftlog-data")[1]).logs[0].sets[0].weight, 888);
+  assert.equal(JSON.parse(recovered.base.find(([key]) => key === "liftlog-active-run")[1]).sessionEntries[0].entry.sets[0].weight, 100);
+  const preserved = await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("brk-recovery:")));
+  assert.ok(preserved.length > 0);
   await page.reload(); await page.getByRole("alert").waitFor();
   assert.equal((await data(page)).workoutSessions.length, 1);
   assert.equal((await run(page)).finished, false);
@@ -375,6 +375,8 @@ test("storage unavailable during completion read-back keeps the checkpoint for s
 
 test("legacy ambiguous checkpoints remain recoverable instead of choosing the shorter canonical log", async (t) => {
   const page = await fixture(t); await start(page); await save(page); await save(page);
+  // Seed an older-build snapshot while no editor owns storage, not as an uncoordinated live edit.
+  await page.getByRole("button", { name: "Release editing", exact: true }).click();
   await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem("liftlog-data")), r = JSON.parse(localStorage.getItem("liftlog-active-run"));
     const entry = { id: `log_${r.id}_${r.exercises[0].workoutSlotId}`, exId: "bench", date: r.startedAt, targetReps: 8, sets: r.draftByIndex[0].confirmedSets };
@@ -498,7 +500,7 @@ test("failed swap checkpoint retains original durable work and recovers when sto
   });
   await swapExercise(page);
   assert.deepEqual((await run(page)).draftByIndex[0].confirmedSets, before.draftByIndex[0].confirmedSets);
-  await page.getByText(/not saved/i).waitFor();
+  await page.getByText("Not saved", { exact: true }).waitFor();
   await page.evaluate(() => { Storage.prototype.setItem = window.restoreSwapStorage; });
   await save(page, "150"); await page.reload(); await finish(page);
   assert.deepEqual((await data(page)).workoutSessions[0].entries.map((e) => e.sets.length), [1, 1]);
@@ -507,6 +509,7 @@ test("failed swap checkpoint retains original durable work and recovers when sto
 
 test("swap preserves historical logs and calculates PRs for the performed exercise", async (t) => {
   const page = await fixture(t);
+  await page.getByRole("button", { name: "Release editing", exact: true }).click();
   await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem("liftlog-data"));
     state.logs = [{ id: "old-bench", exId: "bench", date: "2025-01-01T10:00:00Z", sets: [{ weight: 50, reps: 8, setType: "working" }], targetReps: 8 }];
@@ -549,4 +552,235 @@ test("reload after a rejected swap write restores the last durable original sets
   const state = await data(page);
   assert.equal(state.workoutSessions[0].workingSets, 2);
   assert.equal(state.logs.length, 1); assert.equal(state.logs[0].exId, "bench");
+});
+
+async function competingTab(page, init) {
+  const tab = await page.context().newPage();
+  tab.on("dialog", (dialog) => { if (dialog.type() === "beforeunload") dialog.accept(); });
+  if (init) await tab.addInitScript(init);
+  await tab.goto(origin);
+  await tab.getByRole("heading", { name: "Read-only", exact: true }).waitFor();
+  return tab;
+}
+async function handoff(a, b) {
+  await a.getByRole("button", { name: "Release editing", exact: true }).click();
+  await a.getByRole("heading", { name: "Read-only", exact: true }).waitFor();
+  await b.getByRole("button", { name: "Enable editing", exact: true }).click();
+  await b.getByRole("button", { name: "Save set", exact: true }).waitFor();
+}
+
+test("single editor prevents the original two-tab overwrite and transfers fresh confirmed data", async (t) => {
+  const a = await fixture(t); await start(a); await save(a);
+  const b = await competingTab(a, () => {
+    window.writerCalls = [];
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function(key,value) { window.writerCalls.push(key); return original.call(this,key,value); };
+  });
+  assert.equal(await b.getByRole("button", { name: "Save set", exact: true }).count(), 0);
+  assert.doesNotMatch(await b.locator("body").innerText(), /Saved ✓/i);
+  assert.deepEqual(await b.evaluate(() => window.writerCalls), []); // no startup migration, auth or timer writer
+  await b.getByRole("button", { name: "Enable editing", exact: true }).click();
+  await b.getByRole("heading", { name: "Read-only", exact: true }).waitFor();
+  await save(a, "150");
+  assert.deepEqual((await run(a)).draftByIndex[0].confirmedSets.map((s) => s.weight), [100,150]);
+  // Pending typed input is synchronously flushed during an explicit handoff.
+  await a.locator('input[type="number"]').first().fill("175");
+  await handoff(a,b);
+  assert.equal(await b.locator('input[type="number"]').first().inputValue(), "175");
+  await save(b,"200"); await finish(b);
+  assert.deepEqual((await data(b)).workoutSessions[0].entries[0].sets.map((s) => s.weight), [100,150,200]);
+  assert.equal((await data(b)).logs.length,1);
+  await a.reload(); await a.getByRole("heading", { name: "Read-only", exact: true }).waitFor();
+  await b.reload(); await b.getByRole("button", { name: "Reopen workout", exact: true }).waitFor();
+  assert.deepEqual((await data(b)).logs[0].sets.map((s) => s.weight), [100,150,200]);
+});
+
+test("closing the owning tab releases the browser lock and resumes the durable workout", async (t) => {
+  const a = await fixture(t); await start(a); await save(a);
+  const before = await run(a), b = await competingTab(a);
+  await a.close();
+  await b.getByRole("button", { name: "Enable editing", exact: true }).click();
+  await b.getByRole("button", { name: "Save set", exact: true }).waitFor();
+  assert.equal((await run(b)).id,before.id);
+  assert.deepEqual((await run(b)).draftByIndex[0].confirmedSets,before.draftByIndex[0].confirmedSets);
+  await finish(b); assert.equal((await data(b)).workoutSessions[0].workingSets,1);
+});
+
+test("reload reacquires ownership before restoring an unfinished editor", async (t) => {
+  const a = await fixture(t); await start(a); await save(a);
+  const before = await run(a), b = await competingTab(a);
+  await a.reload(); await a.getByRole("button", { name: "Save set", exact: true }).waitFor();
+  assert.equal((await run(a)).id,before.id);
+  await save(a,"150");
+  assert.equal(await b.getByRole("button", { name: "Save set", exact: true }).count(),0);
+  await finish(a); assert.equal((await data(a)).workoutSessions[0].workingSets,2);
+});
+
+test("a stale captured Finish handler cannot write after ownership transfer", async (t) => {
+  const a = await fixture(t); await start(a); await save(a);
+  await a.getByRole("button", { name: "Finish workout", exact: true }).click();
+  await a.evaluate(() => {
+    const button = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Finish Anyway");
+    const props = button[Object.keys(button).find((key) => key.startsWith("__reactProps$"))];
+    window.staleFinish = props.onClick; // real handler, retained as a late asynchronous callback
+  });
+  const b = await competingTab(a); await handoff(a,b); await save(b,"150");
+  const before = await b.evaluate(() => [localStorage.getItem("liftlog-data"),localStorage.getItem("liftlog-active-run")]);
+  await a.evaluate(() => window.staleFinish());
+  assert.deepEqual(await b.evaluate(() => [localStorage.getItem("liftlog-data"),localStorage.getItem("liftlog-active-run")]),before);
+  await finish(b); assert.equal((await data(b)).workoutSessions[0].workingSets,2);
+});
+
+test("a delayed backup reader cannot replace history after its editor releases ownership", async (t) => {
+  const a = await fixture(t);
+  await a.getByRole("button", { name: "More", exact: true }).last().click();
+  await a.getByText("Settings", { exact: true }).click();
+  await a.evaluate(() => {
+    window.FileReader = class {
+      readAsText() { window.lateBackup = () => { this.result=JSON.stringify({data:{logs:[],workoutSessions:[]}}); this.onload(); }; }
+    };
+  });
+  await a.locator('input[type="file"][accept*="json"]').setInputFiles({name:"synthetic.json",mimeType:"application/json",buffer:Buffer.from("{}")});
+  const b = await competingTab(a);
+  await a.getByRole("button", { name: "Release editing", exact: true }).click();
+  await b.getByRole("button", { name: "Enable editing", exact: true }).click();
+  await b.getByRole("button", { name: "Train", exact: true }).last().click();
+  await start(b); await save(b); await finish(b);
+  const before = await data(b);
+  a.once("dialog", (dialog) => dialog.accept()); await a.evaluate(() => window.lateBackup());
+  assert.deepEqual(await data(b),before);
+});
+
+test("complete write rejection stays Not saved, refuses transfer, and Finish retry retains all sets", async (t) => {
+  const a = await fixture(t); await start(a); await save(a); const b = await competingTab(a);
+  await a.evaluate(() => {
+    window.restorePersistence = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => { throw new DOMException("Synthetic total rejection","QuotaExceededError"); };
+  });
+  await save(a,"150"); await a.getByText("Not saved",{exact:true}).waitFor();
+  assert.doesNotMatch(await a.locator("body").innerText(), /Saved ✓/i);
+  a.once("dialog",(dialog) => dialog.accept());
+  await a.getByRole("button",{name:"Finish workout",exact:true}).click();
+  await a.getByRole("button",{name:"Finish Anyway",exact:true}).click();
+  await a.waitForTimeout(500);
+  assert.match(await a.locator("body").innerText(),/not saved/i);
+  assert.doesNotMatch(await a.locator("body").innerText(),/SAVING…|Saved ✓/i);
+  assert.equal(await a.getByRole("button",{name:"Save set",exact:true}).count(),1); // original exercise remains editable
+  await a.getByRole("button",{name:"Release editing",exact:true}).click();
+  assert.equal(await a.getByRole("heading",{name:"Read-only",exact:true}).count(),0);
+  await b.getByRole("button",{name:"Enable editing",exact:true}).click();
+  await b.getByRole("heading",{name:"Read-only",exact:true}).waitFor();
+  assert.equal((await data(a)).workoutSessions.length,1);
+  await a.evaluate(() => { Storage.prototype.setItem=window.restorePersistence; });
+  await finish(a); assert.deepEqual((await data(a)).logs[0].sets.map((s) => s.weight),[100,150]);
+});
+
+test("a silent dropped checkpoint never earns Saved and can be retried without duplicate sets", async (t) => {
+  const a = await fixture(t); await start(a); await save(a);
+  await a.evaluate(() => {
+    window.restoreSilent = Storage.prototype.setItem;
+    Storage.prototype.setItem = function(k,v) { if(k!=="liftlog-active-run") return window.restoreSilent.call(this,k,v); };
+  });
+  await save(a,"150"); await a.getByText("Not saved",{exact:true}).waitFor();
+  assert.equal((await run(a)).draftByIndex[0].confirmedSets.length,1);
+  await a.evaluate(() => {Storage.prototype.setItem=window.restoreSilent;});
+  await finish(a); assert.equal((await data(a)).workoutSessions[0].workingSets,2);
+});
+
+for (const failure of ["unavailable", "request-rejected"]) test(`coordination ${failure} fails closed before startup writers`, async (t) => {
+  const a = await fixture(t); const original = await data(a);
+  await a.getByRole("button",{name:"Release editing",exact:true}).click();
+  const b = await competingTab(a, failure === "unavailable" ? () => {
+    Object.defineProperty(navigator,"locks",{value:undefined});
+  } : () => {
+    navigator.locks.request = () => Promise.reject(new Error("Synthetic ownership failure"));
+  });
+  assert.match(await b.locator("body").innerText(),/coordination is unavailable/i);
+  assert.equal(await b.getByRole("button",{name:"Train",exact:true}).count(),0);
+  assert.deepEqual(await data(b),original);
+});
+
+test("unreadable revision snapshot prevents default-state writes", async (t) => {
+  const a = await fixture(t), before=await data(a);
+  await a.getByRole("button",{name:"Release editing",exact:true}).click();
+  const b = await competingTab(a, () => {
+    window.getBeforeFailure=Storage.prototype.getItem;
+    Storage.prototype.getItem = function(key) { if(key==="liftlog-data") throw new Error("Synthetic revision read failure"); return window.getBeforeFailure.call(this,key); };
+  });
+  assert.match(await b.locator("body").innerText(),/saved data has not been changed/i);
+  await b.evaluate(() => {Storage.prototype.getItem=window.getBeforeFailure;});
+  assert.deepEqual(await data(b),before);
+});
+
+test("pagehide fences the old realm and BFCache restore reloads before editing", async (t) => {
+  const a = await fixture(t); await start(a); await save(a); const b=await competingTab(a);
+  await a.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide",{persisted:true})));
+  await a.getByRole("heading",{name:"Read-only",exact:true}).waitFor();
+  await b.getByRole("button",{name:"Enable editing",exact:true}).click();
+  await b.getByRole("button",{name:"Save set",exact:true}).waitFor(); await save(b,"150");
+  await a.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true})));
+  await a.getByRole("heading",{name:"Read-only",exact:true}).waitFor();
+  await finish(b); assert.equal((await data(b)).workoutSessions[0].workingSets,2);
+});
+
+test("photo metadata uses the verified owner store and survives a handoff", async (t) => {
+  const a=await fixture(t);
+  await a.getByRole("button",{name:"Progress",exact:true}).last().click();
+  await a.getByRole("tab",{name:"Body",exact:true}).click();
+  await a.getByText("Progress photos",{exact:true}).click();
+  const png=await a.evaluate(() => {const c=document.createElement("canvas"); c.width=16;c.height=16;c.getContext("2d").fillRect(0,0,16,16);return c.toDataURL().split(",")[1];});
+  await a.locator('input[type="file"][accept="image/*"]').setInputFiles({name:"synthetic.png",mimeType:"image/png",buffer:Buffer.from(png,"base64")});
+  await a.waitForFunction(() => JSON.parse(localStorage.getItem("liftlog-data")).photos?.length===1);
+  const before=await data(a), b=await competingTab(a);
+  await a.getByRole("button",{name:"Release editing",exact:true}).click();
+  await b.getByRole("button",{name:"Enable editing",exact:true}).click();
+  await b.getByRole("button",{name:"Train",exact:true}).last().waitFor();
+  assert.deepEqual((await data(b)).photos,before.photos);
+  assert.deepEqual((await data(b)).workoutSessions,before.workoutSessions);
+});
+
+test("an uncoordinated external storage writer triggers read-only recovery without replacing either copy", async (t) => {
+  const a=await fixture(t); await start(a); await save(a); const b=await competingTab(a);
+  await b.evaluate(() => {
+    const state=JSON.parse(localStorage.getItem("liftlog-data"));
+    state.exerciseNotes.bench.general="Synthetic external correction";
+    localStorage.setItem("liftlog-data",JSON.stringify(state));
+  });
+  await a.getByRole("status").filter({hasText:"Read-only"}).waitFor();
+  assert.equal(await a.getByRole("button",{name:"Save set",exact:true}).isDisabled(),true);
+  assert.equal((await data(a)).exerciseNotes.bench.general,"Synthetic external correction");
+  assert.equal((await run(a)).draftByIndex[0].confirmedSets.length,1);
+  const downloadPromise=a.waitForEvent("download");
+  await a.getByRole("button",{name:"Export persistence recovery",exact:true}).click();
+  const download=await downloadPromise;
+  const exported=JSON.parse(await readFile(await download.path(),"utf8"));
+  assert.equal(JSON.parse(exported.conflicts[0].base).exerciseNotes.bench.general,"Preserve my bench cue");
+  assert.equal(JSON.parse(exported.conflicts[0].observed).exerciseNotes.bench.general,"Synthetic external correction");
+});
+
+test("photo processing prevents voluntary transfer until its metadata is safely persisted", async (t) => {
+  const a=await fixture(t);
+  await a.getByRole("button",{name:"Progress",exact:true}).last().click();
+  await a.getByRole("tab",{name:"Body",exact:true}).click();
+  await a.getByText("Progress photos",{exact:true}).click();
+  await a.evaluate(() => {
+    const original=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,"src");
+    Object.defineProperty(HTMLImageElement.prototype,"src",{...original,set(value) {
+      if(value.startsWith("blob:")) window.resumePhoto=()=>original.set.call(this,value);
+      else original.set.call(this,value);
+    }});
+  });
+  const png=await a.evaluate(() => {const c=document.createElement("canvas");c.width=16;c.height=16;return c.toDataURL().split(",")[1];});
+  await a.locator('input[type="file"][accept="image/*"]').setInputFiles({name:"pending.png",mimeType:"image/png",buffer:Buffer.from(png,"base64")});
+  const b=await competingTab(a);
+  await a.getByRole("button",{name:"Release editing",exact:true}).click();
+  assert.equal(await a.getByRole("heading",{name:"Read-only",exact:true}).count(),0);
+  assert.equal((await data(a)).photos.length,0);
+  await a.evaluate(()=>window.resumePhoto());
+  await a.waitForFunction(()=>JSON.parse(localStorage.getItem("liftlog-data")).photos.length===1);
+  const photo=(await data(a)).photos[0];
+  await a.getByRole("button",{name:"Release editing",exact:true}).click();
+  await b.getByRole("button",{name:"Enable editing",exact:true}).click();
+  await b.getByRole("button",{name:"Train",exact:true}).last().waitFor();
+  assert.deepEqual((await data(b)).photos,[photo]);
 });

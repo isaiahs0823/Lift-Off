@@ -1,3 +1,4 @@
+import { editorStorage, getEditorSession } from "./persistence/editorSession.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Plus,
@@ -1960,11 +1961,15 @@ function sanitizeActiveRun(raw) {
 }
 
 export default function LiftLog() {
+  const persistence = getEditorSession();
+  const [durability, setDurability] = useState(persistence.snapshot);
+  useEffect(() => persistence.subscribe(setDurability), [persistence]);
   const [state, setRenderedState] = useState(loadInitialState());
   // Serialize transitions against the latest accepted state, including multiple actions in one
   // React batch. Persistence must not run inside a replayable React updater.
   const stateRef = useRef(state);
   const setState = useCallback((updater) => {
+    if (!persistence.isOwner()) return stateRef.current;
     const next = typeof updater === "function" ? updater(stateRef.current) : updater;
     stateRef.current = next;
     setRenderedState(next);
@@ -1994,7 +1999,7 @@ export default function LiftLog() {
   // still means something after closing and reopening the app.
   const [syncStatus, setSyncStatus] = useState(() => {
     try {
-      const raw = window.localStorage.getItem("liftlog-sync-status");
+      const raw = editorStorage().getItem("liftlog-sync-status");
       return raw ? JSON.parse(raw) : initialSyncStatus();
     } catch (e) {
       return initialSyncStatus();
@@ -2002,7 +2007,7 @@ export default function LiftLog() {
   });
   useEffect(() => {
     try {
-      window.localStorage.setItem("liftlog-sync-status", JSON.stringify(syncStatus));
+      editorStorage().setItem("liftlog-sync-status", JSON.stringify(syncStatus));
     } catch (e) {
       // storage unavailable — status just won't survive a reload, not worth surfacing an error
       // about an error-tracking mechanism
@@ -2068,7 +2073,7 @@ export default function LiftLog() {
   // the plan-picker tab, and no race with the persist effect right below.
   const [activeRun, setRenderedActiveRun] = useState(() => {
     try {
-      const raw = window.localStorage.getItem("liftlog-active-run");
+      const raw = editorStorage().getItem("liftlog-active-run");
       return raw ? sanitizeActiveRun(JSON.parse(raw)) : null;
     } catch (e) {
       return null;
@@ -2094,13 +2099,14 @@ export default function LiftLog() {
   const [persistStatus, setPersistStatus] = useState("saved");
   const activeRunRef = useRef(activeRun);
   const setActiveRun = useCallback((updater) => {
+    if (!persistence.isOwner()) return false;
     const next = typeof updater === "function" ? updater(activeRunRef.current) : updater;
-    if (next === activeRunRef.current) return true;
+    if (next === activeRunRef.current) return !persistence.snapshot().error;
     activeRunRef.current = next;
     let saved = true;
     try {
-      if (next) window.localStorage.setItem("liftlog-active-run", JSON.stringify(next));
-      else window.localStorage.removeItem("liftlog-active-run");
+      if (next) editorStorage().setItem("liftlog-active-run", JSON.stringify(next));
+      else editorStorage().removeItem("liftlog-active-run");
     } catch {
       saved = false;
     }
@@ -2116,7 +2122,10 @@ export default function LiftLog() {
     });
     setPersistStatus("error");
   }, [setActiveRun]);
-  const markDraftDirty = useCallback(() => setPersistStatus("saving"), []);
+  const markDraftDirty = useCallback(() => {
+    persistence.markPending("liftlog-active-run");
+    setPersistStatus((status) => status === "error" ? status : "saving");
+  }, [persistence]);
   // Transient hand-off from BarcodeScannerScreen's "unknown barcode" path to
   // NutritionLabelScannerScreen — the scanned barcode gets attached to the food the user is
   // about to build from the label photo. Navigation-only state, never persisted.
@@ -2225,7 +2234,7 @@ export default function LiftLog() {
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem("liftlog-data");
+      const raw = editorStorage().getItem("liftlog-data");
       if (raw) {
         const parsed = JSON.parse(raw);
         setState((s) => {
@@ -2249,7 +2258,7 @@ export default function LiftLog() {
           }
           try {
             const { templates, programs, ...toPersist } = migrated;
-            window.localStorage.setItem("liftlog-data", JSON.stringify(toPersist));
+            editorStorage().setItem("liftlog-data", JSON.stringify(toPersist));
           } catch (e) {
             // storage unavailable — migrated state still applies for this session
           }
@@ -2275,7 +2284,9 @@ export default function LiftLog() {
   // never duplicate or lose a row, worst case it's immediately superseded by the next real push.
   const pushWithRetry = useCallback(async (next, userId, attempt = 1) => {
     setSyncStatus((s) => markSyncStarted(s, attempt));
-    const result = await pushWorkoutDataToSupabase(next, userId);
+    if (!persistence.isOwner()) return;
+    const result = await persistence.task(() => pushWorkoutDataToSupabase(next, userId));
+    if (!persistence.isOwner()) return;
     if (result.ok) {
       setSyncStatus((s) => markSyncSuccess(s));
       return;
@@ -2292,14 +2303,15 @@ export default function LiftLog() {
 
   const scheduleCloudSync = useCallback(
     (next) => {
-      if (!auth.user) return;
+      if (!persistence.isOwner() || !auth.user) return;
       if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
       if (cloudSyncRetryTimerRef.current) clearTimeout(cloudSyncRetryTimerRef.current);
       const userId = auth.user.id;
       cloudSyncTimerRef.current = setTimeout(() => {
+        if (!persistence.isOwner()) return;
         pushWithRetry(next, userId);
-        pushPhotosToSupabase(next.photos, userId).then(({ uploadedIds }) => {
-          if (uploadedIds && uploadedIds.length > 0) {
+        persistence.task(() => pushPhotosToSupabase(next.photos, userId)).then(({ uploadedIds }) => {
+          if (persistence.isOwner() && uploadedIds && uploadedIds.length > 0) {
             setState((prev) => ({
               ...prev,
               photos: (prev.photos || []).map((p) => (uploadedIds.includes(p.id) ? { ...p, syncedToCloud: true } : p)),
@@ -2314,7 +2326,7 @@ export default function LiftLog() {
   // instead of waiting for the next edit or the next backoff attempt. Re-sends current `state`,
   // which upserts harmlessly even if nothing actually changed since the last successful push.
   const retrySyncNow = useCallback(() => {
-    if (!auth.user) return;
+    if (!persistence.isOwner() || !auth.user) return;
     if (cloudSyncRetryTimerRef.current) clearTimeout(cloudSyncRetryTimerRef.current);
     pushWithRetry(state, auth.user.id);
   }, [auth.user, pushWithRetry, state]);
@@ -2326,7 +2338,7 @@ export default function LiftLog() {
         // always come from source on the next load, not a snapshot from whatever build
         // last saved.
         const { templates, programs, ...toPersist } = next;
-        window.localStorage.setItem("liftlog-data", JSON.stringify(toPersist));
+        editorStorage().setItem("liftlog-data", JSON.stringify(toPersist));
       } catch (e) {
         console.error("Storage error", e);
       }
@@ -2357,7 +2369,8 @@ export default function LiftLog() {
     const userId = auth.user.id;
     const email = auth.user.email;
     (async () => {
-      const { data, errors, ok } = await pullWorkoutDataFromSupabase(userId);
+      const { data, errors, ok } = await persistence.task(() => pullWorkoutDataFromSupabase(userId));
+      if (!persistence.isOwner()) return;
       // "Never falsely report success" (P0 auth audit, item 6) — a pull failure is data-safe by
       // construction (mergeRemoteIntoLocal only ever adds, so partial/empty data just means
       // nothing new arrives), but it must still be visible rather than silently doing nothing.
@@ -2391,7 +2404,9 @@ export default function LiftLog() {
         return next;
       });
       const localPhotoIds = new Set((state.photos || []).map((p) => p.id));
-      const newPhotos = await pullNewPhotosFromSupabase(userId, localPhotoIds);
+      if (!persistence.isOwner()) return;
+      const newPhotos = await persistence.task(() => pullNewPhotosFromSupabase(userId, localPhotoIds));
+      if (!persistence.isOwner()) return;
       if (newPhotos.length > 0) {
         setState((prev) => {
           const merged = { ...prev, photos: [...(prev.photos || []), ...newPhotos] };
@@ -2759,6 +2774,7 @@ export default function LiftLog() {
     });
   };
   const finishRun = () => {
+    if (!persistence.isOwner()) return;
     const run = activeRunRef.current;
     if (!hasUnfinishedWorkout(run)) return;
     const previous = stateRef.current;
@@ -2789,11 +2805,17 @@ export default function LiftLog() {
     // safe even if the app is killed between the main-state and finished-marker writes.
     const checkpoint = { ...result.run, finished: false, draftByIndex: run.draftByIndex, recoveryConflict: run.recoveryConflict, completionPending: true };
     if (!setActiveRun(checkpoint)) {
+      // Retain the editable run; a rejected checkpoint must not advance the UI into
+      // a pending state that ignores future drafts or masks an error with Saving.
+      activeRunRef.current = run;
+      setRenderedActiveRun(run);
+      setPersistStatus("error");
+      if (!persistence.isOwner()) return; // The coordinator already surfaced a recoverable conflict.
       window.alert("Couldn't save your workout on this device. Your sets are still open. Free storage space and try Finish again.");
       return;
     }
     try {
-      const retired = writeWorkoutCompletion(window.localStorage, next, result.run);
+      const retired = writeWorkoutCompletion(editorStorage(), next, result.run);
       setState(next);
       activeRunRef.current = result.run;
       setRenderedActiveRun(result.run);
@@ -2801,6 +2823,7 @@ export default function LiftLog() {
       scheduleCloudSync(next);
       ratingCelebrationPendingRef.current = isNew;
     } catch (error) {
+      if (!persistence.isOwner()) { setPersistStatus("error"); return; }
       if (error.code === "WORKOUT_RECOVERY_CONFLICT") {
         preserveRecoveryConflict(error);
         return;
@@ -3037,7 +3060,7 @@ export default function LiftLog() {
             onMinimize={minimizeRun}
             onDraftChange={updateRunDraft}
             onDraftDirty={markDraftDirty}
-            persistStatus={persistStatus}
+            persistStatus={durability.error ? "error" : durability.pending ? "saving" : persistStatus}
             onSwap={swapRunExercise}
             onAddExercise={addRunExercise}
             onRemoveExercise={removeRunExercise}
@@ -4640,7 +4663,7 @@ async function showWorkoutReminderNotification(plan) {
 const REST_TIMER_STORAGE_KEY = "liftlog-rest-timer";
 function loadPersistedRestTimer() {
   try {
-    const raw = window.localStorage.getItem(REST_TIMER_STORAGE_KEY);
+    const raw = editorStorage().getItem(REST_TIMER_STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -4649,9 +4672,9 @@ function loadPersistedRestTimer() {
 function persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor }) {
   try {
     if (endsAt != null || pausedRemainingMs != null) {
-      window.localStorage.setItem(REST_TIMER_STORAGE_KEY, JSON.stringify({ duration, endsAt, pausedRemainingMs, alertedFor }));
+      editorStorage().setItem(REST_TIMER_STORAGE_KEY, JSON.stringify({ duration, endsAt, pausedRemainingMs, alertedFor }));
     } else {
-      window.localStorage.removeItem(REST_TIMER_STORAGE_KEY);
+      editorStorage().removeItem(REST_TIMER_STORAGE_KEY);
     }
   } catch {
     // storage unavailable
@@ -5220,10 +5243,12 @@ function TrainingExerciseCard({
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("pagehide", flushNow);
     window.addEventListener("beforeunload", flushNow);
+    const unregisterFlush = getEditorSession().registerFlush(flushNow);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("pagehide", flushNow);
       window.removeEventListener("beforeunload", flushNow);
+      unregisterFlush();
       flushNow();
     };
   }, []);
@@ -9043,13 +9068,13 @@ function PhotosTab({ state, updateState }) {
         currentProgramDay && !currentProgramDay.isComplete
           ? `${currentProgramDay.programName} — ${currentProgramDay.dayLabel}`
           : null;
-      const dataUrl = await compositeProgressPhoto(file, contextLine);
+      const dataUrl = await getEditorSession().task(() => compositeProgressPhoto(file, contextLine));
       const photo = { id: `photo_${Date.now()}`, date: new Date().toISOString(), context: contextLine, dataUrl };
       let quotaError = false;
       updateState((prev) => {
         const next = { ...prev, photos: [photo, ...(prev.photos || [])] };
         try {
-          window.localStorage.setItem("liftlog-data", JSON.stringify(next));
+          editorStorage().setItem("liftlog-data", JSON.stringify(next));
         } catch (err) {
           quotaError = true;
           return prev;

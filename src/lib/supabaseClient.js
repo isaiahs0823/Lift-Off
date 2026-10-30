@@ -1,3 +1,4 @@
+import { editorStorage } from "../persistence/editorSession.js";
 import { createClient } from "@supabase/supabase-js";
 
 // Read-only from env — never hardcode a URL/key here. Both must come from
@@ -12,6 +13,6 @@ export const supabaseEnabled = Boolean(supabaseUrl && supabaseAnonKey);
 
 export const supabase = supabaseEnabled
   ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      auth: { storage: editorStorage(), persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     })
   : null;
