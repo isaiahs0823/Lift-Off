@@ -1,15 +1,15 @@
 import React from "react";
 import { ChevronRight, FilePlus, History } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
-import { resolveCurrentProgramDay } from "../utils/programSchedule.js";
+import { resolveTodayWorkout } from "../utils/programSchedule.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 
 // The one screen "Start Workout Today" opens — kept to exactly the three paths the redesign
 // calls for, in priority order. Never forces the athlete through history/program/exercise
 // browsing before they can begin: each option is a single tap away from actually training.
-export default function StartWorkoutChoice({ state, exMap, onStartRun, onRepeatRecent, onBack }) {
-  const programDay = resolveCurrentProgramDay(state);
+export default function StartWorkoutChoice({ state, exMap, onStartRun, onStartRecovery, onRepeatRecent, onBack }) {
+  const programDay = resolveTodayWorkout(state);
   const hasProgram = programDay && !programDay.isComplete;
 
   return (
@@ -30,10 +30,12 @@ export default function StartWorkoutChoice({ state, exMap, onStartRun, onRepeatR
             </div>
           )}
           <button
-            onClick={() => onStartRun(programDay.plan, programDay.programContext)}
+            onClick={() => programDay.isRecoveryDay
+              ? onStartRecovery?.(programDay.routine, programDay.programContext)
+              : onStartRun(programDay.plan, programDay.programContext)}
             className="w-full py-3.5 rounded-xl text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:opacity-90"
           >
-            Start programmed workout
+            {programDay.isRecoveryDay ? "Start recovery session" : "Start programmed workout"}
           </button>
         </div>
       )}

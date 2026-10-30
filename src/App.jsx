@@ -123,6 +123,7 @@ import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
 import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
 import { initialSyncStatus, markSyncStarted, markSyncSuccess, markSyncFailure, MAX_SYNC_ATTEMPTS, retryDelayMs } from "./utils/syncStatus.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
+import { newWorkoutId, hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion } from "./utils/workoutIntegrity.js";
 import {
   SET_TYPES,
   PROGRAM_ROLES,
@@ -1924,8 +1925,14 @@ function sanitizeActiveRun(raw) {
   try {
     return {
       version: ACTIVE_RUN_VERSION,
+      id: typeof raw.id === "string" ? raw.id : newWorkoutId(),
+      completionPending: !!raw.completionPending,
+      programBeforeCompletion: raw.programBeforeCompletion ?? null,
+      sourceProgramId: raw.sourceProgramId ?? raw.programContext?.programId ?? null,
+      sourceProgramName: raw.sourceProgramName ?? raw.programContext?.programName ?? null,
+      sourceDayLabel: raw.sourceDayLabel ?? null,
       planName: typeof raw.planName === "string" && raw.planName ? raw.planName : "Workout",
-      exercises: Array.isArray(raw.exercises) ? raw.exercises : [],
+      exercises: Array.isArray(raw.exercises) ? raw.exercises.map((slot) => ({ ...slot, workoutSlotId: slot.workoutSlotId || newWorkoutId() })) : [],
       sessionEntries: Array.isArray(raw.sessionEntries) ? raw.sessionEntries : [],
       swaps: raw.swaps && typeof raw.swaps === "object" ? raw.swaps : {},
       finished: !!raw.finished,
@@ -1951,7 +1958,16 @@ function sanitizeActiveRun(raw) {
 }
 
 export default function LiftLog() {
-  const [state, setState] = useState(loadInitialState());
+  const [state, setRenderedState] = useState(loadInitialState());
+  // Serialize transitions against the latest accepted state, including multiple actions in one
+  // React batch. Persistence must not run inside a replayable React updater.
+  const stateRef = useRef(state);
+  const setState = useCallback((updater) => {
+    const next = typeof updater === "function" ? updater(stateRef.current) : updater;
+    stateRef.current = next;
+    setRenderedState(next);
+    return next;
+  }, []);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("today");
   // "Start This Program" success feedback (UX audit Phase 1, item 1) — deliberately NOT part of
@@ -2048,7 +2064,7 @@ export default function LiftLog() {
   // Lazy-initted straight from localStorage (not loaded in an effect like `state` below) so
   // an in-progress workout is already in place on the very first render — no flash back to
   // the plan-picker tab, and no race with the persist effect right below.
-  const [activeRun, setActiveRun] = useState(() => {
+  const [activeRun, setRenderedActiveRun] = useState(() => {
     try {
       const raw = window.localStorage.getItem("liftlog-active-run");
       return raw ? sanitizeActiveRun(JSON.parse(raw)) : null;
@@ -2070,10 +2086,26 @@ export default function LiftLog() {
   const [mobilitySelectedId, setMobilitySelectedId] = useState(null);
   const [mobilityRunContext, setMobilityRunContext] = useState(null); // { routine, programContext, returnTab }
   // Drives the small "Saved / Saving… / Not saved" indicator during an active workout — see the
-  // activeRun-persist effect below (which is the single place that actually knows whether the
+  // activeRun setter (which knows whether the
   // localStorage write succeeded) and TrainingExerciseCard's draft-dirty callback (which flips
   // this to "saving" the instant a field changes, ahead of the debounce actually committing).
   const [persistStatus, setPersistStatus] = useState("saved");
+  const activeRunRef = useRef(activeRun);
+  const setActiveRun = useCallback((updater) => {
+    const next = typeof updater === "function" ? updater(activeRunRef.current) : updater;
+    if (next === activeRunRef.current) return true;
+    activeRunRef.current = next;
+    let saved = true;
+    try {
+      if (next) window.localStorage.setItem("liftlog-active-run", JSON.stringify(next));
+      else window.localStorage.removeItem("liftlog-active-run");
+    } catch {
+      saved = false;
+    }
+    setRenderedActiveRun(next);
+    setPersistStatus(saved ? "saved" : "error");
+    return saved;
+  }, []);
   const markDraftDirty = useCallback(() => setPersistStatus("saving"), []);
   // Transient hand-off from BarcodeScannerScreen's "unknown barcode" path to
   // NutritionLabelScannerScreen — the scanned barcode gets attached to the food the user is
@@ -2167,22 +2199,15 @@ export default function LiftLog() {
     setSelectedSessionId(sessionId);
     setTab("sessionRecap");
   };
-  // Keeps the in-progress (or just-finished-but-not-yet-exited) run surviving a closed tab,
-  // backgrounded phone, or crash — otherwise closing mid-workout silently drops everything
-  // that wasn't already saved as a logged set. Cleared once the user actually exits the run
-  // (finishRun -> "Back to plans", or Exit), not merely on "Finish workout".
+  // Resume an interrupted completion after canonical history was committed but the
+  // independent draft marker was not. Never clear the checkpoint before history is durable.
   useEffect(() => {
-    try {
-      if (activeRun) window.localStorage.setItem("liftlog-active-run", JSON.stringify(activeRun));
-      else window.localStorage.removeItem("liftlog-active-run");
-      if (activeRun) setPersistStatus("saved");
-    } catch (e) {
-      // Storage full/unavailable (private browsing, quota exceeded, etc.) — the workout keeps
-      // running normally in memory, but the athlete needs to know it won't survive a close, not
-      // see a false "Saved" while nothing was actually written.
-      if (activeRun) setPersistStatus("error");
+    const run = activeRunRef.current;
+    if (loaded && run?.completionPending) {
+      const committed = state.workoutSessions?.some((session) => session.id === run.summaryId);
+      setActiveRun({ ...run, finished: !!committed, completionPending: false, ...(committed ? { draftByIndex: {} } : {}) });
     }
-  }, [activeRun]);
+  }, [loaded, state.workoutSessions, setActiveRun]);
   const [restBump, setRestBump] = useState({ token: 0, seconds: 90 });
 
   useEffect(() => {
@@ -2421,18 +2446,30 @@ export default function LiftLog() {
   );
 
   const startRun = (plan, fromTab, programContext) => {
+    if (hasUnfinishedWorkout(activeRunRef.current)) {
+      setWorkoutMinimized(false);
+      return; // Every entry point resumes; starting elsewhere cannot replace athlete work.
+    }
+    if (!plan || !Array.isArray(plan.exercises)) return;
+    const assignment = programContext
+      ? nextCurrentProgramForStartRun(stateRef.current.currentProgram, programContext, stateRef.current.athleteProfile?.preferredDays)
+      : null;
     const now = new Date().toISOString();
     setWorkoutMinimized(false);
     setPersistStatus("saved");
     setActiveRun({
       version: ACTIVE_RUN_VERSION,
+      id: newWorkoutId(),
       planName: plan.name,
-      exercises: plan.exercises,
+      exercises: plan.exercises.map((slot) => ({ ...slot, workoutSlotId: newWorkoutId() })),
       sessionEntries: [],
       swaps: {},
       finished: false,
       returnTab: fromTab,
-      programContext: programContext || null,
+      programContext: programContext ? {
+        ...programContext, assignmentStartDate: assignment.startDate,
+        assignmentDayIndex: assignment.dayIndex, assignmentLastCompletedAt: assignment.lastCompletedAt ?? null,
+      } : null,
       // Optional metadata only (see buildSessionSummary) — "blank"/"repeated" come from the
       // plan object the Start Workout Today choice screen builds; every other caller leaves
       // plan.source unset and gets the same "program"/"custom" inference as before this existed.
@@ -2466,7 +2503,7 @@ export default function LiftLog() {
           // Records what planned-training-frequency was active when this program was picked
           // (see nextCurrentProgramForStartRun's own comment for why dayIndex/totalDays only ever
           // come from programContext when a different program is actually becoming active).
-          currentProgram: nextCurrentProgramForStartRun(prev.currentProgram, programContext, prev.athleteProfile?.preferredDays),
+          currentProgram: assignment,
           programDayOverride,
           hasSeenOnboarding: true,
         };
@@ -2540,6 +2577,7 @@ export default function LiftLog() {
   const updateSessionContext = (next) => setActiveRun((run) => (run ? { ...run, sessionContext: sanitizeSessionContext(next) } : run));
   const recordRunEntry = (index, entry) => {
     setActiveRun((run) => {
+      if (!run || run.finished || run.completionPending) return run;
       // The exercise is now durable in state.logs/sessionEntries (real completed history) — its
       // slot's in-progress draft (confirmed sets + the current typed set) is now redundant and
       // would otherwise resurrect stale confirmed sets if this slot were ever revisited.
@@ -2547,7 +2585,7 @@ export default function LiftLog() {
       delete draftByIndex[index];
       return {
         ...run,
-        sessionEntries: [...run.sessionEntries, { index, exId: entry.exId, entry }],
+        sessionEntries: [...run.sessionEntries.filter((se) => se.index !== index), { index, exId: entry.exId, entry }],
         draftByIndex,
         updatedAt: new Date().toISOString(),
       };
@@ -2580,7 +2618,7 @@ export default function LiftLog() {
   // weight/reps/RIR/set-type/drops draft. See sanitizeActiveRun's draftByIndex comment for shape.
   const updateRunDraft = useCallback((index, draft) => {
     setActiveRun((run) => {
-      if (!run) return run;
+      if (!run || run.finished || run.completionPending || run.sessionEntries.some((se) => se.index === index)) return run;
       return {
         ...run,
         draftByIndex: { ...(run.draftByIndex || {}), [index]: draft },
@@ -2598,7 +2636,11 @@ export default function LiftLog() {
     }));
   };
   const deleteRunEntry = (index) => {
-    setActiveRun((run) => ({ ...run, sessionEntries: run.sessionEntries.filter((se) => se.index !== index) }));
+    setActiveRun((run) => {
+      const draftByIndex = { ...run.draftByIndex };
+      delete draftByIndex[index];
+      return { ...run, draftByIndex, sessionEntries: run.sessionEntries.filter((se) => se.index !== index) };
+    });
   };
   const swapRunExercise = (index, newExId) => {
     setActiveRun((run) => {
@@ -2613,7 +2655,7 @@ export default function LiftLog() {
   // slot lands at the end of run.exercises, so it becomes the active card once everything
   // already queued ahead of it is logged, no matter when during the workout it's added.
   const addRunExercise = (exId) => {
-    setActiveRun((run) => ({ ...run, exercises: [...run.exercises, { exId, sets: 3 }] }));
+    setActiveRun((run) => ({ ...run, exercises: [...run.exercises, { exId, sets: 3, workoutSlotId: newWorkoutId() }] }));
   };
   // Swipe-to-remove (task: "BRK Active Workout — Swipe to Remove Exercise") — removes one slot
   // from the in-progress run, today-only: this only ever mutates activeRun.exercises, the
@@ -2676,6 +2718,7 @@ export default function LiftLog() {
       const exSlot = run.exercises[index];
       if (!exSlot) return run;
       const { group, ...continuationSlot } = exSlot;
+      continuationSlot.workoutSlotId = newWorkoutId();
       const draftByIndex = Object.fromEntries(
         Object.entries(run.draftByIndex || {}).map(([k, v]) => [shiftUp(Number(k)), v])
       );
@@ -2697,70 +2740,47 @@ export default function LiftLog() {
       };
     });
   };
-  // Shared by finishRun (lifting) and finishRecoverySession (mobility/recovery) — a program day
-  // is a program day regardless of whether it was a lifting workout or a recovery day, so
-  // "advance to the next day, clear a same-day override, record when/what was completed" is one
-  // rule, not two. Pure function of (prev, ctx); the caller wraps it in updateState.
-  const applyProgramDayAdvance = (prev, ctx) => {
-    // A swap-workout override (see programSchedule.js) is a one-day substitution — the instant
-    // its workout is actually completed, the override has done its job and is resolved/cleared,
-    // exactly like the task's "completing the swapped workout clears the override" requirement.
-    // Only clear it if it belongs to THIS program (a stale override from some other program
-    // should already be inert, but this keeps state tidy too).
-    const ov = prev.programDayOverride;
-    const clearOverride = ov && ov.programId === ctx.programId && ov.source === ctx.source;
-    return {
-      ...prev,
-      programDayOverride: clearOverride ? null : prev.programDayOverride,
-      currentProgram: {
-        ...ctx,
-        dayIndex: (ctx.dayIndex + 1) % ctx.totalDays,
-        startDate: prev.currentProgram?.startDate || new Date().toISOString(),
-        // dayIndex above already points at the *next* day — these two record what was actually
-        // just finished and when, so the Today card keeps showing today's day (see
-        // resolveCurrentProgramDay) instead of jumping to tomorrow's within the same calendar day.
-        lastCompletedAt: new Date().toISOString(),
-        lastCompletedDayIndex: ctx.dayIndex,
-      },
-    };
-  };
-
   const finishRun = () => {
-    const summary = buildSessionSummary(activeRun, state.logs, state.workoutSessions || [], exMap);
-    // Only worth a coach review when something was actually logged — an empty session has
-    // nothing to grade. Passing logs/exMap/state lets the review lead with real matched-exercise
-    // (same exercise + same equipment) progression instead of a raw total-volume delta — see
-    // generatePostWorkoutReview's own header and utils/sessionComparison.js.
-    const coachMessage = summary.exerciseCount > 0 ? generatePostWorkoutReview(summary, { logs: state.logs, exMap, state }).message : null;
-    const summaryWithCoach = coachMessage ? { ...summary, coachMessage } : summary;
-    const coachHistoryId = coachMessage ? `coach_${Date.now()}` : null;
-    updateState((prev) => ({
-      ...prev,
-      workoutSessions: [summaryWithCoach, ...(prev.workoutSessions || [])],
-      ...(coachMessage
-        ? {
-            coachHistory: [
-              { id: coachHistoryId, date: new Date().toISOString(), type: "post_workout", message: coachMessage },
-              ...(prev.coachHistory || []),
-            ],
-          }
-        : {}),
-    }));
-    // Whatever was still sitting in a slot's draft (an active-but-not-yet-Finish-Exercise'd
-    // exercise, if Finish Workout was tapped directly) is unsaved by definition — buildSessionSummary
-    // above already only counted real state.logs entries, so this is just clearing now-dead state.
-    setActiveRun((run) => ({ ...run, finished: true, summaryId: summary.id, coachHistoryId, draftByIndex: {} }));
-    if (activeRun?.programContext) {
-      const ctx = activeRun.programContext;
-      updateState((prev) => applyProgramDayAdvance(prev, ctx));
+    const run = activeRunRef.current;
+    if (!hasUnfinishedWorkout(run)) return;
+    const previous = stateRef.current;
+    const result = completeWorkoutState(previous, run, (completed, logs, sessions) => buildSessionSummary(completed, logs, sessions, exMap));
+    const isNew = result.state !== previous;
+    let next = result.state;
+    if (isNew) {
+      const coachMessage = result.summary.exerciseCount > 0
+        ? generatePostWorkoutReview(result.summary, { logs: next.logs, exMap, state: next }).message : null;
+      if (coachMessage) {
+        const coachHistoryId = `coach_${run.id}`;
+        result.run.coachHistoryId = coachHistoryId;
+        next = {
+          ...next,
+          workoutSessions: [{ ...result.summary, coachMessage }, ...next.workoutSessions.slice(1)],
+          coachHistory: [{ id: coachHistoryId, date: result.summary.finishedAt, type: "post_workout", message: coachMessage }, ...(next.coachHistory || [])],
+        };
+      }
+      next = recalcAthleteRatingState(next, exMap);
     }
-    // Athlete Rating recalculates right after the new session lands (and after the program-day
-    // advance above, so it sees fully up-to-date state) — never on every render. Flagging this
-    // recalculation as celebration-eligible (see the athleteRatingSnapshots effect below) is
-    // what lets a genuine Level Up / Rank Up / first-rating moment surface after finishing a
-    // workout, but never after a quiet historical edit elsewhere.
-    ratingCelebrationPendingRef.current = true;
-    updateState((prev) => recalcAthleteRatingState(prev, exMap));
+    // Checkpoint the complete set payload FIRST. Stable run/log/session IDs make a retry
+    // safe even if the app is killed between the main-state and finished-marker writes.
+    const checkpoint = { ...result.run, finished: false, draftByIndex: run.draftByIndex, completionPending: true };
+    if (!setActiveRun(checkpoint)) {
+      window.alert("Couldn't save your workout on this device. Your sets are still open. Free storage space and try Finish again.");
+      return;
+    }
+    try {
+      const retired = writeWorkoutCompletion(window.localStorage, next, result.run);
+      setState(next);
+      activeRunRef.current = result.run;
+      setRenderedActiveRun(result.run);
+      setPersistStatus(retired ? "saved" : "error");
+      scheduleCloudSync(next);
+      ratingCelebrationPendingRef.current = isNew;
+    } catch {
+      setActiveRun((pending) => ({ ...pending, completionPending: false }));
+      setPersistStatus("error");
+      window.alert("Couldn't save workout history on this device. Your saved sets are preserved in this open workout. Free storage space and try Finish again.");
+    }
   };
 
   // Recovery-session counterpart to finishRun — deliberately does NOT touch state.workoutSessions,
@@ -2775,7 +2795,16 @@ export default function LiftLog() {
     const summary = buildRecoverySessionSummary({ routine, programContext, result, manual });
     updateState((prev) => ({ ...prev, recoverySessions: [summary, ...(prev.recoverySessions || [])] }));
     if (programContext) {
-      updateState((prev) => applyProgramDayAdvance(prev, programContext));
+      updateState((prev) => {
+        // Manual logging happens now; a guided routine carries its original assignment stamp.
+        const cp = prev.currentProgram;
+        const context = manual ? {
+          ...programContext,
+          assignmentStartDate: cp?.programId === programContext.programId && cp.source === programContext.source ? cp.startDate : null,
+          assignmentDayIndex: cp?.dayIndex, assignmentLastCompletedAt: cp?.lastCompletedAt ?? null,
+        } : programContext;
+        return advanceProgramForWorkout(prev, { id: summary.id, programContext: context, startedAt: programContext.runStartedAt });
+      });
     }
     return summary;
   };
@@ -2783,7 +2812,19 @@ export default function LiftLog() {
   // back where the athlete actually started from (Today, Train, the library itself, or a
   // program's detail screen), same "returnTab" convention startRun already uses for lifting runs.
   const startRecoverySession = (routine, programContext, fromTab) => {
-    setMobilityRunContext({ routine, programContext, returnTab: fromTab });
+    if (hasUnfinishedWorkout(activeRunRef.current)) {
+      setWorkoutMinimized(false);
+      return;
+    }
+    if (!routine) return;
+    const cp = stateRef.current.currentProgram;
+    const context = programContext ? {
+      ...programContext,
+      assignmentStartDate: cp?.programId === programContext.programId && cp.source === programContext.source ? cp.startDate : null,
+      assignmentDayIndex: cp?.dayIndex, assignmentLastCompletedAt: cp?.lastCompletedAt ?? null,
+      runStartedAt: new Date().toISOString(),
+    } : null;
+    setMobilityRunContext({ routine, programContext: context, returnTab: fromTab });
     setTab("mobilitySession");
   };
   // The lightweight "LOG RECOVERY SESSION" path (task section 15) — marks a routine done without
@@ -2801,8 +2842,8 @@ export default function LiftLog() {
     updateState((prev) => {
       const next = { ...prev, workoutSessions: (prev.workoutSessions || []).filter((s) => s.id !== summaryId) };
       if (coachHistoryId) next.coachHistory = (prev.coachHistory || []).filter((h) => h.id !== coachHistoryId);
-      if (ctx && prev.currentProgram?.programId === ctx.programId && prev.currentProgram?.source === ctx.source) {
-        next.currentProgram = { ...prev.currentProgram, dayIndex: ctx.dayIndex, lastCompletedAt: null, lastCompletedDayIndex: null };
+      if (ctx && prev.currentProgram?.lastWorkoutRunId === activeRun.id) {
+        next.currentProgram = activeRun.programBeforeCompletion;
       }
       return next;
     });
@@ -3008,6 +3049,7 @@ export default function LiftLog() {
                   exMap={exMap}
                   allExercises={allExercises}
                   activeRun={activeRun}
+                  onResumeWorkout={resumeRun}
                   onStartRun={(plan, programContext) => startRun(plan, "today", programContext)}
                   onStartRecovery={(routine, programContext) => startRecoverySession(routine, programContext, "today")}
                   onNavigate={setTab}
@@ -3080,6 +3122,7 @@ export default function LiftLog() {
                 state={state}
                 exMap={exMap}
                 onStartRun={(plan, programContext) => startRun(plan, "train", programContext)}
+                onStartRecovery={(routine, programContext) => startRecoverySession(routine, programContext, "train")}
                 onRepeatRecent={() => setTab("repeatRecent")}
                 onBack={() => setTab("train")}
               />
@@ -3290,6 +3333,11 @@ export default function LiftLog() {
             )}
             {tab === "programTimeline" && (
               <ProgramTimelineScreen
+                onBeforeStart={() => {
+                  if (!hasUnfinishedWorkout(activeRunRef.current)) return true;
+                  setWorkoutMinimized(false);
+                  return false;
+                }}
                 state={state}
                 updateState={updateState}
                 exMap={exMap}
@@ -4878,6 +4926,7 @@ function clampRirStep(n, system) {
 
 function TrainingExerciseCard({
   exId,
+  logId,
   exSlot,
   state,
   updateState,
@@ -5044,22 +5093,30 @@ function TrainingExerciseCard({
     onDraftDirtyRef.current = onDraftDirty;
   }, [onDraftChange, onDraftDirty]);
 
+  const draftSnapshot = (sets = confirmedSets, patch = {}) => ({
+    confirmedSets: sets,
+    weight,
+    reps,
+    rir: rirVal,
+    setType,
+    programRole,
+    drops,
+    equipmentProfileId,
+    equipmentContext,
+    quality,
+    pain: quality === "pain" ? { bodyArea: painBodyArea, severity: painSeverity, note: painNote } : null,
+    jointNote: jointNoteArea || jointNoteSeverity || jointNoteText ? { bodyArea: jointNoteArea, severity: jointNoteSeverity, note: jointNoteText } : null,
+    updatedAt: new Date().toISOString(),
+    ...patch,
+  });
+  const persistConfirmedSets = (sets, patch = {}) => {
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    pendingSnapshotRef.current = null;
+    onDraftChangeRef.current?.(draftSnapshot(sets, patch));
+    setConfirmedSets(sets);
+  };
   useEffect(() => {
-    const snapshot = {
-      confirmedSets,
-      weight,
-      reps,
-      rir: rirVal,
-      setType,
-      programRole,
-      drops,
-      equipmentProfileId,
-      equipmentContext,
-      quality,
-      pain: quality === "pain" ? { bodyArea: painBodyArea, severity: painSeverity, note: painNote } : null,
-      jointNote: jointNoteArea || jointNoteSeverity || jointNoteText ? { bodyArea: jointNoteArea, severity: jointNoteSeverity, note: jointNoteText } : null,
-      updatedAt: new Date().toISOString(),
-    };
+    const snapshot = draftSnapshot();
     pendingSnapshotRef.current = snapshot;
     onDraftDirtyRef.current?.();
     if (draftTimerRef.current) {
@@ -5177,14 +5234,14 @@ function TrainingExerciseCard({
       return;
     }
     setEditSetError(null);
-    setConfirmedSets((prev) => prev.map((s, idx) => (idx === i ? cleaned : s)));
+    persistConfirmedSets(confirmedSets.map((s, idx) => (idx === i ? cleaned : s)));
     setEditingSetIndex(null);
     setEditSetRow(null);
   };
   const deleteEditSet = () => {
     if (!window.confirm("Delete this set? This can't be undone.")) return;
     const i = editingSetIndex;
-    setConfirmedSets((prev) => prev.filter((_, idx) => idx !== i));
+    persistConfirmedSets(confirmedSets.filter((_, idx) => idx !== i));
     setEditingSetIndex(null);
     setEditSetRow(null);
     setEditSetError(null);
@@ -5211,7 +5268,7 @@ function TrainingExerciseCard({
       return;
     }
     setSaveSetError(null);
-    setConfirmedSets((prev) => [...prev, cleaned]);
+    persistConfirmedSets([...confirmedSets, cleaned], { rir: "", setType: "working", programRole: "", drops: [], quality: null, pain: null });
     onSetSaved?.({ weight, reps });
     setRirVal("");
     setSetType("working");
@@ -5238,7 +5295,7 @@ function TrainingExerciseCard({
     const validSets = confirmedSets.filter((s) => Number(s.reps) > 0);
     if (validSets.length === 0) return null;
     return {
-      id: `log_${Date.now()}`,
+      id: logId || `log_${newWorkoutId()}`,
       exId,
       date: new Date().toISOString(),
       sets: validSets,
@@ -6710,24 +6767,20 @@ function GuidedRunView({
   // Finish Workout confirmation (task: "BRK Active Workout — Critical UX Fixes," Issue 1) — the
   // numbers shown in that dialog, computed once here rather than in the modal's own JSX so both
   // the summary line and the incomplete-exercise warning read the same values. workingSetsLogged
-  // only counts what buildSessionSummary will actually see (real sessionEntries) — a still-
-  // in-progress active exercise's confirmed-but-not-yet-"Finish exercise"'d sets are correctly
-  // NOT counted, since they won't be part of the saved session either; this keeps the dialog's
-  // numbers truthful rather than promising something Finish Workout wouldn't actually save.
-  const workingSetsLogged = run.sessionEntries.reduce((sum, se) => sum + countedSets(se.entry.sets).length, 0);
+  // includes confirmed sets even before Finish Exercise, exactly as final completion does.
+  const confirmedEntries = collectConfirmedWorkout(run).sessionEntries;
+  const workingSetsLogged = confirmedEntries.reduce((sum, se) => sum + countedSets(se.entry.sets).length, 0);
   const incompleteExerciseCount = run.exercises.reduce((count, exSlot, idx) => {
     const target = exSlot?.sets || 0;
     if (!target) return count;
-    const done = countedSets(entryForIndex(idx)?.sets || []).length;
+    const done = countedSets(confirmedEntries.find((se) => se.index === idx)?.entry.sets || []).length;
     return done < target ? count + 1 : count;
   }, 0);
 
   return (
     <div className="space-y-6">
-      {/* Overlay, not a view-swap: the active exercise's confirmed-but-not-yet-"Finish
-          exercise"-locked sets live only in TrainingExerciseCard's local state, so navigating
-          away by unmounting it here would silently drop them. Staying mounted underneath keeps
-          in-progress sets intact no matter when mid-workout this gets opened. */}
+      {/* Keep the active editor mounted under pickers so typed-but-unconfirmed input and
+          keyboard state stay intact. Confirmed sets are also persisted through the draft. */}
       {addingExercise && (
         <div className="fixed inset-0 z-30 bg-v5-surface overflow-y-auto p-4 sm:p-6">
           <AddExercisePicker
@@ -7013,6 +7066,7 @@ function GuidedRunView({
                   <TrainingExerciseCard
                     key={currentExId}
                     exId={currentExId}
+                    logId={workoutLogId(run, idx)}
                     exSlot={exSlot}
                     state={state}
                     updateState={updateState}
