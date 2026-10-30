@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion } from "../workoutIntegrity.js";
+import { hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion, stampWorkoutDraft } from "../workoutIntegrity.js";
 
 const time = "2026-10-30T12:00:00Z";
 const set = { weight: 100, reps: 8, rir: 2, setType: "working", drops: [{ weight: 75, reps: 4 }] };
@@ -36,9 +36,9 @@ describe("confirmed workout durability", () => {
     const run = workout({ draftByIndex: { 0: { confirmedSets: [], weight: 200, reps: 10 } } });
     expect(collectConfirmedWorkout(run).sessionEntries).toEqual([]);
   });
-  it("combines complete and partial exercises in slot order without reusing old drafts", () => {
+  it("combines complete and partial exercises in slot order exactly once", () => {
     const finished = { index: 0, entry: { id: "finished", exId: "bench", sets: [set, set] } };
-    const run = workout({ sessionEntries: [finished], draftByIndex: { 0: { confirmedSets: [set, set, set] }, 1: { confirmedSets: [set, set] } } });
+    const run = workout({ sessionEntries: [finished], draftByIndex: { 1: { confirmedSets: [set, set] } } });
     const completed = completeWorkoutState(state({ logs: [finished.entry] }), run, summary, time);
     expect(completed.summary.workingSets).toBe(4);
     expect(completed.state.logs.map((l) => l.sets.length)).toEqual([2, 2]);
@@ -63,7 +63,7 @@ describe("confirmed workout durability", () => {
   it("reconciles an interrupted exercise write with more saved sets without duplicating its log", () => {
     const run = workout();
     const priorEntry = collectConfirmedWorkout(run).sessionEntries[0].entry;
-    run.draftByIndex[0].confirmedSets = [set, set];
+    run.draftByIndex[0] = stampWorkoutDraft(run, 0, { ...run.draftByIndex[0], confirmedSets: [set, set] }, [priorEntry]);
     const result = completeWorkoutState(state({ logs: [priorEntry, { id: "unrelated", sets: [set] }] }), run, summary);
     expect(result.state.logs).toHaveLength(2);
     expect(result.state.logs[0].sets).toHaveLength(2);
@@ -81,14 +81,13 @@ describe("confirmed workout durability", () => {
     expect(result.state.workoutSessions[1]).toBe(previous.workoutSessions[0]);
     expect(result.state.logs[1]).toBe(previous.logs[0]);
   });
-  it("uses the current canonical log rather than a stale finished-exercise snapshot", () => {
+  it("preserves conflicting canonical corrections rather than silently choosing a stale snapshot", () => {
     const stale = { id: "log_run-1_0", exId: "bench", sets: [set] };
     const corrected = { ...stale, sets: [set, set], note: "latest correction" };
     const run = workout({ sessionEntries: [{ index: 0, entry: stale }], draftByIndex: {} });
-    const result = completeWorkoutState(state({ logs: [corrected] }), run, summary);
-    expect(result.state.logs[0]).toBe(corrected);
-    expect(result.summary.workingSets).toBe(2);
-    expect(result.summary.entries[0].note).toBe("latest correction");
+    expect(() => completeWorkoutState(state({ logs: [corrected] }), run, summary)).toThrow("Both copies are preserved");
+    expect(corrected.note).toBe("latest correction");
+    expect(run.sessionEntries[0].entry.sets).toHaveLength(1);
   });
   it("retrying an unfinished checkpoint cannot duplicate history or advance a second time", () => {
     const run = workout(), first = completeWorkoutState(state(), run, summary, time);
@@ -156,18 +155,19 @@ describe("program lifecycle boundaries", () => {
 
 describe("completion storage ordering", () => {
   it("writes canonical history before retiring the recoverable checkpoint", () => {
-    const storage = { setItem: vi.fn() };
+    const values = {};
+    const storage = { setItem: vi.fn((k, v) => { values[k] = v; }), getItem: (k) => values[k] || null };
     expect(writeWorkoutCompletion(storage, state(), workout({ finished: true }))).toBe(true);
     expect(storage.setItem.mock.calls.map(([key]) => key)).toEqual(["liftlog-data", "liftlog-active-run"]);
   });
   it("does not retire a draft when the main-state write fails", () => {
-    const storage = { setItem: vi.fn(() => { throw new Error("quota"); }) };
+    const storage = { getItem: () => null, setItem: vi.fn(() => { throw new Error("quota"); }) };
     expect(() => writeWorkoutCompletion(storage, state(), workout())).toThrow("quota");
     expect(storage.setItem).toHaveBeenCalledTimes(1);
   });
   it("keeps durable history recoverable if writing the finished marker fails", () => {
     const values = {};
-    const storage = { setItem: (key, value) => { if (key === "liftlog-active-run") throw new Error("quota"); values[key] = value; } };
+    const storage = { getItem: (k) => values[k] || null, setItem: (key, value) => { if (key === "liftlog-active-run") throw new Error("quota"); values[key] = value; } };
     const run = workout(), result = completeWorkoutState(state(), run, summary, time);
     expect(writeWorkoutCompletion(storage, result.state, result.run)).toBe(false);
     const retry = completeWorkoutState(JSON.parse(values["liftlog-data"]), JSON.parse(JSON.stringify(run)), summary, time);

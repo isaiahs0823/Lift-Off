@@ -4,6 +4,7 @@
 // No external requests or existing browser profiles are used.
 import { before, after, test } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 const { chromium } = await import(process.env.BRK_PLAYWRIGHT_MODULE || "playwright");
 let browser;
@@ -259,4 +260,154 @@ test("a failed Save Set write stays visible as unsaved and can be recovered with
   await page.evaluate(() => { Storage.prototype.setItem = window.restoreSyntheticStorage; });
   await finish(page);
   assert.equal((await data(page)).workoutSessions[0].workingSets, 2);
+});
+
+test("combined exercise checkpoint and history failures retain every saved set on retry", async (t) => {
+  const page = await fixture(t), history = (await data(page)).workoutSessions;
+  await start(page); await save(page);
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "liftlog-active-run" && JSON.parse(value).sessionEntries.length) throw new DOMException("Synthetic checkpoint interruption", "QuotaExceededError");
+      return original.call(this, key, value);
+    };
+  });
+  await page.getByRole("button", { name: /Finish exercise now/ }).click();
+  await page.reload(); await save(page);
+  assert.equal((await run(page)).draftByIndex[0].confirmedSets.length, 2);
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "liftlog-data") throw new DOMException("Synthetic history write failure", "QuotaExceededError");
+      return original.call(this, key, value);
+    };
+  });
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Finish workout", exact: true }).click();
+  await page.getByRole("button", { name: "Finish Anyway", exact: true }).click();
+  assert.equal((await run(page)).sessionEntries[0].entry.sets.length, 2);
+  await page.reload(); await finish(page);
+  const state = await data(page);
+  assert.equal(state.workoutSessions[0].workingSets, 2);
+  assert.equal(state.logs.length, 1); assert.equal(state.logs[0].sets.length, 2);
+  assert.deepEqual(state.workoutSessions.slice(1), history);
+});
+
+test("multiple history failures across reloads produce one complete session", async (t) => {
+  const page = await fixture(t); await start(page); await save(page); await save(page);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === "liftlog-data") throw new DOMException("Sequential synthetic failure", "QuotaExceededError");
+        return original.call(this, key, value);
+      };
+    });
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Finish workout", exact: true }).click();
+    await page.getByRole("button", { name: "Finish Anyway", exact: true }).click();
+    assert.equal((await run(page)).sessionEntries[0].entry.sets.length, 2);
+    assert.equal((await data(page)).workoutSessions.length, 1);
+    await page.reload();
+  }
+  await finish(page);
+  const state = await data(page);
+  assert.equal(state.workoutSessions.length, 2); assert.equal(state.logs.length, 1);
+  assert.equal(state.workoutSessions[0].workingSets, 2);
+});
+
+test("unknown durable conflicts preserve both copies, persist on reload and export recovery data", async (t) => {
+  const page = await fixture(t); await start(page); await save(page);
+  await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("liftlog-data")), r = JSON.parse(localStorage.getItem("liftlog-active-run"));
+    state.logs = [{ id: `log_${r.id}_${r.exercises[0].workoutSlotId}`, exId: "bench", date: r.startedAt, targetReps: 8, sets: r.draftByIndex[0].confirmedSets.map((s) => ({ ...s, weight: 999 })) }];
+    localStorage.setItem("liftlog-data", JSON.stringify(state));
+  });
+  await page.getByRole("button", { name: "Finish workout", exact: true }).click();
+  await page.getByRole("button", { name: "Finish Anyway", exact: true }).click();
+  await page.getByRole("alert").waitFor();
+  assert.equal((await data(page)).logs[0].sets[0].weight, 999);
+  assert.equal((await run(page)).recoveryConflict.records.checkpoint.sets[0].weight, 100);
+  assert.equal((await run(page)).finished, false);
+  await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("liftlog-data"));
+    state.logs[0].sets[0].weight = 888;
+    localStorage.setItem("liftlog-data", JSON.stringify(state));
+  });
+  await page.getByRole("button", { name: "Finish workout", exact: true }).click();
+  await page.getByRole("button", { name: "Finish Anyway", exact: true }).click();
+  assert.equal((await run(page)).recoveryConflict.variants.length, 2);
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export workout recovery", exact: true }).click();
+  const download = await downloading;
+  const recovered = JSON.parse(await readFile(await download.path(), "utf8"));
+  assert.equal(recovered.run.recoveryConflict.records.canonical.sets[0].weight, 888);
+  assert.equal(recovered.run.recoveryConflict.variants[0].canonical.sets[0].weight, 999);
+  assert.equal(recovered.run.recoveryConflict.records.checkpoint.sets[0].weight, 100);
+  await page.reload(); await page.getByRole("alert").waitFor();
+  assert.equal((await data(page)).workoutSessions.length, 1);
+  assert.equal((await run(page)).finished, false);
+});
+
+test("storage unavailable during completion read-back keeps the checkpoint for safe retry", async (t) => {
+  const page = await fixture(t); await start(page); await save(page);
+  await page.evaluate(() => {
+    const get = Storage.prototype.getItem, set = Storage.prototype.setItem;
+    let fail = false;
+    Storage.prototype.setItem = function (key, value) {
+      set.call(this, key, value);
+      if (key === "liftlog-data" && JSON.parse(value).workoutSessions.length > 1) fail = true;
+    };
+    Storage.prototype.getItem = function (key) {
+      if (key === "liftlog-data" && fail) { fail = false; throw new DOMException("Read-back unavailable", "SecurityError"); }
+      return get.call(this, key);
+    };
+  });
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Finish workout", exact: true }).click();
+  await page.getByRole("button", { name: "Finish Anyway", exact: true }).click();
+  assert.equal((await run(page)).finished, false);
+  assert.equal((await data(page)).workoutSessions[0].workingSets, 1);
+  await page.reload(); await finish(page);
+  assert.equal((await data(page)).workoutSessions.length, 2);
+  assert.equal((await data(page)).logs.length, 1);
+});
+
+test("legacy ambiguous checkpoints remain recoverable instead of choosing the shorter canonical log", async (t) => {
+  const page = await fixture(t); await start(page); await save(page); await save(page);
+  await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("liftlog-data")), r = JSON.parse(localStorage.getItem("liftlog-active-run"));
+    const entry = { id: `log_${r.id}_${r.exercises[0].workoutSlotId}`, exId: "bench", date: r.startedAt, targetReps: 8, sets: r.draftByIndex[0].confirmedSets };
+    state.logs = [{ ...entry, sets: entry.sets.slice(0, 1) }];
+    delete r.draftByIndex[0].recoveryBases;
+    r.summaryId = `session_${r.id}`; r.sessionEntries = [{ index: 0, exId: "bench", entry }];
+    localStorage.setItem("liftlog-data", JSON.stringify(state)); localStorage.setItem("liftlog-active-run", JSON.stringify(r));
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Finish workout", exact: true }).click();
+  await page.getByRole("button", { name: "Finish Anyway", exact: true }).click();
+  await page.getByRole("alert").waitFor();
+  assert.equal((await run(page)).sessionEntries[0].entry.sets.length, 2);
+  assert.equal((await run(page)).draftByIndex[0].confirmedSets.length, 2);
+  assert.equal((await data(page)).logs[0].sets.length, 1);
+  assert.equal((await data(page)).workoutSessions.length, 1);
+});
+
+test("failed canonical exercise write followed by another saved exercise recovers both on reload", async (t) => {
+  const page = await fixture(t); await start(page); await save(page);
+  await page.evaluate(() => {
+    window.restoreExerciseStorage = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "liftlog-data") throw new DOMException("Synthetic exercise write failure", "QuotaExceededError");
+      return window.restoreExerciseStorage.call(this, key, value);
+    };
+  });
+  await page.getByRole("button", { name: /Finish exercise now/ }).click();
+  assert.equal((await data(page)).logs.length, 0);
+  assert.equal((await run(page)).sessionEntries[0].entry.sets.length, 1);
+  await page.evaluate(() => { Storage.prototype.setItem = window.restoreExerciseStorage; });
+  await save(page, "150"); await page.reload(); await finish(page);
+  const state = await data(page);
+  assert.equal(state.logs.length, 2); assert.equal(state.workoutSessions[0].workingSets, 2);
+  assert.equal(state.workoutSessions[0].totalVolume, 2000);
 });

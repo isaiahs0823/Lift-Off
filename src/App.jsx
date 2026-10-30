@@ -123,7 +123,7 @@ import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
 import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
 import { initialSyncStatus, markSyncStarted, markSyncSuccess, markSyncFailure, MAX_SYNC_ATTEMPTS, retryDelayMs } from "./utils/syncStatus.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
-import { newWorkoutId, hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion } from "./utils/workoutIntegrity.js";
+import { newWorkoutId, hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion, stampWorkoutDraft, workoutEntryKey, recoverWorkoutCheckpoint } from "./utils/workoutIntegrity.js";
 import {
   SET_TYPES,
   PROGRAM_ROLES,
@@ -1927,6 +1927,8 @@ function sanitizeActiveRun(raw) {
       version: ACTIVE_RUN_VERSION,
       id: typeof raw.id === "string" ? raw.id : newWorkoutId(),
       completionPending: !!raw.completionPending,
+      completionReceipt: raw.completionReceipt ?? null,
+      recoveryConflict: raw.recoveryConflict ?? null,
       programBeforeCompletion: raw.programBeforeCompletion ?? null,
       sourceProgramId: raw.sourceProgramId ?? raw.programContext?.programId ?? null,
       sourceProgramName: raw.sourceProgramName ?? raw.programContext?.programName ?? null,
@@ -2106,6 +2108,14 @@ export default function LiftLog() {
     setPersistStatus(saved ? "saved" : "error");
     return saved;
   }, []);
+  const preserveRecoveryConflict = useCallback((error) => {
+    setActiveRun((run) => {
+      const variants = [...(run.recoveryConflict?.variants || (run.recoveryConflict?.records ? [run.recoveryConflict.records] : []))];
+      if (error.records && !variants.some((record) => JSON.stringify(record) === JSON.stringify(error.records))) variants.push(error.records);
+      return { ...run, completionPending: false, recoveryConflict: { message: error.message, records: error.records, variants } };
+    });
+    setPersistStatus("error");
+  }, [setActiveRun]);
   const markDraftDirty = useCallback(() => setPersistStatus("saving"), []);
   // Transient hand-off from BarcodeScannerScreen's "unknown barcode" path to
   // NutritionLabelScannerScreen — the scanned barcode gets attached to the food the user is
@@ -2204,10 +2214,13 @@ export default function LiftLog() {
   useEffect(() => {
     const run = activeRunRef.current;
     if (loaded && run?.completionPending) {
-      const committed = state.workoutSessions?.some((session) => session.id === run.summaryId);
-      setActiveRun({ ...run, finished: !!committed, completionPending: false, ...(committed ? { draftByIndex: {} } : {}) });
+      try {
+        setActiveRun(recoverWorkoutCheckpoint(state, run));
+      } catch (error) {
+        preserveRecoveryConflict(error);
+      }
     }
-  }, [loaded, state.workoutSessions, setActiveRun]);
+  }, [loaded, state.workoutSessions, setActiveRun, preserveRecoveryConflict]);
   const [restBump, setRestBump] = useState({ token: 0, seconds: 90 });
 
   useEffect(() => {
@@ -2585,7 +2598,9 @@ export default function LiftLog() {
       delete draftByIndex[index];
       return {
         ...run,
-        sessionEntries: [...run.sessionEntries.filter((se) => se.index !== index), { index, exId: entry.exId, entry }],
+        sessionEntries: [...run.sessionEntries.filter((se) => se.index !== index), {
+          index, exId: entry.exId, entry, writeState: "prepared", recoveryBases: run.draftByIndex?.[index]?.recoveryBases || [],
+        }],
         draftByIndex,
         updatedAt: new Date().toISOString(),
       };
@@ -2608,7 +2623,10 @@ export default function LiftLog() {
       return {
         ...run,
         sessionEntries: run.sessionEntries.map((se) =>
-          se.index === idx ? { ...se, entry: { ...se.entry, equipmentProfileId: id, equipmentContext: null } } : se
+          se.index === idx ? {
+            ...se, entry: { ...se.entry, equipmentProfileId: id, equipmentContext: null },
+            recoveryBases: [...new Set([...(se.recoveryBases || []), workoutEntryKey(se.entry)])],
+          } : se
         ),
       };
     });
@@ -2621,7 +2639,7 @@ export default function LiftLog() {
       if (!run || run.finished || run.completionPending || run.sessionEntries.some((se) => se.index === index)) return run;
       return {
         ...run,
-        draftByIndex: { ...(run.draftByIndex || {}), [index]: draft },
+        draftByIndex: { ...(run.draftByIndex || {}), [index]: stampWorkoutDraft(run, index, draft, stateRef.current.logs) },
         updatedAt: new Date().toISOString(),
       };
     });
@@ -2632,7 +2650,9 @@ export default function LiftLog() {
   const editRunEntry = (index, updatedEntry) => {
     setActiveRun((run) => ({
       ...run,
-      sessionEntries: run.sessionEntries.map((se) => (se.index === index ? { ...se, entry: updatedEntry } : se)),
+      sessionEntries: run.sessionEntries.map((se) => (se.index === index ? {
+        ...se, entry: updatedEntry, recoveryBases: [...new Set([...(se.recoveryBases || []), workoutEntryKey(se.entry)])],
+      } : se)),
     }));
   };
   const deleteRunEntry = (index) => {
@@ -2732,7 +2752,7 @@ export default function LiftLog() {
         exercises: [...run.exercises.slice(0, index + 1), continuationSlot, ...run.exercises.slice(index + 1)],
         sessionEntries: [
           ...run.sessionEntries.map((se) => (se.index > index ? { ...se, index: shiftUp(se.index) } : se)),
-          { index, exId: exSlot.exId, entry: finishedEntry },
+          { index, exId: exSlot.exId, entry: finishedEntry, writeState: "prepared", recoveryBases: run.draftByIndex?.[index]?.recoveryBases || [] },
         ],
         swaps: Object.fromEntries(Object.entries(run.swaps || {}).map(([k, v]) => [shiftUp(Number(k)), v])),
         draftByIndex,
@@ -2744,7 +2764,13 @@ export default function LiftLog() {
     const run = activeRunRef.current;
     if (!hasUnfinishedWorkout(run)) return;
     const previous = stateRef.current;
-    const result = completeWorkoutState(previous, run, (completed, logs, sessions) => buildSessionSummary(completed, logs, sessions, exMap));
+    let result;
+    try {
+      result = completeWorkoutState(previous, run, (completed, logs, sessions) => buildSessionSummary(completed, logs, sessions, exMap));
+    } catch (error) {
+      preserveRecoveryConflict(error);
+      return;
+    }
     const isNew = result.state !== previous;
     let next = result.state;
     if (isNew) {
@@ -2763,7 +2789,7 @@ export default function LiftLog() {
     }
     // Checkpoint the complete set payload FIRST. Stable run/log/session IDs make a retry
     // safe even if the app is killed between the main-state and finished-marker writes.
-    const checkpoint = { ...result.run, finished: false, draftByIndex: run.draftByIndex, completionPending: true };
+    const checkpoint = { ...result.run, finished: false, draftByIndex: run.draftByIndex, recoveryConflict: run.recoveryConflict, completionPending: true };
     if (!setActiveRun(checkpoint)) {
       window.alert("Couldn't save your workout on this device. Your sets are still open. Free storage space and try Finish again.");
       return;
@@ -2776,7 +2802,11 @@ export default function LiftLog() {
       setPersistStatus(retired ? "saved" : "error");
       scheduleCloudSync(next);
       ratingCelebrationPendingRef.current = isNew;
-    } catch {
+    } catch (error) {
+      if (error.code === "WORKOUT_RECOVERY_CONFLICT") {
+        preserveRecoveryConflict(error);
+        return;
+      }
       setActiveRun((pending) => ({ ...pending, completionPending: false }));
       setPersistStatus("error");
       window.alert("Couldn't save workout history on this device. Your saved sets are preserved in this open workout. Free storage space and try Finish again.");
@@ -5297,7 +5327,7 @@ function TrainingExerciseCard({
     return {
       id: logId || `log_${newWorkoutId()}`,
       exId,
-      date: new Date().toISOString(),
+      date: draft?.entryDate || new Date().toISOString(),
       sets: validSets,
       targetReps: Number(reps) || validSets[0].reps,
       // Whatever equipment context was selected when this exercise was finished (task section
@@ -6779,6 +6809,20 @@ function GuidedRunView({
 
   return (
     <div className="space-y-6">
+      {run.recoveryConflict && (
+        <div role="alert" className="border border-v5-red/40 bg-v5-elevated p-4 space-y-2">
+          <div className="text-sm font-bold text-v5-text">Workout recovery needs review</div>
+          <p className="text-sm text-v5-subtext">{run.recoveryConflict.message}</p>
+          <p className="text-xs text-v5-subtext">Your workout remains open. Export the recovery copies before making changes, then retry Finish once the conflict is resolved.</p>
+          <ButtonSecondary onClick={() => {
+            const payload = { app: "BRK Fit", type: "workout-recovery", schemaVersion: 1, run, logs: state.logs, workoutSessions: state.workoutSessions };
+            const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+            const link = document.createElement("a");
+            link.href = url; link.download = "brk-fit-workout-recovery.json";
+            link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }}>Export workout recovery</ButtonSecondary>
+        </div>
+      )}
       {/* Keep the active editor mounted under pickers so typed-but-unconfirmed input and
           keyboard state stay intact. Confirmed sets are also persisted through the draft. */}
       {addingExercise && (
