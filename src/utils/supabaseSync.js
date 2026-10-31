@@ -12,6 +12,8 @@
 // remove it from Supabase, and a row deleted directly in Supabase won't be removed locally. A
 // real delete-sync (tombstones, or a "deleted_at" column) is future work, not built here.
 import { supabase, supabaseEnabled } from "../lib/supabaseClient.js";
+import { CLOUD_SYNC_V2_ENABLED } from "../config/featureFlags.js";
+import { reconcileRetryOutcome, downloadAllPages as paginateDownload } from "../persistence/syncOutbox.js";
 
 const DROP_UNDEFINED = (obj) => JSON.parse(JSON.stringify(obj));
 
@@ -440,4 +442,53 @@ export function mergeRemoteIntoLocal(localState, remoteData) {
   }
 
   return next;
+}
+
+// ---------------- CLOUD SYNC v2 (outbox-backed, revision-checked) ----------------
+// Everything below is gated on CLOUD_SYNC_V2_ENABLED (see src/config/featureFlags.js, off by
+// default) and is not called anywhere in the app yet — it exists to be security-tested and
+// reviewed ahead of the migration it depends on (database/sync-v2/001_add_revision_tracking.sql),
+// not to run today. Turning it on requires: applying that migration, wiring these functions into
+// the actual mutation call sites, and dropping the old whole-collection push/pull above (or
+// running both in parallel deliberately) — none of which is done by flipping the flag alone.
+
+const COLLECTIONS_BY_TABLE = new Map(COLLECTIONS.map((c) => [c.table, c]));
+
+// Sends one outbox operation with an atomic, RLS-safe compare-and-swap: the UPDATE only applies
+// if the row is still at the revision this operation expects, so a concurrent writer is never
+// silently overwritten. No SECURITY DEFINER function is used or needed for this — a single
+// UPDATE...WHERE is already atomic in Postgres.
+export async function pushOperationWithRevision(op, userId) {
+  if (!CLOUD_SYNC_V2_ENABLED || !requireUser()) return { outcome: "skipped" };
+  const collection = COLLECTIONS_BY_TABLE.get(op.table);
+  if (!collection) return { outcome: "skipped" };
+
+  if (op.type === "delete") {
+    const { error } = await supabase.from(op.table).delete().eq("id", op.rowId).eq("user_id", userId);
+    return reconcileRetryOutcome(op, { updatedRow: null, currentRow: error ? null : { revision: null, last_operation_id: null } });
+  }
+
+  const row = DROP_UNDEFINED({ ...collection.toRow(op.payload, userId), revision: (op.expectedRevision ?? 0) + 1, last_operation_id: op.opId });
+  if (op.expectedRevision === null) {
+    // First write for this row — plain insert, nothing to compare-and-swap against yet.
+    const { data, error } = await supabase.from(op.table).insert(row).select().maybeSingle();
+    if (!error) return reconcileRetryOutcome(op, { updatedRow: data, currentRow: null });
+  } else {
+    const { data, error } = await supabase.from(op.table).update(row).eq("id", op.rowId).eq("user_id", userId).eq("revision", op.expectedRevision).select().maybeSingle();
+    if (!error && data) return reconcileRetryOutcome(op, { updatedRow: data, currentRow: null });
+  }
+
+  const { data: current } = await supabase.from(op.table).select("revision, last_operation_id").eq("id", op.rowId).eq("user_id", userId).maybeSingle();
+  return reconcileRetryOutcome(op, { updatedRow: null, currentRow: current ?? null });
+}
+
+// Downloads every row for one table past Supabase's row cap, for an account whose history has
+// grown beyond 1,000 records in a single collection.
+export async function downloadTableAllPages(table, userId) {
+  if (!CLOUD_SYNC_V2_ENABLED || !requireUser()) return [];
+  return paginateDownload(async ({ from, to }) => {
+    const { data, error } = await supabase.from(table).select("*").eq("user_id", userId).range(from, to);
+    if (error) throw new Error(`${table}: ${error.message}`);
+    return data || [];
+  });
 }
