@@ -1,9 +1,10 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { activateEditor, createEditorSession, EDITOR_LOCK } from "./editorSession.js";
+import { createAccountOwnership } from "./accountOwnership.js";
 import { LOCAL_ONLY_PREVIEW, preparePreviewInitialization } from "./localPreview.js";
 
 // App (including Supabase's auth client) is not imported until ownership is granted.
-const EditorApp = lazy(() => import("../App.jsx"));
+const EditorApp = lazy(() => import("./AccountBoundary.jsx"));
 export default function PersistenceBoundary() {
   const [mode, setMode] = useState("opening"), [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState(null), [message, setMessage] = useState("");
@@ -20,6 +21,7 @@ export default function PersistenceBoundary() {
       catch { raw = { getItem() { throw new Error("Saved storage is unavailable"); } }; }
       const session = createEditorSession(raw);
       session.initialize(preparePreviewInitialization);
+      if(!session.snapshot().blocked) createAccountOwnership(session);
       activateEditor(session);
       admitted.current = !session.snapshot().blocked;
       const off = session.subscribe(setStatus);
