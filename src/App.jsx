@@ -1,3 +1,4 @@
+import { ACTIVE_RUN_VERSION, sanitizeSessionContext } from "./utils/activeRun.js";
 import { editorStorage, getEditorSession } from "./persistence/editorSession.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
@@ -1436,52 +1437,6 @@ function loadInitialState() {
   };
 }
 
-// Programs renamed after users may already have saved plan copies / a currentProgram
-// referencing the old names — brings those forward so nothing's left pointing at a name
-// that no longer exists anywhere in the app.
-const RENAMED_PROGRAMS = { Superman: "Titan", Batman: "Reaper", Punisher: "Berserker", Thor: "Ragnar" };
-
-function migrateProgramNames(state) {
-  const customPlans = (state.customPlans || []).map((p) => {
-    const sepIdx = p.name.indexOf(" — ");
-    if (sepIdx === -1) return p;
-    const prefix = p.name.slice(0, sepIdx);
-    const rest = p.name.slice(sepIdx);
-    return RENAMED_PROGRAMS[prefix] ? { ...p, name: RENAMED_PROGRAMS[prefix] + rest } : p;
-  });
-
-  const customPrograms = (state.customPrograms || []).map((p) =>
-    RENAMED_PROGRAMS[p.name] ? { ...p, name: RENAMED_PROGRAMS[p.name] } : p
-  );
-
-  const currentProgram =
-    state.currentProgram && RENAMED_PROGRAMS[state.currentProgram.programName]
-      ? { ...state.currentProgram, programName: RENAMED_PROGRAMS[state.currentProgram.programName] }
-      : state.currentProgram;
-
-  return { ...state, customPlans, customPrograms, currentProgram };
-}
-
-// One-time corrective fix for a Coach onboarding bug that shipped briefly: an earlier build
-// auto-migrated anyone with pre-existing Coach data (Athlete Profile / history / memories)
-// straight past "Select Your Coach," silently defaulting them to Bodybuilding — treating old
-// Coach usage as proof a specialty had been explicitly chosen, which it never was. That path
-// is the only place `coachOnboarding.migrationNoticeShown` was ever written; the corrected
-// picker flow no longer writes that field at all, so its mere presence on a saved record is
-// an unambiguous fingerprint of "this user was silently auto-migrated by the old bug, not by
-// their own explicit confirmation." For exactly those records, resets specialtySelected back
-// to false so they see the real picker once, the way they should have originally — every
-// other field (their Athlete Profile, history, memories, commitments, everything else) is
-// left completely untouched.
-function migrateStaleCoachOnboarding(state) {
-  const onboarding = state.coachOnboarding;
-  if (onboarding && Object.prototype.hasOwnProperty.call(onboarding, "migrationNoticeShown")) {
-    const { migrationNoticeShown, ...rest } = onboarding;
-    return { ...state, coachOnboarding: { ...rest, specialtySelected: false, specialty: null, confirmedAt: null } };
-  }
-  return state;
-}
-
 // ---------- Data export / import ----------
 // Everything the user has actually created — not the built-in templates/programs, which
 // ship with the app and always come from source, never from a backup file.
@@ -1901,70 +1856,14 @@ const SECTION_OF = {
   programTimeline: "train",
 };
 
-// Travel/Alternate Gym mode (task Part 3) — a whole-session flag, not per-exercise. Defaults to
-// "normal" so every existing/older run (and every run started without ever touching Session
-// Options) behaves exactly as before this existed.
-function sanitizeSessionContext(raw) {
-  const locationMode = raw?.locationMode === "alternate_gym" ? "alternate_gym" : "normal";
-  const locationLabel = typeof raw?.locationLabel === "string" && raw.locationLabel.trim() ? raw.locationLabel.trim().slice(0, 80) : null;
-  return { locationMode, locationLabel };
-}
-
-// ---------------- ACTIVE WORKOUT DRAFT PERSISTENCE ----------------
-// The persisted shape of `liftlog-active-run`. Bumping this only matters if a future change
-// makes an old draft meaningfully incompatible — sanitizeActiveRun() below already recovers as
-// much of an old/partial object as it can rather than discarding it, so most schema growth
-// (like adding draftByIndex here) never needs a bump at all.
-const ACTIVE_RUN_VERSION = 1;
-// Defends against a corrupted/partial/pre-this-change `liftlog-active-run` value crashing the
-// workout screen: every field is defaulted individually so one missing/malformed property (an
-// old save from before draftByIndex existed, a hand-edited value, truncated storage, etc.) never
-// takes the rest of a legitimate in-progress workout down with it. Returns null only when there's
-// nothing usable at all.
-function sanitizeActiveRun(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  try {
-    return {
-      version: ACTIVE_RUN_VERSION,
-      id: typeof raw.id === "string" ? raw.id : newWorkoutId(),
-      completionPending: !!raw.completionPending,
-      completionReceipt: raw.completionReceipt ?? null,
-      recoveryConflict: raw.recoveryConflict ?? null,
-      programBeforeCompletion: raw.programBeforeCompletion ?? null,
-      sourceProgramId: raw.sourceProgramId ?? raw.programContext?.programId ?? null,
-      sourceProgramName: raw.sourceProgramName ?? raw.programContext?.programName ?? null,
-      sourceDayLabel: raw.sourceDayLabel ?? null,
-      planName: typeof raw.planName === "string" && raw.planName ? raw.planName : "Workout",
-      exercises: Array.isArray(raw.exercises) ? raw.exercises.map((slot) => ({ ...slot, workoutSlotId: slot.workoutSlotId || newWorkoutId() })) : [],
-      sessionEntries: Array.isArray(raw.sessionEntries) ? raw.sessionEntries : [],
-      swaps: raw.swaps && typeof raw.swaps === "object" ? raw.swaps : {},
-      finished: !!raw.finished,
-      returnTab: typeof raw.returnTab === "string" ? raw.returnTab : "templates",
-      programContext: raw.programContext && typeof raw.programContext === "object" ? raw.programContext : null,
-      source: typeof raw.source === "string" ? raw.source : null,
-      startedAt: typeof raw.startedAt === "string" ? raw.startedAt : new Date().toISOString(),
-      // Per-exercise-slot in-progress state (confirmed-but-exercise-not-finished sets, plus the
-      // current unsaved set draft) — see TrainingExerciseCard's draft autosave. Keyed by the
-      // exercise's index within `exercises`, cleared the moment that slot's exercise is finished.
-      draftByIndex: raw.draftByIndex && typeof raw.draftByIndex === "object" ? raw.draftByIndex : {},
-      updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : (typeof raw.startedAt === "string" ? raw.startedAt : new Date().toISOString()),
-      summaryId: raw.summaryId ?? null,
-      coachHistoryId: raw.coachHistoryId ?? null,
-      // Travel/Alternate Gym mode (see SessionOptionsSheet) — a whole-session flag, defaulting
-      // to "normal" for every run started before this existed. Persists immediately on change
-      // (task section 28), same treatment as an equipment-profile selection.
-      sessionContext: sanitizeSessionContext(raw.sessionContext),
-    };
-  } catch (e) {
-    return null;
-  }
-}
-
 export default function LiftLog() {
   const persistence = getEditorSession();
   const [durability, setDurability] = useState(persistence.snapshot);
   useEffect(() => persistence.subscribe(setDurability), [persistence]);
-  const [state, setRenderedState] = useState(loadInitialState());
+  const [state, setRenderedState] = useState(() => ({
+    ...loadInitialState(), ...persistence.initializedState().data,
+    templates: DEFAULT_TEMPLATES, programs: HERO_PROGRAMS,
+  }));
   // Serialize transitions against the latest accepted state, including multiple actions in one
   // React batch. Persistence must not run inside a replayable React updater.
   const stateRef = useRef(state);
@@ -1975,7 +1874,7 @@ export default function LiftLog() {
     setRenderedState(next);
     return next;
   }, []);
-  const [loaded, setLoaded] = useState(false);
+  const loaded = true; // The shared broker completed initialization before this module loaded.
   const [tab, setTab] = useState("today");
   // "Start This Program" success feedback (UX audit Phase 1, item 1) — deliberately NOT part of
   // `state`/localStorage: it's a one-shot "you just did this" banner for Today, not durable data,
@@ -2068,17 +1967,8 @@ export default function LiftLog() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on load by design; re-armed
     // separately after Supabase hydration below, not by watching state here.
   }, [loaded]);
-  // Lazy-initted straight from localStorage (not loaded in an effect like `state` below) so
-  // an in-progress workout is already in place on the very first render — no flash back to
-  // the plan-picker tab, and no race with the persist effect right below.
-  const [activeRun, setRenderedActiveRun] = useState(() => {
-    try {
-      const raw = editorStorage().getItem("liftlog-active-run");
-      return raw ? sanitizeActiveRun(JSON.parse(raw)) : null;
-    } catch (e) {
-      return null;
-    }
-  });
+  // Prepared and validated under the Web Lock before App or auth initialization.
+  const [activeRun, setRenderedActiveRun] = useState(() => persistence.initializedState().active);
   // Lets the athlete navigate to other tabs (Progress, More, Train) mid-workout without losing
   // it — GuidedRunView stays mounted in `activeRun` the whole time, this just controls whether
   // it's the thing currently on screen. Tapping "Exit" mid-workout sets this true instead of
@@ -2231,46 +2121,6 @@ export default function LiftLog() {
     }
   }, [loaded, state.workoutSessions, setActiveRun, preserveRecoveryConflict]);
   const [restBump, setRestBump] = useState({ token: 0, seconds: 90 });
-
-  useEffect(() => {
-    try {
-      const raw = editorStorage().getItem("liftlog-data");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setState((s) => {
-          // templates/programs are static, app-shipped content — always take the fresh
-          // in-source copy, never whatever got persisted from an older build. Older saves
-          // (from before persist() excluded them) can still carry a stale copy forward
-          // through this spread otherwise, silently reverting any future edit to the
-          // built-in library — which is exactly what happened with this rename.
-          const merged = { ...s, ...parsed, templates: DEFAULT_TEMPLATES, programs: HERO_PROGRAMS };
-          let migrated = migrateProgramNames(merged);
-          migrated = migrateStaleCoachOnboarding(migrated);
-          // Backward-compat: a returning user whose save predates the onboarding flag
-          // already clearly isn't a fresh install — retroactively mark them as having
-          // seen it so they never see the welcome screen. A brand-new install has no
-          // `raw` at all, so this block never runs for them and the loadInitialState()
-          // default (false) correctly stands.
-          if (!migrated.hasSeenOnboarding) {
-            const alreadyActive =
-              (migrated.logs || []).length > 0 || (migrated.cardioLogs || []).length > 0 || !!migrated.currentProgram;
-            if (alreadyActive) migrated = { ...migrated, hasSeenOnboarding: true };
-          }
-          try {
-            const { templates, programs, ...toPersist } = migrated;
-            editorStorage().setItem("liftlog-data", JSON.stringify(toPersist));
-          } catch (e) {
-            // storage unavailable — migrated state still applies for this session
-          }
-          return migrated;
-        });
-      }
-    } catch (e) {
-      // no saved data yet, or storage unavailable
-    } finally {
-      setLoaded(true);
-    }
-  }, []);
 
   // Debounced background push — fires at most once per 1.5s of inactivity rather than on
   // every single set logged, since bursts of updateState calls (e.g. rapid set entry) would

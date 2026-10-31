@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { createEditorSession } from "../../persistence/editorSession.js";
+import { createEditorSession as pendingSession } from "../../persistence/editorSession.js";
+// These broker tests use identity preparation for opaque payloads; schema/migrations
+// are exercised independently in initialization tests and the real browser suite.
+function createEditorSession(...args) {
+  const session = pendingSession(...args);
+  session.initialize(({canonical}) => ({serialized:canonical,data:null,active:null}));
+  return session;
+}
 function memory(initial = {}) {
   const values = new Map(Object.entries(initial));
   return { values, get length() { return values.size; }, key: (i) => [...values.keys()][i], getItem: (k) => values.get(k) ?? null,

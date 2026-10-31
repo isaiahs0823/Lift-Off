@@ -1,3 +1,4 @@
+import { validateCanonicalData, migrateCanonicalData } from "../persistence/initialization.js";
 // ---------------- BACKUP / EXPORT-IMPORT ----------------
 // The only backup mechanism available, since everything lives in localStorage with no
 // server. Export/import cover every piece of user-created data — logs, cardio logs,
@@ -104,5 +105,10 @@ export function parseBackupFile(text) {
   if (!hasKnownKey) {
     return { ok: false, error: "That file doesn't contain any recognizable BRK - Fit data." };
   }
-  return { ok: true, data };
+  try {
+    validateCanonicalData(data);
+    const migrated = migrateCanonicalData(data);
+    validateCanonicalData(migrated);
+    return { ok: true, data: migrated };
+  } catch { return { ok: false, error: "Backup data could not be validated safely. Your current data has not been changed." }; }
 }

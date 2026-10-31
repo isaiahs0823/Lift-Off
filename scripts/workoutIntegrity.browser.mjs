@@ -326,7 +326,7 @@ test("unknown durable conflicts preserve both copies, persist on reload and expo
   });
   await page.getByRole("button", { name: "Finish workout", exact: true }).click();
   await page.getByRole("button", { name: "Finish Anyway", exact: true }).click();
-  await page.getByRole("alert").waitFor();
+  await page.getByRole("alert").first().waitFor();
   assert.equal((await data(page)).logs[0].sets[0].weight, 999);
   assert.equal((await run(page)).finished, false);
   assert.equal(await page.getByRole("button", { name: "Finish workout", exact: true }).isDisabled(), true);
@@ -344,7 +344,7 @@ test("unknown durable conflicts preserve both copies, persist on reload and expo
   assert.equal(JSON.parse(recovered.base.find(([key]) => key === "liftlog-active-run")[1]).sessionEntries[0].entry.sets[0].weight, 100);
   const preserved = await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("brk-recovery:")));
   assert.ok(preserved.length > 0);
-  await page.reload(); await page.getByRole("alert").waitFor();
+  await page.reload(); await page.getByRole("alert").first().waitFor();
   assert.equal((await data(page)).workoutSessions.length, 1);
   assert.equal((await run(page)).finished, false);
 });
@@ -388,7 +388,7 @@ test("legacy ambiguous checkpoints remain recoverable instead of choosing the sh
   await page.reload();
   await page.getByRole("button", { name: "Finish workout", exact: true }).click();
   await page.getByRole("button", { name: "Finish Anyway", exact: true }).click();
-  await page.getByRole("alert").waitFor();
+  await page.getByRole("alert").first().waitFor();
   assert.equal((await run(page)).sessionEntries[0].entry.sets.length, 2);
   assert.equal((await run(page)).draftByIndex[0].confirmedSets.length, 2);
   assert.equal((await data(page)).logs[0].sets.length, 1);
@@ -559,7 +559,7 @@ async function competingTab(page, init) {
   tab.on("dialog", (dialog) => { if (dialog.type() === "beforeunload") dialog.accept(); });
   if (init) await tab.addInitScript(init);
   await tab.goto(origin);
-  await tab.getByRole("heading", { name: "Read-only", exact: true }).waitFor();
+  await tab.getByRole("heading", { name: /^(Read-only|Initialization failed)$/ }).waitFor();
   return tab;
 }
 async function handoff(a, b) {
@@ -707,7 +707,7 @@ test("unreadable revision snapshot prevents default-state writes", async (t) => 
     window.getBeforeFailure=Storage.prototype.getItem;
     Storage.prototype.getItem = function(key) { if(key==="liftlog-data") throw new Error("Synthetic revision read failure"); return window.getBeforeFailure.call(this,key); };
   });
-  assert.match(await b.locator("body").innerText(),/saved data has not been changed/i);
+  assert.match(await b.locator("body").innerText(),/No data has been reset/i);
   await b.evaluate(() => {Storage.prototype.getItem=window.getBeforeFailure;});
   assert.deepEqual(await data(b),before);
 });
@@ -775,7 +775,7 @@ test("photo processing prevents voluntary transfer until its metadata is safely 
   const b=await competingTab(a);
   await a.getByRole("button",{name:"Release editing",exact:true}).click();
   assert.equal(await a.getByRole("heading",{name:"Read-only",exact:true}).count(),0);
-  assert.equal((await data(a)).photos.length,0);
+  assert.equal(((await data(a)).photos || []).length,0);
   await a.evaluate(()=>window.resumePhoto());
   await a.waitForFunction(()=>JSON.parse(localStorage.getItem("liftlog-data")).photos.length===1);
   const photo=(await data(a)).photos[0];
@@ -783,4 +783,170 @@ test("photo processing prevents voluntary transfer until its metadata is safely 
   await b.getByRole("button",{name:"Enable editing",exact:true}).click();
   await b.getByRole("button",{name:"Train",exact:true}).last().waitFor();
   assert.deepEqual((await data(b)).photos,[photo]);
+});
+
+test("startup migration failure must not authorize overwriting valid workout history", async (t) => {
+ const page=await fixture(t);
+ await page.getByRole("button",{name:"Release editing",exact:true}).click();
+ const before=await page.evaluate(() => {
+   const state=JSON.parse(localStorage.getItem("liftlog-data"));
+   state.customPlans=[{id:"synthetic-legacy-plan",exercises:[]}];
+   state.logs=[{id:"synthetic-existing-log",exId:"bench",date:"2026-01-01T12:00:00Z",sets:[{weight:150,reps:8}],targetReps:8}];
+   state.workoutSessions[0].entries=[{exId:"bench",sets:[{weight:150,reps:8}],targetReps:8}];
+   state.workoutSessions[0].workingSets=1; state.workoutSessions[0].totalVolume=1200;
+   const raw=JSON.stringify(state); localStorage.setItem("liftlog-data",raw); return raw;
+ });
+ await page.reload();
+ await page.getByRole("button",{name:"More",exact:true}).last().click();
+ await page.getByText("Settings",{exact:true}).click();
+ const loaded=await data(page), original=JSON.parse(before);
+ assert.deepEqual(loaded.workoutSessions,original.workoutSessions);
+ assert.deepEqual(loaded.logs,original.logs);
+ assert.equal(loaded.customPlans[0].name,"Custom workout");
+ await page.getByRole("button",{name:"RPE",exact:true}).click();
+ const after=await data(page);
+ assert.deepEqual(after.workoutSessions,original.workoutSessions,"Changing effort tracking after a startup failure must preserve existing sessions");
+ assert.deepEqual(after.logs,original.logs,"Changing settings must preserve confirmed historical sets");
+});
+
+async function initializationFixture(t, canonical, {active=null,fault=null,credential=false}={}) {
+  const context=await browser.newContext({viewport:{width:390,height:844}});
+  t.after(()=>context.close());
+  const external=[];
+  await context.route("**/*",route=>{
+    if(new URL(route.request().url()).origin===origin) return route.continue();
+    external.push(route.request().url());return route.abort();
+  });
+  await context.addInitScript(({canonical,active,fault,credential})=>{
+    if(!localStorage.getItem("brk-synthetic-seeded")) {
+      if(canonical!==null) localStorage.setItem("liftlog-data",canonical);
+      if(active!==null) localStorage.setItem("liftlog-active-run",active);
+      if(credential) localStorage.setItem("sb-synthetic-auth-token","synthetic-private-credential");
+      if(fault) localStorage.setItem("brk-synthetic-fault",fault);
+      localStorage.setItem("brk-synthetic-seeded","yes");
+    }
+    window.initialWrites=[];
+    const set=Storage.prototype.setItem,remove=Storage.prototype.removeItem;
+    Storage.prototype.setItem=function(key,value) {
+      window.initialWrites.push(key);
+      const mode=localStorage.getItem("brk-synthetic-fault");
+      if(mode==="stage-dropped"&&key.startsWith("brk-initialization-stage:"))return;
+      if(mode==="canonical-rejected"&&key==="liftlog-data")throw new DOMException("Synthetic migration quota failure","QuotaExceededError");
+      return set.call(this,key,value);
+    };
+    Storage.prototype.removeItem=function(key) {window.initialWrites.push(key);return remove.call(this,key);};
+    if(localStorage.getItem("brk-synthetic-fault")==="halfway") {
+      const indexOf=String.prototype.indexOf;
+      String.prototype.indexOf=function(search,...args) {
+        if(String(this)==="Superman — fault"&&search===" — ")throw new Error("Synthetic migration exception after first plan");
+        return indexOf.call(this,search,...args);
+      };
+    }
+  },{canonical,active,fault,credential});
+  const page=await context.newPage();
+  page.on("dialog",dialog=>{if(dialog.type()==="beforeunload")dialog.accept();});
+  await page.goto(origin);
+  return {page,external};
+}
+function startupHistory(extra={}) {
+  return {hasSeenOnboarding:true,logs:[{id:"previous-log",exId:"bench",date:"2026-01-01T12:00:00Z",sets:[{weight:150,reps:8}],targetReps:8}],
+    workoutSessions:[{id:"previous-session",planName:"Previous workout",startedAt:"2026-01-01T12:00:00Z",finishedAt:"2026-01-01T13:00:00Z",entries:[{exId:"bench",sets:[{weight:150,reps:8}],targetReps:8}],workingSets:1,totalVolume:1200,prs:[],mainMuscles:[]}],...extra};
+}
+async function initializationFailed(page) {
+  await page.getByRole("heading",{name:"Initialization failed",exact:true}).waitFor();
+  assert.equal(await page.getByRole("button",{name:"RPE",exact:true}).count(),0);
+  assert.equal(await page.getByRole("button",{name:/^(Start|Save set|Finish workout)$/}).count(),0);
+  assert.equal(await page.getByRole("button",{name:"More",exact:true}).count(),0);
+  assert.doesNotMatch(await page.locator("body").innerText(),/SAVED ✓/i);
+}
+async function exportInitialization(page) {
+  const pending=page.waitForEvent("download");
+  await page.getByRole("button",{name:"Export original saved data",exact:true}).click();
+  const download=await pending;
+  return JSON.parse(await readFile(await download.path(),"utf8"));
+}
+
+test("a genuinely new installation can initialize and save without an existing snapshot",async(t)=>{
+  const {page}=await initializationFixture(t,null);
+  await page.getByRole("button",{name:"Train",exact:true}).last().click();
+  assert.equal(await page.evaluate(()=>localStorage.getItem("liftlog-data")),null);
+  await page.getByRole("button",{name:"More",exact:true}).last().click();
+  await page.getByText("Settings",{exact:true}).click();await page.getByRole("button",{name:"RPE",exact:true}).click();
+  assert.equal((await data(page)).settings.rirSystem,"rpe");assert.deepEqual((await data(page)).logs,[]);
+});
+
+test("valid existing history initializes without replacement and remains unchanged after settings and reload",async(t)=>{
+  const original=JSON.stringify(startupHistory());
+  const {page}=await initializationFixture(t,original);
+  await page.getByRole("button",{name:"More",exact:true}).last().click();
+  assert.deepEqual((await data(page)).logs,JSON.parse(original).logs);
+  assert.deepEqual((await data(page)).workoutSessions,JSON.parse(original).workoutSessions);
+  await page.getByText("Settings",{exact:true}).click();await page.getByRole("button",{name:"RPE",exact:true}).click();
+  for(let i=0;i<2;i++) {
+    await page.reload();await page.getByRole("button",{name:"Train",exact:true}).last().waitFor();
+    const actual=await data(page);assert.deepEqual(actual.logs,JSON.parse(original).logs);assert.deepEqual(actual.workoutSessions,JSON.parse(original).workoutSessions);
+  }
+});
+
+for(const invalid of ["{invalid-json", "", JSON.stringify(startupHistory({logs:{malformed:true}})), JSON.stringify(startupHistory({customPrograms:[{id:"bad-program",name:17,days:[]}]}))]) {
+ test(`invalid startup fails closed, exports exact bytes, and remains safe after reload (${invalid.slice(0,24)})`,async(t)=>{
+   const {page,external}=await initializationFixture(t,invalid,{credential:true});
+   await initializationFailed(page);await page.waitForTimeout(500);
+   assert.deepEqual(await page.evaluate(()=>window.initialWrites),[]);
+   assert.equal(await page.evaluate(()=>localStorage.getItem("liftlog-data")),invalid);
+   const exported=await exportInitialization(page);
+   assert.equal(exported.original.canonical,invalid);assert.doesNotMatch(JSON.stringify(exported),/synthetic-private-credential/);
+   assert.equal(exported.initialization,"failed");
+   assert.equal(await page.evaluate(()=>localStorage.getItem("sb-synthetic-auth-token")),"synthetic-private-credential");
+   assert.deepEqual(external,[]); // App, account restoration and hydration never start.
+   await page.getByRole("button",{name:"Release editing",exact:true}).click();
+   assert.equal(await page.evaluate(()=>localStorage.getItem("liftlog-data")),invalid);
+   await page.reload();await initializationFailed(page);
+   assert.equal((await exportInitialization(page)).original.canonical,invalid);
+ });
+}
+
+test("a custom program missing its optional name migrates without changing identity, progress, or history",async(t)=>{
+ const source=startupHistory({customPrograms:[{id:"legacy-program",days:[{label:"A",exercises:[{exId:"bench",sets:3}]}]}],currentProgram:{programId:"legacy-program",source:"custom",dayIndex:0,totalDays:1,startDate:"2026-01-01T00:00:00Z"}});
+ const original=JSON.stringify(source),{page}=await initializationFixture(t,original);
+ await page.getByRole("button",{name:"Train",exact:true}).last().waitFor();
+ const migrated=await data(page);
+ assert.equal(migrated.customPrograms[0].name,"Custom program");assert.deepEqual(migrated.currentProgram,source.currentProgram);
+ assert.deepEqual(migrated.logs,source.logs);assert.deepEqual(migrated.workoutSessions,source.workoutSessions);
+ const savedOriginal=await page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.startsWith("brk-initialization-original:")))));
+ assert.equal(savedOriginal.canonical,original);
+ await page.reload();await page.getByRole("button",{name:"Train",exact:true}).last().waitFor();
+ assert.deepEqual(await data(page),migrated);
+});
+
+test("a migration exception halfway through preserves the original and blocks every editor until a verified retry",async(t)=>{
+ const source=startupHistory({customPlans:[{id:"first",name:"Superman — first",exercises:[]},{id:"second",name:"Superman — fault",exercises:[]}]}),original=JSON.stringify(source);
+ const {page,external}=await initializationFixture(t,original,{fault:"halfway",credential:true});
+ for(let i=0;i<2;i++) {
+   await initializationFailed(page);assert.equal(await page.evaluate(()=>localStorage.getItem("liftlog-data")),original);
+   assert.deepEqual(await page.evaluate(()=>window.initialWrites),[]);
+   assert.equal((await exportInitialization(page)).original.canonical,original);
+   await page.reload();
+ }
+ await initializationFailed(page);assert.deepEqual(external,[]);
+ await page.evaluate(()=>localStorage.setItem("brk-synthetic-fault","off"));await page.reload();
+ await page.getByRole("button",{name:"Train",exact:true}).last().waitFor();
+ const after=await data(page);assert.equal(after.customPlans[0].name,"Titan — first");assert.equal(after.customPlans[1].name,"Titan — fault");
+ assert.deepEqual(after.logs,source.logs);assert.deepEqual(after.workoutSessions,source.workoutSessions);
+});
+
+for(const fault of ["stage-dropped","canonical-rejected"]) test(`failed migration persistence (${fault}) never enables editing or replaces original history`,async(t)=>{
+ const source=startupHistory({customPlans:[{id:"p",exercises:[]}]}),original=JSON.stringify(source);
+ const {page}=await initializationFixture(t,original,{fault});await initializationFailed(page);
+ assert.equal(await page.evaluate(()=>localStorage.getItem("liftlog-data")),original);
+ assert.equal((await exportInitialization(page)).original.canonical,original);
+ await page.reload();await initializationFailed(page);assert.equal(await page.evaluate(()=>localStorage.getItem("liftlog-data")),original);
+});
+
+test("an invalid active checkpoint cannot be silently replaced by starting another workout",async(t)=>{
+ const original=JSON.stringify(startupHistory()),active="{broken active checkpoint";
+ const {page}=await initializationFixture(t,original,{active});await initializationFailed(page);
+ assert.equal(await page.evaluate(()=>localStorage.getItem("liftlog-active-run")),active);
+ assert.equal((await exportInitialization(page)).original.active,active);
+ assert.equal(await page.evaluate(()=>localStorage.getItem("liftlog-data")),original);
 });

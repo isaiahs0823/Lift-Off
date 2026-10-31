@@ -16,22 +16,33 @@ export const editorStorage = () => getEditorSession().storage;
 
 export function createEditorSession(raw, id = globalThis.crypto.randomUUID()) {
   let active = true, revision = 0, running = 0, unreadable = false;
+  let initialization = "pending", prepared = null, initializationError = null;
   const expected = new Map(), attempted = new Map(), failures = new Map(), pending = new Set(), conflicts = [];
   const listeners = new Set(), flushers = new Set();
-  for (const key of new Set([...KEYS, ...Array.from({ length: raw.length || 0 }, (_, i) => raw.key(i))])) {
+  const discovered = [];
+  try { for (let i=0; i < (raw.length || 0); i++) discovered.push(raw.key(i)); }
+  catch { unreadable = true; failures.set("storage-index","Saved storage could not be inspected."); }
+  for (const key of new Set([...KEYS, ...discovered])) {
     if (key) {
-      const value = raw.getItem(key);
-      expected.set(key, value);
-      // An unresolved conflict must not disappear merely because the app reloaded.
-      if (key.startsWith("brk-recovery:") && value) conflicts.push({ ...JSON.parse(value), recoveryKey: key });
+      try {
+        const value = raw.getItem(key);
+        expected.set(key, value);
+        // An unresolved conflict must not disappear merely because the app reloaded.
+        if (key.startsWith("brk-recovery:") && value) conflicts.push({ ...JSON.parse(value), recoveryKey: key });
+      } catch { unreadable = true; failures.set(key,"Original saved data could not be read safely."); }
     }
   }
-  const snapshot = () => ({ id, active, revision, running, blocked: unreadable || conflicts.length > 0, pending: pending.size, error: failures.size > 0 || conflicts.length > 0 || unreadable, conflicts: [...conflicts] });
+  const original = Object.freeze({
+    canonical: expected.has("liftlog-data") ? expected.get("liftlog-data") : {unreadable:true},
+    active: expected.has("liftlog-active-run") ? expected.get("liftlog-active-run") : {unreadable:true},
+  });
+  const snapshot = () => ({ id, active, revision, running, initialization, initializationError, blocked: initialization !== "ready" || unreadable || conflicts.length > 0, pending: pending.size, error: initialization === "failed" || failures.size > 0 || conflicts.length > 0 || unreadable, conflicts: [...conflicts] });
   const emit = () => listeners.forEach((fn) => fn(snapshot()));
-  function assertOwner() {
+  function assertOwner(requireInitialization = true) {
     if (!active) throw Object.assign(new Error("This editor is read-only. Reload after editing has been released."), { code: "EDITOR_RELEASED" });
     if (unreadable) throw new Error("Saved data could not be read safely. Export recovery before reloading.");
     if (conflicts.length) throw Object.assign(new Error("Stored data changed outside this editor. Export recovery copies before reloading."), { code: "EDITOR_CONFLICT" });
+    if (requireInitialization && initialization !== "ready") throw new Error("Initialization has not completed safely. Editing is disabled.");
   }
   function check(key, candidate) {
     const actual = raw.getItem(key);
@@ -58,8 +69,8 @@ export function createEditorSession(raw, id = globalThis.crypto.randomUUID()) {
     }
     return actual;
   }
-  function mutate(key, value) {
-    assertOwner();
+  function mutate(key, value, initializing = false) {
+    assertOwner(!initializing);
     try {
       check(key, value);
       attempted.set(key, value);
@@ -70,7 +81,30 @@ export function createEditorSession(raw, id = globalThis.crypto.randomUUID()) {
     } catch (error) { attempted.set(key, value); failures.set(key, error.message); emit(); throw error; }
   }
   const session = {
-    id, snapshot, assertOwner, isOwner: () => active && !conflicts.length && !unreadable,
+    id, snapshot, assertOwner, isOwner: () => active && initialization === "ready" && !conflicts.length && !unreadable,
+    initialize(prepare) {
+      if (initialization !== "pending") throw new Error("Reload before retrying initialization.");
+      try {
+        assertOwner(false);
+        for (const key of expected.keys()) check(key);
+        const candidate = prepare(original);
+        if (!candidate || !(candidate.serialized === null || typeof candidate.serialized === "string")) throw new Error("Invalid prepared state");
+        if (original.canonical !== null && candidate.serialized === null) throw new Error("Initialization cannot remove existing canonical data");
+        if (candidate.serialized !== original.canonical) {
+          // Validate in prepare(), then preserve the original and verify a staged copy
+          // BEFORE replacing canonical state. No component/SDK can write in this phase.
+          mutate(`brk-initialization-original:${id}`,JSON.stringify(original),true);
+          mutate(`brk-initialization-stage:${id}`,candidate.serialized,true);
+          mutate("liftlog-data",candidate.serialized,true);
+        }
+        prepared = candidate;
+        initialization = "ready"; emit(); return true;
+      } catch {
+        initializationError = "Saved data could not be initialized safely. Original copies are preserved for export.";
+        initialization = "failed"; emit(); return false;
+      }
+    },
+    initializedState() { assertOwner(); return prepared; },
     storage: {
       getItem(key) {
         assertOwner();
@@ -112,7 +146,7 @@ export function createEditorSession(raw, id = globalThis.crypto.randomUUID()) {
       const observed = [...expected.keys()].filter(recoverable).map((key) => {
         try { return [key, raw.getItem(key)]; } catch { return [key, { unreadable: true }]; }
       });
-      return { owner: id, revision, conflicts, base: [...expected].filter(([key]) => recoverable(key)), observed, failedWrites: [...failures], attempted: [...attempted].filter(([key]) => recoverable(key)) };
+      return { owner: id, revision, initialization, initializationError, original, conflicts, base: [...expected].filter(([key]) => recoverable(key)), observed, failedWrites: [...failures], attempted: [...attempted].filter(([key]) => recoverable(key)) };
     },
   };
   return session;

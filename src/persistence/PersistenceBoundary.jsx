@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { activateEditor, createEditorSession, EDITOR_LOCK } from "./editorSession.js";
+import { prepareInitialization } from "./initialization.js";
 
 // App (including Supabase's auth client) is not imported until ownership is granted.
 const EditorApp = lazy(() => import("../App.jsx"));
@@ -14,7 +15,11 @@ export default function PersistenceBoundary() {
     navigator.locks.request(EDITOR_LOCK, { mode: "exclusive", ifAvailable: true }, async (lock) => {
       if (disposed) return;
       if (!lock) { setMode("readonly"); return; }
-      const session = createEditorSession(window.localStorage);
+      let raw;
+      try { raw = window.localStorage; }
+      catch { raw = { getItem() { throw new Error("Saved storage is unavailable"); } }; }
+      const session = createEditorSession(raw);
+      session.initialize(prepareInitialization);
       activateEditor(session);
       admitted.current = !session.snapshot().blocked;
       const off = session.subscribe(setStatus);
@@ -26,7 +31,7 @@ export default function PersistenceBoundary() {
       };
       const show = (event) => { if (event.persisted) window.location.reload(); };
       const changed = (event) => {
-        if (event.storageArea === window.localStorage) session.observe(event.key);
+        if (event.storageArea === raw) session.observe(event.key);
       };
       const unload = (event) => {
         try { session.prepareRelease(); } catch { event.preventDefault(); event.returnValue = ""; }
@@ -58,6 +63,12 @@ export default function PersistenceBoundary() {
   };
   return <>
     {mode === "owner" ? <>
+      {status?.initialization === "failed" && <section className="p-6 space-y-3">
+        <h1 className="text-xl font-bold">Initialization failed</h1>
+        <p role="alert">Your saved data could not be opened safely. Editing and account synchronization are disabled. No data has been reset.</p>
+        <button className="underline" onClick={exportRecovery}>Export original saved data</button>
+        <button className="underline ml-4" onClick={() => window.location.reload()}>Reload to retry safely</button>
+      </section>}
       <div className="bg-v5-surface text-v5-subtext px-4 py-2 text-xs flex flex-wrap items-center gap-3">
         <span role={status?.error ? "alert" : undefined}>{status?.error ? "Not saved — keep this tab open and retry or export recovery." : "Editing in this tab"}</span>
         <button onClick={relinquish} className="underline">Release editing</button>
