@@ -60,7 +60,7 @@ import { DEFAULT_REST_DEFAULTS } from "./utils/backup.js";
 import ScheduleEditor from "./components/ScheduleEditor.jsx";
 import AthleteProfileForm from "./components/AthleteProfileForm.jsx";
 import TrainingDaysSelector from "./components/TrainingDaysSelector.jsx";
-import { recommendationFor, totalWeeklySets, FREQUENCY_GUIDANCE, familyVariants } from "./utils/programRecommendation.js";
+import { recommendationFor, totalWeeklySets, FREQUENCY_GUIDANCE, familyVariants, uniqueFamilyPrograms, familyFrequencyRange } from "./utils/programRecommendation.js";
 import { FAMILY_PROGRAMS } from "./data/programFamilies.js";
 import { recoveryRoutineById } from "./data/mobilityLibrary.js";
 import { buildRecoverySessionSummary } from "./utils/mobilitySession.js";
@@ -8202,8 +8202,19 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
           if (prefDays != null) featured = recommendationFor(prefDays, { programs: all, customPrograms: [], preferFamilyId: activeFamilyId }).recommended;
         }
         if (!featured) featured = all[0];
-        const others = all.filter((p) => p.id !== featured.id);
+        // One catalog card per program family (Titan/Athena/Shape), not one per frequency
+        // variant — the fix for "Titan — 2-Day," "Titan — 3-Day," ... all appearing as separate
+        // products. `featured`'s own family (if it has one) is excluded entirely rather than
+        // deduped-and-kept, since it's already shown above as the hero card.
+        const others = uniqueFamilyPrograms(all, { preferredDays: state.athleteProfile?.preferredDays }).filter(
+          (p) => p.id !== featured.id && (!featured.familyId || p.familyId !== featured.familyId)
+        );
         const daysPerWeek = (prog) => prog.trainingDays || countTrainingDays(prog.days) || null;
+        const frequencyLabel = (prog) => {
+          if (!prog.familyId) return daysPerWeek(prog) ? `${daysPerWeek(prog)} Days/Week` : null;
+          const range = familyFrequencyRange(prog.familyId, all);
+          return range ? (range.min === range.max ? `${range.min} Days/Week` : `${range.min}–${range.max} Days/Week`) : null;
+        };
         return (
           <>
             <div className="space-y-2.5">
@@ -8240,9 +8251,16 @@ function TemplatesTab({ state, updateState, exMap, allExercises, onStartRun, onS
                         <span className="text-sm font-black text-v5-text truncate">{prog.name}</span>
                         {isComplete(prog.id) ? <Pill tone="inactive">Done</Pill> : isCurrent(prog.id) && <Pill>Current</Pill>}
                       </div>
-                      <div className="text-[11px] text-v5-subtext line-clamp-2">{prog.tagline}</div>
+                      {/* A family representative's own tagline is "N-Day Version — <family
+                          tagline>" (expandProgramFamilies) — accurate for the program-detail view,
+                          misleading on a catalog card standing in for every frequency the family
+                          supports. Strip that prefix here so the card reads as the family's
+                          identity, not one arbitrarily-picked variant. */}
+                      <div className="text-[11px] text-v5-subtext line-clamp-2">
+                        {prog.familyId ? prog.tagline.replace(/^\d+-Day Version — /, "") : prog.tagline}
+                      </div>
                       <div className="text-[11px] font-bold text-v5-subtext/70 flex items-center gap-2 pt-0.5">
-                        {daysPerWeek(prog) && <span>{daysPerWeek(prog)} Days/Week</span>}
+                        {frequencyLabel(prog) && <span>{frequencyLabel(prog)}</span>}
                         {prog.weeks && <span>· {prog.weeks} wks</span>}
                       </div>
                     </Card>
