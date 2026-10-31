@@ -11,6 +11,7 @@
 // Known limitation of this pass: deletions aren't synced. Deleting something locally doesn't
 // remove it from Supabase, and a row deleted directly in Supabase won't be removed locally. A
 // real delete-sync (tombstones, or a "deleted_at" column) is future work, not built here.
+import {cloudAccountLease} from "../persistence/cloudAccount.js";
 import { supabase, supabaseEnabled } from "../lib/supabaseClient.js";
 
 const DROP_UNDEFINED = (obj) => JSON.parse(JSON.stringify(obj));
@@ -340,10 +341,12 @@ function requireUser() {
 }
 
 // Pushes every list collection present in `state`, plus the workout_profile singleton. Upserts
-// by primary key, so re-pushing unchanged rows is a harmless no-op. Collections are pushed
+// by primary key: identical rows are idempotent, but stale payloads can replace newer ones.
+// Account ownership is enforced here; cross-device revision checks remain separate. Collections are pushed
 // independently — one table failing (e.g. a transient network blip) doesn't block the rest.
 export async function pushWorkoutDataToSupabase(state, userId) {
   if (!requireUser() || !userId) return { ok: false, errors: ["sync not available"] };
+  const lease=cloudAccountLease(userId);
   const errors = [];
 
   await Promise.all(
@@ -351,7 +354,9 @@ export async function pushWorkoutDataToSupabase(state, userId) {
       const items = state[key];
       if (!Array.isArray(items) || items.length === 0) return;
       const rows = items.map((item) => DROP_UNDEFINED(toRow(item, userId)));
+      lease.assert();
       const { error } = await supabase.from(table).upsert(rows, { onConflict: "id" });
+      lease.assert();
       if (error) errors.push(`${table}: ${error.message}`);
     })
   );
@@ -366,7 +371,9 @@ export async function pushWorkoutDataToSupabase(state, userId) {
     has_seen_onboarding: !!state.hasSeenOnboarding,
     updated_at: new Date().toISOString(),
   });
+  lease.assert();
   const { error: profileError } = await supabase.from("workout_profile").upsert(profileRow, { onConflict: "user_id" });
+  lease.assert();
   if (profileError) errors.push(`workout_profile: ${profileError.message}`);
 
   return { ok: errors.length === 0, errors };
@@ -376,12 +383,15 @@ export async function pushWorkoutDataToSupabase(state, userId) {
 // never mutates anything itself — see mergeRemoteIntoLocal for how the caller applies it.
 export async function pullWorkoutDataFromSupabase(userId) {
   if (!requireUser() || !userId) return { ok: false, errors: ["sync not available"], data: {} };
+  const lease=cloudAccountLease(userId);
   const errors = [];
   const data = {};
 
   await Promise.all(
     COLLECTIONS.map(async ({ key, table, fromRow }) => {
+      lease.assert();
       const { data: rows, error } = await supabase.from(table).select("*").eq("user_id", userId);
+      lease.assert();
       if (error) {
         errors.push(`${table}: ${error.message}`);
         return;
@@ -390,11 +400,13 @@ export async function pullWorkoutDataFromSupabase(userId) {
     })
   );
 
+  lease.assert();
   const { data: profileRow, error: profileError } = await supabase
     .from("workout_profile")
     .select("*")
     .eq("user_id", userId)
     .maybeSingle();
+  lease.assert();
   if (profileError) errors.push(`workout_profile: ${profileError.message}`);
   if (profileRow) {
     data.workoutProfile = {
