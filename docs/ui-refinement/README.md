@@ -19,3 +19,12 @@ had exactly one dominant Start action and no competing controls; the only change
 HeroCard's own "Start" button and a second, unconditional "Start workout today" button both
 rendered at once. After, the second control demotes to a plain text link ("Or start something
 else") whenever the hero card is already showing its own Start action.
+
+## v2 — typography + hero treatment
+
+`after-*.png` (the first pass above) kept the generic system sans font and a flat gradient —
+correctly called out as "looks the exact same." `screenshots/v2-today.png` and
+`screenshots/v2-train.png` are the corrected pass: Anton/Oswald (Google Fonts, SIL OFL) now
+drive every screen's type instead of the system stack, and PhotoHero's fallback got a layered
+gradient + red glow + vignette + accent bar in place of the old flat two-stop wash. See the
+UI-correction commit for the full rationale.
