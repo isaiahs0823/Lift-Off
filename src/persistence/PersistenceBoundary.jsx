@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { activateEditor, createEditorSession, EDITOR_LOCK } from "./editorSession.js";
-import { prepareInitialization } from "./initialization.js";
+import { LOCAL_ONLY_PREVIEW, preparePreviewInitialization } from "./localPreview.js";
 
 // App (including Supabase's auth client) is not imported until ownership is granted.
 const EditorApp = lazy(() => import("../App.jsx"));
@@ -19,7 +19,7 @@ export default function PersistenceBoundary() {
       try { raw = window.localStorage; }
       catch { raw = { getItem() { throw new Error("Saved storage is unavailable"); } }; }
       const session = createEditorSession(raw);
-      session.initialize(prepareInitialization);
+      session.initialize(preparePreviewInitialization);
       activateEditor(session);
       admitted.current = !session.snapshot().blocked;
       const off = session.subscribe(setStatus);
@@ -62,6 +62,7 @@ export default function PersistenceBoundary() {
     link.href = url; link.download = "brk-persistence-recovery.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   return <>
+    {LOCAL_ONLY_PREVIEW && <p data-local-preview="true" className="bg-v5-surface text-v5-subtext px-4 py-2 text-xs">Local test preview · Synthetic data · Cloud sync off</p>}
     {mode === "owner" ? <>
       {status?.initialization === "failed" && <section className="p-6 space-y-3">
         <h1 className="text-xl font-bold">Initialization failed</h1>

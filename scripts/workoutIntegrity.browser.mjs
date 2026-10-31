@@ -869,10 +869,13 @@ async function exportInitialization(page) {
 test("a genuinely new installation can initialize and save without an existing snapshot",async(t)=>{
   const {page}=await initializationFixture(t,null);
   await page.getByRole("button",{name:"Train",exact:true}).last().click();
-  assert.equal(await page.evaluate(()=>localStorage.getItem("liftlog-data")),null);
+  const preview=await page.locator("[data-local-preview]").count();
+  const original=await data(page);
+  if(preview) assert.equal(original.customPrograms[0].id,"preview-full-body");
+  else assert.equal(original,null);
   await page.getByRole("button",{name:"More",exact:true}).last().click();
   await page.getByText("Settings",{exact:true}).click();await page.getByRole("button",{name:"RPE",exact:true}).click();
-  assert.equal((await data(page)).settings.rirSystem,"rpe");assert.deepEqual((await data(page)).logs,[]);
+  assert.equal((await data(page)).settings.rirSystem,"rpe");assert.deepEqual((await data(page)).logs,original?.logs || []);
 });
 
 test("valid existing history initializes without replacement and remains unchanged after settings and reload",async(t)=>{
