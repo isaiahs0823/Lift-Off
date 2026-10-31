@@ -145,7 +145,7 @@ function DayPreview({ day, weekNumber, programName, exMap, onBack, onViewWorkout
 // never writes anything (see resolveProgramTimeline's own header comment). Reads the single
 // active program directly rather than taking an id prop, since there's only ever one at a time —
 // every entry point (Train's Current Program card, Today's compact card) just navigates here.
-export default function ProgramTimelineScreen({ state, updateState, exMap, onBack, onViewWorkout, onSwitchProgram, onEndProgram, onRenameProgram, onStartRun, onNavigate }) {
+export default function ProgramTimelineScreen({ state, updateState, exMap, onBack, onViewWorkout, onSwitchProgram, onEndProgram, onRenameProgram, onStartRun, onBeforeStart, onNavigate }) {
   const [openDay, setOpenDay] = useState(null); // { day, weekNumber } | null
   // "Swap Workout" (item 2 — swap which day, not Switch Program's swap which PROGRAM) opens the
   // exact same sheet Today/Train already use, so picking a different day of this same program to
@@ -193,6 +193,8 @@ export default function ProgramTimelineScreen({ state, updateState, exMap, onBac
   // separate swap-then-go-to-Today round trip.
   const startDay = (day) => {
     if (day.isRecovery || !onStartRun) return;
+    // Resume before applying a day swap; a blocked Start must not alter program progress.
+    if (onBeforeStart && !onBeforeStart()) return;
     const plan = { name: `${timeline.programName} — ${day.label}`, exercises: day.exercises };
     const programContext = { programId: timeline.programId, programName: timeline.programName, source: timeline.source, dayIndex: day.dayIndex, totalDays: timeline.totalDaysPerCycle };
     if (day.status !== "current" && updateState) {

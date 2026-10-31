@@ -1,3 +1,4 @@
+import { editorStorage } from "../persistence/editorSession.js";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, Pause, Play, Square } from "lucide-react";
 import {
@@ -21,7 +22,7 @@ const STORAGE_KEY = "liftlog-interval-timer";
 
 function loadPersisted() {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = editorStorage().getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -29,8 +30,8 @@ function loadPersisted() {
 }
 function persist(data) {
   try {
-    if (data) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    else window.localStorage.removeItem(STORAGE_KEY);
+    if (data) editorStorage().setItem(STORAGE_KEY, JSON.stringify(data));
+    else editorStorage().removeItem(STORAGE_KEY);
   } catch {
     // storage unavailable — the session just won't survive a refresh/navigation
   }

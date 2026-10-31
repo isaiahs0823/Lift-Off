@@ -598,6 +598,7 @@ export default function TodayTab({
   exMap,
   allExercises,
   activeRun,
+  onResumeWorkout,
   onStartRun,
   onStartRecovery,
   onNavigate,
@@ -899,7 +900,14 @@ export default function TodayTab({
       )}
 
       {/* Today's training — the dominant card on the page. */}
-      {scheduleOn && todaySchedule?.type === "rest" ? (
+      {activeRun && !activeRun.finished ? (
+        <HeroCard className="space-y-3">
+          <SectionLabel>Unfinished workout</SectionLabel>
+          <div className="text-xl font-bold text-v5-text">{activeRun.planName}</div>
+          <ButtonPrimary size="lg" onClick={onResumeWorkout}>Resume workout</ButtonPrimary>
+          {state.currentProgram && <ButtonText tone="muted" icon={Map} onClick={() => onNavigate("programTimeline")}>View Program</ButtonText>}
+        </HeroCard>
+      ) : scheduleOn && todaySchedule?.type === "rest" ? (
         (() => {
           const tomorrow = getScheduleDay(state, addDaysStr(new Date().toISOString().slice(0, 10), 1));
           const adherence = computeScheduleAdherence(state, 7);

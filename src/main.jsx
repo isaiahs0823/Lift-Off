@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App.jsx";
+import PersistenceBoundary from "./persistence/PersistenceBoundary.jsx";
 import DevAnatomyShowcase from "./components/DevAnatomyShowcase.jsx";
 import "./index.css";
 
@@ -10,7 +10,7 @@ const isDevAnatomyRoute = new URLSearchParams(window.location.search).get("devAn
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {isDevAnatomyRoute ? <DevAnatomyShowcase /> : <App />}
+    {isDevAnatomyRoute ? <DevAnatomyShowcase /> : <PersistenceBoundary />}
   </React.StrictMode>
 );
 
