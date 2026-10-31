@@ -1,7 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { PHOTOGRAPHY_MANIFEST, hasPhotography } from "../../content/photographyManifest.js";
+import { PHOTOGRAPHY_MANIFEST, hasPhotography, resolveProgramCoverSlot } from "../../content/photographyManifest.js";
 
-const REQUIRED_SLOTS = ["onboardingHero", "todayHeader", "programCoverStrength", "programCoverHypertrophy", "programCoverConditioning", "programCoverRecovery"];
+const REQUIRED_SLOTS = [
+  "onboardingHero",
+  "todayHeader",
+  "programCoverStrength",
+  "programCoverHypertrophy",
+  "programCoverConditioning",
+  "programCoverRecovery",
+  "programCoverTitan",
+  "programCoverAthena",
+  "programCoverShape",
+  "programCoverBerserker",
+];
 
 describe("photography manifest", () => {
   it("defines all six required slots", () => {
@@ -37,5 +48,31 @@ describe("photography manifest", () => {
 
   it("returns false for an unknown slot instead of throwing", () => {
     expect(hasPhotography("doesNotExist")).toBe(false);
+  });
+});
+
+describe("resolveProgramCoverSlot", () => {
+  it("resolves each known family to its own cover slot", () => {
+    expect(resolveProgramCoverSlot({ familyId: "titan" })).toBe("programCoverTitan");
+    expect(resolveProgramCoverSlot({ familyId: "athena" })).toBe("programCoverAthena");
+    expect(resolveProgramCoverSlot({ familyId: "shape" })).toBe("programCoverShape");
+  });
+
+  it("resolves Berserker by its program id, not a familyId (it has none)", () => {
+    expect(resolveProgramCoverSlot({ id: "prog_berserker" })).toBe("programCoverBerserker");
+  });
+
+  it("returns null for a custom program — stock photography never covers an athlete's own creation", () => {
+    expect(resolveProgramCoverSlot({ id: "custom_123", familyId: undefined })).toBeNull();
+  });
+
+  it("returns null for an unrecognized family or standalone program, rather than throwing", () => {
+    expect(resolveProgramCoverSlot({ familyId: "some-future-family" })).toBeNull();
+    expect(resolveProgramCoverSlot({ id: "prog_some_future_program" })).toBeNull();
+  });
+
+  it("returns null for null/undefined input", () => {
+    expect(resolveProgramCoverSlot(null)).toBeNull();
+    expect(resolveProgramCoverSlot(undefined)).toBeNull();
   });
 });

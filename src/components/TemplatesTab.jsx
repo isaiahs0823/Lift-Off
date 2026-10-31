@@ -11,6 +11,8 @@ import { findMostRecentSessionForPlan } from "../utils/workoutHistory.js";
 import { recoveryRoutineById } from "../data/mobilityLibrary.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import { recommendationFor, totalWeeklySets, FREQUENCY_GUIDANCE, familyVariants, uniqueFamilyPrograms, familyFrequencyRange } from "../utils/programRecommendation.js";
+import { resolveProgramCoverSlot, hasPhotography } from "../content/photographyManifest.js";
+import CinematicImage from "./ui/CinematicImage.jsx";
 
 // Extracted from App.jsx verbatim (see the extraction commit) — the program/plan browser screen
 // (catalog, program detail with its frequency switcher, custom-program management, templates,
@@ -762,6 +764,7 @@ export default function TemplatesTab({ state, updateState, exMap, allExercises, 
             <div className="space-y-2.5">
               <SectionLabel>Recommended for you</SectionLabel>
               <PhotoHero
+                photoSlot={resolveProgramCoverSlot(featured)}
                 exercise={exMap[featured.days?.[0]?.exercises?.[0]?.exId]}
                 eyebrow={featured.tagline}
                 title={featured.name}
@@ -787,8 +790,16 @@ export default function TemplatesTab({ state, updateState, exMap, allExercises, 
               <div className="space-y-2.5">
                 <SectionLabel tone="muted">Other programs</SectionLabel>
                 <div className="grid grid-cols-2 gap-2.5">
-                  {others.map((prog) => (
+                  {others.map((prog) => {
+                    const coverSlot = resolveProgramCoverSlot(prog);
+                    return (
                     <Card key={prog.id} onClick={() => setDetail({ kind: "program", id: prog.id })} padding="p-3.5" className="space-y-1.5">
+                      {/* Inert today (no card has photography configured yet) — renders nothing
+                          and the card looks exactly as it did before, same pattern as PhotoHero's
+                          photoSlot. Lights up the instant a cover exists for that program. */}
+                      {coverSlot && hasPhotography(coverSlot) && (
+                        <CinematicImage slotKey={coverSlot} className="w-full aspect-square rounded-lg overflow-hidden -mt-1" />
+                      )}
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-black text-v5-text truncate">{prog.name}</span>
                         {isComplete(prog.id) ? <Pill tone="inactive">Done</Pill> : isCurrent(prog.id) && <Pill>Current</Pill>}
@@ -806,7 +817,7 @@ export default function TemplatesTab({ state, updateState, exMap, allExercises, 
                         {prog.weeks && <span>· {prog.weeks} wks</span>}
                       </div>
                     </Card>
-                  ))}
+                  );})}
                 </div>
               </div>
             )}

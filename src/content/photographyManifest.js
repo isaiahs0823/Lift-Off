@@ -70,7 +70,67 @@ export const PHOTOGRAPHY_MANIFEST = {
     sources: { avif: null, webp: null, fallback: null },
     publicDir: "images/photography/programs/recovery",
   },
+
+  // ---- program-family catalog covers ----
+  // One slot per named program family/standalone program — distinct from the generic
+  // strength/hypertrophy/conditioning/recovery category covers above, which are for the (not yet
+  // built) category-filter view. These back the actual catalog cards in TemplatesTab's program
+  // browser (one card per family, see uniqueFamilyPrograms in programRecommendation.js) and the
+  // featured "Recommended for you" hero. Resolved via resolveProgramCoverSlot(prog), not looked
+  // up by these keys directly, so a new family/standalone program added to programFamilies.js or
+  // HERO_PROGRAMS without a matching entry here still renders correctly — it just falls through
+  // to the existing gradient/anatomy treatment, same as every slot does until photography exists.
+  programCoverTitan: {
+    usage: "Titan program family's catalog card and detail-view hero.",
+    aspectRatio: "1 / 1",
+    crop: "Classic hero V-taper physique, three-quarter back/lat shot, hard key light from one side, deep shadow on the other — the most 'commercial poster' of the four, since Titan is BRK's flagship.",
+    alt: "Titan program cover photo — classic V-taper physique.",
+    fallback: "solid",
+    sources: { avif: null, webp: null, fallback: null },
+    publicDir: "images/photography/programs/titan",
+  },
+  programCoverAthena: {
+    usage: "Athena program family's catalog card and detail-view hero.",
+    aspectRatio: "1 / 1",
+    crop: "Lower-body/glute-forward compound movement (hip thrust, RDL, split squat), athletic female physique, same hard directional lighting as Titan — never softened or styled differently on account of the audience.",
+    alt: "Athena program cover photo — lower-body hypertrophy focus.",
+    fallback: "solid",
+    sources: { avif: null, webp: null, fallback: null },
+    publicDir: "images/photography/programs/athena",
+  },
+  programCoverShape: {
+    usage: "Shape program family's catalog card and detail-view hero.",
+    aspectRatio: "1 / 1",
+    crop: "Machine/cable/dumbbell general-physique movement, mid-contraction, approachable rather than maximal-effort framing — Shape's identity is general hypertrophy, not peak intensity.",
+    alt: "Shape program cover photo — general physique hypertrophy.",
+    fallback: "solid",
+    sources: { avif: null, webp: null, fallback: null },
+    publicDir: "images/photography/programs/shape",
+  },
+  programCoverBerserker: {
+    usage: "Berserker (standalone, not a family) catalog card and detail-view hero.",
+    aspectRatio: "1 / 1",
+    crop: "Heavy barbell compound (deadlift, squat) at or near lockout, maximal visible effort/strain, lowest-key (darkest) lighting of the four — raw strength, not physique.",
+    alt: "Berserker program cover photo — heavy compound strength.",
+    fallback: "solid",
+    sources: { avif: null, webp: null, fallback: null },
+    publicDir: "images/photography/programs/berserker",
+  },
 };
+
+// familyId (programFamilies.js) -> its cover slot. Standalone (non-family) programs are keyed by
+// their own program id instead, since they have no familyId.
+const FAMILY_COVER_SLOTS = { titan: "programCoverTitan", athena: "programCoverAthena", shape: "programCoverShape" };
+const STANDALONE_COVER_SLOTS = { prog_berserker: "programCoverBerserker" };
+
+// The cover slot key for a given program/family-representative object, or null if this program
+// has no cover authored yet (a newly added family/standalone program, or a custom program — those
+// are explicitly never covered by stock photography, since they're the athlete's own creation).
+export function resolveProgramCoverSlot(prog) {
+  if (!prog) return null;
+  if (prog.familyId) return FAMILY_COVER_SLOTS[prog.familyId] || null;
+  return STANDALONE_COVER_SLOTS[prog.id] || null;
+}
 
 // True once a slot actually has at least one real source filled in — callers use this (rather
 // than checking `sources` shape themselves) to decide whether to render a real <picture> or the
