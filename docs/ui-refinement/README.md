@@ -28,3 +28,12 @@ correctly called out as "looks the exact same." `screenshots/v2-today.png` and
 drive every screen's type instead of the system stack, and PhotoHero's fallback got a layered
 gradient + red glow + vignette + accent bar in place of the old flat two-stop wash. See the
 UI-correction commit for the full rationale.
+
+## Program library consolidation
+
+`screenshots/catalog-01-browse.png` — the Programs catalog with the fix applied: Titan, Athena,
+Shape, and Berserker each appear exactly once (previously each family showed once per supported
+frequency — up to 5 duplicate cards per family). `screenshots/catalog-02-titan-detail.png` — the
+pre-existing detail-view frequency switcher (2-6 day chips), confirmed still resolving the correct
+authored variant after the catalog change. See the consolidation commit for the full before/after
+architecture notes — this was a presentation-layer dedup, not a data-model or activation change.
