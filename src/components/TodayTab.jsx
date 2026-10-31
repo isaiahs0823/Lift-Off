@@ -323,7 +323,7 @@ function RecoveryLogCard({ label, state, updateState }) {
   return (
     <HeroCard>
       <SectionLabel>Active recovery</SectionLabel>
-      <div className="text-2xl font-black text-v5-text">{label}</div>
+      <div className="font-brk-display text-2xl text-v5-text uppercase">{label}</div>
       <div className="text-sm text-v5-subtext">Walk · Mobility · Light cardio</div>
       {loggedToday ? (
         <div className="text-sm text-v5-success font-bold flex items-center gap-1.5">
@@ -772,7 +772,7 @@ export default function TodayTab({
   return (
     <div className="space-y-2.5 sm:space-y-4">
       <div>
-        <div className="text-2xl font-black text-v5-text tracking-tight">{greeting()}</div>
+        <div className="font-brk-display text-3xl text-v5-text tracking-tight uppercase">{greeting()}</div>
         <div className="text-xs text-v5-subtext mt-0.5">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
       </div>
 
@@ -914,7 +914,7 @@ export default function TodayTab({
           return (
             <Card padding="p-5" className="space-y-3">
               <SectionLabel tone="muted">Rest day</SectionLabel>
-              <div className="text-2xl font-black text-v5-text">Recover</div>
+              <div className="font-brk-display text-2xl text-v5-text uppercase">Recover</div>
               <div className="text-sm text-v5-subtext">
                 {tomorrow.status !== "none" && tomorrow.type && tomorrow.type !== "rest"
                   ? `Training resumes tomorrow — ${tomorrow.label || DAY_TYPE_LABEL[tomorrow.type]}.`
@@ -943,7 +943,7 @@ export default function TodayTab({
               <SectionLabel className="flex items-center gap-1.5">
                 <Timer size={12} /> Conditioning
               </SectionLabel>
-              <div className="text-2xl font-black text-v5-text">{todaySchedule.label || "Conditioning"}</div>
+              <div className="font-brk-display text-2xl text-v5-text uppercase">{todaySchedule.label || "Conditioning"}</div>
               {run && <div className="text-sm text-v5-subtext">{run.plan.exercises.length} exercises · Est. {estimateMinutes(run.plan)} min</div>}
               {todaySchedule.status === "completed" && (
                 <div className="text-sm text-v5-success font-bold flex items-center gap-1.5">
@@ -977,7 +977,7 @@ export default function TodayTab({
             return (
               <HeroCard>
                 <SectionLabel>{run.programName}</SectionLabel>
-                <div className="text-2xl font-black text-v5-text">{run.dayLabel}</div>
+                <div className="font-brk-display text-2xl text-v5-text uppercase">{run.dayLabel}</div>
                 {recoveryDone ? (
                   <div className="flex items-center gap-2 text-v5-success font-bold text-lg">
                     <Check size={18} /> Recovery complete
@@ -1112,7 +1112,7 @@ export default function TodayTab({
               return (
                 <>
                   <div className="text-xs uppercase tracking-widest text-v5-subtext">{programDay.programName}</div>
-                  <div className="text-2xl font-black text-v5-text">{programDay.dayLabel}</div>
+                  <div className="font-brk-display text-2xl text-v5-text uppercase">{programDay.dayLabel}</div>
                   {recoveryDone ? (
                     <div className="flex items-center gap-2 text-v5-success font-bold text-lg">
                       <Check size={18} /> Recovery complete

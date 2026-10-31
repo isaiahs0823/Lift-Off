@@ -2,6 +2,13 @@
 export default {
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
+    // Not under extend: this replaces Tailwind's default `font-sans` stack (which App.jsx's root
+    // applies app-wide via the `font-sans` utility) with the brand heading face, so every screen
+    // picks up real typography with no per-component changes. `serif`/`mono` aren't touched —
+    // nothing in this app uses them.
+    fontFamily: {
+      sans: ["var(--font-brk-heading)"],
+    },
     extend: {
       colors: {
         // Dark charcoal replacing pure black. "deep" = page/tab-bar background,
