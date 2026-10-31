@@ -1,6 +1,8 @@
 import React from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import MuscleBodyOutline from "../MuscleBodyOutline.jsx";
+import CinematicImage from "./CinematicImage.jsx";
+import { hasPhotography } from "../../content/photographyManifest.js";
 
 // ---------------- BRK SHARED DESIGN SYSTEM ----------------
 // Reusable primitives for the app-wide premium redesign. Everything here is built on the v5
@@ -313,12 +315,22 @@ export function PeriodSelect({ value, onChange, options, className = "" }) {
 // program at full size; Active Workout's current-exercise card (which repeats once per exercise,
 // not once per day) uses `compact` — mobile-only tighter padding/title, sm: matches the default
 // hero exactly so desktop is identical either way (mobile density/composition pass, section 7).
-export function PhotoHero({ exercise, eyebrow, title, meta, children, className = "", compact = false }) {
+export function PhotoHero({ exercise, eyebrow, title, meta, children, className = "", compact = false, photoSlot }) {
+  // Real photography (once a slot in photographyManifest.js is actually filled in) replaces the
+  // anatomy-outline watermark as the hero's visual, rather than competing with it — everything
+  // else here, including the scrim that protects title/meta legibility, stays identical either
+  // way. Until then (today, for every slot) this renders nothing and the original treatment is
+  // untouched.
+  const showPhoto = photoSlot && hasPhotography(photoSlot);
   return (
     <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-v5-red/25 via-v5-elevated to-v5-surface p-3.5 sm:p-6 ${className}`}>
-      <div className="absolute -right-8 -bottom-10 opacity-95 pointer-events-none">
-        <MuscleBodyOutline exercise={exercise} size={190} />
-      </div>
+      {showPhoto ? (
+        <CinematicImage slotKey={photoSlot} className="absolute inset-0" />
+      ) : (
+        <div className="absolute -right-8 -bottom-10 opacity-95 pointer-events-none">
+          <MuscleBodyOutline exercise={exercise} size={190} />
+        </div>
+      )}
       <div className="absolute inset-0 bg-gradient-to-r from-v5-surface via-v5-surface/55 to-transparent pointer-events-none" />
       <div className="relative space-y-1.5 sm:space-y-3">
         {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}

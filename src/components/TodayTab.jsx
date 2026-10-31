@@ -1018,6 +1018,7 @@ export default function TodayTab({
           }
           return (
             <PhotoHero
+              photoSlot="todayHeader"
               exercise={run ? exMap[run.plan.exercises[0]?.exId] : null}
               eyebrow="Today's workout"
               title={todaySchedule.label || "Training day"}
@@ -1046,6 +1047,7 @@ export default function TodayTab({
         // large gradient card, anatomy figure integrated on the trailing edge, eyebrow/title/
         // meta row, one unmistakable red CTA.
         <PhotoHero
+          photoSlot="todayHeader"
           exercise={exMap[todayPlan.exercises[0]?.exId]}
           eyebrow="Today's workout"
           title={todayPlan.name}

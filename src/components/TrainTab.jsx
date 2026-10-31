@@ -251,9 +251,19 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
         </HeroCard>
       )}
 
-      <ButtonPrimary size="lg" icon={Play} onClick={() => onNavigate("startWorkout")} className="py-5 text-base shadow-[0_12px_32px_-10px_rgba(210,38,46,0.6)]">
-        Start workout today
-      </ButtonPrimary>
+      {/* One dominant start action at a time: when today's program day is already shown above
+          with its own Start/Start Recovery CTA, this must not be a second competing full-width
+          red button — it demotes to a plain text entry point into the same workout-choice flow
+          (picking a different plan/exercise), never a second "the" primary action. */}
+      {programDay && !programDay.isComplete ? (
+        <ButtonText tone="muted" icon={Play} onClick={() => onNavigate("startWorkout")} className="w-full py-1">
+          Or start something else
+        </ButtonText>
+      ) : (
+        <ButtonPrimary size="lg" icon={Play} onClick={() => onNavigate("startWorkout")} className="py-5 text-base shadow-[0_12px_32px_-10px_rgba(210,38,46,0.6)]">
+          Start workout today
+        </ButtonPrimary>
+      )}
 
       {/* Core training destinations as a compact action grid, not a stack of full-width rows —
           Train should read as a control panel, with program discovery one tap deeper via
