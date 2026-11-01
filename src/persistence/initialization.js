@@ -15,7 +15,10 @@ function sets(value, path) {
   requireValue(Array.isArray(value),path);
   value.forEach((set,i) => {
     requireValue(object(set),`${path}[${i}]`);
-    requireValue(typeof set.reps === "number" && Number.isFinite(set.reps) && set.reps > 0,`${path}[${i}].reps`);
+    // >= 0, not > 0: a genuinely failed rep attempt (racked at zero completed reps) is real,
+    // recordable training data — not a sign of corruption. Confirmed against an actual athlete's
+    // save that this validation rejected: a logged third set at a given weight with reps: 0.
+    requireValue(typeof set.reps === "number" && Number.isFinite(set.reps) && set.reps >= 0,`${path}[${i}].reps`);
     requireValue(typeof set.weight === "number" && Number.isFinite(set.weight) && set.weight >= 0,`${path}[${i}].weight`);
     if (set.drops !== undefined) sets(set.drops,`${path}[${i}].drops`);
   });
