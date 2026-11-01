@@ -2,7 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- maximum-scale=1/user-scalable=no is a deliberate reversal of an earlier decision to leave
+         pinch-zoom available for readability (see index.css's font-size-on-focus comment, now
+         stale on this point). In practice, a standalone home-screen PWA has no browser chrome to
+         help an athlete reset an accidental zoom, and logging mid-workout (sweaty hands, quick
+         imprecise touches) reliably triggers one — reported as "have to consistently zoom out to
+         accurately log anything." Locking the zoom level, like Strong/Hevy and most native-feeling
+         fitness PWAs do, trades away zoom-for-readability in exchange for the app never getting
+         stuck zoomed in during the one activity it exists for. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>BRK - Fit</title>
     <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
