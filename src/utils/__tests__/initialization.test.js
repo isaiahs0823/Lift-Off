@@ -44,10 +44,18 @@ it.each(["{bad","","null","[]","42"])("fails closed on existing invalid canonica
  expect(()=>s.storage.setItem("liftlog-data","{}")).toThrow("Initialization");expect(s.recovery().original.canonical).toBe(bad);
  expect(raw.getItem("liftlog-data")).toBe(bad);expect(raw.setItem).not.toHaveBeenCalled();
 });
+it("accepts a genuinely failed rep attempt — a logged set with zero completed reps is real data, not corruption",()=>{
+ const failedSet={...log,sets:[{weight:150,reps:0}]};
+ const raw=memory({...history(),logs:[failedSet]}),original=raw.getItem("liftlog-data"),s=createEditorSession(raw,"a");
+ expect(s.initialize(prepareInitialization)).toBe(true);
+ expect(s.initializedState().data.logs[0].sets[0]).toEqual({weight:150,reps:0});
+ expect(raw.getItem("liftlog-data")).toBe(original);
+});
 it.each([
  {logs:{}},{customPrograms:[null]},{settings:"invalid"},
  {customPrograms:[{id:"p",days:{}}]},
  {logs:[{...log,sets:[{weight:"oops",reps:8}]}]},
+ {logs:[{...log,sets:[{weight:150,reps:-1}]}]},
  {customPlans:[{id:"p",exercises:"invalid"}]},
 ])("rejects malformed containers/records without losing valid surrounding history: %j",patch=>{
  const raw=memory({...history(),...patch}),original=raw.getItem("liftlog-data"),s=createEditorSession(raw,"a");
