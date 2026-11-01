@@ -24,10 +24,11 @@ html, body, #root {
    in quick succession (incrementing a weight/reps stepper, tapping Log Set again right after the
    first tap) reads as a double-tap and zooms the whole page in, which then stays zoomed until the
    athlete manually pinches back out. `manipulation` disables double-tap-zoom (and the ~300ms tap
-   delay) while leaving real pinch-to-zoom and normal scrolling untouched — this is the standard,
-   documented fix, distinct from the input-focus-zoom fix below (different trigger, same visible
-   symptom: "the page is suddenly zoomed in"). Global, not phone-width-scoped: desktop has no
-   touch input, so this is inert there rather than needing its own media query. */
+   delay) and normal scrolling is untouched — this is the standard, documented fix, distinct from
+   the input-focus-zoom fix below (different trigger, same visible symptom: "the page is suddenly
+   zoomed in"). Pinch-zoom itself is now also disabled app-wide, via the viewport meta tag in
+   index.html, not this rule — see that file's comment for why. Global, not phone-width-scoped:
+   desktop has no touch input, so this is inert there rather than needing its own media query. */
 html, body {
   touch-action: manipulation;
 }
@@ -41,8 +42,10 @@ html, body {
    phone-width viewports so desktop rendering (if BRK is ever previewed wider) keeps its
    original, tighter Tailwind-driven sizing — this fix exists for the iOS behavior specifically,
    not as a general size bump.
-   Manual pinch-to-zoom is untouched — that's controlled by the viewport meta tag
-   (width=device-width, initial-scale=1.0, no maximum-scale/user-scalable), not by this rule. */
+   Manual pinch-to-zoom is now disabled app-wide (index.html's viewport meta tag,
+   maximum-scale=1.0/user-scalable=no) — this rule still matters regardless, since a form control
+   under 16px would otherwise force an auto-zoom that user-scalable=no cannot then let the athlete
+   reverse. */
 @media (max-width: 640px) {
   input:not([type="checkbox"]):not([type="radio"]),
   textarea,
