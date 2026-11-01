@@ -19,6 +19,19 @@ html, body, #root {
   background: #0A0A0B;
 }
 
+/* iOS Safari's default double-tap-to-zoom gesture is live on every element unless this is set —
+   and a workout logger is exactly the UI that triggers it by accident: two taps on the same spot
+   in quick succession (incrementing a weight/reps stepper, tapping Log Set again right after the
+   first tap) reads as a double-tap and zooms the whole page in, which then stays zoomed until the
+   athlete manually pinches back out. `manipulation` disables double-tap-zoom (and the ~300ms tap
+   delay) while leaving real pinch-to-zoom and normal scrolling untouched — this is the standard,
+   documented fix, distinct from the input-focus-zoom fix below (different trigger, same visible
+   symptom: "the page is suddenly zoomed in"). Global, not phone-width-scoped: desktop has no
+   touch input, so this is inert there rather than needing its own media query. */
+html, body {
+  touch-action: manipulation;
+}
+
 /* iOS Safari auto-zooms the page when a focused form control renders text smaller than 16px —
    this is the single guarantee that never happens, regardless of which Tailwind text-size
    utility (text-xs, text-sm, ...) a given input/select/textarea happens to carry. `!important`
