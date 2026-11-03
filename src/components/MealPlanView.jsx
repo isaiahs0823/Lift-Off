@@ -1,10 +1,20 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { resolveNutritionProfile } from "../utils/nutrition.js";
 import { generateMealPlan, getSwapOptions, swapFoodInMeal, suggestFromAvailable } from "../utils/mealPlanGenerator.js";
 
+// Bug report (Nutrition -> Meal Plan -> Swap -> "What do you have instead?"): Build From This
+// appeared to do nothing for an unrecognized food (e.g. "Corn Flakes"). Root cause —
+// suggestFromAvailable() correctly returns null when nothing in FOOD_DB overlaps the input, but
+// this component had no branch for "searched and found nothing": `{result && (...)}` and
+// `{!result && (...)}` render identically whether the athlete has typed anything yet or has
+// already searched and come up empty, so a real "no match" outcome looked exactly like never
+// having clicked the button at all. `searched`/`noMatchFor` track that distinction explicitly so
+// a no-match result always says so, in plain language, instead of silently reverting.
 function IDontHaveThat({ meal, onApply, onClose }) {
   const [text, setText] = useState("");
   const [result, setResult] = useState(null);
+  const [noMatchFor, setNoMatchFor] = useState(null);
+  const resultRef = useRef(null);
 
   const build = () => {
     const foods = text
@@ -12,8 +22,22 @@ function IDontHaveThat({ meal, onApply, onClose }) {
       .map((s) => s.trim())
       .filter(Boolean);
     if (foods.length === 0) return;
-    setResult(suggestFromAvailable(foods, meal));
+    const built = suggestFromAvailable(foods, meal);
+    setResult(built);
+    setNoMatchFor(built ? null : foods.join(", "));
   };
+
+  // UI concern from the same report ("Cancel control is partially obscured"): on a real phone,
+  // the on-screen keyboard shrinks the visible viewport while this input has focus. The fixed
+  // bottom nav doesn't move, so new content appearing near the bottom of this panel (the result
+  // row, or this no-match message) can render partially behind it. Scrolling the newly-rendered
+  // content into view — the standard fix for "something appeared below the keyboard/fixed
+  // chrome" — sidesteps that without touching the nav bar's own layout for every other screen.
+  useEffect(() => {
+    if ((result || noMatchFor) && resultRef.current) {
+      resultRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [result, noMatchFor]);
 
   return (
     <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-3">
@@ -29,7 +53,7 @@ function IDontHaveThat({ meal, onApply, onClose }) {
         Build from this
       </button>
       {result && (
-        <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+        <div ref={resultRef} className="space-y-2 pt-2 border-t border-white/[0.06]">
           {result.items.map((i) => (
             <div key={i.name} className="text-sm text-v5-text/90">
               {i.name} — {i.servingDesc}
@@ -42,6 +66,14 @@ function IDontHaveThat({ meal, onApply, onClose }) {
             <button onClick={onClose} className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40">
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+      {!result && noMatchFor && (
+        <div ref={resultRef} className="space-y-2 pt-2 border-t border-white/[0.06]">
+          <div className="text-sm text-v5-red/90">
+            We don't have "{noMatchFor}" in our food list yet. Try a more common name (e.g. "oats" instead of a brand
+            name), or list a few options separated by commas.
           </div>
         </div>
       )}
