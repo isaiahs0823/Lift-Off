@@ -2,7 +2,7 @@ import { sanitizeActiveRun } from "../utils/activeRun.js";
 
 const object = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const arrayKeys = ["logs","cardioLogs","workoutSessions","customPlans","customPrograms","customExercises","photos","completedPrograms","recoverySessions","goals","bodyweightLogs","readinessLogs","coachHistory","scheduleLog","recoveryLogs","coachMemories","commitments","coachConversations","foodLogs","savedFoods","savedMeals","favoriteFoods","nutritionCheckIns","nutritionCoachAdjustments","programSwapLog","equipmentProfiles","athleteRatingSnapshots"];
-const objectKeys = ["settings","exerciseNotes","specialtyInterest","currentProgram","pendingFrequencyReview","programDayOverride","weeklySchedule","reminderSettings","athleteProfile","coachAccess","coachOnboarding","nutritionProfile","nutritionTargets","nutritionMealPlan","developmentPriorities"];
+const objectKeys = ["settings","exerciseNotes","specialtyInterest","currentProgram","pendingFrequencyReview","programDayOverride","weeklySchedule","reminderSettings","athleteProfile","coachAccess","coachOnboarding","nutritionProfile","nutritionTargets","nutritionMealPlan","developmentPriorities","beginnerOnboarding"];
 function requireValue(ok, path) { if (!ok) throw new Error(`Saved data is invalid at ${path}.`); }
 function parse(raw, key) {
   if (raw === null) return null;

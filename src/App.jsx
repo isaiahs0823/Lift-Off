@@ -52,6 +52,8 @@ import { computeReadinessScore, readinessBand } from "./utils/readiness.js";
 import ShareCardButton from "./components/ShareCardButton.jsx";
 import TodayTab from "./components/TodayTab.jsx";
 import TrainTab from "./components/TrainTab.jsx";
+import BeginnerOnboardingFlow from "./components/BeginnerOnboarding.jsx";
+import ExerciseInstructionPanel from "./components/ExerciseInstructionPanel.jsx";
 import MoreTab from "./components/MoreTab.jsx";
 import SettingsTab from "./components/SettingsTab.jsx";
 import TopUsedTab from "./components/TopUsedTab.jsx";
@@ -1364,6 +1366,11 @@ function loadInitialState() {
     photos: [], // { id, date, context, dataUrl }
     completedPrograms: [], // { id, programId, programSource, programName, weeks, startDate, endDate }
     hasSeenOnboarding: false, // sticky — never re-derived from current data, only set true by a real action
+    // The raw answers from BeginnerOnboardingFlow (experience/goal/days/equipment + when it was
+    // completed) — written once, by that flow's acceptPlan, never by anything else. Reference/
+    // audit data only; nothing reads it to gate behavior except the onboarding flow itself
+    // (which never re-runs once hasSeenOnboarding is true anyway).
+    beginnerOnboarding: null,
     settings: {
       rirSystem: "rir", // "rir" | "rpe"
       restDefaults: DEFAULT_REST_DEFAULTS,
@@ -2938,8 +2945,9 @@ export default function LiftLog() {
           <>
             {tab === "today" &&
               (!state.hasSeenOnboarding ? (
-                <OnboardingView
+                <BeginnerOnboardingFlow
                   state={state}
+                  updateState={updateState}
                   onStartRun={(plan, programContext) => startRun(plan, "today", programContext)}
                   onGoToTemplates={() => setTab("templates")}
                 />
@@ -4137,59 +4145,11 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
 }
 
 // ---------------- ONBOARDING ----------------
-// Shown in place of the Log tab only for a genuinely fresh install — no logs, no cardio
-// logs, no active program — until the user logs anything or starts a program, at which
-// point hasSeenOnboarding latches true for good (see startRun / saveLog / saveEntry).
-function OnboardingView({ state, onStartRun, onGoToTemplates }) {
-  return (
-    <div className="space-y-6">
-      <div className="text-center space-y-3 py-2">
-        <img
-          src={BREAK_LOGO}
-          alt="B.R.E.A.K. logo"
-          className="w-16 h-16 rounded-full object-cover ring-1 ring-red-700/60 mx-auto"
-        />
-        <div>
-          <div className="text-xl font-bold text-white">Welcome to BRK - Fit</div>
-          <p className="text-sm text-v5-subtext mt-2 max-w-sm mx-auto">
-            Log every set, follow a structured multi-day program, and let the app tell you what to lift next. Pick a
-            program below to start Day 1 right now.
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="text-[11px] uppercase tracking-widest text-v5-red">Pick a program</div>
-        {(state.programs || []).map((prog) => (
-          <div key={prog.id} className="border border-v5-red/25 bg-v5-elevated p-4 space-y-2">
-            <div>
-              <div className="text-base font-medium text-white">{prog.name}</div>
-              <div className="text-xs text-v5-subtext mt-0.5">
-                {prog.tagline}
-                {prog.weeks ? ` · ${prog.weeks} weeks` : ""}
-              </div>
-            </div>
-            <button
-              onClick={() =>
-                onStartRun(
-                  { name: `${prog.name} — ${prog.days[0].label}`, exercises: prog.days[0].exercises },
-                  { programId: prog.id, programName: prog.name, source: "builtin", dayIndex: 0, totalDays: prog.days.length }
-                )
-              }
-              className="w-full py-2 text-xs uppercase tracking-widest font-bold border border-v5-red bg-v5-red text-white hover:opacity-90 flex items-center justify-center gap-1.5"
-            >
-              <ChevronRight size={12} /> Start Day 1
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <button onClick={onGoToTemplates} className="w-full text-center text-xs text-v5-subtext hover:text-v5-red py-2">
-        Or browse everything in Templates
-      </button>
-    </div>
-  );
-}
+// The flat program-dump OnboardingView that used to live here has been replaced by
+// BeginnerOnboardingFlow (./components/BeginnerOnboarding.jsx) — a guided question flow with a
+// single explained recommendation, per Beginner Experience V2. Still shown in place of the Log
+// tab only for a genuinely fresh install — no logs, no cardio logs, no active program — until the
+// user completes it or starts a program, at which point hasSeenOnboarding latches true for good.
 
 // ---------------- LOG TAB ----------------
 // ---------------- PR CELEBRATION ----------------
@@ -6398,7 +6358,33 @@ function GuidedRunView({
           )}
         </div>
 
-        {summary && (
+        {/* Simplified completion (Beginner Experience V2, Stage 2A item 8) — a beginner finishing
+            their first workout sees "nice work" + what's next, not a progression/attention/coach/
+            rating/share analytics stack they have no context for yet (brief: "avoid advanced
+            analytics overload"). Computed from the SAME live state TrainTab's "Next: {dayLabel}"
+            card already reads — currentProgram has already advanced by this point (see
+            advanceProgramForWorkout), so this is the real next session, not a guess. Advanced
+            athletes (isSimple === false) are completely unaffected — see the `!isSimple` branch
+            below, which is this card's pre-existing, untouched content. */}
+        {isSimple && summary && (() => {
+          const activeProg = state.currentProgram
+            ? (state.programs || []).find((p) => p.id === state.currentProgram.programId) ||
+              (state.customPrograms || []).find((p) => p.id === state.currentProgram.programId)
+            : null;
+          const nextDay = activeProg?.days?.[state.currentProgram?.dayIndex]?.label || null;
+          return (
+            <Card tone="accent" padding="p-5" className="space-y-1 text-center">
+              <div className="text-sm font-bold text-v5-text">Nice work — {run.planName} complete.</div>
+              {nextDay ? (
+                <div className="text-sm text-v5-subtext">Next session: {nextDay}</div>
+              ) : (
+                <div className="text-sm text-v5-subtext">Come back any time to start your next session.</div>
+              )}
+            </Card>
+          );
+        })()}
+
+        {!isSimple && summary && (
           <Card tone="accent" padding="p-5" className="space-y-3">
 
             {/* Auto Post-Workout Recap additions (task Part 1) — progression per exercise,
@@ -6597,19 +6583,23 @@ function GuidedRunView({
             recomputes the identical session id fresh. Exposed here as its own explicit action
             rather than only implicitly through "Add exercise," since the athlete may want back
             in for any reason, not just to add a new exercise. */}
-        <ButtonSecondary icon={RotateCcw} onClick={onReopen}>
-          Reopen workout
-        </ButtonSecondary>
+        {!isSimple && (
+          <>
+            <ButtonSecondary icon={RotateCcw} onClick={onReopen}>
+              Reopen workout
+            </ButtonSecondary>
 
-        <ButtonSecondary
-          icon={Plus}
-          onClick={() => {
-            onReopen();
-            setAddingExercise(true);
-          }}
-        >
-          Add exercise
-        </ButtonSecondary>
+            <ButtonSecondary
+              icon={Plus}
+              onClick={() => {
+                onReopen();
+                setAddingExercise(true);
+              }}
+            >
+              Add exercise
+            </ButtonSecondary>
+          </>
+        )}
 
         <ButtonPrimary size="lg" onClick={onExit}>Back to plans</ButtonPrimary>
       </div>
@@ -6978,6 +6968,12 @@ function GuidedRunView({
                       <Trash2 size={14} />
                     </button>
                   </div>
+                  {/* Beginner Experience V2, Stage 2B: shown only in simple mode — an experienced
+                      athlete in advanced mode doesn't need form instructions surfacing above every
+                      set. Reads from the shared exerciseInstructions.js manifest; safely falls back
+                      to "no demonstration yet" for the ~130 exercises not yet populated, never a
+                      broken element. See ExerciseInstructionPanel.jsx for the full fallback chain. */}
+                  {isSimple && <ExerciseInstructionPanel exId={currentExId} exerciseName={exMap[currentExId]?.name} />}
                   <TrainingExerciseCard
                     key={currentExId}
                     exId={currentExId}
