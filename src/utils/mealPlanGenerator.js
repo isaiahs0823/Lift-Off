@@ -268,16 +268,43 @@ export function swapFoodInMeal(meal, oldItemName, newFood) {
   return { ...meal, items, totals: sumTotals(items) };
 }
 
+// A handful of low-signal words ("breast", "whole", "cup") would otherwise let almost any
+// two-word food name collide with almost any other — excluded from the word-overlap match
+// below, not from substring matching (which stays exact).
+const STOP_WORDS = new Set(["and", "with", "the", "of", "a", "an"]);
+function wordsOf(s) {
+  return normalize(s)
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+}
+
+// Matches an athlete's free-text food name against one FOOD_DB entry. Two independent checks,
+// unioned: the original substring/superstring check (exact phrases, either direction — e.g.
+// "greek yogurt" against "Greek yogurt"), plus a word-overlap check (e.g. "ground beef" sharing
+// "beef" with "Lean beef (93/7)", or "chicken" alone matching "Chicken breast") that the pure
+// substring check missed. Both only ever match against the real, curated FOOD_DB — nothing here
+// invents a food or its macros; an input with no real overlap (e.g. "Corn Flakes," not in the
+// list) still correctly matches nothing.
+function foodNameMatches(foodName, input) {
+  const normFood = normalize(foodName), normInput = normalize(input);
+  if (!normInput) return false;
+  if (normFood.includes(normInput) || normInput.includes(normFood)) return true;
+  const foodWords = wordsOf(foodName);
+  return wordsOf(input).some((w) => foodWords.includes(w));
+}
+
 // Section 10 — "I don't have that": builds a reasonable replacement meal from whatever the
 // athlete says they actually have on hand, matched to the original meal's protein/carb split
-// rather than demanding a match to a static plan.
+// rather than demanding a match to a static plan. Returns null when nothing in FOOD_DB overlaps
+// at all — the caller (MealPlanView's IDontHaveThat) is responsible for surfacing that as a
+// clear "no match" message, never a silent no-op (see its own comment on this).
 export function suggestFromAvailable(availableFoodNames, meal) {
-  const named = availableFoodNames.map((n) => normalize(n));
+  const names = availableFoodNames.filter((n) => normalize(n));
   const matches = [];
   Object.values(FOOD_DB)
     .flat()
     .forEach((f) => {
-      if (named.some((n) => n && (normalize(f.name).includes(n) || n.includes(normalize(f.name))))) matches.push(f);
+      if (names.some((n) => foodNameMatches(f.name, n))) matches.push(f);
     });
   if (matches.length === 0) return null;
 
