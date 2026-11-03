@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { resolveNutritionProfile } from "../utils/nutrition.js";
-import { generateMealPlan, getSwapOptions, swapFoodInMeal, suggestFromAvailable } from "../utils/mealPlanGenerator.js";
+import { generateMealPlan, getSwapOptions, swapFoodInMeal, suggestFromAvailable, planGaps, planMeetsTargets } from "../utils/mealPlanGenerator.js";
 
 // Bug report (Nutrition -> Meal Plan -> Swap -> "What do you have instead?"): Build From This
 // appeared to do nothing for an unrecognized food (e.g. "Corn Flakes"). Root cause —
@@ -152,6 +152,77 @@ function MealCard({ meal, profile, onSwap, onDontHave }) {
   );
 }
 
+// Nutrition P0, step 4 — the daily plan-vs-target summary. Computed LIVE from the plan's current
+// meals + the athlete's current targets (never from the plan's own stored `totals`/`gaps`, which
+// are a snapshot from generation time and go stale the moment a swap or "I don't have this"
+// substitution changes a meal) — so this always reflects exactly what's actually in the plan
+// right now, the same real numbers the meal cards below already show per-meal. "Planned" is
+// explicit in the label: this is what the plan calls for, never a claim about what was actually
+// eaten (food logging, where that distinction would apply, is a separate screen entirely).
+function dailyTotalsFromMeals(meals) {
+  return (meals || []).reduce(
+    (acc, m) => ({
+      calories: acc.calories + m.totals.calories,
+      protein: acc.protein + m.totals.protein,
+      carbs: acc.carbs + m.totals.carbs,
+      fat: acc.fat + m.totals.fat,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+}
+
+function MacroRow({ label, planned, target, unit, within }) {
+  const diff = planned - target;
+  const sign = diff > 0 ? "+" : "";
+  return (
+    <div className="flex items-center justify-between text-sm py-1.5 border-t border-white/[0.06] first:border-t-0 first:pt-0">
+      <div className="text-v5-subtext">{label}</div>
+      <div className="flex items-center gap-2">
+        <span className="text-v5-text font-bold tabular-nums">
+          {planned}
+          {unit}
+        </span>
+        <span className="text-v5-subtext/50">/</span>
+        <span className="text-v5-subtext tabular-nums">
+          {target}
+          {unit}
+        </span>
+        <span className={`text-[11px] tabular-nums w-14 text-right ${within ? "text-v5-subtext/60" : "text-amber-500"}`}>
+          {diff === 0 ? "exact" : `${sign}${diff}${unit}`}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function DailyNutritionSummary({ meals, targets }) {
+  if (!targets) return null;
+  const planned = dailyTotalsFromMeals(meals);
+  const within = planMeetsTargets(planned, targets);
+  const gaps = planGaps(planned, targets);
+  const allWithin = Object.values(within).every(Boolean);
+
+  return (
+    <div className="border border-white/10 bg-v5-elevated p-4 space-y-1">
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-[11px] uppercase tracking-widest text-v5-red">Planned vs. Target</div>
+        {!allWithin && <div className="text-[11px] uppercase tracking-widest text-amber-500">Doesn't fully match</div>}
+      </div>
+      <MacroRow label="Calories" planned={planned.calories} target={targets.calories} unit=" kcal" within={within.calories} />
+      <MacroRow label="Protein" planned={planned.protein} target={targets.protein} unit="g" within={within.protein} />
+      <MacroRow label="Carbs" planned={planned.carbs} target={targets.carbs} unit="g" within={within.carbs} />
+      <MacroRow label="Fat" planned={planned.fat} target={targets.fat} unit="g" within={within.fat} />
+      {!allWithin && (
+        <div className="text-[11px] text-v5-subtext/70 pt-2 border-t border-white/[0.06] mt-1">
+          This plan is built from a curated set of real foods, so it won't always land exactly on every number — the
+          differences above are real, not rounded away. Use Swap on any item to adjust it, or Regenerate for a new
+          attempt.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Section 8/9/10 — the FULL MEAL PLAN control level's home. Every meal supports a same-
 // category swap and a conversational "I don't have that" substitution, because a static PDF
 // nobody can follow on a real Tuesday isn't worth generating.
@@ -207,6 +278,7 @@ export default function MealPlanView({ state, updateState, onBack }) {
         </div>
       ) : (
         <>
+          <DailyNutritionSummary meals={plan.meals} targets={targets} />
           {plan.meals.map((meal) => (
             <MealCard key={meal.id} meal={meal} profile={profile} onSwap={handleSwap} onDontHave={handleDontHave} />
           ))}
