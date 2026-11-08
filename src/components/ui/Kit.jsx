@@ -353,7 +353,11 @@ export function PhotoHero({ exercise, eyebrow, title, meta, children, className 
 // deserves more visual weight than a plain number (Progress dashboard, Today's readiness card).
 // Pure SVG, no chart library. `tone` recolors the ring independent of the numeric value (e.g.
 // green/yellow/red readiness bands) — defaults to the brand red.
-const RING_TONE = { red: "#D2262E", success: "#29C17E", warn: "#f59e0b", subtle: "#5b5f66" };
+// Plain SVG stroke/fill colors can't reference Tailwind classes, so these are literal hex — kept
+// in sync with tailwind.config.js's v5.red/v5.success by hand. (Found during the V2 token
+// refresh: this was still the old v5.red #D2262E after the token moved to #E8101D, so the
+// readiness ring was rendering a visibly different red from every button/card on the screen.)
+const RING_TONE = { red: "#E8101D", success: "#29C17E", warn: "#f59e0b", subtle: "#5b5f66" };
 export function RingGauge({ pct, size = 76, strokeWidth = 7, tone = "red", label, value, sublabel, className = "" }) {
   const clamped = Math.max(0, Math.min(100, pct ?? 0));
   const r = (size - strokeWidth) / 2;
@@ -363,7 +367,9 @@ export function RingGauge({ pct, size = 76, strokeWidth = 7, tone = "red", label
     <div className={`flex items-center gap-3 ${className}`}>
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#2A2D31" strokeWidth={strokeWidth} />
+          {/* Track color — literal hex since SVG stroke can't use Tailwind classes; kept in sync
+              with v5.muted. */}
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#28282B" strokeWidth={strokeWidth} />
           <circle
             cx={size / 2}
             cy={size / 2}

@@ -1,6 +1,8 @@
 import { tierTheme } from "../utils/rankTheme.js";
 
-const BRAND_RED = "#D2262E";
+// Kept in sync with tailwind.config.js's v5.red by hand — this file builds a dynamic glow/shadow
+// color in JS rather than a Tailwind class, so it can't reference the token directly.
+const BRAND_RED = "#E8101D";
 
 const BONUS_LABEL = { consistency: "Consistency", trainingQuality: "Training Quality", recovery: "Recovery", nutrition: "Nutrition" };
 
@@ -40,7 +42,7 @@ export default function LevelUpScreen({ event, onDismiss }) {
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-6">
       <div
         className="w-full max-w-sm bg-gradient-to-b via-v5-bg to-v5-bg border rounded-2xl p-6 text-center space-y-5"
-        style={{ backgroundImage: `linear-gradient(to bottom, ${accent}33, #0A0A0B, #0A0A0B)`, borderColor: `${accent}66`, boxShadow: `0 0 60px -10px ${accent}80` }}
+        style={{ backgroundImage: `linear-gradient(to bottom, ${accent}33, #050505, #050505)`, borderColor: `${accent}66`, boxShadow: `0 0 60px -10px ${accent}80` }}
       >
         <div className="text-[11px] uppercase tracking-[0.3em] font-bold" style={{ color: accent }}>
           {type === "first" ? "Athlete Rating" : type === "rankup" ? "Rank Up" : "Athlete Rating"}

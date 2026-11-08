@@ -20,7 +20,10 @@
 
 html, body, #root {
   height: 100%;
-  background: #0A0A0B;
+  /* Kept in sync with tailwind.config.js's v5.bg by hand — this is the page's actual paint
+     background (first paint, and anywhere not explicitly covered by a bg-v5-bg element), so a
+     stale value here would show as a visible near-black mismatch against every v5-bg card. */
+  background: #050505;
 }
 
 /* iOS Safari's default double-tap-to-zoom gesture is live on every element unless this is set —

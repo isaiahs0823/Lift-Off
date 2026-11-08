@@ -25,7 +25,10 @@
     <meta name="theme-color" content="#050505" />
     <meta name="description" content="BRK Fit — workout templates, custom plans, and progression tracking." />
   </head>
-  <body class="bg-charcoal-deep">
+  <!-- bg-v5-bg (not the old, now-unused `charcoal` palette) — a class on <body> beats the plain
+       `body { background }` rule in index.css by specificity, so this is the real visible
+       background behind everything; it needs to be the current token, not a stale one. -->
+  <body class="bg-v5-bg">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
