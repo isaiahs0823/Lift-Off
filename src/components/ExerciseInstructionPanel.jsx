@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { Info, Lightbulb } from "lucide-react";
+import { Info, Lightbulb, AlertTriangle } from "lucide-react";
 import { getExerciseInstruction, instructionSteps } from "../content/exerciseInstructions.js";
-import { Card, SegmentedTabs } from "./ui/Kit.jsx";
+import { Card, SegmentedTabs, SectionLabel } from "./ui/Kit.jsx";
 
-// Reusable exercise-demonstration surface — How To / Tips / Muscles switcher matching the V2
-// reference board. Built so a future founder-filmed video library can be dropped in by
-// populating exerciseInstructions.js alone — nothing here, and nothing in the workout logger
-// that renders it, needs to change.
+// Reusable exercise-demonstration surface — How To / Tips / Mistakes / Muscles switcher matching
+// the V2 reference board. Built so a future founder-filmed video library can be dropped in by
+// populating exerciseInstructions.js alone — nothing here, and nothing in the workout logger or
+// Exercise Discovery that renders it, needs to change.
 //
-// Fallback chain, in order: video -> still image -> plain-language instructions/cue -> a safe
+// Fallback chain, in order: video -> still image -> plain-language setup/execution -> a safe
 // "no demonstration yet" state. Never a broken image/video element, never a fake play button over
 // nothing — every exId in the catalog today has null video/image, so that fallback is the common
 // case, not an edge case. `prefersReducedMotion` disables video autoplay (also always muted and
@@ -32,7 +32,9 @@ export default function ExerciseInstructionPanel({ exId, exerciseName, muscle, c
     );
   }
 
-  const steps = instructionSteps(content.instructions);
+  const executionSteps = instructionSteps(content.execution);
+  const cues = content.cues || [];
+  const mistakes = content.mistakes || [];
 
   return (
     <Card tone="default" className={compact ? "py-2.5 space-y-3" : "space-y-3"}>
@@ -66,33 +68,72 @@ export default function ExerciseInstructionPanel({ exId, exerciseName, muscle, c
         tabs={[
           { value: "howto", label: "How To" },
           { value: "tips", label: "Tips" },
+          { value: "mistakes", label: "Mistakes" },
           { value: "muscles", label: "Muscles" },
         ]}
         value={tab}
         onChange={setTab}
       />
 
-      {tab === "howto" && steps.length > 0 && (
-        <ol className="space-y-2">
-          {steps.map((step, i) => (
-            <li key={i} className="flex items-start gap-2.5">
-              <span className="shrink-0 w-5 h-5 rounded-full bg-v5-red text-white text-[11px] font-bold flex items-center justify-center mt-0.5">
-                {i + 1}
-              </span>
-              <span className="text-xs text-v5-text/90 leading-relaxed">{step}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-
-      {tab === "tips" &&
-        (content.cue ? (
-          <div className="flex items-start gap-1.5 text-xs text-v5-text/90">
-            <Lightbulb size={13} className="shrink-0 mt-0.5 text-v5-red" />
-            <span>{content.cue}</span>
+      {tab === "howto" &&
+        (content.setup || executionSteps.length > 0 ? (
+          <div className="space-y-2.5">
+            {content.setup && (
+              <div>
+                <SectionLabel tone="muted" className="mb-1">
+                  Setup
+                </SectionLabel>
+                <p className="text-xs text-v5-text/90 leading-relaxed">{content.setup}</p>
+              </div>
+            )}
+            {executionSteps.length > 0 && (
+              <div>
+                <SectionLabel tone="muted" className="mb-1.5">
+                  Execution
+                </SectionLabel>
+                <ol className="space-y-2">
+                  {executionSteps.map((step, i) => (
+                    <li key={i} className="flex items-start gap-2.5">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-v5-red text-white text-[11px] font-bold flex items-center justify-center mt-0.5">
+                        {i + 1}
+                      </span>
+                      <span className="text-xs text-v5-text/90 leading-relaxed">{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
           </div>
         ) : (
+          <div className="text-xs text-v5-subtext">No step-by-step guidance yet for this exercise.</div>
+        ))}
+
+      {tab === "tips" &&
+        (cues.length > 0 ? (
+          <ul className="space-y-1.5">
+            {cues.map((cue, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-xs text-v5-text/90">
+                <Lightbulb size={13} className="shrink-0 mt-0.5 text-v5-red" />
+                <span>{cue}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
           <div className="text-xs text-v5-subtext">No additional tips yet for this exercise.</div>
+        ))}
+
+      {tab === "mistakes" &&
+        (mistakes.length > 0 ? (
+          <ul className="space-y-1.5">
+            {mistakes.map((mistake, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-xs text-v5-text/90">
+                <AlertTriangle size={13} className="shrink-0 mt-0.5 text-v5-red" />
+                <span>{mistake}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-xs text-v5-subtext">No common mistakes documented yet for this exercise.</div>
         ))}
 
       {tab === "muscles" && (
