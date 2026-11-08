@@ -42,7 +42,15 @@ function scoreToColor(score) {
 // "ratings" is { chest: {score, confidence}, back: {...}, ... } keyed by the 8 MUSCLE_GROUPS
 // from utils/athleteRating.js. "view" is controlled by the caller (front/back toggle lives in
 // the parent screen, not here) so it can be kept in sync with any surrounding UI.
-export default function AthleteMuscleMap({ ratings, view = "front", selected = null, onSelectZone, width = 220 }) {
+//
+// `mode`: "ratings" (default, unchanged) colors every zone by its Athlete Rating score and only
+// the 8 rating-group zones are clickable — Progress's Muscle Map, byte-identical to before this
+// prop existed. "zones" is for Exercise Discovery: every real anatomy zone this SVG actually
+// draws (including abs, and biceps/triceps/forearms/quads/hamstrings/glutes/calves as their own
+// distinct zones rather than folded into one "arms"/"legs" rating group) is individually
+// selectable, filled with a neutral body tone, and highlighted in BRK red only when selected —
+// no score, since exercise discovery isn't about performance data.
+export default function AthleteMuscleMap({ ratings, view = "front", selected = null, onSelectZone, width = 220, mode = "ratings" }) {
   const uid = useId();
   const isBack = view === "back";
   const parts = isBack ? BACK_PARTS : FRONT_PARTS;
@@ -50,7 +58,8 @@ export default function AthleteMuscleMap({ ratings, view = "front", selected = n
 
   // Each anatomy "zone" slug (e.g. biceps, triceps, forearms) maps to one of the 8 rating
   // groups (Arms covers all three) — same mapping athleteRating.js's ZONE_TO_GROUP uses, kept
-  // in sync by hand since one is SVG-zone-keyed and the other is rating-group-keyed.
+  // in sync by hand since one is SVG-zone-keyed and the other is rating-group-keyed. Only read
+  // when mode is "ratings" (the default) — "zones" mode uses the raw zone slug directly instead.
   const ZONE_TO_GROUP = useMemo(
     () => ({
       chest: "chest",
@@ -67,9 +76,17 @@ export default function AthleteMuscleMap({ ratings, view = "front", selected = n
     []
   );
 
+  const zoneForSlug = (slug) => Object.entries(zoneSlugs).find(([, slugs]) => slugs.includes(slug))?.[0] ?? null;
+
   const fillForSlug = (slug) => {
-    // Find which anatomy zone this SVG part slug belongs to in the current view
-    const zone = Object.entries(zoneSlugs).find(([, slugs]) => slugs.includes(slug))?.[0];
+    const zone = zoneForSlug(slug);
+    if (mode === "zones") {
+      // Neutral body tone normally; the selected zone gets a visible red tint too (not just the
+      // selection stroke below) so the tap target reads clearly even for a viewer who can't
+      // distinguish the thin selection outline — color is a bonus signal here, never the only
+      // one, since the text button grid under the diagram is the real accessible equivalent.
+      return zone && zone === selected ? SELECTED_STROKE : `url(#amm-body-${uid})`;
+    }
     const group = zone ? ZONE_TO_GROUP[zone] : null;
     if (!group) return `url(#amm-body-${uid})`; // abs/full/unmapped parts — neutral body tone
     const rating = ratings?.[group];
@@ -77,12 +94,14 @@ export default function AthleteMuscleMap({ ratings, view = "front", selected = n
     return scoreToColor(rating.score);
   };
   const isSelected = (slug) => {
-    const zone = Object.entries(zoneSlugs).find(([, slugs]) => slugs.includes(slug))?.[0];
+    const zone = zoneForSlug(slug);
+    if (mode === "zones") return !!zone && zone === selected;
     const group = zone ? ZONE_TO_GROUP[zone] : null;
     return !!group && group === selected;
   };
   const groupForSlug = (slug) => {
-    const zone = Object.entries(zoneSlugs).find(([, slugs]) => slugs.includes(slug))?.[0];
+    const zone = zoneForSlug(slug);
+    if (mode === "zones") return zone; // every drawn zone is its own selectable unit
     return zone ? ZONE_TO_GROUP[zone] : null;
   };
 

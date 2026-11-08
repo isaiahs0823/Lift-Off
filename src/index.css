@@ -18,6 +18,22 @@
   --font-brk-body: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* PersistenceBoundary wraps the entire app body in a <fieldset> (to grey out/disable every
+   input at once when another tab holds the cross-tab edit lock). Browsers give <fieldset> a
+   long-standing UA-stylesheet default of `min-width: min-content` — unlike a plain div, it can
+   never shrink narrower than the single widest unwrapped (white-space: nowrap, e.g. a truncated
+   title) piece of text anywhere inside it, which silently forces the whole page wider than the
+   viewport once any screen's content is long enough. Found via Exercise Discovery's real catalog
+   names (e.g. "Hammer Strength MTS Iso-Lateral ..." truncated exercise cards) finally exceeding
+   whatever every earlier screen's text happened to stay under — this was always a latent bug in
+   the fieldset itself, not something introduced by one screen's content. Resetting it to 0 here
+   makes <fieldset> behave width-wise like every other block container in the app; it only
+   loosens an incorrect default and has no other effect (the disabled-inputs behavior itself is
+   untouched). */
+fieldset {
+  min-width: 0;
+}
+
 html, body, #root {
   height: 100%;
   /* Kept in sync with tailwind.config.js's v5.bg by hand — this is the page's actual paint
