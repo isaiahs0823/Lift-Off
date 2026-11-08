@@ -10,7 +10,13 @@ const root=resolve(fileURLToPath(new URL("..",import.meta.url)));
 const git=(...args)=>execFileSync("git",args,{cwd:root,encoding:"utf8"}).trim();
 if(git("status","--porcelain"))throw new Error("Preview packaging requires a clean, committed checkout.");
 const commit=git("rev-parse","HEAD"),branch=git("branch","--show-current");
-if(branch!=="feature/workout-data-integrity")throw new Error("Use the authorized feature branch for this preview.");
+// Guards against accidentally packaging a "preview" from the live production or dev checkout —
+// not a single hardcoded branch name. Was pinned to the one branch active when this script was
+// first written (feature/workout-data-integrity); generalized here so later isolated prototype
+// branches (e.g. Beginner Experience V2's claude/beginner-onboarding-v2) can reuse this same,
+// already-reviewed packaging flow instead of each needing a one-line edit to re-authorize itself.
+const disallowedBranches=["claude/new-session-4e2i2p","claude/branch-sync-verify-u5e8fh","main","master"];
+if(disallowedBranches.includes(branch))throw new Error(`Refusing to package a preview from ${branch} — check out an isolated feature branch first.`);
 const output=mkdtempSync(join(tmpdir(),"brk-fit-local-preview-")),site=join(output,"site");mkdirSync(site);
 const build=spawnSync("npm",["run","build","--","--outDir",site],{cwd:root,stdio:"inherit",env:{...process.env,VITE_LOCAL_ONLY_PREVIEW:"true",VITE_SUPABASE_URL:"",VITE_SUPABASE_ANON_KEY:""}});
 if(build.status!==0)process.exit(build.status||1);
