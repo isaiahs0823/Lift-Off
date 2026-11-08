@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ClipboardList, Timer, Dumbbell, Plus, Play, RefreshCw, Map, AlarmClock } from "lucide-react";
+import { ClipboardList, Timer, Dumbbell, Plus, Play, RefreshCw, Map, AlarmClock, Search } from "lucide-react";
 import { resolveTodayWorkout, activeProgramAndCP } from "../utils/programSchedule.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
@@ -129,6 +129,17 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
               </div>
             )}
             <ButtonPrimary size="lg" onClick={onResumeWorkout}>Resume workout</ButtonPrimary>
+            {/* While a workout is minimized, this early-return replaces Train's whole tile grid
+                with just Resume/Discard (by design — see this block's own comment above), which
+                would otherwise leave Exercise Discovery's "Add to Current Workout" unreachable:
+                there'd be no path back to it without first resuming (full-screen logger) or
+                discarding. One quiet secondary link preserves the focused resume-card design
+                while still letting the athlete browse and add an exercise without losing their
+                place — activeRun passed to ExerciseDiscoveryScreen is the live top-level state,
+                so "Add to Current Workout" there picks this exact session back up. */}
+            <ButtonText icon={Search} onClick={() => onNavigate("exerciseDiscovery")} className="w-full py-1">
+              Find exercises to add
+            </ButtonText>
             <ButtonText tone="muted" onClick={onDiscardWorkout} className="w-full py-1">Discard workout</ButtonText>
           </div>
         </HeroCard>
@@ -263,6 +274,10 @@ export default function TrainTab({ state, updateState, exMap, activeRun, onStart
         <ActionTile icon={Timer} label="Cardio" onClick={() => onNavigate("cardio")} />
         <ActionTile icon={Plus} label="Custom workout" onClick={() => onNavigate("build")} />
         <ActionTile icon={Dumbbell} label="Single exercise" onClick={() => onNavigate("log")} />
+        {/* Exercise Discovery (interactive muscle map + beginner exercise browser) — a
+            beginner who doesn't know how to build a program yet can tap a muscle, read real
+            instructions, and start lifting without going through program design at all. */}
+        <ActionTile icon={Search} label="Find Exercises" onClick={() => onNavigate("exerciseDiscovery")} />
         {/* Standalone rest timer (task: "sometimes train another person and want to use BRK
             only as a rest timer") — a plain navigation tile like its neighbors, not a giant
             card. Opens a screen that takes no state/updateState prop at all, so it structurally

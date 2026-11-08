@@ -70,6 +70,7 @@ import MobilityLibraryScreen from "./components/MobilityLibraryScreen.jsx";
 import MobilityDetailScreen from "./components/MobilityDetailScreen.jsx";
 import MobilitySessionRunner from "./components/MobilitySessionRunner.jsx";
 import ProgramTimelineScreen from "./components/ProgramTimelineScreen.jsx";
+import ExerciseDiscoveryScreen from "./components/ExerciseDiscoveryScreen.jsx";
 import DevelopmentPrioritiesScreen from "./components/DevelopmentPrioritiesScreen.jsx";
 import EquipmentProfileSheet, { AddEquipmentProfileForm } from "./components/EquipmentProfileSheet.jsx";
 import {
@@ -3257,6 +3258,16 @@ export default function LiftLog() {
                 onRenameProgram={renameActiveProgram}
                 onStartRun={(plan, programContext) => startRun(plan, "train", programContext)}
                 onNavigate={setTab}
+              />
+            )}
+            {tab === "exerciseDiscovery" && (
+              <ExerciseDiscoveryScreen
+                allExercises={allExercises}
+                exMap={exMap}
+                activeRun={activeRun}
+                onBack={() => setTab("train")}
+                onStartRun={(plan) => startRun(plan, "train", null)}
+                onAddToActiveRun={addRunExercise}
               />
             )}
             {tab === "developmentPriorities" && (
