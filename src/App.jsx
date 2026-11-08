@@ -70,6 +70,7 @@ import MobilitySessionRunner from "./components/MobilitySessionRunner.jsx";
 import ProgramTimelineScreen from "./components/ProgramTimelineScreen.jsx";
 import DevelopmentPrioritiesScreen from "./components/DevelopmentPrioritiesScreen.jsx";
 import EquipmentProfileSheet, { AddEquipmentProfileForm } from "./components/EquipmentProfileSheet.jsx";
+import ExerciseInstructionPanel from "./components/ExerciseInstructionPanel.jsx";
 import {
   isMachineBasedExercise,
   profilesForExercise,
@@ -5387,6 +5388,13 @@ function TrainingExerciseCard({
           )}
         </div>
       </PhotoHero>
+
+      {/* V2 reference board's How To / Tips / Muscles panel — right below the exercise hero,
+          before the swap/equipment controls and the set table. Falls back to an honest "no demo
+          yet" state for the ~300+ exercises not yet in exerciseInstructions.js; never fabricated
+          video/instructions. */}
+      <ExerciseInstructionPanel exId={exId} exerciseName={exMap[exId]?.name} muscle={exMap[exId]?.muscle} compact />
+
       {onSwap && (
         <button
           onClick={() => setSwapOpen(true)}
