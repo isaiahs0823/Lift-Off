@@ -2,6 +2,12 @@
 export default {
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
+    // Not under extend: this replaces Tailwind's default `font-sans` stack with the brand
+    // heading face, so every screen picks up real typography with no per-component changes.
+    // `serif`/`mono` aren't touched — nothing in this app uses them.
+    fontFamily: {
+      sans: ["var(--font-brk-heading)"],
+    },
     extend: {
       colors: {
         // Dark charcoal replacing pure black. "deep" = page/tab-bar background,
@@ -10,19 +16,27 @@ export default {
           deep: "#151515",
           panel: "#202020",
         },
-        // v5 workout redesign palette — additive, scoped to the active-workout screens
-        // (TrainTab, StartWorkoutChoice, TrainingExerciseCard, GuidedRunView, RestTimer). Kept
-        // separate from `charcoal`/Tailwind's `red` rather than overwriting them so every other
-        // existing screen's look is untouched.
+        // v5 app-wide design-system palette. Refined for the V2 transformation against the
+        // approved reference image (BRKFIT Beginner Experience V2 board) — not a blind swap to
+        // the brief's starting-point hex values. Verified by sampling the actual reference PNG's
+        // dominant colors (histogram, not eyeballed): background clusters at #000000/#080808
+        // (true near-black, darker than this palette's old #0A0A0B), the accent red clusters
+        // tightly at #E00810-#E80810, and the card/surface tones step through #181818/#202020/
+        // #282828/#383838. The brief's own proposed red (~#F10B20) lands almost exactly on that
+        // measured cluster, so it's adopted directly; the brief's charcoal/surface proposals were
+        // already within a few hex units of both the old tokens and the measured reference, so
+        // those only get a small nudge rather than a rewrite. Text stays just short of pure
+        // #FFFFFF (matching the reference's actual #F8F8F8, not literal white) — common dark-UI
+        // practice to avoid halation on a near-black background.
         v5: {
-          bg: "#0A0A0B",
-          surface: "#111215",
-          elevated: "#1A1C1F",
-          muted: "#2A2D31",
-          text: "#E8E9EA",
-          subtext: "#9AA0A6",
-          red: "#D2262E",
-          "red-dim": "#7A1015",
+          bg: "#050505",
+          surface: "#121214",
+          elevated: "#1B1B1E",
+          muted: "#28282B",
+          text: "#F2F3F4",
+          subtext: "#A1A1AA",
+          red: "#E8101D",
+          "red-dim": "#7A0A10",
           success: "#29C17E",
         },
       },

@@ -3,8 +3,8 @@
   "short_name": "BRK - Fit",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#151515",
-  "theme_color": "#151515",
+  "background_color": "#050505",
+  "theme_color": "#050505",
   "icons": [
     {
       "src": "/icon-192.png",

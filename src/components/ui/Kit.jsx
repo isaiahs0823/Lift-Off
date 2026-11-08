@@ -29,6 +29,19 @@ export function SectionLabel({ children, tone = "red", className = "" }) {
   );
 }
 
+// The big bold-italic display moment the V2 reference board reserves for a screen's hero heading
+// ("TODAY") and major content titles (an exercise name like "Barbell Bench Press") — deliberately
+// separate from ScreenHeader's title below, which is the plain nav-bar face used everywhere else
+// ("Push Day", "Your Program"). Only use this for the one or two biggest, most important pieces
+// of text on a screen, never for routine headers — that's what makes it read as a moment.
+export function HeroHeading({ children, size = "lg", className = "" }) {
+  const SIZE = {
+    md: "text-2xl sm:text-3xl",
+    lg: "text-[28px] sm:text-4xl",
+  };
+  return <div className={`font-brk-display italic ${SIZE[size] || SIZE.lg} text-v5-text tracking-tight leading-[0.95] uppercase ${className}`}>{children}</div>;
+}
+
 // Top-of-screen title block — eyebrow + large headline + optional subtitle/support text, with an
 // optional right-aligned slot for a single action. Every top-level screen (Today, Train,
 // Programs, Progress, More) opens with one of these so screen identity is always presented the
@@ -45,7 +58,11 @@ export function ScreenHeader({ eyebrow, title, subtitle, right, className = "" }
             text-lg on mobile (18px, comfortably above the ~13px supporting-text floor) is still
             an obvious page title next to SectionLabel's 11px eyebrow — sm: restores the original
             text-xl for tablet/desktop. */}
-        <div className="text-lg sm:text-xl font-black text-v5-text tracking-tight mt-0.5">{title}</div>
+        {/* font-brk-display (Anton) matches the V2 reference's nav-bar screen titles ("Push
+            Day", "Your Program") — bold display face, mixed case, NOT the italic treatment the
+            reference reserves for hero/content headings ("TODAY") and exercise names, which is a
+            distinct, bigger moment handled by its own primitive, not this shared nav header. */}
+        <div className="font-brk-display text-lg sm:text-xl text-v5-text tracking-tight mt-0.5">{title}</div>
         {subtitle && <div className="text-sm text-v5-subtext mt-0.5">{subtitle}</div>}
       </div>
       {right && <div className="shrink-0">{right}</div>}
@@ -313,7 +330,10 @@ export function PeriodSelect({ value, onChange, options, className = "" }) {
 // program at full size; Active Workout's current-exercise card (which repeats once per exercise,
 // not once per day) uses `compact` — mobile-only tighter padding/title, sm: matches the default
 // hero exactly so desktop is identical either way (mobile density/composition pass, section 7).
-export function PhotoHero({ exercise, eyebrow, title, meta, children, className = "", compact = false }) {
+// `icon` (optional) renders the reference board's leading red circular icon badge above the
+// eyebrow — the small dumbbell-in-a-circle the primary workout card opens with. Omit it for a
+// PhotoHero used somewhere that badge doesn't make sense (kept optional, not forced everywhere).
+export function PhotoHero({ exercise, eyebrow, title, meta, icon: Icon, children, className = "", compact = false }) {
   return (
     <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-v5-red/25 via-v5-elevated to-v5-surface p-3.5 sm:p-6 ${className}`}>
       <div className="absolute -right-8 -bottom-10 opacity-95 pointer-events-none">
@@ -321,8 +341,21 @@ export function PhotoHero({ exercise, eyebrow, title, meta, children, className 
       </div>
       <div className="absolute inset-0 bg-gradient-to-r from-v5-surface via-v5-surface/55 to-transparent pointer-events-none" />
       <div className="relative space-y-1.5 sm:space-y-3">
+        {Icon && (
+          <div className="w-9 h-9 rounded-full bg-v5-red flex items-center justify-center shadow-[0_4px_14px_-4px_rgba(232,16,29,0.6)]">
+            <Icon size={16} className="text-white" />
+          </div>
+        )}
         {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
-        {title && <div className={`${compact ? "text-lg" : "text-[22px]"} sm:text-[26px] leading-[1.1] font-black text-v5-text tracking-tight`}>{title}</div>}
+        {/* No forced uppercase here, unlike HeroHeading — this title doubles as the exercise-name
+            display in the active-workout logger ("Barbell Bench Press"), which the reference
+            board shows in natural mixed case, not forced caps. "TODAY"/"Push Day" pass their own
+            already-correct casing as plain text. */}
+        {title && (
+          <div className={`font-brk-display italic ${compact ? "text-xl" : "text-[26px]"} sm:text-[30px] leading-[0.95] text-v5-text tracking-tight`}>
+            {title}
+          </div>
+        )}
         {meta}
         {children}
       </div>
@@ -336,7 +369,11 @@ export function PhotoHero({ exercise, eyebrow, title, meta, children, className 
 // deserves more visual weight than a plain number (Progress dashboard, Today's readiness card).
 // Pure SVG, no chart library. `tone` recolors the ring independent of the numeric value (e.g.
 // green/yellow/red readiness bands) — defaults to the brand red.
-const RING_TONE = { red: "#D2262E", success: "#29C17E", warn: "#f59e0b", subtle: "#5b5f66" };
+// Plain SVG stroke/fill colors can't reference Tailwind classes, so these are literal hex — kept
+// in sync with tailwind.config.js's v5.red/v5.success by hand. (Found during the V2 token
+// refresh: this was still the old v5.red #D2262E after the token moved to #E8101D, so the
+// readiness ring was rendering a visibly different red from every button/card on the screen.)
+const RING_TONE = { red: "#E8101D", success: "#29C17E", warn: "#f59e0b", subtle: "#5b5f66" };
 export function RingGauge({ pct, size = 76, strokeWidth = 7, tone = "red", label, value, sublabel, className = "" }) {
   const clamped = Math.max(0, Math.min(100, pct ?? 0));
   const r = (size - strokeWidth) / 2;
@@ -346,7 +383,9 @@ export function RingGauge({ pct, size = 76, strokeWidth = 7, tone = "red", label
     <div className={`flex items-center gap-3 ${className}`}>
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#2A2D31" strokeWidth={strokeWidth} />
+          {/* Track color — literal hex since SVG stroke can't use Tailwind classes; kept in sync
+              with v5.muted. */}
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#28282B" strokeWidth={strokeWidth} />
           <circle
             cx={size / 2}
             cy={size / 2}
