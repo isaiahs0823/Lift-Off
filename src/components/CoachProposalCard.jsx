@@ -54,12 +54,18 @@ function NutritionProposal({ proposal, updateState, onResolve }) {
   const [modifying, setModifying] = useState(false);
   const [modifiedCalories, setModifiedCalories] = useState(String(proposal.toCalories));
 
+  // Nutrition P0.1 fix: `action` is already one of the single "accepted" | "modified" |
+  // "declined" vocabulary applyAdjustment expects (see its callers below) — passing it straight
+  // through to onResolve, instead of re-mapping it against stale "modify"/"decline" (no "d")
+  // strings that never actually matched, fixes two bugs at once: Modify's typed value reaching
+  // applyAdjustment (it already did, coincidentally, since both sides used to say "modify"), and
+  // Decline being correctly reported upstream instead of silently becoming "Accepted".
   const apply = (action, calories) => {
     updateState((prev) => {
       const patch = applyAdjustment(prev, proposal, action, calories);
       return { ...prev, ...patch };
     });
-    onResolve(action === "modify" ? "modified" : action === "decline" ? "declined" : "accepted");
+    onResolve(action);
   };
 
   return (
@@ -97,7 +103,7 @@ function NutritionProposal({ proposal, updateState, onResolve }) {
             className="w-full bg-v5-muted rounded-lg text-v5-text px-3 py-2 text-base focus:outline-none focus:ring-1 focus:ring-v5-red"
           />
           <div className="flex gap-2">
-            <button onClick={() => apply("modify", Number(modifiedCalories) || proposal.toCalories)} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-red text-white hover:opacity-90">
+            <button onClick={() => apply("modified", Number(modifiedCalories) || proposal.toCalories)} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-red text-white hover:opacity-90">
               Save
             </button>
             <button onClick={() => setModifying(false)} className="flex-1 py-2 text-[11px] uppercase tracking-widest font-bold rounded-lg bg-v5-elevated text-v5-subtext hover:text-v5-text">

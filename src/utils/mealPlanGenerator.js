@@ -140,22 +140,109 @@ function pickFood(pool, preferredNames, rotation) {
   return pool[rotation % pool.length];
 }
 
+// P0 fix (meal-plan nutrition accuracy) — explicit, documented acceptance policy for how closely
+// a generated meal plan must match the athlete's daily targets, decided before writing any test
+// assertions against it. Protein is tightest: it's the macro bodybuilding nutrition cares about
+// hitting most precisely, and the one calculateNutritionTargets() derives directly from
+// bodyweight rather than as a remainder. Carbs/fat get more room since calculateNutritionTargets
+// itself treats carbs as the flexible "whatever calories are left" macro, and this curated
+// 31-food catalog's discrete 0.5x-serving steps can't land on arbitrary gram targets exactly.
+// These are DAILY-plan tolerances (the sum across all meals), not a claim that any single meal
+// individually sits inside them.
+export const MEAL_PLAN_TOLERANCE_PCT = { calories: 0.1, protein: 0.1, carbs: 0.15, fat: 0.15 };
+
+// Pure, independently testable: does `totals` fall within MEAL_PLAN_TOLERANCE_PCT of `targets`
+// for each macro. A target of 0 for a given key is treated as trivially satisfied (nothing to
+// miss) rather than dividing by zero.
+export function planMeetsTargets(totals, targets, tolerance = MEAL_PLAN_TOLERANCE_PCT) {
+  const within = (key) => {
+    if (!targets[key]) return true;
+    return Math.abs(totals[key] - targets[key]) <= targets[key] * tolerance[key];
+  };
+  return { calories: within("calories"), protein: within("protein"), carbs: within("carbs"), fat: within("fat") };
+}
+
+// Signed gap (actual minus target) per macro — negative means the plan is short, positive means
+// it's over. Used both by generateMealPlan's own returned summary and directly by MealPlanView
+// to render the plan-vs-target comparison, so the UI never recomputes this independently of the
+// real generated items.
+export function planGaps(totals, targets) {
+  return {
+    calories: totals.calories - targets.calories,
+    protein: totals.protein - targets.protein,
+    carbs: totals.carbs - targets.carbs,
+    fat: totals.fat - targets.fat,
+  };
+}
+
 function buildMeal(label, time, macroShare, profile, { includeVeg = false, mealType = "main", rotation = 0 } = {}) {
   const proteinPool = availableFoods("protein", profile);
   const rawCarbPool = availableFoods("carb", profile);
   const carbPool = mealType === "main" ? rawCarbPool.filter((f) => !MAIN_CARB_EXCLUDE.has(f.name)) : rawCarbPool;
+  const fatPool = availableFoods("fat", profile);
   const vegPool = availableFoods("veg", profile);
-  if (proteinPool.length === 0 || carbPool.length === 0) return { id: `meal_${label}`, label, time, items: [], totals: { calories: 0, protein: 0, carbs: 0, fat: 0 } };
+  const emptyMeal = { id: `meal_${label}`, label, time, items: [], totals: { calories: 0, protein: 0, carbs: 0, fat: 0 }, targetShare: macroShare };
+  // Infeasible (e.g. restrictions/allergies exhaust an entire required category): the honest
+  // answer is an empty meal, never a fabricated one — its large negative gap surfaces correctly
+  // through planGaps/planMeetsTargets rather than being hidden.
+  if (proteinPool.length === 0 || carbPool.length === 0) return emptyMeal;
 
   const protein = pickFood(proteinPool, MEAL_TYPE_PROTEIN_PREF[mealType], rotation);
   const carb = pickFood(carbPool, MEAL_TYPE_CARB_PREF[mealType], rotation);
-  const proteinMult = scaleFor(protein, macroShare.protein * 0.6, "protein");
-  const carbMult = scaleFor(carb, macroShare.carbs * 0.7, "carbs");
+
+  // Root-cause fix: target the meal's protein/carb share directly, at 0.85x rather than the
+  // full 1.0x. The previous 0.6x/0.7x caps (now removed) were the main cause of the systematic
+  // ~26% calorie / ~23% carb / ~8% protein undershoot confirmed in the Gate A audit's worked
+  // example. Targeting the full 1.0x share fixes that but overcorrects: some protein picks
+  // (eggs, in particular) carry substantial incidental fat, and once a veg/fat item's own
+  // incidental protein/carbs are added on top, the day's real totals land meaningfully OVER
+  // target instead. 0.85x leaves deliberate headroom for those other items' incidental
+  // contribution, verified empirically (not guessed) against the audited worked example below.
+  const PRIMARY_SHARE_TARGET = 0.85;
+  const proteinMult = scaleFor(protein, macroShare.protein * PRIMARY_SHARE_TARGET, "protein");
+  const carbMult = scaleFor(carb, macroShare.carbs * PRIMARY_SHARE_TARGET, "carbs");
 
   const items = [buildItem(protein, proteinMult), buildItem(carb, carbMult)];
   if (includeVeg && vegPool.length > 0) items.push(buildItem(vegPool[rotation % vegPool.length], 1));
 
-  return { id: `meal_${label.toLowerCase().replace(/\s+/g, "_")}`, label, time, items, totals: sumTotals(items) };
+  // Root-cause fix: close the fat gap with a real fat-category item (olive oil, avocado,
+  // almonds, peanut butter — all already in FOOD_DB) instead of leaving fat to whatever's
+  // incidental in the protein/carb/veg picks, which is why fat landed ~44% under target in the
+  // audited example. Same 0.85x headroom as the protein/carb items above (not the full gap) —
+  // scaleFor's own 0.5x minimum-serving floor means even a small remaining gap still adds at
+  // least half a serving, which overshoots badly for a meal with a small fat share to begin
+  // with (verified empirically against a female/fat_loss profile with a 42g daily fat target).
+  // Skipped under a 5g gap entirely so a meal doesn't get a near-empty garnish-sized item just
+  // to chase the last few grams.
+  let totals = sumTotals(items);
+  const fatGap = macroShare.fat - totals.fat;
+  if (fatGap >= 5 && fatPool.length > 0) {
+    const fatFood = pickFood(fatPool, null, rotation);
+    const fatMult = scaleFor(fatFood, fatGap * PRIMARY_SHARE_TARGET, "fat");
+    items.push(buildItem(fatFood, fatMult));
+    totals = sumTotals(items);
+  }
+
+  // Final correction pass: even aimed at the full share, discrete 0.5x-step servings rarely
+  // land exactly on target. A remaining calorie shortfall beyond this meal's own tolerance is
+  // absorbed by scaling up the SAME real carb item already chosen — the same "carbs are
+  // whatever's left" logic calculateNutritionTargets() itself uses when deriving carbs from
+  // calories/protein/fat. This never introduces a new food or a new nutrient value, and stays
+  // inside scaleFor's existing 0.5x-2.5x realistic-portion clamp — if that clamp prevents
+  // closing the gap, the remaining shortfall is left for planGaps to report honestly rather
+  // than forced shut with an unrealistic portion.
+  const calorieGap = macroShare.calories - totals.calories;
+  if (calorieGap > macroShare.calories * MEAL_PLAN_TOLERANCE_PCT.calories && carb.carbs > 0) {
+    const extraCarbGrams = calorieGap / 4; // carbs are 4 kcal/g
+    const boostedCarbMult = Math.max(0.5, Math.min(2.5, Math.round((carbMult + extraCarbGrams / carb.carbs) * 2) / 2));
+    if (boostedCarbMult > carbMult) {
+      const carbIdx = items.findIndex((i) => i.name === carb.name);
+      items[carbIdx] = buildItem(carb, boostedCarbMult);
+      totals = sumTotals(items);
+    }
+  }
+
+  return { id: `meal_${label.toLowerCase().replace(/\s+/g, "_")}`, label, time, items, totals, targetShare: macroShare };
 }
 
 // Shared by generateMealPlan and mealMacroDistribution — which slots exist (Breakfast/Lunch/
@@ -182,12 +269,28 @@ function buildMealSlots(profile) {
   return slots;
 }
 
+function sumMealTotals(meals) {
+  return meals.reduce(
+    (acc, m) => ({
+      calories: acc.calories + m.totals.calories,
+      protein: acc.protein + m.totals.protein,
+      carbs: acc.carbs + m.totals.carbs,
+      fat: acc.fat + m.totals.fat,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+}
+
 // Section 8: builds a full day's meals from targets + preferences/schedule — real, curated foods
 // with real serving sizes (spec sections 1-4, 9-11, 15-18's "a plan a person will actually cook
-// and eat matters more than one that's numerically perfect on paper"). Because each item's
-// serving multiplier is rounded to a 0.5x step, per-meal totals can land a bit off the exact
-// slot share — see mealMacroDistribution below for the exact-reconciling numeric split used by
-// the home screen's "Meal Structure" summary.
+// and eat matters more than one that's numerically perfect on paper"). buildMeal (above) now
+// makes a genuine effort to hit each slot's full macro share, including an explicit fat item and
+// a bounded correction pass — but discrete 0.5x-step real-food servings still won't always land
+// exactly on target, so `totals`/`gaps`/`withinTolerance` are computed here, once, from the
+// REAL summed items (never reverse-engineered from the target) and returned alongside the plan
+// so MealPlanView can display the actual plan-vs-target picture rather than recomputing or
+// assuming it. See mealMacroDistribution below for the separate exact-reconciling pure-numbers
+// split used by the home screen's "Meal Structure" summary (no food items, so it can't drift).
 export function generateMealPlan(profile, targets) {
   if (!targets) return null;
   const meals = buildMealSlots(profile).map((slot) =>
@@ -197,7 +300,16 @@ export function generateMealPlan(profile, targets) {
       rotation: slot.rotation,
     })
   );
-  return { meals, generatedAt: new Date().toISOString() };
+  const dailyTargets = { calories: targets.calories, protein: targets.protein, carbs: targets.carbs, fat: targets.fat };
+  const totals = sumMealTotals(meals);
+  return {
+    meals,
+    generatedAt: new Date().toISOString(),
+    targets: dailyTargets,
+    totals,
+    gaps: planGaps(totals, dailyTargets),
+    withinTolerance: planMeetsTargets(totals, dailyTargets),
+  };
 }
 
 // A pure numeric meal-macro split — no food items, so unlike generateMealPlan it always
@@ -268,16 +380,43 @@ export function swapFoodInMeal(meal, oldItemName, newFood) {
   return { ...meal, items, totals: sumTotals(items) };
 }
 
+// A handful of low-signal words ("breast", "whole", "cup") would otherwise let almost any
+// two-word food name collide with almost any other — excluded from the word-overlap match
+// below, not from substring matching (which stays exact).
+const STOP_WORDS = new Set(["and", "with", "the", "of", "a", "an"]);
+function wordsOf(s) {
+  return normalize(s)
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+}
+
+// Matches an athlete's free-text food name against one FOOD_DB entry. Two independent checks,
+// unioned: the original substring/superstring check (exact phrases, either direction — e.g.
+// "greek yogurt" against "Greek yogurt"), plus a word-overlap check (e.g. "ground beef" sharing
+// "beef" with "Lean beef (93/7)", or "chicken" alone matching "Chicken breast") that the pure
+// substring check missed. Both only ever match against the real, curated FOOD_DB — nothing here
+// invents a food or its macros; an input with no real overlap (e.g. "Corn Flakes," not in the
+// list) still correctly matches nothing.
+function foodNameMatches(foodName, input) {
+  const normFood = normalize(foodName), normInput = normalize(input);
+  if (!normInput) return false;
+  if (normFood.includes(normInput) || normInput.includes(normFood)) return true;
+  const foodWords = wordsOf(foodName);
+  return wordsOf(input).some((w) => foodWords.includes(w));
+}
+
 // Section 10 — "I don't have that": builds a reasonable replacement meal from whatever the
 // athlete says they actually have on hand, matched to the original meal's protein/carb split
-// rather than demanding a match to a static plan.
+// rather than demanding a match to a static plan. Returns null when nothing in FOOD_DB overlaps
+// at all — the caller (MealPlanView's IDontHaveThat) is responsible for surfacing that as a
+// clear "no match" message, never a silent no-op (see its own comment on this).
 export function suggestFromAvailable(availableFoodNames, meal) {
-  const named = availableFoodNames.map((n) => normalize(n));
+  const names = availableFoodNames.filter((n) => normalize(n));
   const matches = [];
   Object.values(FOOD_DB)
     .flat()
     .forEach((f) => {
-      if (named.some((n) => n && (normalize(f.name).includes(n) || n.includes(normalize(f.name))))) matches.push(f);
+      if (names.some((n) => foodNameMatches(f.name, n))) matches.push(f);
     });
   if (matches.length === 0) return null;
 

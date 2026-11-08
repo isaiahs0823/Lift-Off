@@ -105,12 +105,19 @@ export function generateAdjustmentProposal(state) {
 // Applies (or discards) a proposal the athlete has been shown — always an explicit choice
 // (section 35's ADVISE/ASSIST/COACH ME levels all converge on this same accept/modify/decline
 // gate for anything that touches calories/macros).
+//
+// Nutrition P0.1 fix: every real caller (CoachProposalCard.jsx, NutritionAdjustmentCard.jsx via
+// NutritionHome.jsx) sends "modified" — matching the single action vocabulary this function
+// already stores as record.status — but this check used to read "modify" (no "d"), so a typed
+// replacement calorie value was silently discarded and the original proposed value applied
+// instead, every time. Also now rejects a non-finite modifiedCalories (NaN/Infinity), not just
+// null/undefined, before falling back to the proposed value.
 export function applyAdjustment(state, proposal, action, modifiedCalories) {
   const record = {
     id: `nutradj_${Date.now()}`,
     date: new Date().toISOString(),
     fromCalories: proposal.fromCalories,
-    toCalories: action === "modify" && modifiedCalories != null ? modifiedCalories : proposal.toCalories,
+    toCalories: action === "modified" && Number.isFinite(modifiedCalories) ? modifiedCalories : proposal.toCalories,
     fromMacros: proposal.fromMacros,
     toMacros: proposal.toMacros,
     reason: proposal.reason,
