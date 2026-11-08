@@ -1,6 +1,8 @@
 import React from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import MuscleBodyOutline from "../MuscleBodyOutline.jsx";
+import CinematicImage from "./CinematicImage.jsx";
+import { hasPhotography } from "../../content/photographyManifest.js";
 
 // ---------------- BRK SHARED DESIGN SYSTEM ----------------
 // Reusable primitives for the app-wide premium redesign. Everything here is built on the v5
@@ -45,7 +47,7 @@ export function ScreenHeader({ eyebrow, title, subtitle, right, className = "" }
             text-lg on mobile (18px, comfortably above the ~13px supporting-text floor) is still
             an obvious page title next to SectionLabel's 11px eyebrow — sm: restores the original
             text-xl for tablet/desktop. */}
-        <div className="text-lg sm:text-xl font-black text-v5-text tracking-tight mt-0.5">{title}</div>
+        <div className="font-brk-display text-xl sm:text-2xl text-v5-text tracking-tight mt-0.5 uppercase">{title}</div>
         {subtitle && <div className="text-sm text-v5-subtext mt-0.5">{subtitle}</div>}
       </div>
       {right && <div className="shrink-0">{right}</div>}
@@ -313,16 +315,34 @@ export function PeriodSelect({ value, onChange, options, className = "" }) {
 // program at full size; Active Workout's current-exercise card (which repeats once per exercise,
 // not once per day) uses `compact` — mobile-only tighter padding/title, sm: matches the default
 // hero exactly so desktop is identical either way (mobile density/composition pass, section 7).
-export function PhotoHero({ exercise, eyebrow, title, meta, children, className = "", compact = false }) {
+export function PhotoHero({ exercise, eyebrow, title, meta, children, className = "", compact = false, photoSlot }) {
+  // Real photography (once a slot in photographyManifest.js is actually filled in) replaces the
+  // anatomy-outline watermark as the hero's visual, rather than competing with it — everything
+  // else here, including the scrim that protects title/meta legibility, stays identical either
+  // way. Until then (today, for every slot) this renders nothing and the original treatment is
+  // untouched.
+  const showPhoto = photoSlot && hasPhotography(photoSlot);
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-v5-red/25 via-v5-elevated to-v5-surface p-3.5 sm:p-6 ${className}`}>
-      <div className="absolute -right-8 -bottom-10 opacity-95 pointer-events-none">
-        <MuscleBodyOutline exercise={exercise} size={190} />
-      </div>
+    <div className={`relative overflow-hidden rounded-2xl bg-v5-bg p-3.5 sm:p-6 ring-1 ring-white/[0.06] ${className}`}>
+      {/* Layered in place of a flat two-stop gradient: a dark base, a red glow anchored where the
+          photo/watermark sits (so a future real photo and today's fallback both read as "lit from
+          one side," not evenly washed), and a vignette top edge for depth. All three stay purely
+          decorative — the scrim below is still what guarantees title/meta legibility. */}
+      <div className="absolute inset-0 bg-gradient-to-br from-v5-elevated via-v5-surface to-v5-bg pointer-events-none" />
+      <div className="absolute -right-10 -bottom-16 w-56 h-56 rounded-full bg-v5-red/30 blur-3xl pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/40 pointer-events-none" />
+      {showPhoto ? (
+        <CinematicImage slotKey={photoSlot} className="absolute inset-0" />
+      ) : (
+        <div className="absolute -right-8 -bottom-10 opacity-95 pointer-events-none drop-shadow-[0_0_30px_rgba(210,38,46,0.35)]">
+          <MuscleBodyOutline exercise={exercise} size={190} />
+        </div>
+      )}
       <div className="absolute inset-0 bg-gradient-to-r from-v5-surface via-v5-surface/55 to-transparent pointer-events-none" />
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-v5-red pointer-events-none" />
       <div className="relative space-y-1.5 sm:space-y-3">
         {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
-        {title && <div className={`${compact ? "text-lg" : "text-[22px]"} sm:text-[26px] leading-[1.1] font-black text-v5-text tracking-tight`}>{title}</div>}
+        {title && <div className={`font-brk-display ${compact ? "text-xl" : "text-[28px]"} sm:text-[32px] leading-[0.95] text-v5-text tracking-tight uppercase`}>{title}</div>}
         {meta}
         {children}
       </div>

@@ -111,6 +111,51 @@ export function familyVariants(familyId, programs = []) {
   return out;
 }
 
+// Collapses a program list down to one catalog entry per family (Titan/Athena/Shape today) plus
+// every genuinely standalone program (Berserker, a custom program, anything with no familyId)
+// unchanged — the fix for the catalog literally listing "Titan — 2-Day," "Titan — 3-Day," ...,
+// "Titan — 6-Day" as five separate commercial products. This never changes what a family IS: the
+// underlying flat program objects (and their ids) are exactly what expandProgramFamilies already
+// produces; this only picks ONE of a family's sibling variants to stand in for the family on a
+// catalog card. Opening that card still goes to the same program-detail view, which already has
+// its own frequency switcher (see TemplatesTab's familyPreview) to reach any other sibling.
+//
+// Representative-picking order, most to least specific: (1) the family's variant matching
+// `preferFamilyId`'s own currently-active day count, so an athlete already on a family sees their
+// own version featured, not an arbitrary one; (2) a variant matching `preferredDays` (e.g. the
+// athlete's saved training-frequency preference); (3) BRK's stated 3-day default (see
+// recommendedProgramId's own same rule); (4) the lowest day count the family supports, so an
+// unfamiliar athlete's first impression is the most approachable version, not the most demanding.
+export function uniqueFamilyPrograms(programs = [], { preferFamilyId = null, preferredDays = null, activeDaysByFamily = {} } = {}) {
+  const byFamily = new Map();
+  const standalone = [];
+  for (const p of programs) {
+    if (!p.familyId) {
+      standalone.push(p);
+      continue;
+    }
+    if (!byFamily.has(p.familyId)) byFamily.set(p.familyId, []);
+    byFamily.get(p.familyId).push(p);
+  }
+  const representatives = [];
+  for (const [familyId, variants] of byFamily) {
+    const byDays = (n) => variants.find((v) => v.trainingDays === n);
+    const activeDays = familyId === preferFamilyId ? activeDaysByFamily[familyId] : null;
+    const pick = (activeDays && byDays(activeDays)) || (preferredDays && byDays(preferredDays)) || byDays(3) || variants.slice().sort((a, b) => a.trainingDays - b.trainingDays)[0];
+    representatives.push(pick);
+  }
+  return [...representatives, ...standalone];
+}
+
+// The full span of weekly frequencies a family supports (e.g. Titan: 2-6, Shape: 2-5) — for a
+// catalog card's "2-6 Days/Week" range, since one representative variant's own trainingDays would
+// otherwise misrepresent a family as single-frequency.
+export function familyFrequencyRange(familyId, programs = []) {
+  const days = programs.filter((p) => p.familyId === familyId).map((p) => p.trainingDays).filter((n) => Number.isFinite(n));
+  if (days.length === 0) return null;
+  return { min: Math.min(...days), max: Math.max(...days) };
+}
+
 // Approximate weekly volume for a preview screen — total working sets across every day in the
 // program. Deliberately simple (a single number, not a full per-muscle breakdown) per the task's
 // "keep scope controlled" instruction; src/utils/programProposal.js's plannedWeeklyVolumeByMuscle
