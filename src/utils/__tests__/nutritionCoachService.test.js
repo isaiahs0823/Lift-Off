@@ -141,16 +141,32 @@ describe("applyAdjustment — explicit athlete choice, never silent", () => {
     expect(patch.nutritionTargets.protein).toBe(180);
   });
 
-  // PRE-EXISTING DEFECT, found while writing this baseline test, OUT OF SCOPE for this P0
-  // round (meal-plan generation totals only — see the task authorization) and NOT fixed here.
-  // NutritionAdjustmentCard.jsx calls onResolve(proposal, "modified", value) (past tense), but
-  // applyAdjustment's own check is `action === "modify"` (no "d") — so the athlete's typed
-  // replacement number is silently discarded and the ORIGINAL proposed calories get applied
-  // instead, every time "Modify" is used. This test documents the actual current behavior
-  // rather than hiding it; flagged in the P0 delivery report as a concern for the next phase.
-  it("DEFECT (documented, not fixed in this P0): 'modified' action string doesn't match applyAdjustment's 'modify' check, so the athlete's typed number is silently ignored", () => {
+  // Nutrition P0.1 fix (was the pre-existing defect documented above, in the P0 round that
+  // fixed meal-plan generation totals) — real callers (CoachProposalCard.jsx,
+  // NutritionAdjustmentCard.jsx via NutritionHome.jsx) always send "modified", matching
+  // applyAdjustment's own single accepted/modified/declined vocabulary.
+  it("'modified' applies the athlete's exact typed calorie value, and recomputes carbs to reconcile", () => {
     const patch = applyAdjustment(state, proposal, "modified", 2400);
-    expect(patch.nutritionTargets.calories).toBe(2350); // proposal.toCalories, NOT the athlete's 2400 — this is the bug
+    expect(patch.nutritionTargets.calories).toBe(2400); // the athlete's typed value, not proposal.toCalories (2350)
+    // carbs recomputed from the new calorie total minus the (unchanged) protein/fat calories —
+    // same reconciliation logic used for "accepted", just against the modified total.
+    const proteinCalories = proposal.toMacros.protein * 4;
+    const fatCalories = proposal.toMacros.fat * 9;
+    expect(patch.nutritionTargets.carbs).toBe(Math.round((2400 - proteinCalories - fatCalories) / 4));
+    expect(patch.nutritionCoachAdjustments[0].status).toBe("modified");
+  });
+
+  it("'modified' with a non-finite calorie value (NaN/Infinity) falls back to the proposed calories, never silently applying garbage", () => {
+    expect(applyAdjustment(state, proposal, "modified", NaN).nutritionTargets.calories).toBe(2350);
+    expect(applyAdjustment(state, proposal, "modified", Infinity).nutritionTargets.calories).toBe(2350);
+    expect(applyAdjustment(state, proposal, "modified", undefined).nutritionTargets.calories).toBe(2350);
+  });
+
+  it("a modified adjustment survives a reload-equivalent JSON round-trip unchanged", () => {
+    const patch = applyAdjustment(state, proposal, "modified", 2400);
+    const reloaded = JSON.parse(JSON.stringify(patch));
+    expect(reloaded.nutritionTargets.calories).toBe(2400);
+    expect(reloaded.nutritionCoachAdjustments[0].status).toBe("modified");
   });
 
   it("every application is recorded in history with a reason, for later audit", () => {
