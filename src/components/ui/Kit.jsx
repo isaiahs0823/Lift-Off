@@ -29,6 +29,19 @@ export function SectionLabel({ children, tone = "red", className = "" }) {
   );
 }
 
+// The big bold-italic display moment the V2 reference board reserves for a screen's hero heading
+// ("TODAY") and major content titles (an exercise name like "Barbell Bench Press") — deliberately
+// separate from ScreenHeader's title below, which is the plain nav-bar face used everywhere else
+// ("Push Day", "Your Program"). Only use this for the one or two biggest, most important pieces
+// of text on a screen, never for routine headers — that's what makes it read as a moment.
+export function HeroHeading({ children, size = "lg", className = "" }) {
+  const SIZE = {
+    md: "text-2xl sm:text-3xl",
+    lg: "text-[28px] sm:text-4xl",
+  };
+  return <div className={`font-brk-display italic ${SIZE[size] || SIZE.lg} text-v5-text tracking-tight leading-[0.95] uppercase ${className}`}>{children}</div>;
+}
+
 // Top-of-screen title block — eyebrow + large headline + optional subtitle/support text, with an
 // optional right-aligned slot for a single action. Every top-level screen (Today, Train,
 // Programs, Progress, More) opens with one of these so screen identity is always presented the
@@ -45,7 +58,11 @@ export function ScreenHeader({ eyebrow, title, subtitle, right, className = "" }
             text-lg on mobile (18px, comfortably above the ~13px supporting-text floor) is still
             an obvious page title next to SectionLabel's 11px eyebrow — sm: restores the original
             text-xl for tablet/desktop. */}
-        <div className="text-lg sm:text-xl font-black text-v5-text tracking-tight mt-0.5">{title}</div>
+        {/* font-brk-display (Anton) matches the V2 reference's nav-bar screen titles ("Push
+            Day", "Your Program") — bold display face, mixed case, NOT the italic treatment the
+            reference reserves for hero/content headings ("TODAY") and exercise names, which is a
+            distinct, bigger moment handled by its own primitive, not this shared nav header. */}
+        <div className="font-brk-display text-lg sm:text-xl text-v5-text tracking-tight mt-0.5">{title}</div>
         {subtitle && <div className="text-sm text-v5-subtext mt-0.5">{subtitle}</div>}
       </div>
       {right && <div className="shrink-0">{right}</div>}
