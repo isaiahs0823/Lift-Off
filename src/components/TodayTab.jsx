@@ -4,7 +4,7 @@ import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
 import NutritionCard from "./NutritionCard.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
 import { SlideInPanel } from "./SlideInPanel.jsx";
-import { SectionLabel, Card, HeroCard, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, Pill, ActionTile, ListRow, RingGauge, LineChart } from "./ui/Kit.jsx";
+import { SectionLabel, Card, HeroCard, HeroHeading, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, Pill, ActionTile, ListRow, RingGauge, LineChart } from "./ui/Kit.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue, upsertBodyweightEntry, isValidBodyweightLb } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue, goalHistory } from "../utils/goalData.js";
 import { goalProgressPct, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
@@ -772,7 +772,7 @@ export default function TodayTab({
   return (
     <div className="space-y-2.5 sm:space-y-4">
       <div>
-        <div className="text-2xl font-black text-v5-text tracking-tight">{greeting()}</div>
+        <HeroHeading size="md">{greeting()}</HeroHeading>
         <div className="text-xs text-v5-subtext mt-0.5">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
       </div>
 
