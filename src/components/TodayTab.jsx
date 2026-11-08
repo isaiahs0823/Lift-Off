@@ -1250,20 +1250,30 @@ export default function TodayTab({
           metric that honestly summarizes "progress" the way a calorie count summarizes
           nutrition — showing one would mean picking a number to feature, not reporting one that
           exists. */}
-      {state.currentProgram && (
-        <ListRow
-          icon={Calendar}
-          title={programDay?.programName || state.currentProgram.programName}
-          subtitle={
-            programDay?.weekNumber
-              ? `Week ${programDay.weekNumber}${programDay.totalWeeks ? ` of ${programDay.totalWeeks}` : ""}${programDay.dayLabel ? ` · Next: ${programDay.dayLabel}` : ""}`
-              : programDay?.dayLabel
-                ? `Next: ${programDay.dayLabel}`
-                : "View your program"
-          }
-          onClick={() => onNavigate("programTimeline")}
-        />
-      )}
+      {state.currentProgram &&
+        (() => {
+          // resolveCurrentProgramDay deliberately pins `dayLabel` to TODAY's day (even once
+          // completed — it stays put for the rest of the calendar day so this card doesn't jump
+          // ahead the instant a workout is logged; see that function's own comment). The actual
+          // next-up day only exists as the separate `nextDayLabel` field, populated when
+          // completedToday is true. Labeling programDay.dayLabel as "Next: X" unconditionally
+          // would show "Next: Full Body A" right after Full Body A was just finished — wrong.
+          const nextLabel = programDay?.completedToday ? programDay.nextDayLabel : programDay?.dayLabel;
+          return (
+            <ListRow
+              icon={Calendar}
+              title={programDay?.programName || state.currentProgram.programName}
+              subtitle={
+                programDay?.weekNumber
+                  ? `Week ${programDay.weekNumber}${programDay.totalWeeks ? ` of ${programDay.totalWeeks}` : ""}${nextLabel ? ` · Next: ${nextLabel}` : ""}`
+                  : nextLabel
+                    ? `Next: ${nextLabel}`
+                    : "View your program"
+              }
+              onClick={() => onNavigate("programTimeline")}
+            />
+          );
+        })()}
       <ListRow icon={TrendingUp} title="Progress" subtitle="Track strength, weight, and results" onClick={() => onNavigate("progress")} />
 
       {/* Nutrition and Coach Brief — two compact snapshots side by side rather than two more
