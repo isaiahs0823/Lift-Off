@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown, Target, Flame, Plus, X, AlertTriangle, CloudOff } from "lucide-react";
+import { ChevronRight, MessageCircle, Award, Scale, Timer, Check, RefreshCw, Map, Play, Weight, Dumbbell, TrendingUp, TrendingDown, Target, Flame, Plus, X, AlertTriangle, CloudOff, Calendar } from "lucide-react";
 import ReadinessCheckIn from "./ReadinessCheckIn.jsx";
 import NutritionCard from "./NutritionCard.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
 import { SlideInPanel } from "./SlideInPanel.jsx";
-import { SectionLabel, Card, HeroCard, HeroHeading, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, Pill, ActionTile, ListRow, RingGauge, LineChart } from "./ui/Kit.jsx";
+import { SectionLabel, Card, HeroCard, HeroHeading, PhotoHero, ButtonPrimary, ButtonSecondary, ButtonText, Pill, ActionTile, ListRow, RingGauge, LineChart, ProgressBar } from "./ui/Kit.jsx";
 import { rollingAverage, weeklyRateOfChange, latestValue, upsertBodyweightEntry, isValidBodyweightLb } from "../utils/bodyweightMath.js";
 import { resolveGoalCurrentValue, goalHistory } from "../utils/goalData.js";
 import { goalProgressPct, goalStatus, GOAL_STATUS_LABEL } from "../utils/goalMath.js";
@@ -903,7 +903,7 @@ export default function TodayTab({
       {activeRun && !activeRun.finished ? (
         <HeroCard className="space-y-3">
           <SectionLabel>Unfinished workout</SectionLabel>
-          <div className="text-xl font-bold text-v5-text">{activeRun.planName}</div>
+          <div className="font-brk-display italic text-xl text-v5-text">{activeRun.planName}</div>
           <ButtonPrimary size="lg" onClick={onResumeWorkout}>Resume workout</ButtonPrimary>
           {state.currentProgram && <ButtonText tone="muted" icon={Map} onClick={() => onNavigate("programTimeline")}>View Program</ButtonText>}
         </HeroCard>
@@ -1242,6 +1242,30 @@ export default function TodayTab({
         )}
       </div>
 
+      {/* V2 reference board's "Your Program" / "Progress" rows — real data only, no new
+          computation beyond what resolveTodayWorkout/currentProgram already give this screen.
+          Your Program is the one genuinely new entry point here (Program Timeline was previously
+          only reachable via the primary card's "View Program" text link); Progress reuses the
+          same plain descriptive subtitle the reference itself uses, since there's no single
+          metric that honestly summarizes "progress" the way a calorie count summarizes
+          nutrition — showing one would mean picking a number to feature, not reporting one that
+          exists. */}
+      {state.currentProgram && (
+        <ListRow
+          icon={Calendar}
+          title={programDay?.programName || state.currentProgram.programName}
+          subtitle={
+            programDay?.weekNumber
+              ? `Week ${programDay.weekNumber}${programDay.totalWeeks ? ` of ${programDay.totalWeeks}` : ""}${programDay.dayLabel ? ` · Next: ${programDay.dayLabel}` : ""}`
+              : programDay?.dayLabel
+                ? `Next: ${programDay.dayLabel}`
+                : "View your program"
+          }
+          onClick={() => onNavigate("programTimeline")}
+        />
+      )}
+      <ListRow icon={TrendingUp} title="Progress" subtitle="Track strength, weight, and results" onClick={() => onNavigate("progress")} />
+
       {/* Nutrition and Coach Brief — two compact snapshots side by side rather than two more
           full-width cards (task section 5). Both drop to their `compact` presentation so
           neither cramps at 375px: one headline metric each, tap through for the rest. */}
@@ -1249,6 +1273,32 @@ export default function TodayTab({
         <NutritionCard state={state} onNavigate={onOpenNutrition} compact />
         <CoachBriefCard message={coachMessage} onNavigate={onNavigate} />
       </div>
+
+      {/* This Week — always-visible real completion count + progress bar (V2 reference board),
+          promoted from the "More today" sheet rather than duplicated: computeScheduleAdherence
+          already accounts for fixed vs. rolling schedules (hasSchedule/getScheduleDay handle that
+          distinction internally), so this is the same real number, just surfaced where the
+          reference puts it. Hidden entirely (not shown as 0/0) when no weekly schedule is set up
+          — the existing "Set up your training week" prompt above already covers that case. */}
+      {scheduleOn &&
+        (() => {
+          const thisWeek = computeScheduleAdherence(state, 7);
+          if (!thisWeek || thisWeek.overall == null) return null;
+          const totalScheduled = thisWeek.lifting.scheduled + thisWeek.conditioning.scheduled + thisWeek.recovery.scheduled;
+          const totalCompleted = thisWeek.lifting.completed + thisWeek.conditioning.completed + thisWeek.recovery.completed;
+          return (
+            <Card padding="p-4" className="space-y-2">
+              <div className="flex items-center justify-between">
+                <SectionLabel tone="muted">This Week</SectionLabel>
+                <span className="text-sm font-bold text-white tabular-nums">{thisWeek.overall}%</span>
+              </div>
+              <div className="text-sm text-v5-text/90">
+                {totalCompleted} of {totalScheduled} workouts complete
+              </div>
+              <ProgressBar pct={thisWeek.overall} />
+            </Card>
+          );
+        })()}
 
       <div>
         {/* This Week / Mission / Recent Win are useful but secondary — pulled out of the
