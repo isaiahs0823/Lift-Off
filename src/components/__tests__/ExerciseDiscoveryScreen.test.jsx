@@ -12,6 +12,13 @@ const allExercises = [
   { id: "db_shoulder_press", name: "Dumbbell shoulder press", type: "compound", muscle: "Shoulders" },
   { id: "barbell_curl", name: "Barbell curl", type: "isolation", muscle: "Arms" },
   { id: "deadlift", name: "Deadlift", type: "compound", muscle: "Back" },
+  // Second Back-zone exercise, bodyweight, isolation, with real instruction content — gives the
+  // Back zone real variety (two equipment labels, two movement types) to filter across.
+  { id: "pullup", name: "Weighted pull-up", type: "compound", muscle: "Back" },
+  // A third Back-zone exercise with no recognizable equipment keyword and no entry in
+  // exerciseInstructions.js — exercises the "Not specified" equipment option and the "Has Guide"
+  // filter's negative case honestly, without inventing data for it.
+  { id: "mystery_back_move", name: "Mystery back move", type: "isolation", muscle: "Back" },
   { id: "leg_press", name: "Leg press", type: "compound", muscle: "Legs" },
 ];
 const exMap = Object.fromEntries(allExercises.map((e) => [e.id, e]));
@@ -77,6 +84,65 @@ describe("ExerciseDiscoveryScreen — muscle selection and filtering", () => {
     const rendered = text(root.toJSON());
     expect(rendered).toContain("Dumbbell shoulder press");
     expect(rendered).not.toContain("Barbell bench press");
+  });
+});
+
+describe("ExerciseDiscoveryScreen — list filters (honest, real-data-backed only)", () => {
+  it("Movement Type filter narrows to only the selected type", () => {
+    const root = renderScreen();
+    clickByText(root, "Back"); // deadlift (compound), pullup (compound), mystery_back_move (isolation)
+    let rendered = text(root.toJSON());
+    expect(rendered).toContain("Deadlift");
+    expect(rendered).toContain("Weighted pull-up");
+    expect(rendered).toContain("Mystery back move");
+
+    clickByText(root, "Isolation");
+    rendered = text(root.toJSON());
+    expect(rendered).toContain("Mystery back move");
+    expect(rendered).not.toContain("Deadlift");
+    expect(rendered).not.toContain("Weighted pull-up");
+  });
+
+  it("Equipment filter narrows to only exercises with that real, name-derived label", () => {
+    const root = renderScreen();
+    clickByText(root, "Back");
+    clickByText(root, "Bodyweight"); // only pullup resolves to Bodyweight
+    const rendered = text(root.toJSON());
+    expect(rendered).toContain("Weighted pull-up");
+    expect(rendered).not.toContain("Deadlift");
+    expect(rendered).not.toContain("Mystery back move");
+  });
+
+  it("Has Guide filter keeps only exercises with real exerciseInstructions.js content, never inventing a difficulty rating", () => {
+    const root = renderScreen();
+    clickByText(root, "Back");
+    clickByText(root, "Has Guide");
+    const rendered = text(root.toJSON());
+    expect(rendered).toContain("Deadlift"); // has real content
+    expect(rendered).toContain("Weighted pull-up"); // has real content
+    expect(rendered).not.toContain("Mystery back move"); // no manifest entry
+  });
+
+  it("shows an honest empty state (with a Clear filters action) when filters match nothing, rather than a blank list", () => {
+    const root = renderScreen();
+    clickByText(root, "Back");
+    clickByText(root, "Isolation");
+    clickByText(root, "Has Guide"); // mystery_back_move is isolation but has no guide -> zero results
+    const rendered = text(root.toJSON());
+    expect(rendered).toContain("No exercises match these filters");
+    clickByText(root, "Clear filters");
+    expect(text(root.toJSON())).toContain("Deadlift"); // back to the unfiltered zone list
+  });
+
+  it("switching muscles resets filters so they can't silently hide exercises in a new zone", () => {
+    const root = renderScreen();
+    clickByText(root, "Back");
+    clickByText(root, "Isolation");
+    // Navigate back to the muscle grid, then into a different zone — filters must not carry over.
+    const backNav = findAllButtons(root.toJSON()).find((b) => b.props["aria-label"] === "Back");
+    act(() => backNav.props.onClick());
+    clickByText(root, "Chest");
+    expect(text(root.toJSON())).toContain("Barbell bench press"); // compound, would be hidden if the Isolation filter carried over
   });
 });
 

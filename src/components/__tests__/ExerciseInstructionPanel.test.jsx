@@ -88,3 +88,53 @@ it("never renders a <video> or <img> element for a known exercise with no media,
   expect(findType(tree, "video")).toBeNull();
   expect(findType(tree, "img")).toBeNull();
 });
+
+it("How To splits Setup and Execution into their own labeled sections", () => {
+  let root;
+  act(() => {
+    root = TestRenderer.create(<ExerciseInstructionPanel exId="deadlift" exerciseName="Deadlift" />);
+  });
+  const rendered = text(root.toJSON());
+  expect(rendered).toContain("Setup");
+  expect(rendered).toContain("Stand with the bar over your mid-foot");
+  expect(rendered).toContain("Execution");
+  expect(rendered).toContain("Stand up by driving through your legs");
+});
+
+it("shows real Common Mistakes content on the Mistakes tab for a newly-written exercise", () => {
+  let root;
+  act(() => {
+    root = TestRenderer.create(<ExerciseInstructionPanel exId="deadlift" exerciseName="Deadlift" />);
+  });
+  act(() => {
+    root.root.findAllByType("button").find((b) => text(b.children) === "Mistakes")?.props.onClick();
+  });
+  const rendered = text(root.toJSON());
+  expect(rendered).toContain("round under load");
+});
+
+it("Mistakes tab shows an honest fallback for an exercise with no documented mistakes yet", () => {
+  let root;
+  act(() => {
+    // bench's mistakes array is intentionally empty (reformatted from originally-reviewed
+    // content that never covered common mistakes — see exerciseInstructions.js's own comment).
+    root = TestRenderer.create(<ExerciseInstructionPanel exId="bench" exerciseName="Barbell bench press" />);
+  });
+  act(() => {
+    root.root.findAllByType("button").find((b) => text(b.children) === "Mistakes")?.props.onClick();
+  });
+  expect(text(root.toJSON())).toContain("No common mistakes documented yet");
+});
+
+it("Tips tab renders every cue when an exercise has more than one", () => {
+  let root;
+  act(() => {
+    root = TestRenderer.create(<ExerciseInstructionPanel exId="deadlift" exerciseName="Deadlift" />);
+  });
+  act(() => {
+    root.root.findAllByType("button").find((b) => text(b.children) === "Tips")?.props.onClick();
+  });
+  const rendered = text(root.toJSON());
+  expect(rendered).toContain("Keep the bar brushing your legs");
+  expect(rendered).toContain("push the floor away");
+});
