@@ -330,7 +330,10 @@ export function PeriodSelect({ value, onChange, options, className = "" }) {
 // program at full size; Active Workout's current-exercise card (which repeats once per exercise,
 // not once per day) uses `compact` — mobile-only tighter padding/title, sm: matches the default
 // hero exactly so desktop is identical either way (mobile density/composition pass, section 7).
-export function PhotoHero({ exercise, eyebrow, title, meta, children, className = "", compact = false }) {
+// `icon` (optional) renders the reference board's leading red circular icon badge above the
+// eyebrow — the small dumbbell-in-a-circle the primary workout card opens with. Omit it for a
+// PhotoHero used somewhere that badge doesn't make sense (kept optional, not forced everywhere).
+export function PhotoHero({ exercise, eyebrow, title, meta, icon: Icon, children, className = "", compact = false }) {
   return (
     <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-v5-red/25 via-v5-elevated to-v5-surface p-3.5 sm:p-6 ${className}`}>
       <div className="absolute -right-8 -bottom-10 opacity-95 pointer-events-none">
@@ -338,8 +341,21 @@ export function PhotoHero({ exercise, eyebrow, title, meta, children, className 
       </div>
       <div className="absolute inset-0 bg-gradient-to-r from-v5-surface via-v5-surface/55 to-transparent pointer-events-none" />
       <div className="relative space-y-1.5 sm:space-y-3">
+        {Icon && (
+          <div className="w-9 h-9 rounded-full bg-v5-red flex items-center justify-center shadow-[0_4px_14px_-4px_rgba(232,16,29,0.6)]">
+            <Icon size={16} className="text-white" />
+          </div>
+        )}
         {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
-        {title && <div className={`${compact ? "text-lg" : "text-[22px]"} sm:text-[26px] leading-[1.1] font-black text-v5-text tracking-tight`}>{title}</div>}
+        {/* No forced uppercase here, unlike HeroHeading — this title doubles as the exercise-name
+            display in the active-workout logger ("Barbell Bench Press"), which the reference
+            board shows in natural mixed case, not forced caps. "TODAY"/"Push Day" pass their own
+            already-correct casing as plain text. */}
+        {title && (
+          <div className={`font-brk-display italic ${compact ? "text-xl" : "text-[26px]"} sm:text-[30px] leading-[0.95] text-v5-text tracking-tight`}>
+            {title}
+          </div>
+        )}
         {meta}
         {children}
       </div>

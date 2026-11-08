@@ -1019,6 +1019,7 @@ export default function TodayTab({
           return (
             <PhotoHero
               exercise={run ? exMap[run.plan.exercises[0]?.exId] : null}
+              icon={Dumbbell}
               eyebrow="Today's workout"
               title={todaySchedule.label || "Training day"}
               meta={
@@ -1047,6 +1048,7 @@ export default function TodayTab({
         // meta row, one unmistakable red CTA.
         <PhotoHero
           exercise={exMap[todayPlan.exercises[0]?.exId]}
+          icon={Dumbbell}
           eyebrow="Today's workout"
           title={todayPlan.name}
           meta={
