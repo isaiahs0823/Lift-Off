@@ -619,6 +619,80 @@ export const PROGRAM_FAMILIES = [
       ],
     },
   },
+
+  // ---- THE ARCHITECT — BRK Owner Edition: advanced machine-dominant bodybuilding/hypertrophy,
+  // Push/Pull/Legs/Upper/Legs, 5 days/week, 12 weeks. A locked personal programming spec (exact
+  // exercise selection, order, and prescriptions below must not be reinterpreted), authored with
+  // only its native 5-day variant — this program is not meant to auto-adapt to other weekly
+  // frequencies, unlike the other families above. Pec Deck/Machine Fly is pre-exhaust on Push and
+  // Legs A; Pull stays pure heavy-compounds-first with no pre-exhaustion, per the spec's own
+  // training-emphasis notes.
+  {
+    familyId: "architect",
+    name: "The Architect",
+    tagline: "BRK Owner Edition — advanced machine-dominant bodybuilding, Push/Pull/Legs/Upper/Legs",
+    programFocus: ["Chest", "Back", "Legs"],
+    weeks: 12,
+    variants: {
+      5: [
+        {
+          label: "Push",
+          exercises: [
+            { exId: "pec_deck", sets: 2, reps: 12, repRange: [10, 15] },
+            { exId: "hammer_strength_iso_incline_press", sets: 3, reps: 8, repRange: [6, 10] },
+            { exId: "seated_ohp_machine", sets: 2, reps: 10, repRange: [8, 12] },
+            { exId: "hammer_strength_iso_chest_press", sets: 2, reps: 10, repRange: [8, 12] },
+            { exId: "lat_raise_machine", sets: 2, reps: 16, repRange: [12, 20] },
+            { exId: "tricep_pushdown", sets: 2, reps: 12, repRange: [10, 15] },
+          ],
+        },
+        {
+          label: "Pull",
+          exercises: [
+            { exId: "hammer_strength_iso_front_lat_pulldown", sets: 3, reps: 8, repRange: [6, 10] },
+            { exId: "chest_supported_row", sets: 3, reps: 10, repRange: [8, 12] },
+            { exId: "hammer_strength_iso_row", sets: 2, reps: 10, repRange: [8, 12] },
+            { exId: "kelso_shrug", sets: 2, reps: 13, repRange: [12, 15] },
+            { exId: "bicep_curl_machine", sets: 2, reps: 10, repRange: [8, 12] },
+            { exId: "incline_db_curl", sets: 2, reps: 12, repRange: [10, 15] },
+          ],
+        },
+        {
+          label: "Legs A",
+          exercises: [
+            { exId: "hip_adduction_machine", sets: 2, reps: 16, repRange: [12, 20] },
+            { exId: "leg_curl_lying", sets: 2, reps: 10, repRange: [8, 12] },
+            { exId: "leg_extension", sets: 2, reps: 12, repRange: [10, 15] },
+            { exId: "leg_press", sets: 3, reps: 10, repRange: [8, 12] },
+            { exId: "hack_squat", sets: 2, reps: 10, repRange: [8, 12] },
+            { exId: "calf_raise_seated", sets: 2, reps: 12, repRange: [10, 15] },
+          ],
+        },
+        {
+          label: "Upper",
+          exercises: [
+            { exId: "hammer_strength_iso_incline_press", sets: 2, reps: 10, repRange: [8, 12] },
+            { exId: "chest_supported_row", sets: 3, reps: 10, repRange: [8, 12] },
+            { exId: "pec_deck", sets: 2, reps: 12, repRange: [10, 15] },
+            { exId: "single_arm_pulldown", sets: 2, reps: 11, repRange: [10, 12] },
+            { exId: "lat_raise_machine", sets: 2, reps: 16, repRange: [12, 20] },
+            { exId: "rear_delt_machine", sets: 2, reps: 16, repRange: [12, 20] },
+          ],
+        },
+        {
+          label: "Legs B",
+          exercises: [
+            { exId: "leg_curl_seated", sets: 3, reps: 10, repRange: [8, 12] },
+            { exId: "hip_adduction_machine", sets: 2, reps: 13, repRange: [12, 15] },
+            { exId: "hammer_strength_belt_squat", sets: 3, reps: 10, repRange: [8, 12] },
+            { exId: "belt_squat_split_squat", sets: 2, reps: 11, repRange: [10, 12] },
+            { exId: "leg_extension", sets: 2, reps: 13, repRange: [12, 15] },
+            { exId: "calf_raise_seated", sets: 1, reps: 16, repRange: [12, 20] },
+          ],
+        },
+      ],
+    },
+  },
 ];
 
 // Turns each family's compact { variants: { N: days[] } } map into flat, ordinary program objects
