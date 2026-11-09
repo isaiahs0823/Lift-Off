@@ -147,46 +147,93 @@ function wrapCentered(ctx, text, cx, y, maxWidth, lineHeight, maxLines = 3) {
   return wrapAligned(ctx, text, cx, y, maxWidth, lineHeight, maxLines, "center");
 }
 
+// A soft-edged diagonal beam — built from overlapping translucent strokes fading outward from a
+// bright core, never a single hard-edged line — for the "light streaks" the card otherwise has
+// no cinematic lighting cue for beyond the central glow. Kept to the corners (never crossing the
+// content column) so it reads as atmosphere, not a graphic competing with real data.
+function diagonalStreak(ctx, x1, y1, x2, y2, coreWidth, coreAlpha) {
+  ctx.save();
+  ctx.lineCap = "round";
+  for (let i = 5; i >= 0; i--) {
+    const t = i / 5;
+    ctx.strokeStyle = `rgba(239,68,68,${coreAlpha * (1 - t) * (1 - t)})`;
+    ctx.lineWidth = coreWidth * (1 + t * 3.2);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function background(ctx, W, H, glowY) {
+  // Deeper, more saturated base than a flat charcoal-to-black fade — a near-black floor with a
+  // faint warm (not gray) lift near the top, so the red lighting on top of it reads as premium
+  // rather than washed out (task: "looks too flat, gray, and understated").
   const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, COLOR.bgTop);
+  grad.addColorStop(0, "#1f1313");
+  grad.addColorStop(0.45, COLOR.bgTop);
   grad.addColorStop(1, COLOR.bgBottom);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
-  // Soft red glow behind the hero — the one "premium" lighting cue that separates this from a
-  // flat receipt, kept subtle so it never competes with the numbers on top of it.
-  const glow = ctx.createRadialGradient(W * 0.62, glowY, 0, W * 0.62, glowY, W * 0.75);
-  glow.addColorStop(0, COLOR.glow);
+  // Intense, controlled red glow behind the hero — raised from the original subtle wash into a
+  // real cinematic cast, still centered behind the content so it never competes with the numbers
+  // sitting on top of it.
+  const glow = ctx.createRadialGradient(W * 0.62, glowY, 0, W * 0.62, glowY, W * 0.78);
+  glow.addColorStop(0, "rgba(220,38,38,0.34)");
+  glow.addColorStop(0.55, "rgba(185,28,28,0.16)");
   glow.addColorStop(1, "rgba(220,38,38,0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
-  // Restrained vignette at the very top/bottom edges — the "subtle depth" cue the flat original
-  // was missing, without any literal grain/noise texture that would read as generated/Canva-ish.
+  // A second, deeper crimson bloom low in the frame — the reference's floor isn't flat black,
+  // it has its own faint red undertone separate from the hero glow above.
+  const floorGlow = ctx.createRadialGradient(W * 0.5, H * 0.98, 0, W * 0.5, H * 0.98, W * 0.9);
+  floorGlow.addColorStop(0, "rgba(140,20,24,0.22)");
+  floorGlow.addColorStop(1, "rgba(140,20,24,0)");
+  ctx.fillStyle = floorGlow;
+  ctx.fillRect(0, 0, W, H);
+
+  // Angular light-streak accents, top-right and bottom-left — the two diagonal cues the
+  // reference uses to break up the flat corners without ever crossing the content column.
+  diagonalStreak(ctx, W * 0.74, -H * 0.02, W * 1.04, H * 0.14, 1.5, 0.5);
+  diagonalStreak(ctx, -W * 0.04, H * 0.92, W * 0.22, H * 1.02, 1.5, 0.38);
+
+  // Restrained vignette at the very top/bottom edges — the "subtle depth" cue a flat fill is
+  // missing, without any literal grain/noise texture that would read as generated/Canva-ish.
   const vignette = ctx.createLinearGradient(0, 0, 0, H);
-  vignette.addColorStop(0, "rgba(0,0,0,0.28)");
+  vignette.addColorStop(0, "rgba(0,0,0,0.3)");
   vignette.addColorStop(0.12, "rgba(0,0,0,0)");
   vignette.addColorStop(0.88, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0,0,0,0.32)");
+  vignette.addColorStop(1, "rgba(0,0,0,0.36)");
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, W, H);
 
-  // Premium framing pass (follow-up task: "stronger card framing," "subtle red highlight
-  // lines") — a barely-there red hairline at the very top edge, and a soft inset border, so the
-  // card reads as a designed asset rather than a plain screenshot even before any content
-  // renders. Both stay far below anything that would compete with the hero content.
-  const hairline = ctx.createLinearGradient(W * 0.22, 0, W * 0.78, 0);
+  // Premium framing pass — a brighter red hairline at the very top edge, and a genuinely
+  // illuminated (not barely-there) red-tinted border running the full card perimeter, so the
+  // card reads as a designed achievement poster before any content even renders.
+  const hairline = ctx.createLinearGradient(W * 0.18, 0, W * 0.82, 0);
   hairline.addColorStop(0, "rgba(239,68,68,0)");
-  hairline.addColorStop(0.5, "rgba(239,68,68,0.55)");
+  hairline.addColorStop(0.5, "rgba(239,68,68,0.75)");
   hairline.addColorStop(1, "rgba(239,68,68,0)");
   ctx.fillStyle = hairline;
-  ctx.fillRect(W * 0.22, 0, W * 0.56, 3);
+  ctx.fillRect(W * 0.18, 0, W * 0.64, 3);
 
   const inset = Math.round(W * 0.022);
-  ctx.strokeStyle = "rgba(255,255,255,0.055)";
-  ctx.lineWidth = 1.5;
+  ctx.save();
+  ctx.shadowColor = "rgba(239,68,68,0.45)";
+  ctx.shadowBlur = 18;
+  ctx.strokeStyle = "rgba(239,68,68,0.38)";
+  ctx.lineWidth = 2;
   roundRect(ctx, inset, inset, W - inset * 2, H - inset * 2, 28);
+  ctx.stroke();
+  ctx.restore();
+  // A second, brighter hairline just inside the glowing one — the "thin illuminated border"
+  // reads as a crisp edge up close even though the glow softens its outer side.
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 1;
+  roundRect(ctx, inset + 3, inset + 3, W - (inset + 3) * 2, H - (inset + 3) * 2, 26);
   ctx.stroke();
 }
 
@@ -197,9 +244,9 @@ function wordmark(ctx, W, y, size = 40, align = "center", leftX = 0) {
   ctx.font = `800 ${size}px ${FONT}`;
   const brkWidth = ctx.measureText("BRK").width;
   ctx.font = `700 ${size * 0.42}px ${FONT}`;
-  const liftWidth = ctx.measureText("LIFT").width;
+  const fitWidth = ctx.measureText("FIT").width;
   const gap = size * 0.22;
-  const totalW = brkWidth + gap + liftWidth;
+  const totalW = brkWidth + gap + fitWidth;
   const startX = align === "left" ? leftX : W / 2 - totalW / 2;
   ctx.textAlign = "left";
   ctx.fillStyle = COLOR.red;
@@ -207,7 +254,7 @@ function wordmark(ctx, W, y, size = 40, align = "center", leftX = 0) {
   ctx.fillText("BRK", startX, y);
   ctx.fillStyle = COLOR.dimGray;
   ctx.font = `700 ${size * 0.42}px ${FONT}`;
-  ctx.fillText("LIFT", startX + brkWidth + gap, y - size * 0.02);
+  ctx.fillText("FIT", startX + brkWidth + gap, y - size * 0.02);
   ctx.textAlign = "center";
 }
 
@@ -805,15 +852,47 @@ function splitTitleForColor(text) {
 function drawHeroPanel(ctx, x, y, w, h, isPR) {
   ctx.save();
   if (isPR) {
-    ctx.shadowColor = "rgba(239,68,68,0.5)";
-    ctx.shadowBlur = 46;
+    ctx.shadowColor = "rgba(239,68,68,0.65)";
+    ctx.shadowBlur = 58;
   }
   ctx.fillStyle = "rgba(5,5,6,0.42)";
   roundRect(ctx, x, y, w, h, 32);
   ctx.fill();
   ctx.restore();
-  ctx.strokeStyle = isPR ? "rgba(239,68,68,0.55)" : "rgba(255,255,255,0.12)";
-  ctx.lineWidth = isPR ? 2 : 1.5;
+
+  if (isPR) {
+    // Dark crimson textured fill (task: "dark crimson textured background") — a diagonal
+    // gradient wash plus a soft off-center bloom, layered on top of the near-black base above so
+    // the panel reads as smoldering crimson rather than flat charcoal, while staying dark enough
+    // that white/red text on top never loses contrast.
+    ctx.save();
+    roundRect(ctx, x, y, w, h, 32);
+    ctx.clip();
+    const wash = ctx.createLinearGradient(x, y, x + w, y + h);
+    wash.addColorStop(0, "rgba(120,16,20,0.4)");
+    wash.addColorStop(0.5, "rgba(40,6,8,0.22)");
+    wash.addColorStop(1, "rgba(120,16,20,0.4)");
+    ctx.fillStyle = wash;
+    ctx.fillRect(x, y, w, h);
+    const bloom = ctx.createRadialGradient(x + w * 0.78, y + h * 0.18, 0, x + w * 0.78, y + h * 0.18, w * 0.55);
+    bloom.addColorStop(0, "rgba(239,68,68,0.28)");
+    bloom.addColorStop(1, "rgba(239,68,68,0)");
+    ctx.fillStyle = bloom;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+  }
+
+  // Bright illuminated rim — the PR panel's defining "championship poster" cue. A second,
+  // dimmer outer ring (drawn first, slightly larger) reads as a soft glow halo even without a
+  // shadow blur stacking on top of the crisp inner stroke.
+  if (isPR) {
+    ctx.strokeStyle = "rgba(239,68,68,0.22)";
+    ctx.lineWidth = 7;
+    roundRect(ctx, x, y, w, h, 32);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = isPR ? "rgba(248,113,113,0.85)" : "rgba(255,255,255,0.12)";
+  ctx.lineWidth = isPR ? 2.5 : 1.5;
   roundRect(ctx, x, y, w, h, 32);
   ctx.stroke();
 }
@@ -987,19 +1066,28 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured, state) {
     wrapCentered(ctx, featured.name, W / 2, hy, heroPanelW * 0.86, nameSize * 1.06, 1);
     hy += nameSize * 1.06 + sz(10, k, 6);
 
-    const heroSize = sz(96, k, 52);
+    // "Extremely prominent" (task spec) — raised from the previous fixed 96px ceiling, but run
+    // through fitFontSize (same guard every other variable-length string on this card already
+    // uses) so a long combo like "1,245 × 12" scales down instead of clipping past the panel.
+    const heroText = featured.weight != null ? `${featured.weight} × ${featured.reps}` : "—";
+    const heroSize = fitFontSize(ctx, heroText, heroPanelW * 0.84, "900", sz(112, k, 58), sz(52, k, 32));
     const spotlightY = hy + heroSize * 0.35;
     const spotlight = ctx.createRadialGradient(W / 2, spotlightY, 0, W / 2, spotlightY, W * 0.38);
-    spotlight.addColorStop(0, isPR ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.08)");
+    spotlight.addColorStop(0, isPR ? "rgba(239,68,68,0.24)" : "rgba(255,255,255,0.08)");
     spotlight.addColorStop(1, "rgba(239,68,68,0)");
     ctx.fillStyle = spotlight;
     ctx.fillRect(heroPanelX, spotlightY - heroPanelW * 0.5, heroPanelW, heroPanelW);
 
+    ctx.save();
+    if (isPR) {
+      ctx.shadowColor = "rgba(239,68,68,0.55)";
+      ctx.shadowBlur = 28;
+    }
     ctx.fillStyle = COLOR.white;
     ctx.font = `900 ${heroSize}px ${FONT}`;
     ctx.textAlign = "center";
-    const heroText = featured.weight != null ? `${featured.weight} × ${featured.reps}` : "—";
     ctx.fillText(heroText, W / 2, hy + heroSize * 0.78);
+    ctx.restore();
     hy += heroSize * 0.78 + sz(22, k, 14);
 
     if (isPR) {
