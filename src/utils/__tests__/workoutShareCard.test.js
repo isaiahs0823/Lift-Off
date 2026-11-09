@@ -12,6 +12,8 @@ const exMap = {
     muscle: "Chest",
   },
   curl: { id: "curl", name: "Dumbbell curl", type: "isolation", muscle: "Arms" },
+  shoulder_press: { id: "shoulder_press", name: "Dumbbell shoulder press", type: "compound", muscle: "Shoulders" },
+  no_name: { id: "no_name", muscle: "Chest" }, // real but minimal exercise record — no `name` field
 };
 
 function entry(exId, sets, extra = {}) {
@@ -241,6 +243,27 @@ describe("renderWorkoutShareCard — accurate data, never fabricated", () => {
     const texts = ctx.__calls.fillText.map((c) => c.text);
     expect(texts).not.toContain("NEW PR");
     expect(texts).toContain("BEST SET");
+  });
+});
+
+describe("renderWorkoutShareCard — anatomy highlight reflects all actually-trained muscles", () => {
+  it("a session spanning multiple real muscle groups (chest + shoulders) renders without throwing on every template", () => {
+    const session = baseSession({
+      entries: [entry("bench", [{ weight: 225, reps: 5 }]), entry("shoulder_press", [{ weight: 95, reps: 8 }])],
+    });
+    for (const template of ["performance", "minimal", "social"]) {
+      expect(() => renderWorkoutShareCard({ session, exMap, state: {}, template, sizeId: "story" })).not.toThrow();
+    }
+  });
+
+  it("falls back cleanly when an entry's exercise record has no `name` field", () => {
+    const session = baseSession({ entries: [entry("no_name", [{ weight: 135, reps: 10 }])] });
+    expect(() => renderWorkoutShareCard({ session, exMap, state: {}, template: "performance", sizeId: "story" })).not.toThrow();
+  });
+
+  it("falls back to the broad mainMuscles category when exMap can't resolve any entry (e.g. a stale/missing catalog id)", () => {
+    const session = baseSession({ entries: [entry("unknown_ex_id", [{ weight: 100, reps: 10 }])], mainMuscles: ["Back"] });
+    expect(() => renderWorkoutShareCard({ session, exMap, state: {}, template: "performance", sizeId: "story" })).not.toThrow();
   });
 });
 

@@ -180,25 +180,38 @@ function background(ctx, W, H, glowY) {
   // Intense, controlled red glow behind the hero — raised from the original subtle wash into a
   // real cinematic cast, still centered behind the content so it never competes with the numbers
   // sitting on top of it.
-  const glow = ctx.createRadialGradient(W * 0.62, glowY, 0, W * 0.62, glowY, W * 0.78);
-  glow.addColorStop(0, "rgba(220,38,38,0.34)");
-  glow.addColorStop(0.55, "rgba(185,28,28,0.16)");
+  const glow = ctx.createRadialGradient(W * 0.62, glowY, 0, W * 0.62, glowY, W * 0.85);
+  glow.addColorStop(0, "rgba(220,38,38,0.42)");
+  glow.addColorStop(0.5, "rgba(185,28,28,0.22)");
   glow.addColorStop(1, "rgba(220,38,38,0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
   // A second, deeper crimson bloom low in the frame — the reference's floor isn't flat black,
   // it has its own faint red undertone separate from the hero glow above.
-  const floorGlow = ctx.createRadialGradient(W * 0.5, H * 0.98, 0, W * 0.5, H * 0.98, W * 0.9);
-  floorGlow.addColorStop(0, "rgba(140,20,24,0.22)");
-  floorGlow.addColorStop(1, "rgba(140,20,24,0)");
+  const floorGlow = ctx.createRadialGradient(W * 0.5, H * 0.98, 0, W * 0.5, H * 0.98, W * 0.95);
+  floorGlow.addColorStop(0, "rgba(150,22,26,0.3)");
+  floorGlow.addColorStop(1, "rgba(150,22,26,0)");
   ctx.fillStyle = floorGlow;
   ctx.fillRect(0, 0, W, H);
 
-  // Angular light-streak accents, top-right and bottom-left — the two diagonal cues the
-  // reference uses to break up the flat corners without ever crossing the content column.
-  diagonalStreak(ctx, W * 0.74, -H * 0.02, W * 1.04, H * 0.14, 1.5, 0.5);
-  diagonalStreak(ctx, -W * 0.04, H * 0.92, W * 0.22, H * 1.02, 1.5, 0.38);
+  // A faint smoky red wash spanning the full card (not just the hero panel) — low, broad
+  // gradients rather than a texture image, so the whole frame reads as charged red atmosphere
+  // the way the reference does, while staying well below the hairline/number contrast above it.
+  const atmosphere = ctx.createLinearGradient(0, H * 0.25, W, H * 0.75);
+  atmosphere.addColorStop(0, "rgba(180,24,28,0.1)");
+  atmosphere.addColorStop(0.5, "rgba(120,16,20,0.04)");
+  atmosphere.addColorStop(1, "rgba(180,24,28,0.12)");
+  ctx.fillStyle = atmosphere;
+  ctx.fillRect(0, 0, W, H);
+
+  // Angular light-streak accents — four crossing diagonals (up from two) for the reference's
+  // more dynamic, energetic corner treatment, still kept off the content column and still faded
+  // from a bright core rather than hard-edged.
+  diagonalStreak(ctx, W * 0.7, -H * 0.03, W * 1.06, H * 0.17, 1.6, 0.58);
+  diagonalStreak(ctx, W * 0.86, -H * 0.02, W * 1.04, H * 0.07, 1.2, 0.4);
+  diagonalStreak(ctx, -W * 0.04, H * 0.86, W * 0.26, H * 1.03, 1.6, 0.46);
+  diagonalStreak(ctx, -W * 0.02, H * 0.97, W * 0.16, H * 1.05, 1.2, 0.3);
 
   // Restrained vignette at the very top/bottom edges — the "subtle depth" cue a flat fill is
   // missing, without any literal grain/noise texture that would read as generated/Canva-ish.
@@ -222,10 +235,10 @@ function background(ctx, W, H, glowY) {
 
   const inset = Math.round(W * 0.022);
   ctx.save();
-  ctx.shadowColor = "rgba(239,68,68,0.45)";
-  ctx.shadowBlur = 18;
-  ctx.strokeStyle = "rgba(239,68,68,0.38)";
-  ctx.lineWidth = 2;
+  ctx.shadowColor = "rgba(239,68,68,0.6)";
+  ctx.shadowBlur = 28;
+  ctx.strokeStyle = "rgba(239,68,68,0.5)";
+  ctx.lineWidth = 3;
   roundRect(ctx, inset, inset, W - inset * 2, H - inset * 2, 28);
   ctx.stroke();
   ctx.restore();
@@ -374,15 +387,44 @@ function parseViewBox(vb) {
 // trained-muscle figure. `highlight = false` keeps that companion figure permanently muted/
 // charcoal, since it never represents real trained-muscle data — it's decorative symmetry only,
 // exactly as uncolored in the reference as the real figure is red.
-function drawAnatomyWatermark(ctx, { centerX, topY, height, muscleCategory, bodyAlpha = 0.4, redAlpha = 0.92, forceView = null, highlight = true }) {
+// Every zone (chest/shoulders/triceps/...) any exercise ACTUALLY LOGGED this session maps to —
+// not just the single dominant broad category session.mainMuscles[0] reduces to. A Push session
+// that hit bench press + shoulder press + tricep pushdown lights up chest+shoulders+triceps
+// together, exactly matching what was actually trained, never a broader claim than the real
+// logged work supports (task: "reflect the workout's actual trained muscles, rather than
+// hardcoded chest highlights" — this is the fuller, still-100%-honest reading of that rule).
+// Falls back to the single dominant-category zone when there's no usable entry/exMap data (an
+// old session, or a preview with no exMap), so that case renders exactly as it always has.
+function sessionHighlightZones(session, exMap) {
+  const entries = session?.entries || [];
+  const viewCounts = { front: 0, back: 0 };
+  const zonesByView = { front: new Set(), back: new Set() };
+  entries.forEach((entry) => {
+    const ex = exMap?.[entry.exId];
+    if (!ex) return;
+    const { view, zone } = getMuscleDisplay(ex);
+    if (zone === "full") return;
+    viewCounts[view]++;
+    zonesByView[view].add(zone);
+  });
+  const view = viewCounts.back > viewCounts.front ? "back" : "front";
+  const zones = [...zonesByView[view]];
+  if (zones.length > 0) return { view, zones };
+  const fallback = getMuscleDisplay({ muscle: session?.mainMuscles?.[0] });
+  return { view: fallback.view, zones: fallback.zone !== "full" ? [fallback.zone] : [] };
+}
+
+function drawAnatomyWatermark(ctx, { centerX, topY, height, muscleCategory, zones, bodyAlpha = 0.4, redAlpha = 0.92, forceView = null, highlight = true }) {
   const resolved = getMuscleDisplay({ muscle: muscleCategory });
   const view = forceView || resolved.view;
-  const zone = resolved.zone;
   const isBack = view === "back";
   const vb = parseViewBox(isBack ? VIEW_BOX_BACK : VIEW_BOX_FRONT);
   const parts = isBack ? BACK_PARTS : FRONT_PARTS;
   const zoneSlugs = isBack ? BACK_ZONE_SLUGS : FRONT_ZONE_SLUGS;
-  const activeSlugs = highlight && zone !== "full" ? zoneSlugs[zone] || [] : [];
+  // `zones` (plural, real logged-exercise derived) takes over when given; otherwise fall back to
+  // the single broad-category zone exactly as before, so every other call site is unaffected.
+  const activeZones = zones && zones.length ? zones : resolved.zone !== "full" ? [resolved.zone] : [];
+  const activeSlugs = highlight ? [...new Set(activeZones.flatMap((z) => zoneSlugs[z] || []))] : [];
 
   const scale = height / vb.h;
   const width = vb.w * scale;
@@ -954,13 +996,12 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured, state) {
   // figure nor its highlight is fabricated — the companion is never colored, ever. ----
   const anatomyHeight = H * (k < 1 ? 0.46 : 0.43);
   const anatomyTop = H * 0.082;
-  const { view: activeView } = getMuscleDisplay({ muscle: session.mainMuscles?.[0] });
-  const companionView = activeView === "back" ? "front" : "back";
+  const highlightZones = sessionHighlightZones(session, exMap);
+  const companionView = highlightZones.view === "back" ? "front" : "back";
   drawAnatomyWatermark(ctx, {
     centerX: W * 0.65,
     topY: anatomyTop,
     height: anatomyHeight,
-    muscleCategory: session.mainMuscles?.[0],
     forceView: companionView,
     highlight: false,
     bodyAlpha: 0.28,
@@ -969,7 +1010,8 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured, state) {
     centerX: W * 0.94,
     topY: anatomyTop,
     height: anatomyHeight,
-    muscleCategory: session.mainMuscles?.[0],
+    forceView: highlightZones.view,
+    zones: highlightZones.zones,
     // Bug found in QA: at the previous 0.52, the muted charcoal outline/body fill became
     // functionally invisible against this exact spot's accumulated darkening (page vignette +
     // radial glow falloff + the hero panel's own translucent fill underneath it) — only the much
@@ -1220,7 +1262,7 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured, state) {
 // Genuinely minimal (task section 16) — workout title, best lift, key stats, a small anatomy
 // visual, BRK footer. None of Performance's stat strip/exercise breakdown complexity.
 
-function drawMinimalCard(ctx, W, H, session, featured) {
+function drawMinimalCard(ctx, W, H, session, featured, exMap) {
   const compact = H <= 1500;
   background(ctx, W, H, H * 0.46);
 
@@ -1232,11 +1274,13 @@ function drawMinimalCard(ctx, W, H, session, featured) {
 
   // Small, quiet anatomy watermark — present as the brand signature but never competing with
   // the big numbers, per "keep Minimal Story genuinely minimal."
+  const minimalZones = sessionHighlightZones(session, exMap);
   drawAnatomyWatermark(ctx, {
     centerX: W * 0.85,
     topY: bodyStartY,
     height: compact ? H * 0.16 : H * 0.15,
-    muscleCategory: session.mainMuscles?.[0],
+    forceView: minimalZones.view,
+    zones: minimalZones.zones,
     bodyAlpha: 0.28,
     redAlpha: 0.7,
   });
@@ -1835,7 +1879,7 @@ export function renderWorkoutShareCard({ session, exMap, state, template = "perf
   const featured = featuredLift || pickFeaturedLift(session, exMap);
 
   if (template === "minimal") {
-    drawMinimalCard(ctx, size.width, size.height, session, featured);
+    drawMinimalCard(ctx, size.width, size.height, session, featured, exMap);
   } else {
     drawPerformanceCard(ctx, size.width, size.height, session, exMap, featured, state);
   }
