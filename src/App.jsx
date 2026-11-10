@@ -56,6 +56,7 @@ import BeginnerOnboardingFlow from "./components/BeginnerOnboarding.jsx";
 import ExerciseInstructionPanel from "./components/ExerciseInstructionPanel.jsx";
 import MoreTab from "./components/MoreTab.jsx";
 import SettingsTab from "./components/SettingsTab.jsx";
+import ImportWorkoutHistoryScreen from "./components/ImportWorkoutHistoryScreen.jsx";
 import TopUsedTab from "./components/TopUsedTab.jsx";
 import StandaloneRestTimer from "./components/StandaloneRestTimer.jsx";
 import { DEFAULT_REST_DEFAULTS } from "./utils/backup.js";
@@ -3278,6 +3279,9 @@ export default function LiftLog() {
             {tab === "top" && <TopUsedTab state={state} exMap={exMap} onBack={() => setTab("more")} />}
             {tab === "photos" && <PhotosTab state={state} updateState={updateState} />}
             {tab === "settings" && <SettingsTab state={state} updateState={updateState} onNavigate={setTab} />}
+            {tab === "importWorkoutHistory" && (
+              <ImportWorkoutHistoryScreen state={state} updateState={updateState} onBack={() => setTab("settings")} />
+            )}
             {tab === "dataWorkbook" && (
               <DataWorkbookScreen state={state} exMap={exMap} onBack={() => setTab("settings")} onViewWorkout={(sessionId) => viewWorkout(sessionId, "settings")} />
             )}
