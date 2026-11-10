@@ -359,12 +359,30 @@ export default function SettingsTab({ state, updateState, onNavigate }) {
         </button>
       </div>
 
+      <div className="border border-white/10 bg-v5-elevated">
+        <button
+          onClick={() => onNavigate?.("importWorkoutHistory")}
+          className="w-full flex items-center gap-3 px-4 py-4 text-left hover:bg-v5-surface"
+        >
+          <Upload size={20} className="text-v5-red shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-white">Import Workout History</div>
+            <div className="text-xs text-v5-subtext mt-0.5">
+              Bring in workouts from another export — adds to what you have, never replaces it.
+            </div>
+          </div>
+          <ChevronRight size={18} className="text-v5-subtext/70 shrink-0" />
+        </button>
+      </div>
+
       <div className="border border-v5-red/25 bg-v5-elevated p-4 space-y-4">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-v5-red">Data backup</div>
+          <div className="text-[11px] uppercase tracking-widest text-v5-red">Data backup — restore full device</div>
           <p className="text-xs text-v5-subtext mt-1">
             Everything is stored on this device only — there's no account or server. Export a backup before
-            switching phones or clearing browser data, and import it to restore.
+            switching phones or clearing browser data. Import here <strong>replaces</strong> everything on this
+            device — for adding historical workouts without losing what you have, use "Import Workout History" above
+            instead.
           </p>
         </div>
 
