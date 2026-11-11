@@ -143,6 +143,32 @@ export function validateCloudRecord(record, requiredKeys) {
   return { valid: true, reason: null };
 }
 
+// The outbox state above is a plain JS object with no persistence of its own — nothing in this
+// module writes it to storage. That's deliberate (keeps this module network/storage-free and
+// testable), but it means a caller that never persists it is silently exposed to exactly the
+// "interrupted synchronization" failure mode this design is supposed to prevent: a browser reload
+// or app restart while an operation is still "pending" loses that operation forever, even though
+// it was never sent. These two functions are the serialize/deserialize half of the fix — still
+// pure, still storage-free (the caller supplies where it actually gets written), so wiring this
+// in is "call persistOutboxState after every mutation and loadOutboxState once at startup," not a
+// rewrite of this module.
+export function persistOutboxState(state) {
+  return JSON.stringify(state);
+}
+
+// Never throws: a corrupt/foreign payload starts a fresh outbox rather than blocking the app —
+// losing a not-yet-sent queue is recoverable (the next edit re-enqueues it), crashing isn't.
+export function loadOutboxState(raw) {
+  if (!raw) return createOutboxState();
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || typeof parsed.byAccount !== "object") return createOutboxState();
+    return parsed;
+  } catch {
+    return createOutboxState();
+  }
+}
+
 // Pages through a Supabase-style range query past its implicit/explicit row cap. `fetchPage`
 // is injected so this stays network-free and testable; the real wrapper (supabaseSync.js)
 // supplies `({ from, to }) => supabase.from(table).select("*").range(from, to)`.
