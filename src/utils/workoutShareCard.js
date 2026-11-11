@@ -147,46 +147,106 @@ function wrapCentered(ctx, text, cx, y, maxWidth, lineHeight, maxLines = 3) {
   return wrapAligned(ctx, text, cx, y, maxWidth, lineHeight, maxLines, "center");
 }
 
+// A soft-edged diagonal beam — built from overlapping translucent strokes fading outward from a
+// bright core, never a single hard-edged line — for the "light streaks" the card otherwise has
+// no cinematic lighting cue for beyond the central glow. Kept to the corners (never crossing the
+// content column) so it reads as atmosphere, not a graphic competing with real data.
+function diagonalStreak(ctx, x1, y1, x2, y2, coreWidth, coreAlpha) {
+  ctx.save();
+  ctx.lineCap = "round";
+  for (let i = 5; i >= 0; i--) {
+    const t = i / 5;
+    ctx.strokeStyle = `rgba(239,68,68,${coreAlpha * (1 - t) * (1 - t)})`;
+    ctx.lineWidth = coreWidth * (1 + t * 3.2);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function background(ctx, W, H, glowY) {
+  // Deeper, more saturated base than a flat charcoal-to-black fade — a near-black floor with a
+  // faint warm (not gray) lift near the top, so the red lighting on top of it reads as premium
+  // rather than washed out (task: "looks too flat, gray, and understated").
   const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, COLOR.bgTop);
+  grad.addColorStop(0, "#1f1313");
+  grad.addColorStop(0.45, COLOR.bgTop);
   grad.addColorStop(1, COLOR.bgBottom);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
-  // Soft red glow behind the hero — the one "premium" lighting cue that separates this from a
-  // flat receipt, kept subtle so it never competes with the numbers on top of it.
-  const glow = ctx.createRadialGradient(W * 0.62, glowY, 0, W * 0.62, glowY, W * 0.75);
-  glow.addColorStop(0, COLOR.glow);
+  // Intense, controlled red glow behind the hero — raised from the original subtle wash into a
+  // real cinematic cast, still centered behind the content so it never competes with the numbers
+  // sitting on top of it.
+  const glow = ctx.createRadialGradient(W * 0.62, glowY, 0, W * 0.62, glowY, W * 0.85);
+  glow.addColorStop(0, "rgba(220,38,38,0.42)");
+  glow.addColorStop(0.5, "rgba(185,28,28,0.22)");
   glow.addColorStop(1, "rgba(220,38,38,0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
-  // Restrained vignette at the very top/bottom edges — the "subtle depth" cue the flat original
-  // was missing, without any literal grain/noise texture that would read as generated/Canva-ish.
+  // A second, deeper crimson bloom low in the frame — the reference's floor isn't flat black,
+  // it has its own faint red undertone separate from the hero glow above.
+  const floorGlow = ctx.createRadialGradient(W * 0.5, H * 0.98, 0, W * 0.5, H * 0.98, W * 0.95);
+  floorGlow.addColorStop(0, "rgba(150,22,26,0.3)");
+  floorGlow.addColorStop(1, "rgba(150,22,26,0)");
+  ctx.fillStyle = floorGlow;
+  ctx.fillRect(0, 0, W, H);
+
+  // A faint smoky red wash spanning the full card (not just the hero panel) — low, broad
+  // gradients rather than a texture image, so the whole frame reads as charged red atmosphere
+  // the way the reference does, while staying well below the hairline/number contrast above it.
+  const atmosphere = ctx.createLinearGradient(0, H * 0.25, W, H * 0.75);
+  atmosphere.addColorStop(0, "rgba(180,24,28,0.1)");
+  atmosphere.addColorStop(0.5, "rgba(120,16,20,0.04)");
+  atmosphere.addColorStop(1, "rgba(180,24,28,0.12)");
+  ctx.fillStyle = atmosphere;
+  ctx.fillRect(0, 0, W, H);
+
+  // Angular light-streak accents — four crossing diagonals (up from two) for the reference's
+  // more dynamic, energetic corner treatment, still kept off the content column and still faded
+  // from a bright core rather than hard-edged.
+  diagonalStreak(ctx, W * 0.7, -H * 0.03, W * 1.06, H * 0.17, 1.6, 0.58);
+  diagonalStreak(ctx, W * 0.86, -H * 0.02, W * 1.04, H * 0.07, 1.2, 0.4);
+  diagonalStreak(ctx, -W * 0.04, H * 0.86, W * 0.26, H * 1.03, 1.6, 0.46);
+  diagonalStreak(ctx, -W * 0.02, H * 0.97, W * 0.16, H * 1.05, 1.2, 0.3);
+
+  // Restrained vignette at the very top/bottom edges — the "subtle depth" cue a flat fill is
+  // missing, without any literal grain/noise texture that would read as generated/Canva-ish.
   const vignette = ctx.createLinearGradient(0, 0, 0, H);
-  vignette.addColorStop(0, "rgba(0,0,0,0.28)");
+  vignette.addColorStop(0, "rgba(0,0,0,0.3)");
   vignette.addColorStop(0.12, "rgba(0,0,0,0)");
   vignette.addColorStop(0.88, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0,0,0,0.32)");
+  vignette.addColorStop(1, "rgba(0,0,0,0.36)");
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, W, H);
 
-  // Premium framing pass (follow-up task: "stronger card framing," "subtle red highlight
-  // lines") — a barely-there red hairline at the very top edge, and a soft inset border, so the
-  // card reads as a designed asset rather than a plain screenshot even before any content
-  // renders. Both stay far below anything that would compete with the hero content.
-  const hairline = ctx.createLinearGradient(W * 0.22, 0, W * 0.78, 0);
+  // Premium framing pass — a brighter red hairline at the very top edge, and a genuinely
+  // illuminated (not barely-there) red-tinted border running the full card perimeter, so the
+  // card reads as a designed achievement poster before any content even renders.
+  const hairline = ctx.createLinearGradient(W * 0.18, 0, W * 0.82, 0);
   hairline.addColorStop(0, "rgba(239,68,68,0)");
-  hairline.addColorStop(0.5, "rgba(239,68,68,0.55)");
+  hairline.addColorStop(0.5, "rgba(239,68,68,0.75)");
   hairline.addColorStop(1, "rgba(239,68,68,0)");
   ctx.fillStyle = hairline;
-  ctx.fillRect(W * 0.22, 0, W * 0.56, 3);
+  ctx.fillRect(W * 0.18, 0, W * 0.64, 3);
 
   const inset = Math.round(W * 0.022);
-  ctx.strokeStyle = "rgba(255,255,255,0.055)";
-  ctx.lineWidth = 1.5;
+  ctx.save();
+  ctx.shadowColor = "rgba(239,68,68,0.6)";
+  ctx.shadowBlur = 28;
+  ctx.strokeStyle = "rgba(239,68,68,0.5)";
+  ctx.lineWidth = 3;
   roundRect(ctx, inset, inset, W - inset * 2, H - inset * 2, 28);
+  ctx.stroke();
+  ctx.restore();
+  // A second, brighter hairline just inside the glowing one — the "thin illuminated border"
+  // reads as a crisp edge up close even though the glow softens its outer side.
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 1;
+  roundRect(ctx, inset + 3, inset + 3, W - (inset + 3) * 2, H - (inset + 3) * 2, 26);
   ctx.stroke();
 }
 
@@ -197,9 +257,9 @@ function wordmark(ctx, W, y, size = 40, align = "center", leftX = 0) {
   ctx.font = `800 ${size}px ${FONT}`;
   const brkWidth = ctx.measureText("BRK").width;
   ctx.font = `700 ${size * 0.42}px ${FONT}`;
-  const liftWidth = ctx.measureText("LIFT").width;
+  const fitWidth = ctx.measureText("FIT").width;
   const gap = size * 0.22;
-  const totalW = brkWidth + gap + liftWidth;
+  const totalW = brkWidth + gap + fitWidth;
   const startX = align === "left" ? leftX : W / 2 - totalW / 2;
   ctx.textAlign = "left";
   ctx.fillStyle = COLOR.red;
@@ -207,7 +267,7 @@ function wordmark(ctx, W, y, size = 40, align = "center", leftX = 0) {
   ctx.fillText("BRK", startX, y);
   ctx.fillStyle = COLOR.dimGray;
   ctx.font = `700 ${size * 0.42}px ${FONT}`;
-  ctx.fillText("LIFT", startX + brkWidth + gap, y - size * 0.02);
+  ctx.fillText("FIT", startX + brkWidth + gap, y - size * 0.02);
   ctx.textAlign = "center";
 }
 
@@ -327,15 +387,44 @@ function parseViewBox(vb) {
 // trained-muscle figure. `highlight = false` keeps that companion figure permanently muted/
 // charcoal, since it never represents real trained-muscle data — it's decorative symmetry only,
 // exactly as uncolored in the reference as the real figure is red.
-function drawAnatomyWatermark(ctx, { centerX, topY, height, muscleCategory, bodyAlpha = 0.4, redAlpha = 0.92, forceView = null, highlight = true }) {
+// Every zone (chest/shoulders/triceps/...) any exercise ACTUALLY LOGGED this session maps to —
+// not just the single dominant broad category session.mainMuscles[0] reduces to. A Push session
+// that hit bench press + shoulder press + tricep pushdown lights up chest+shoulders+triceps
+// together, exactly matching what was actually trained, never a broader claim than the real
+// logged work supports (task: "reflect the workout's actual trained muscles, rather than
+// hardcoded chest highlights" — this is the fuller, still-100%-honest reading of that rule).
+// Falls back to the single dominant-category zone when there's no usable entry/exMap data (an
+// old session, or a preview with no exMap), so that case renders exactly as it always has.
+function sessionHighlightZones(session, exMap) {
+  const entries = session?.entries || [];
+  const viewCounts = { front: 0, back: 0 };
+  const zonesByView = { front: new Set(), back: new Set() };
+  entries.forEach((entry) => {
+    const ex = exMap?.[entry.exId];
+    if (!ex) return;
+    const { view, zone } = getMuscleDisplay(ex);
+    if (zone === "full") return;
+    viewCounts[view]++;
+    zonesByView[view].add(zone);
+  });
+  const view = viewCounts.back > viewCounts.front ? "back" : "front";
+  const zones = [...zonesByView[view]];
+  if (zones.length > 0) return { view, zones };
+  const fallback = getMuscleDisplay({ muscle: session?.mainMuscles?.[0] });
+  return { view: fallback.view, zones: fallback.zone !== "full" ? [fallback.zone] : [] };
+}
+
+function drawAnatomyWatermark(ctx, { centerX, topY, height, muscleCategory, zones, bodyAlpha = 0.4, redAlpha = 0.92, forceView = null, highlight = true }) {
   const resolved = getMuscleDisplay({ muscle: muscleCategory });
   const view = forceView || resolved.view;
-  const zone = resolved.zone;
   const isBack = view === "back";
   const vb = parseViewBox(isBack ? VIEW_BOX_BACK : VIEW_BOX_FRONT);
   const parts = isBack ? BACK_PARTS : FRONT_PARTS;
   const zoneSlugs = isBack ? BACK_ZONE_SLUGS : FRONT_ZONE_SLUGS;
-  const activeSlugs = highlight && zone !== "full" ? zoneSlugs[zone] || [] : [];
+  // `zones` (plural, real logged-exercise derived) takes over when given; otherwise fall back to
+  // the single broad-category zone exactly as before, so every other call site is unaffected.
+  const activeZones = zones && zones.length ? zones : resolved.zone !== "full" ? [resolved.zone] : [];
+  const activeSlugs = highlight ? [...new Set(activeZones.flatMap((z) => zoneSlugs[z] || []))] : [];
 
   const scale = height / vb.h;
   const width = vb.w * scale;
@@ -805,15 +894,47 @@ function splitTitleForColor(text) {
 function drawHeroPanel(ctx, x, y, w, h, isPR) {
   ctx.save();
   if (isPR) {
-    ctx.shadowColor = "rgba(239,68,68,0.5)";
-    ctx.shadowBlur = 46;
+    ctx.shadowColor = "rgba(239,68,68,0.65)";
+    ctx.shadowBlur = 58;
   }
   ctx.fillStyle = "rgba(5,5,6,0.42)";
   roundRect(ctx, x, y, w, h, 32);
   ctx.fill();
   ctx.restore();
-  ctx.strokeStyle = isPR ? "rgba(239,68,68,0.55)" : "rgba(255,255,255,0.12)";
-  ctx.lineWidth = isPR ? 2 : 1.5;
+
+  if (isPR) {
+    // Dark crimson textured fill (task: "dark crimson textured background") — a diagonal
+    // gradient wash plus a soft off-center bloom, layered on top of the near-black base above so
+    // the panel reads as smoldering crimson rather than flat charcoal, while staying dark enough
+    // that white/red text on top never loses contrast.
+    ctx.save();
+    roundRect(ctx, x, y, w, h, 32);
+    ctx.clip();
+    const wash = ctx.createLinearGradient(x, y, x + w, y + h);
+    wash.addColorStop(0, "rgba(120,16,20,0.4)");
+    wash.addColorStop(0.5, "rgba(40,6,8,0.22)");
+    wash.addColorStop(1, "rgba(120,16,20,0.4)");
+    ctx.fillStyle = wash;
+    ctx.fillRect(x, y, w, h);
+    const bloom = ctx.createRadialGradient(x + w * 0.78, y + h * 0.18, 0, x + w * 0.78, y + h * 0.18, w * 0.55);
+    bloom.addColorStop(0, "rgba(239,68,68,0.28)");
+    bloom.addColorStop(1, "rgba(239,68,68,0)");
+    ctx.fillStyle = bloom;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+  }
+
+  // Bright illuminated rim — the PR panel's defining "championship poster" cue. A second,
+  // dimmer outer ring (drawn first, slightly larger) reads as a soft glow halo even without a
+  // shadow blur stacking on top of the crisp inner stroke.
+  if (isPR) {
+    ctx.strokeStyle = "rgba(239,68,68,0.22)";
+    ctx.lineWidth = 7;
+    roundRect(ctx, x, y, w, h, 32);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = isPR ? "rgba(248,113,113,0.85)" : "rgba(255,255,255,0.12)";
+  ctx.lineWidth = isPR ? 2.5 : 1.5;
   roundRect(ctx, x, y, w, h, 32);
   ctx.stroke();
 }
@@ -875,13 +996,12 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured, state) {
   // figure nor its highlight is fabricated — the companion is never colored, ever. ----
   const anatomyHeight = H * (k < 1 ? 0.46 : 0.43);
   const anatomyTop = H * 0.082;
-  const { view: activeView } = getMuscleDisplay({ muscle: session.mainMuscles?.[0] });
-  const companionView = activeView === "back" ? "front" : "back";
+  const highlightZones = sessionHighlightZones(session, exMap);
+  const companionView = highlightZones.view === "back" ? "front" : "back";
   drawAnatomyWatermark(ctx, {
     centerX: W * 0.65,
     topY: anatomyTop,
     height: anatomyHeight,
-    muscleCategory: session.mainMuscles?.[0],
     forceView: companionView,
     highlight: false,
     bodyAlpha: 0.28,
@@ -890,7 +1010,8 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured, state) {
     centerX: W * 0.94,
     topY: anatomyTop,
     height: anatomyHeight,
-    muscleCategory: session.mainMuscles?.[0],
+    forceView: highlightZones.view,
+    zones: highlightZones.zones,
     // Bug found in QA: at the previous 0.52, the muted charcoal outline/body fill became
     // functionally invisible against this exact spot's accumulated darkening (page vignette +
     // radial glow falloff + the hero panel's own translucent fill underneath it) — only the much
@@ -987,19 +1108,28 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured, state) {
     wrapCentered(ctx, featured.name, W / 2, hy, heroPanelW * 0.86, nameSize * 1.06, 1);
     hy += nameSize * 1.06 + sz(10, k, 6);
 
-    const heroSize = sz(96, k, 52);
+    // "Extremely prominent" (task spec) — raised from the previous fixed 96px ceiling, but run
+    // through fitFontSize (same guard every other variable-length string on this card already
+    // uses) so a long combo like "1,245 × 12" scales down instead of clipping past the panel.
+    const heroText = featured.weight != null ? `${featured.weight} × ${featured.reps}` : "—";
+    const heroSize = fitFontSize(ctx, heroText, heroPanelW * 0.84, "900", sz(112, k, 58), sz(52, k, 32));
     const spotlightY = hy + heroSize * 0.35;
     const spotlight = ctx.createRadialGradient(W / 2, spotlightY, 0, W / 2, spotlightY, W * 0.38);
-    spotlight.addColorStop(0, isPR ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.08)");
+    spotlight.addColorStop(0, isPR ? "rgba(239,68,68,0.24)" : "rgba(255,255,255,0.08)");
     spotlight.addColorStop(1, "rgba(239,68,68,0)");
     ctx.fillStyle = spotlight;
     ctx.fillRect(heroPanelX, spotlightY - heroPanelW * 0.5, heroPanelW, heroPanelW);
 
+    ctx.save();
+    if (isPR) {
+      ctx.shadowColor = "rgba(239,68,68,0.55)";
+      ctx.shadowBlur = 28;
+    }
     ctx.fillStyle = COLOR.white;
     ctx.font = `900 ${heroSize}px ${FONT}`;
     ctx.textAlign = "center";
-    const heroText = featured.weight != null ? `${featured.weight} × ${featured.reps}` : "—";
     ctx.fillText(heroText, W / 2, hy + heroSize * 0.78);
+    ctx.restore();
     hy += heroSize * 0.78 + sz(22, k, 14);
 
     if (isPR) {
@@ -1132,7 +1262,7 @@ function drawPerformanceCard(ctx, W, H, session, exMap, featured, state) {
 // Genuinely minimal (task section 16) — workout title, best lift, key stats, a small anatomy
 // visual, BRK footer. None of Performance's stat strip/exercise breakdown complexity.
 
-function drawMinimalCard(ctx, W, H, session, featured) {
+function drawMinimalCard(ctx, W, H, session, featured, exMap) {
   const compact = H <= 1500;
   background(ctx, W, H, H * 0.46);
 
@@ -1144,11 +1274,13 @@ function drawMinimalCard(ctx, W, H, session, featured) {
 
   // Small, quiet anatomy watermark — present as the brand signature but never competing with
   // the big numbers, per "keep Minimal Story genuinely minimal."
+  const minimalZones = sessionHighlightZones(session, exMap);
   drawAnatomyWatermark(ctx, {
     centerX: W * 0.85,
     topY: bodyStartY,
     height: compact ? H * 0.16 : H * 0.15,
-    muscleCategory: session.mainMuscles?.[0],
+    forceView: minimalZones.view,
+    zones: minimalZones.zones,
     bodyAlpha: 0.28,
     redAlpha: 0.7,
   });
@@ -1747,7 +1879,7 @@ export function renderWorkoutShareCard({ session, exMap, state, template = "perf
   const featured = featuredLift || pickFeaturedLift(session, exMap);
 
   if (template === "minimal") {
-    drawMinimalCard(ctx, size.width, size.height, session, featured);
+    drawMinimalCard(ctx, size.width, size.height, session, featured, exMap);
   } else {
     drawPerformanceCard(ctx, size.width, size.height, session, exMap, featured, state);
   }
