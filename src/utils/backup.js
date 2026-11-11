@@ -70,10 +70,11 @@ export function backupKeyDefault(key) {
   return [];
 }
 
-export function exportBackupFile(state) {
+export function exportBackupFile(state, ownership) {
   const payload = {
     app: "BRK - Fit",
     schemaVersion: 1,
+    ...(ownership ? {ownership} : {}),
     exportedAt: new Date().toISOString(),
     data: Object.fromEntries(BACKUP_DATA_KEYS.map((k) => [k, state[k] ?? backupKeyDefault(k)])),
   };
@@ -109,6 +110,6 @@ export function parseBackupFile(text) {
     validateCanonicalData(data);
     const migrated = migrateCanonicalData(data);
     validateCanonicalData(migrated);
-    return { ok: true, data: migrated };
+    return { ok: true, data: migrated, ownership: parsed.data ? parsed.ownership ?? null : null };
   } catch { return { ok: false, error: "Backup data could not be validated safely. Your current data has not been changed." }; }
 }

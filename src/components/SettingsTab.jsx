@@ -1,3 +1,5 @@
+import {getEditorSession} from "../persistence/editorSession.js";
+import {canImportOwnership} from "../persistence/accountOwnership.js";
 import React, { useRef, useState } from "react";
 import { ChevronRight, Download, Upload, FileSpreadsheet } from "lucide-react";
 import { DEFAULT_REST_DEFAULTS, BACKUP_DATA_KEYS, exportBackupFile, parseBackupFile } from "../utils/backup.js";
@@ -14,6 +16,7 @@ function notificationPermissionState() {
 }
 
 export default function SettingsTab({ state, updateState, onNavigate }) {
+  const persistence=useRef(getEditorSession().scoped()).current;
   const fileInputRef = useRef(null);
   const [importMessage, setImportMessage] = useState(null); // { type: "error" | "success", text }
   // Section 10 — tracked as real state (not read fresh every render) so requesting permission
@@ -50,7 +53,8 @@ export default function SettingsTab({ state, updateState, onNavigate }) {
   };
 
   const handleExport = () => {
-    exportBackupFile(state);
+    if(!persistence.isOwner())return;
+    exportBackupFile(state,persistence.account.snapshot().metadata);
     setImportMessage({ type: "success", text: "Backup downloaded." });
   };
 
@@ -66,10 +70,14 @@ export default function SettingsTab({ state, updateState, onNavigate }) {
 
     const reader = new FileReader();
     reader.onload = () => {
+      if(!persistence.isOwner())return;
       const result = parseBackupFile(String(reader.result));
       if (!result.ok) {
         setImportMessage({ type: "error", text: result.error });
         return;
+      }
+      if(!canImportOwnership(result.ownership,persistence.account.snapshot().metadata)){
+        setImportMessage({type:"error",text:"This backup has a different or unverified owner. It has not been imported. Keep the original file for ownership recovery review."});return;
       }
       const confirmed = window.confirm(
         "Importing this backup will overwrite all current data on this device — logs, cardio logs, custom exercises, custom plans and programs, and your active program. This can't be undone. Continue?"
