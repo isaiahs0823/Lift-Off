@@ -421,6 +421,10 @@ export async function pullWorkoutDataFromSupabase(userId) {
       settings: profileRow.settings,
       hasSeenOnboarding: profileRow.has_seen_onboarding,
     };
+    // Keyed by userId (the profile row's actual primary key), not a generic "id" field — see
+    // pushProfileWithRevision and cloudSyncEngine.js's diffProfile for why this singleton is
+    // handled distinctly from the id-keyed collections above.
+    revisionsByTable.workout_profile = [{ id: userId, revision: profileRow.revision }];
   }
 
   return { ok: errors.length === 0, errors, data, revisionsByTable };
@@ -460,11 +464,14 @@ export function mergeRemoteIntoLocal(localState, remoteData) {
 
 // ---------------- CLOUD SYNC v2 (outbox-backed, revision-checked) ----------------
 // Everything below is gated on CLOUD_SYNC_V2_ENABLED (see src/config/featureFlags.js, off by
-// default) and is not called anywhere in the app yet — it exists to be security-tested and
-// reviewed ahead of the migration it depends on (database/sync-v2/001_add_revision_tracking.sql),
-// not to run today. Turning it on requires: applying that migration, wiring these functions into
-// the actual mutation call sites, and dropping the old whole-collection push/pull above (or
-// running both in parallel deliberately) — none of which is done by flipping the flag alone.
+// default for every real account today) and depends on a migration
+// (database/sync-v2/001_add_revision_tracking.sql) not yet applied to any Supabase project. It
+// IS now wired into App.jsx's real mutation path (persist → scheduleCloudSync →
+// cloudSyncEngine.js's diff/enqueue/drain) behind that flag — when the flag is on, this runs
+// INSTEAD of the legacy whole-collection push/pull above, never alongside it, for exactly the
+// rows this covers. Turning the flag on anywhere real still requires applying that migration
+// first; flipping the flag without it would just make every write fail (the revision/
+// last_operation_id columns it reads and writes wouldn't exist).
 
 const COLLECTIONS_BY_TABLE = new Map(COLLECTIONS.map((c) => [c.table, c]));
 
@@ -513,6 +520,41 @@ export async function pushOperationWithRevision(op, userId) {
   }
 
   const { data: current } = await supabase.from(op.table).select("revision, last_operation_id").eq("id", op.rowId).eq("user_id", userId).maybeSingle();
+  return reconcileRetryOutcome(op, { updatedRow: null, currentRow: current ?? null });
+}
+
+// The workout_profile singleton, protected the same compare-and-swap way as every other synced
+// row, just keyed on user_id directly instead of a separate id column (the row's actual primary
+// key — see supabase_schema.sql). Whole-row revision check, not field-level: see cloudSyncEngine.
+// js's diffProfile for why that's the deliberate, documented choice rather than an oversight.
+const PROFILE_TO_ROW = (profile, userId) => ({
+  user_id: userId,
+  current_program: profile.currentProgram ?? null,
+  weekly_schedule: profile.weeklySchedule ?? null,
+  schedule_log: profile.scheduleLog ?? [],
+  reminder_settings: profile.reminderSettings ?? null,
+  settings: profile.settings ?? {},
+  has_seen_onboarding: !!profile.hasSeenOnboarding,
+  updated_at: new Date().toISOString(),
+});
+export async function pushProfileWithRevision(op, userId) {
+  if (!CLOUD_SYNC_V2_ENABLED || !requireUser()) return { outcome: "skipped" };
+  const row = DROP_UNDEFINED({ ...PROFILE_TO_ROW(op.payload, userId), revision: (op.expectedRevision ?? 0) + 1, last_operation_id: op.opId });
+
+  if (op.expectedRevision === null) {
+    // First-ever write for this account's profile — plain insert. If the row actually already
+    // exists (a pre-v2 account, or a device that never pulled to learn the real revision), this
+    // fails on the user_id primary key and falls through to the reconcile-by-fetch path below,
+    // which is always safe — at worst it reports a conflict for a write that could have been a
+    // normal update, never a silent overwrite.
+    const { data, error } = await supabase.from("workout_profile").insert(row).select().maybeSingle();
+    if (!error) return reconcileRetryOutcome(op, { updatedRow: data, currentRow: null });
+  } else {
+    const { data, error } = await supabase.from("workout_profile").update(row).eq("user_id", userId).eq("revision", op.expectedRevision).select().maybeSingle();
+    if (!error && data) return reconcileRetryOutcome(op, { updatedRow: data, currentRow: null });
+  }
+
+  const { data: current } = await supabase.from("workout_profile").select("revision, last_operation_id").eq("user_id", userId).maybeSingle();
   return reconcileRetryOutcome(op, { updatedRow: null, currentRow: current ?? null });
 }
 

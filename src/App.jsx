@@ -126,11 +126,11 @@ import { recalcAthleteRatingState, detectRatingEvent, RATING_SCHEMA_VERSION } fr
 import { reminderIsDue, getReminderSettings } from "./utils/workoutReminders.js";
 import LevelUpScreen from "./components/LevelUpScreen.jsx";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
-import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal, pushOperationWithRevision, COLLECTION_TABLES } from "./utils/supabaseSync.js";
+import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal, pushOperationWithRevision, pushProfileWithRevision, COLLECTION_TABLES } from "./utils/supabaseSync.js";
 import { initialSyncStatus, markSyncStarted, markSyncSuccess, markSyncFailure, MAX_SYNC_ATTEMPTS, retryDelayMs } from "./utils/syncStatus.js";
 import { CLOUD_SYNC_V2_ENABLED } from "./config/featureFlags.js";
 import { createOutboxState, switchAccount as switchOutboxAccount, persistOutboxState, loadOutboxState } from "./persistence/syncOutbox.js";
-import { diffCollections, enqueueDiff, drainOutbox, resetInFlightToPending, recordPulledRevisions } from "./persistence/cloudSyncEngine.js";
+import { diffCollections, diffProfile, enqueueDiff, drainOutbox, resetInFlightToPending, recordPulledRevisions } from "./persistence/cloudSyncEngine.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
 import { newWorkoutId, hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion, stampWorkoutDraft, workoutEntryKey, recoverWorkoutCheckpoint, swapWorkoutExercise } from "./utils/workoutIntegrity.js";
 import {
@@ -1912,6 +1912,18 @@ export default function LiftLog() {
   // devices, never replaces what's already here). See src/utils/supabaseSync.js.
   const auth = useSupabaseAuth();
   const cloudSyncTimerRef = useRef(null);
+  // Centralized-persistence audit (P0 cloud sync, Phase 2/3): the debounced cloud sync has a
+  // real gap the OLD whole-collection push never had — if the tab/app closes before the 1.5s
+  // debounce fires, that edit's diff is never computed and never enqueued, and (unlike the old
+  // path, which just re-sends everything on the next unrelated edit) there is no later diff that
+  // would ever recover it, since every later diff only compares against whatever `prev` it's
+  // given. The edit itself is never at risk — editorStorage().setItem already wrote it to
+  // localStorage synchronously, outside this debounce — only its enqueue into the cloud-sync
+  // outbox can be skipped. pendingSyncV2Ref + the flush effect below close this: whatever's
+  // currently scheduled-but-not-yet-fired gets enqueued immediately the moment the tab is
+  // hidden or closing, so "outbox entries cannot be silently dropped" holds even across an
+  // interrupted debounce window, not just across a clean reload.
+  const pendingSyncV2Ref = useRef(null); // { next, prev, userId } | null
   const cloudSyncRetryTimerRef = useRef(null);
   const pulledForUserIdRef = useRef(null);
   // Cloud sync status (P0 auth audit, item 6/7) — "visible, retried safely, never falsely
@@ -1989,7 +2001,7 @@ export default function LiftLog() {
         state: syncOutboxState,
         revisions: syncRevisions,
         accountId: auth.user.id,
-        send: (op) => pushOperationWithRevision(op, auth.user.id),
+        send: (op) => (op.table === "workout_profile" ? pushProfileWithRevision(op, auth.user.id) : pushOperationWithRevision(op, auth.user.id)),
       });
       setSyncOutboxState(result.state);
       setSyncRevisions(result.revisions);
@@ -1999,6 +2011,32 @@ export default function LiftLog() {
       syncV2DrainingRef.current = false;
     }
   }, [auth.user, syncOutboxState, syncRevisions]);
+  // The actual diff-and-enqueue step, shared between the normal debounced timer and the
+  // flush-on-hide path below so there is exactly one place this logic lives. Writes the outbox
+  // straight to storage synchronously (not just via the setSyncOutboxState→useEffect path) when
+  // called from a page-hide context, where React's own effect scheduling is not guaranteed to
+  // run before the page actually unloads.
+  const flushSyncV2Diff = useCallback(
+    (next, prev, userId, { synchronousStorageWrite = false } = {}) => {
+      const changes = diffCollections(prev, next, COLLECTION_TABLES);
+      const profileChange = diffProfile(prev, next, userId);
+      if (profileChange) changes.push(profileChange);
+      if (changes.length === 0) return;
+      setSyncOutboxState((s) => {
+        const updated = enqueueDiff(switchOutboxAccount(s, userId), syncRevisions, userId, changes);
+        if (synchronousStorageWrite) {
+          try {
+            editorStorage().setItem("liftlog-sync-outbox-v2", JSON.stringify({ outbox: JSON.parse(persistOutboxState(updated)), revisions: syncRevisions }));
+          } catch (e) {
+            // best-effort — the normal useEffect-driven write still runs on the next render if
+            // this one didn't get the chance to complete before the page actually unloaded
+          }
+        }
+        return updated;
+      });
+    },
+    [syncRevisions]
+  );
   // Re-drain on reconnect — an offline device's queued operations otherwise wait for the next
   // unrelated edit to trigger scheduleCloudSync again.
   useEffect(() => {
@@ -2269,10 +2307,12 @@ export default function LiftLog() {
       if (!persistence.isOwner() || !auth.user) return;
       if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
       const userId = auth.user.id;
+      pendingSyncV2Ref.current = { next, prev, userId };
       cloudSyncTimerRef.current = setTimeout(() => {
+        cloudSyncTimerRef.current = null;
+        pendingSyncV2Ref.current = null;
         if (!persistence.isOwner()) return;
-        const changes = diffCollections(prev, next, COLLECTION_TABLES);
-        if (changes.length > 0) setSyncOutboxState((s) => enqueueDiff(switchOutboxAccount(s, userId), syncRevisions, userId, changes));
+        flushSyncV2Diff(next, prev, userId);
         drainSyncV2();
         persistence.task(() => pushPhotosToSupabase(next.photos, userId)).then(({ uploadedIds }) => {
           if (persistence.isOwner() && uploadedIds && uploadedIds.length > 0) {
@@ -2284,8 +2324,34 @@ export default function LiftLog() {
         });
       }, 1500);
     },
-    [auth.user, syncRevisions, drainSyncV2]
+    [auth.user, flushSyncV2Diff, drainSyncV2]
   );
+  // Flush-on-hide: if the tab is being hidden/closed while a debounced sync is still pending,
+  // enqueue it right now instead of losing the window entirely. visibilitychange fires
+  // reliably on mobile backgrounding (where pagehide/beforeunload are not guaranteed); both are
+  // registered since neither alone is reliable across every browser this PWA runs in.
+  useEffect(() => {
+    if (!CLOUD_SYNC_V2_ENABLED) return;
+    const flush = () => {
+      if (!pendingSyncV2Ref.current) return;
+      if (cloudSyncTimerRef.current) {
+        clearTimeout(cloudSyncTimerRef.current);
+        cloudSyncTimerRef.current = null;
+      }
+      const { next, prev, userId } = pendingSyncV2Ref.current;
+      pendingSyncV2Ref.current = null;
+      flushSyncV2Diff(next, prev, userId, { synchronousStorageWrite: true });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [flushSyncV2Diff]);
 
   const scheduleCloudSync = useCallback(
     (next, prev) => {
@@ -2401,7 +2467,15 @@ export default function LiftLog() {
         const latestSnap = (merged.athleteRatingSnapshots || [])[(merged.athleteRatingSnapshots || []).length - 1] || null;
         const needsRecalc = addedHistory || !latestSnap || latestSnap.scoringVersion !== RATING_SCHEMA_VERSION;
         const next = needsRecalc ? recalcAthleteRatingState(merged, exMap) : merged;
-        persist(next);
+        // Centralized-persistence audit (P0 cloud sync, Phase 2): this previously called
+        // persist(next) with no `prev`, so when CLOUD_SYNC_V2_ENABLED is on, diffCollections/
+        // diffProfile would see `prev` as undefined and treat every row already in `next` as
+        // brand new — safe (never loses data; a false "new row" at worst gets reconciled as a
+        // conflict instead of a clean update) but wrong, and exactly the kind of gap "verify
+        // background and resumed synchronization actually goes through persist(next, prev)"
+        // was checking for. Passing the real `prev` here lets the diff correctly see this pull
+        // as "added N rows", not "replaced everything".
+        persist(next, prev);
         return next;
       });
       const localPhotoIds = new Set((state.photos || []).map((p) => p.id));
@@ -2411,7 +2485,7 @@ export default function LiftLog() {
       if (newPhotos.length > 0) {
         setState((prev) => {
           const merged = { ...prev, photos: [...(prev.photos || []), ...newPhotos] };
-          persist(merged);
+          persist(merged, prev);
           return merged;
         });
       }
@@ -2821,7 +2895,14 @@ export default function LiftLog() {
       activeRunRef.current = result.run;
       setRenderedActiveRun(result.run);
       setPersistStatus(retired ? "saved" : "error");
-      scheduleCloudSync(next);
+      // Centralized-persistence audit (P0 cloud sync, Phase 2): finishing a workout bypasses
+      // updateState/persist entirely (its own checkpoint-then-commit write path, for the reasons
+      // in the comment above `writeWorkoutCompletion`) and previously called scheduleCloudSync
+      // with no `prev`, which is exactly the gap "verify workout completion actually goes
+      // through persist(next, prev)" was checking for — the one mutation this whole effort cares
+      // about most could not have been more directly implicated. `previous` (captured at the top
+      // of finishRun, before completeWorkoutState ran) is the correct prev snapshot.
+      scheduleCloudSync(next, previous);
       ratingCelebrationPendingRef.current = isNew;
     } catch (error) {
       if (!persistence.isOwner()) { setPersistStatus("error"); return; }

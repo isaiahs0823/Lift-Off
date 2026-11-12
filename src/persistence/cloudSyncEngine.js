@@ -28,6 +28,38 @@
 //   are removed from the queue (preserved for review, never retried as-is) and draining continues.
 import { enqueueOperation, selectNextToSend, markInFlight, applyServerResult, reconcileRetryOutcome } from "./syncOutbox.js";
 
+// The workout_profile row is a singleton per account (primary key is user_id, not a generic
+// id), so it can't go through diffCollections' id-keyed array logic — it needs its own diff
+// over the specific local-state fields that row actually carries. Protects: current program
+// identity (currentProgram), program progress/completion state (scheduleLog — yes, array-
+// shaped locally, but synced as one jsonb blob on this row, not as its own collection; this
+// matches the existing, pre-v2 pushWorkoutDataToSupabase behavior exactly, not a new choice),
+// user settings (settings), and profile-level training configuration (weeklySchedule,
+// reminderSettings, hasSeenOnboarding).
+//
+// Deliberately whole-row, not field-level: two concurrent edits to genuinely different fields
+// (e.g. device A changes settings.barWeight, device B changes scheduleLog) are still treated as
+// a conflict if both start from the same revision, even though they don't literally overlap.
+// Field-level merging would need its own invented, untested policy for every possible pair of
+// fields — exactly the kind of ad hoc merge logic this project has deliberately avoided for
+// every other synced record. Whole-row compare-and-swap is coarser but consistent with every
+// other table's strategy, and it is never wrong in the sense that matters: it can never let a
+// stale write silently replace newer data, it just sometimes asks for review when a smarter
+// (and much riskier) implementation might not have needed to.
+const PROFILE_FIELDS = ["currentProgram", "weeklySchedule", "scheduleLog", "reminderSettings", "settings", "hasSeenOnboarding"];
+export function diffProfile(prev, next, userId) {
+  if (!userId) return null;
+  const changed = PROFILE_FIELDS.some((f) => {
+    const a = prev?.[f];
+    const b = next?.[f];
+    return a !== b && JSON.stringify(a ?? null) !== JSON.stringify(b ?? null);
+  });
+  if (!changed) return null;
+  const payload = {};
+  for (const f of PROFILE_FIELDS) payload[f] = next?.[f];
+  return { table: "workout_profile", rowId: userId, type: "upsert", payload, isNew: false };
+}
+
 export function diffCollections(prev, next, collectionTables) {
   const changes = [];
   for (const [key, table] of Object.entries(collectionTables)) {
