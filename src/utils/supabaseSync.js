@@ -464,8 +464,28 @@ export async function pushOperationWithRevision(op, userId) {
   if (!collection) return { outcome: "skipped" };
 
   if (op.type === "delete") {
-    const { error } = await supabase.from(op.table).delete().eq("id", op.rowId).eq("user_id", userId);
-    return reconcileRetryOutcome(op, { updatedRow: null, currentRow: error ? null : { revision: null, last_operation_id: null } });
+    // Compare-and-swap delete, same discipline as the update branch below: a delete queued
+    // against a stale snapshot must never remove a row someone else has since updated to a
+    // newer revision — that would destroy their newer data under the guise of a deletion the
+    // user asked for against an older version of the row. When no revision was ever confirmed
+    // for this row (expectedRevision === null — e.g. deleting something before its own create
+    // ever landed), there is nothing to protect yet, so a plain unconditional delete is safe.
+    if (op.expectedRevision === null) {
+      const { error } = await supabase.from(op.table).delete().eq("id", op.rowId).eq("user_id", userId);
+      if (!error) return { outcome: "confirmed", row: null };
+    } else {
+      const { data, error } = await supabase
+        .from(op.table)
+        .delete()
+        .eq("id", op.rowId)
+        .eq("user_id", userId)
+        .eq("revision", op.expectedRevision)
+        .select()
+        .maybeSingle();
+      if (!error && data) return { outcome: "confirmed", row: null };
+    }
+    const { data: current } = await supabase.from(op.table).select("revision, last_operation_id").eq("id", op.rowId).eq("user_id", userId).maybeSingle();
+    return reconcileRetryOutcome(op, { updatedRow: null, currentRow: current ?? null });
   }
 
   const row = DROP_UNDEFINED({ ...collection.toRow(op.payload, userId), revision: (op.expectedRevision ?? 0) + 1, last_operation_id: op.opId });
