@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   diffCollections,
+  diffProfile,
   enqueueDiff,
   setRevision,
   clearRevision,
@@ -12,6 +13,43 @@ import {
 import { createOutboxState, switchAccount, persistOutboxState, loadOutboxState, pendingCount, exportConflicts } from "../syncOutbox.js";
 
 const TABLES = { workoutSessions: "workout_sessions", logs: "exercise_logs" };
+
+describe("diffProfile — the workout_profile singleton, protected like every other synced row", () => {
+  it("detects a changed currentProgram", () => {
+    const prev = { currentProgram: null };
+    const next = { currentProgram: { programId: "p1" } };
+    const change = diffProfile(prev, next, "user-1");
+    expect(change).toEqual({ table: "workout_profile", rowId: "user-1", type: "upsert", payload: expect.objectContaining({ currentProgram: { programId: "p1" } }), isNew: false });
+  });
+
+  it("detects a changed settings object", () => {
+    const change = diffProfile({ settings: { barWeight: 45 } }, { settings: { barWeight: 35 } }, "user-1");
+    expect(change).not.toBeNull();
+  });
+
+  it("detects a changed scheduleLog (program progress/completion state)", () => {
+    const change = diffProfile({ scheduleLog: [] }, { scheduleLog: [{ date: "2026-01-01", completed: true }] }, "user-1");
+    expect(change).not.toBeNull();
+  });
+
+  it("reports no change when nothing profile-relevant actually differs", () => {
+    expect(diffProfile({ currentProgram: { programId: "p1" }, settings: {} }, { currentProgram: { programId: "p1" }, settings: {} }, "user-1")).toBeNull();
+  });
+
+  it("ignores changes to fields outside the profile (e.g. workoutSessions) — no false positive", () => {
+    expect(diffProfile({ currentProgram: null, workoutSessions: [] }, { currentProgram: null, workoutSessions: [{ id: "s1" }] }, "user-1")).toBeNull();
+  });
+
+  it("returns null without a userId — never enqueues a profile write with no account to scope it to", () => {
+    expect(diffProfile({ currentProgram: null }, { currentProgram: { programId: "p1" } }, null)).toBeNull();
+  });
+
+  it("the payload carries every protected field, not just the one that changed (whole-row, by design)", () => {
+    const next = { currentProgram: { programId: "p1" }, weeklySchedule: { mon: "push" }, scheduleLog: [{ x: 1 }], reminderSettings: { enabled: true }, settings: { barWeight: 45 }, hasSeenOnboarding: true };
+    const change = diffProfile({ currentProgram: null }, next, "user-1");
+    expect(change.payload).toEqual(next);
+  });
+});
 
 // A minimal in-memory fake Postgres table, same discipline as cloudSyncOverwriteSafety.test.js:
 // an UPDATE/DELETE's WHERE clause (including revision) only matches rows that actually satisfy
