@@ -1,7 +1,7 @@
 // Web Locks supplies exclusion. Snapshot revisions below only detect unexpected writers;
 // localStorage read/compare/write is deliberately NOT used to acquire ownership.
 export const EDITOR_LOCK = "brk-fit:user-state:single-editor:v1";
-const KEYS = ["liftlog-data", "liftlog-active-run", "liftlog-sync-status", "liftlog-rest-timer", "liftlog-interval-timer", "brk-standalone-rest-timer"];
+const KEYS = ["liftlog-data", "liftlog-active-run", "liftlog-sync-status", "liftlog-sync-outbox-v2", "liftlog-rest-timer", "liftlog-interval-timer", "brk-standalone-rest-timer"];
 const recoverable = (key) => KEYS.includes(key); // Never duplicate/export SDK auth credentials.
 let editor;
 export function activateEditor(session) {
