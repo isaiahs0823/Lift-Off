@@ -126,8 +126,11 @@ import { recalcAthleteRatingState, detectRatingEvent, RATING_SCHEMA_VERSION } fr
 import { reminderIsDue, getReminderSettings } from "./utils/workoutReminders.js";
 import LevelUpScreen from "./components/LevelUpScreen.jsx";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
-import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
+import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal, pushOperationWithRevision, COLLECTION_TABLES } from "./utils/supabaseSync.js";
 import { initialSyncStatus, markSyncStarted, markSyncSuccess, markSyncFailure, MAX_SYNC_ATTEMPTS, retryDelayMs } from "./utils/syncStatus.js";
+import { CLOUD_SYNC_V2_ENABLED } from "./config/featureFlags.js";
+import { createOutboxState, switchAccount as switchOutboxAccount, persistOutboxState, loadOutboxState } from "./persistence/syncOutbox.js";
+import { diffCollections, enqueueDiff, drainOutbox, resetInFlightToPending, recordPulledRevisions } from "./persistence/cloudSyncEngine.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
 import { newWorkoutId, hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion, stampWorkoutDraft, workoutEntryKey, recoverWorkoutCheckpoint, swapWorkoutExercise } from "./utils/workoutIntegrity.js";
 import {
@@ -1932,6 +1935,90 @@ export default function LiftLog() {
       // about an error-tracking mechanism
     }
   }, [syncStatus]);
+  // Cloud sync v2 (CLOUD_SYNC_V2_ENABLED, off by default and off for every real account today) —
+  // the revision-checked outbox from persistence/syncOutbox.js + cloudSyncEngine.js, wired in
+  // here as a path that is ENTIRELY SEPARATE from the legacy push below: when this flag is on,
+  // scheduleCloudSync (further down) uses this path INSTEAD of pushWorkoutDataToSupabase, never
+  // both — so the two can never race against the same rows. When the flag is off, none of this
+  // runs and nothing about existing behavior changes.
+  //
+  // Persisted under its own storage key (added to editorSession.js's recoverable KEYS) so a
+  // pending offline edit survives a reload — resetInFlightToPending guards against a crash
+  // leaving an operation permanently stuck "in-flight" (which would otherwise wedge that
+  // account's whole queue forever, since the outbox design only allows one in-flight op at a
+  // time per account).
+  const [syncOutboxState, setSyncOutboxState] = useState(() => {
+    if (!CLOUD_SYNC_V2_ENABLED) return createOutboxState();
+    try {
+      const raw = editorStorage().getItem("liftlog-sync-outbox-v2");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return resetInFlightToPending(loadOutboxState(parsed?.outbox ? JSON.stringify(parsed.outbox) : null));
+    } catch (e) {
+      return createOutboxState();
+    }
+  });
+  const [syncRevisions, setSyncRevisions] = useState(() => {
+    if (!CLOUD_SYNC_V2_ENABLED) return {};
+    try {
+      const raw = editorStorage().getItem("liftlog-sync-outbox-v2");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed.revisions === "object" && parsed.revisions ? parsed.revisions : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  useEffect(() => {
+    if (!CLOUD_SYNC_V2_ENABLED) return;
+    try {
+      editorStorage().setItem("liftlog-sync-outbox-v2", JSON.stringify({ outbox: JSON.parse(persistOutboxState(syncOutboxState)), revisions: syncRevisions }));
+    } catch (e) {
+      // storage unavailable — same tolerance as every other persisted key above
+    }
+  }, [syncOutboxState, syncRevisions]);
+  const syncV2DrainingRef = useRef(false);
+  // Drains as much of the current account's queue as it can, one pass. Safe to call freely
+  // (on a schedule, on reconnect, after every enqueue) — re-entrant calls are guarded by the ref
+  // above rather than relying on callers to coordinate, since several independent triggers call
+  // this. A conflict never stops the drain; an auth failure does, until the caller's next trigger
+  // (e.g. the auth hook's own token-refresh effect) tries again.
+  const drainSyncV2 = useCallback(async () => {
+    if (!CLOUD_SYNC_V2_ENABLED || !auth.user || syncV2DrainingRef.current) return;
+    syncV2DrainingRef.current = true;
+    try {
+      const result = await drainOutbox({
+        state: syncOutboxState,
+        revisions: syncRevisions,
+        accountId: auth.user.id,
+        send: (op) => pushOperationWithRevision(op, auth.user.id),
+      });
+      setSyncOutboxState(result.state);
+      setSyncRevisions(result.revisions);
+      if (result.drainedCount > 0 && !result.paused) setSyncStatus((s) => markSyncSuccess(s));
+      if (result.paused && result.pausedReason === "auth") setSyncStatus((s) => markSyncFailure(s, ["Signed out or session expired — reconnect to resume syncing."], true));
+    } finally {
+      syncV2DrainingRef.current = false;
+    }
+  }, [auth.user, syncOutboxState, syncRevisions]);
+  // Re-drain on reconnect — an offline device's queued operations otherwise wait for the next
+  // unrelated edit to trigger scheduleCloudSync again.
+  useEffect(() => {
+    if (!CLOUD_SYNC_V2_ENABLED) return;
+    window.addEventListener("online", drainSyncV2);
+    return () => window.removeEventListener("online", drainSyncV2);
+  }, [drainSyncV2]);
+  // Account switching (Phase 3 scenario 9): keep each account's queue isolated and resumable —
+  // never drop a still-pending operation just because a different account is now active.
+  const syncV2LastAccountRef = useRef(null);
+  useEffect(() => {
+    if (!CLOUD_SYNC_V2_ENABLED) return;
+    const userId = auth.user?.id ?? null;
+    if (syncV2LastAccountRef.current === userId) return;
+    syncV2LastAccountRef.current = userId;
+    if (userId) {
+      setSyncOutboxState((s) => switchOutboxAccount(s, userId));
+      drainSyncV2();
+    }
+  }, [auth.user?.id, drainSyncV2]);
   // One-shot "no cloud history found for this account" vs "welcome back" notice (P0 auth audit,
   // item 8 — mistyped-email awareness) — set once after the post-sign-in pull resolves, shown on
   // Today the same way activationNotice is, cleared on dismiss/timeout. Never persisted.
@@ -2171,8 +2258,41 @@ export default function LiftLog() {
     }
   }, []);
 
+  // Enqueues exactly what changed (per diffCollections) into the v2 outbox and drains it. This
+  // is the ONLY cloud-sync path taken when CLOUD_SYNC_V2_ENABLED is on — pushWithRetry /
+  // pushWorkoutDataToSupabase (the legacy blind-upsert path) is never also called for the same
+  // edit, which is what guarantees the two paths can't race against each other for the same
+  // rows. Photo uploads are unaffected either way — they're blob uploads, not upserted JSON rows,
+  // and were never where the P0 overwrite risk lived.
+  const scheduleCloudSyncV2 = useCallback(
+    (next, prev) => {
+      if (!persistence.isOwner() || !auth.user) return;
+      if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
+      const userId = auth.user.id;
+      cloudSyncTimerRef.current = setTimeout(() => {
+        if (!persistence.isOwner()) return;
+        const changes = diffCollections(prev, next, COLLECTION_TABLES);
+        if (changes.length > 0) setSyncOutboxState((s) => enqueueDiff(switchOutboxAccount(s, userId), syncRevisions, userId, changes));
+        drainSyncV2();
+        persistence.task(() => pushPhotosToSupabase(next.photos, userId)).then(({ uploadedIds }) => {
+          if (persistence.isOwner() && uploadedIds && uploadedIds.length > 0) {
+            setState((p) => ({
+              ...p,
+              photos: (p.photos || []).map((ph) => (uploadedIds.includes(ph.id) ? { ...ph, syncedToCloud: true } : ph)),
+            }));
+          }
+        });
+      }, 1500);
+    },
+    [auth.user, syncRevisions, drainSyncV2]
+  );
+
   const scheduleCloudSync = useCallback(
-    (next) => {
+    (next, prev) => {
+      if (CLOUD_SYNC_V2_ENABLED) {
+        scheduleCloudSyncV2(next, prev);
+        return;
+      }
       if (!persistence.isOwner() || !auth.user) return;
       if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
       if (cloudSyncRetryTimerRef.current) clearTimeout(cloudSyncRetryTimerRef.current);
@@ -2190,19 +2310,23 @@ export default function LiftLog() {
         });
       }, 1500);
     },
-    [auth.user, pushWithRetry]
+    [auth.user, pushWithRetry, scheduleCloudSyncV2]
   );
   // Manual "Retry sync now" (P0 auth audit, item 7) — same push path, just triggered on demand
   // instead of waiting for the next edit or the next backoff attempt. Re-sends current `state`,
   // which upserts harmlessly even if nothing actually changed since the last successful push.
   const retrySyncNow = useCallback(() => {
     if (!persistence.isOwner() || !auth.user) return;
+    if (CLOUD_SYNC_V2_ENABLED) {
+      drainSyncV2();
+      return;
+    }
     if (cloudSyncRetryTimerRef.current) clearTimeout(cloudSyncRetryTimerRef.current);
     pushWithRetry(state, auth.user.id);
-  }, [auth.user, pushWithRetry, state]);
+  }, [auth.user, pushWithRetry, state, drainSyncV2]);
 
   const persist = useCallback(
-    (next) => {
+    (next, prev) => {
       try {
         // Never persist templates/programs — they're static app content that should
         // always come from source on the next load, not a snapshot from whatever build
@@ -2212,7 +2336,7 @@ export default function LiftLog() {
       } catch (e) {
         console.error("Storage error", e);
       }
-      scheduleCloudSync(next);
+      scheduleCloudSync(next, prev);
     },
     [scheduleCloudSync]
   );
@@ -2221,7 +2345,7 @@ export default function LiftLog() {
     (updater) => {
       setState((prev) => {
         const next = typeof updater === "function" ? updater(prev) : updater;
-        persist(next);
+        persist(next, prev);
         return next;
       });
     },
@@ -2239,8 +2363,15 @@ export default function LiftLog() {
     const userId = auth.user.id;
     const email = auth.user.email;
     (async () => {
-      const { data, errors, ok } = await persistence.task(() => pullWorkoutDataFromSupabase(userId));
+      const { data, errors, ok, revisionsByTable } = await persistence.task(() => pullWorkoutDataFromSupabase(userId));
       if (!persistence.isOwner()) return;
+      if (CLOUD_SYNC_V2_ENABLED && revisionsByTable) {
+        setSyncRevisions((rev) => {
+          let next = rev;
+          for (const [table, rows] of Object.entries(revisionsByTable)) next = recordPulledRevisions(next, table, rows);
+          return next;
+        });
+      }
       // "Never falsely report success" (P0 auth audit, item 6) — a pull failure is data-safe by
       // construction (mergeRemoteIntoLocal only ever adds, so partial/empty data just means
       // nothing new arrives), but it must still be visible rather than silently doing nothing.

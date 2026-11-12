@@ -337,6 +337,11 @@ const COLLECTIONS = [
   },
 ];
 
+// Single source of truth for "which local state key maps to which Supabase table" — exported so
+// cloudSyncEngine.js's row-level diffing never has to maintain its own, second list that could
+// silently drift out of sync with the one actually used to push/pull data.
+export const COLLECTION_TABLES = Object.fromEntries(COLLECTIONS.map((c) => [c.key, c.table]));
+
 function requireUser() {
   return supabaseEnabled;
 }
@@ -377,9 +382,17 @@ export async function pushWorkoutDataToSupabase(state, userId) {
 // Fetches every row Supabase has for this user and returns it shaped like local state. Pulling
 // never mutates anything itself — see mergeRemoteIntoLocal for how the caller applies it.
 export async function pullWorkoutDataFromSupabase(userId) {
-  if (!requireUser() || !userId) return { ok: false, errors: ["sync not available"], data: {} };
+  if (!requireUser() || !userId) return { ok: false, errors: ["sync not available"], data: {}, revisionsByTable: {} };
   const errors = [];
   const data = {};
+  // Captured from the RAW rows (before fromRow's camelCase conversion drops anything it doesn't
+  // know about) so cloudSyncEngine.js's recordPulledRevisions can mark a just-pulled row's
+  // revision as known — without this, a local edit to a row that arrived via pull (rather than
+  // being created on this device) would wrongly look like a brand-new row with no revision to
+  // protect. A row from a database that doesn't have the revision/last_operation_id columns yet
+  // (true for every real deployment today) simply has `revision: undefined` here, which
+  // recordPulledRevisions already treats as "nothing to record" — harmless either way.
+  const revisionsByTable = {};
 
   await Promise.all(
     COLLECTIONS.map(async ({ key, table, fromRow }) => {
@@ -389,6 +402,7 @@ export async function pullWorkoutDataFromSupabase(userId) {
         return;
       }
       data[key] = (rows || []).map(fromRow);
+      revisionsByTable[table] = (rows || []).map((r) => ({ id: r.id, revision: r.revision }));
     })
   );
 
@@ -409,7 +423,7 @@ export async function pullWorkoutDataFromSupabase(userId) {
     };
   }
 
-  return { ok: errors.length === 0, errors, data };
+  return { ok: errors.length === 0, errors, data, revisionsByTable };
 }
 
 // Local-first merge: an item already present locally (by id) is never touched — this only adds
