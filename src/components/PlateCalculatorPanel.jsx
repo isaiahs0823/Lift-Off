@@ -6,7 +6,17 @@ import { PLATE_SIZES, BAR_WEIGHT_OPTIONS, emptyStack, addPlatePair, removePlateP
 // (tap a plate size, it's added to BOTH sides at once) rather than typing a target weight and
 // being told which plates to use. Bar weight is local to this panel (defaults from the app-wide
 // setting) since "Reset Plates" must clear only the loaded plates, never the selected bar.
-export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUseWeight }) {
+//
+// `approximate` (Quality Sprint 01 final pass): true for a plate-loaded machine that isn't a
+// plain barbell or Smith machine (leg press, hack squat, belt squat, T-bar row, pendulum squat,
+// Hammer Strength Iso-Lateral/Plate-Loaded/Ground Base machines). Those genuinely take plates,
+// but many use a lever arm or sled rather than a true "bar," and some have a mechanical leverage
+// ratio where the resistance the athlete actually moves isn't 1:1 with the raw plate weight —
+// unlike a barbell, where "current load" IS the exact resistance. This never hides the
+// calculator (it's still a correct, useful plate-tracking tool either way) — it just adds one
+// honest line so a leverage machine's total isn't read as a precise effective-resistance claim
+// this app has no data to back up.
+export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUseWeight, approximate = false }) {
   const [barWeight, setBarWeight] = useState(initialBarWeight || 45);
   const [customBar, setCustomBar] = useState("");
   const [stack, setStack] = useState(emptyStack());
@@ -59,6 +69,11 @@ export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUs
         <div className="text-[11px] uppercase tracking-widest text-v5-subtext/70">Current load</div>
         <div className="text-5xl font-bold text-white tabular-nums mt-1">{total}</div>
         <div className="text-xs text-v5-subtext mt-0.5">lb · bar {barWeight} lb</div>
+        {approximate && (
+          <div className="text-[10px] text-v5-subtext/60 mt-1.5">
+            Approximate — this machine's resistance may not move 1:1 with plate weight.
+          </div>
+        )}
       </div>
 
       <div>
@@ -122,7 +137,7 @@ export default function PlateCalculatorPanel({ barWeight: initialBarWeight, onUs
 // Collapsed by default so it doesn't compete for space with the actual logging flow — one tap
 // reveals it. Kept as its own export (not folded into PlateCalculatorPanel) so callers that just
 // want the toggle affordance don't have to think about the panel's internal state.
-export function PlateCalculatorToggle({ barWeight, onUseWeight }) {
+export function PlateCalculatorToggle({ barWeight, onUseWeight, approximate = false }) {
   const [open, setOpen] = useState(false);
   return (
     <div>
@@ -134,7 +149,7 @@ export function PlateCalculatorToggle({ barWeight, onUseWeight }) {
       </button>
       {open && (
         <div className="mt-2">
-          <PlateCalculatorPanel barWeight={barWeight} onUseWeight={onUseWeight} />
+          <PlateCalculatorPanel barWeight={barWeight} onUseWeight={onUseWeight} approximate={approximate} />
         </div>
       )}
     </div>

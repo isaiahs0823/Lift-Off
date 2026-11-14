@@ -106,7 +106,7 @@ import DataWorkbookScreen from "./components/DataWorkbookScreen.jsx";
 import HelpGuideScreen from "./components/HelpGuideScreen.jsx";
 import IntervalTimerScreen from "./components/IntervalTimerScreen.jsx";
 import PlateCalculatorPanel, { PlateCalculatorToggle } from "./components/PlateCalculatorPanel.jsx";
-import { isPlateLoadedEquipment } from "./utils/equipmentDisplay.js";
+import { isPlateLoadedEquipment, isExactPlateLoad } from "./utils/equipmentDisplay.js";
 import MuscleBodyOutline from "./components/MuscleBodyOutline.jsx";
 import ExerciseAnatomyRow from "./components/ExerciseAnatomyRow.jsx";
 import { formatSetPrescription } from "./utils/exercisePrescription.js";
@@ -4103,6 +4103,7 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         <PlateCalculatorToggle
           barWeight={state.settings?.barWeight || 45}
           onUseWeight={(w) => setSetsInput((rows) => rows.map((r, i) => (i === 0 ? { ...r, weight: String(w) } : r)))}
+          approximate={!isExactPlateLoad(exMap[exId])}
         />
       )}
 
@@ -5792,6 +5793,7 @@ function TrainingExerciseCard({
                 setWeight(w);
                 setPlateCalcOpen(false);
               }}
+              approximate={!isExactPlateLoad(exMap[exId])}
             />
           )}
           {optionsOpen && (
