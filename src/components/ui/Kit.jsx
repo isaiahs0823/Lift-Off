@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useLayoutEffect, useRef } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import MuscleBodyOutline from "../MuscleBodyOutline.jsx";
 
@@ -334,9 +334,45 @@ export function PeriodSelect({ value, onChange, options, className = "" }) {
 // eyebrow — the small dumbbell-in-a-circle the primary workout card opens with. Omit it for a
 // PhotoHero used somewhere that badge doesn't make sense (kept optional, not forced everywhere).
 export function PhotoHero({ exercise, eyebrow, title, meta, icon: Icon, children, className = "", compact = false }) {
+  const cardRef = useRef(null);
+  const anatomyWrapRef = useRef(null);
+
+  // This full-body figure (head to toe) is scaled to one fixed size and anchored at this card's
+  // bottom-right corner everywhere PhotoHero is used — Active Workout, Today, Programs, Exercise
+  // Discovery. A short card only ever shows a thin slice of it, and a fixed bottom anchor always
+  // showed the SAME slice (the legs) regardless of which region was actually highlighted red —
+  // for any upper-body exercise, the highlighted chest/back/shoulder/arm region was cropped off
+  // above the card entirely. Measuring where MuscleBodyOutline's data-mbo-active path(s) actually
+  // rendered and nudging the figure so that region is centered in view (rather than hand-tuning a
+  // fixed offset) keeps this correct at every card height this component is used at, and for
+  // every zone (chest/back/shoulders/arms/legs/core), without touching MuscleBodyOutline's own
+  // rendering or this card's layout/design.
+  useLayoutEffect(() => {
+    const wrap = anatomyWrapRef.current;
+    const card = cardRef.current;
+    const svg = wrap?.querySelector("svg");
+    if (!wrap || !card || !svg) return;
+    wrap.style.transform = ""; // measure the figure's natural (untransformed) position first
+    const activeParts = svg.querySelectorAll("[data-mbo-active]");
+    const viewBox = svg.viewBox?.baseVal;
+    if (activeParts.length === 0 || !viewBox?.height) return; // no highlighted region — keep the default framing
+    let minY = Infinity, maxY = -Infinity;
+    activeParts.forEach((el) => {
+      const box = el.getBBox();
+      minY = Math.min(minY, box.y);
+      maxY = Math.max(maxY, box.y + box.height);
+    });
+    const svgRect = svg.getBoundingClientRect();
+    const scale = svgRect.height / viewBox.height;
+    const highlightCenterY = svgRect.top + ((minY + maxY) / 2) * scale;
+    const cardRect = card.getBoundingClientRect();
+    const cardCenterY = cardRect.top + cardRect.height / 2;
+    wrap.style.transform = `translateY(${cardCenterY - highlightCenterY}px)`;
+  }, [exercise]);
+
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-v5-red/25 via-v5-elevated to-v5-surface p-3.5 sm:p-6 ${className}`}>
-      <div className="absolute -right-8 -bottom-10 opacity-95 pointer-events-none">
+    <div ref={cardRef} className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-v5-red/25 via-v5-elevated to-v5-surface p-3.5 sm:p-6 ${className}`}>
+      <div ref={anatomyWrapRef} className="absolute -right-8 -bottom-10 opacity-95 pointer-events-none">
         <MuscleBodyOutline exercise={exercise} size={190} />
       </div>
       <div className="absolute inset-0 bg-gradient-to-r from-v5-surface via-v5-surface/55 to-transparent pointer-events-none" />

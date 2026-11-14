@@ -96,6 +96,10 @@ function MuscleBodyOutline({ exercise, size = "compact" }) {
             strokeWidth={0.75}
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
+            // Marks the highlighted (red) region only — not a visual change, just lets a caller
+            // (PhotoHero) measure where the actual highlighted muscle sits so it can frame the
+            // crop around it instead of always showing a fixed corner of this full-body figure.
+            {...(isActive(slug) ? { "data-mbo-active": "true" } : {})}
           />
         )),
       )}
