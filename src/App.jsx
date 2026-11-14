@@ -106,6 +106,7 @@ import DataWorkbookScreen from "./components/DataWorkbookScreen.jsx";
 import HelpGuideScreen from "./components/HelpGuideScreen.jsx";
 import IntervalTimerScreen from "./components/IntervalTimerScreen.jsx";
 import PlateCalculatorPanel, { PlateCalculatorToggle } from "./components/PlateCalculatorPanel.jsx";
+import { isPlateLoadedEquipment } from "./utils/equipmentDisplay.js";
 import MuscleBodyOutline from "./components/MuscleBodyOutline.jsx";
 import ExerciseAnatomyRow from "./components/ExerciseAnatomyRow.jsx";
 import { formatSetPrescription } from "./utils/exercisePrescription.js";
@@ -3698,6 +3699,40 @@ function SetRowsEditor({ sets, onChange, rirSystem = "rir", simple = false, allo
               </button>
             </>
           )}
+          {/* Simple mode never shows the 8-option Set type row above (task: "do not expose the
+              full eight-option advanced set-type interface to beginners") — but beginners still
+              need a way to mark a set as a warm-up rather than every set defaulting to Working
+              with no way to say otherwise. One minimal two-way toggle, writing the exact same
+              setType field ("working"/"warmup") every downstream calculation (countedSets,
+              volume, PRs, progression) already reads — nothing else changes. */}
+          {simple && (
+            <div className="flex items-center gap-1.5 pl-7">
+              <button
+                type="button"
+                onClick={() => updateSetRow(idx, "setType", "working")}
+                aria-pressed={(row.setType || "working") !== "warmup"}
+                className={`px-2 py-1 text-[11px] font-bold uppercase tracking-wide rounded border ${
+                  (row.setType || "working") !== "warmup"
+                    ? "bg-v5-red border-v5-red text-white"
+                    : "border-white/10 text-v5-subtext hover:border-v5-red/40"
+                }`}
+              >
+                Working
+              </button>
+              <button
+                type="button"
+                onClick={() => updateSetRow(idx, "setType", "warmup")}
+                aria-pressed={row.setType === "warmup"}
+                className={`px-2 py-1 text-[11px] font-bold uppercase tracking-wide rounded border ${
+                  row.setType === "warmup"
+                    ? "bg-v5-red border-v5-red text-white"
+                    : "border-white/10 text-v5-subtext hover:border-v5-red/40"
+                }`}
+              >
+                Warm-up
+              </button>
+            </div>
+          )}
         </div>
       ))}
       {allowAddRemove && (
@@ -4064,10 +4099,12 @@ function ExerciseLogger({ exId, title, state, updateState, exMap, allExercises, 
         )}
       </div>
 
-      <PlateCalculatorToggle
-        barWeight={state.settings?.barWeight || 45}
-        onUseWeight={(w) => setSetsInput((rows) => rows.map((r, i) => (i === 0 ? { ...r, weight: String(w) } : r)))}
-      />
+      {isPlateLoadedEquipment(exMap[exId]) && (
+        <PlateCalculatorToggle
+          barWeight={state.settings?.barWeight || 45}
+          onUseWeight={(w) => setSetsInput((rows) => rows.map((r, i) => (i === 0 ? { ...r, weight: String(w) } : r)))}
+        />
+      )}
 
       <div>
         <label className="block text-[11px] uppercase tracking-widest text-v5-subtext mb-1.5">Target reps this session</label>
@@ -5680,6 +5717,40 @@ function TrainingExerciseCard({
                 </div>
               </div>
             )}
+            {/* Simple mode fills the same slot advanced mode uses for RIR/RPE with a minimal
+                Working/Warm-up toggle (task: "provide a minimal, immediately understandable
+                Warm-up / Working selection in simple mode" — not the full 8-option Set type row,
+                and reachable before Save Set, not buried behind Options). Writes the same setType
+                field the draft/save/edit paths already persist; every downstream calculation
+                (countedSets, volume, PRs, progression) already excludes "warmup" sets, so no
+                other code needs to change for this to take effect correctly. */}
+            {isSimple && (
+              <div className="flex-[1.3] min-w-0 space-y-1">
+                <div className="text-[11px] uppercase tracking-wide text-v5-subtext text-center">Type</div>
+                <div className="bg-v5-muted rounded-lg p-1 flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSetType("working")}
+                    aria-pressed={setType !== "warmup"}
+                    className={`px-1 py-1 text-[10px] font-bold uppercase tracking-wide rounded ${
+                      setType !== "warmup" ? "bg-v5-red text-white" : "text-v5-subtext hover:text-v5-text"
+                    }`}
+                  >
+                    Work
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSetType("warmup")}
+                    aria-pressed={setType === "warmup"}
+                    className={`px-1 py-1 text-[10px] font-bold uppercase tracking-wide rounded ${
+                      setType === "warmup" ? "bg-v5-red text-white" : "text-v5-subtext hover:text-v5-text"
+                    }`}
+                  >
+                    Warm
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Compact advanced-tools row — RIR/Set Type/Notes bundled behind "More", Plate Calc
@@ -5691,14 +5762,19 @@ function TrainingExerciseCard({
               utility chips — deliberately lighter than the Weight/Reps boxes above them so they
               read as secondary tools, not another major section. */}
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setPlateCalcOpen((o) => !o)}
-              className={`px-2.5 py-1 rounded-md text-[11px] uppercase tracking-wide font-bold ${
-                plateCalcOpen ? "bg-v5-red/15 text-v5-red" : "text-v5-subtext hover:text-v5-text"
-              }`}
-            >
-              Plate calc {plateCalcOpen ? "▴" : "▾"}
-            </button>
+            {/* Quality Sprint 01, Phase 3: a plate calculator only makes sense for a bar you
+                actually load plates onto — offering it on a dumbbell, cable, kettlebell, band, or
+                bodyweight exercise is a confusing, honestly wrong control, not a helpful one. */}
+            {isPlateLoadedEquipment(exMap[exId]) && (
+              <button
+                onClick={() => setPlateCalcOpen((o) => !o)}
+                className={`px-2.5 py-1 rounded-md text-[11px] uppercase tracking-wide font-bold ${
+                  plateCalcOpen ? "bg-v5-red/15 text-v5-red" : "text-v5-subtext hover:text-v5-text"
+                }`}
+              >
+                Plate calc {plateCalcOpen ? "▴" : "▾"}
+              </button>
+            )}
             <button
               onClick={() => setOptionsOpen((o) => !o)}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] uppercase tracking-wide font-bold ${
@@ -5709,7 +5785,7 @@ function TrainingExerciseCard({
               {optionsHasContent && !optionsOpen && <span className="w-1.5 h-1.5 rounded-full bg-v5-red" />}
             </button>
           </div>
-          {plateCalcOpen && (
+          {plateCalcOpen && isPlateLoadedEquipment(exMap[exId]) && (
             <PlateCalculatorPanel
               barWeight={state.settings?.barWeight || 45}
               onUseWeight={(w) => {

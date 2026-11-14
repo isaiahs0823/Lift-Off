@@ -33,6 +33,23 @@ export function getEquipmentLabel(exercise) {
   return null;
 }
 
+// Quality Sprint 01, Phase 3 — the Plate Calculator (builds a load from standard barbell plate
+// pairs) was offered unconditionally on every exercise, including dumbbell, cable, kettlebell,
+// band, and bodyweight movements where there is no bar to load plates onto — a confusing, honestly
+// wrong control for most of the catalog. Reuses the exact same honest, name-keyword approach as
+// getEquipmentLabel above (never a separate/fabricated data source): true only for equipment that
+// is unambiguously plate-loaded by convention. "Machine" is deliberately split rather than treated
+// as one bucket — leg press/hack squat machines ARE plate-loaded, but the far more common lat
+// pulldown/leg curl/leg extension/pec deck/assisted-pullup machines are pin-stack, not plates, so
+// lumping all "Machine" exercises in would be just as wrong as not gating at all.
+const PLATE_LOADED_MACHINE_RULE = /leg press|hack squat/i;
+export function isPlateLoadedEquipment(exercise) {
+  const label = getEquipmentLabel(exercise);
+  if (label === "Barbell" || label === "Smith Machine") return true;
+  if (label === "Machine") return PLATE_LOADED_MACHINE_RULE.test(exercise?.name || "");
+  return false;
+}
+
 // BRK's exercise data model has no difficulty rating either (same audit as equipment above) —
 // `type` ("compound" | "isolation") is the one real, non-fabricated categorization that exists.
 // It isn't literally "difficulty," so this is surfaced to the athlete as "Movement type," never
