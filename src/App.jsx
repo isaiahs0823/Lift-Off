@@ -1897,6 +1897,44 @@ export default function LiftLog() {
     return next;
   }, []);
   const loaded = true; // The shared broker completed initialization before this module loaded.
+  // Today/Train's active-program-day data (resolveTodayWorkout/resolveCurrentProgramDay in
+  // programSchedule.js) is a pure function of `state` and the real clock, recomputed fresh on
+  // every render with no memoization of its own — so nothing here needs to recompute anything;
+  // it only needs to force a re-render at the moments the local calendar day can change out from
+  // under an already-open app: when the day actually rolls over past local midnight while BRK
+  // stays open, and when the browser or installed PWA returns to the foreground after being
+  // backgrounded (same visibilitychange/pageshow/focus trio RestTimer already uses below, for the
+  // same reason — a backgrounded tab's timers can be throttled or suspended entirely, so returning
+  // to the foreground must reconcile against the real clock rather than trust anything scheduled
+  // while hidden). A refresh or cold launch needs no handling here — state is freshly loaded and
+  // every date-dependent read already happens against the real clock on first render.
+  const [, forceDayTick] = useState(0);
+  useEffect(() => {
+    let timeoutId;
+    const scheduleNextMidnightTick = () => {
+      const now = new Date();
+      // :05 past midnight, not exactly :00 — avoids a tick firing a few ms early/late against
+      // local midnight from timer drift and still landing well inside the new calendar day.
+      const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+      timeoutId = setTimeout(() => {
+        forceDayTick((t) => t + 1);
+        scheduleNextMidnightTick();
+      }, Math.max(1000, nextMidnight.getTime() - now.getTime()));
+    };
+    scheduleNextMidnightTick();
+    return () => clearTimeout(timeoutId);
+  }, []);
+  useEffect(() => {
+    const reconcile = () => forceDayTick((t) => t + 1);
+    document.addEventListener("visibilitychange", reconcile);
+    window.addEventListener("pageshow", reconcile);
+    window.addEventListener("focus", reconcile);
+    return () => {
+      document.removeEventListener("visibilitychange", reconcile);
+      window.removeEventListener("pageshow", reconcile);
+      window.removeEventListener("focus", reconcile);
+    };
+  }, []);
   const [tab, setTab] = useState("today");
   // "Start This Program" success feedback (UX audit Phase 1, item 1) — deliberately NOT part of
   // `state`/localStorage: it's a one-shot "you just did this" banner for Today, not durable data,

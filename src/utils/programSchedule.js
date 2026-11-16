@@ -52,8 +52,21 @@ function sessionCompletesDay(session, cp, prog, day) {
   return session.planName === `${prog.name} — ${day.label}`;
 }
 
+// Local (not UTC) calendar-date string for a given instant — "today" for program-schedule
+// purposes is the user's own wall-clock day, not whatever day it currently is in UTC. Using
+// toISOString().slice(0, 10) here previously meant a workout finished in the evening in any
+// timezone west of UTC (the common case — most of the US) could log a lastCompletedAt whose
+// UTC date was already "tomorrow," making completedToday spuriously true a full local day late
+// (see resolveCurrentProgramDay below).
+function localDateStr(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function todayDateStr() {
-  return new Date().toISOString().slice(0, 10);
+  return localDateStr(new Date());
 }
 
 // Looks up the active program's data (built-in or custom) for state.currentProgram. Shared by
@@ -124,7 +137,12 @@ export function resolveCurrentProgramDay(state) {
   // day for the rest of the calendar day. lastCompletedAt/lastCompletedDayIndex record what was
   // actually finished and when, so the resolved day only moves forward once the real date does.
   const todayStr = todayDateStr();
-  const completedToday = !!(cp.lastCompletedAt && cp.lastCompletedAt.slice(0, 10) === todayStr);
+  // lastCompletedAt is a full ISO instant (always UTC-formatted) — compare its LOCAL calendar
+  // date against today's local date, not a raw string slice of the UTC-formatted timestamp
+  // against a UTC "today" (that comparison happened to agree for timezones east of UTC, but for
+  // anyone west of UTC — most of the US included — an evening completion could read as
+  // "tomorrow" in UTC terms and spuriously match the next morning's real "today").
+  const completedToday = !!(cp.lastCompletedAt && localDateStr(new Date(cp.lastCompletedAt)) === todayStr);
   const override = activeOverrideFor(state, cp);
   // A same-day completion is always authoritative over an override (in practice they're mutually
   // exclusive — finishRun clears the override the moment its workout completes — this ordering
