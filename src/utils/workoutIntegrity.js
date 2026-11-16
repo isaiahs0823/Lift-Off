@@ -151,6 +151,35 @@ export function swapWorkoutExercise(run, index, newExId, logs = []) {
   };
 }
 
+// Reorders one exercise slot within the active session only — never the saved program/template,
+// and never past workout history (those are untouched; this only ever mutates activeRun).
+// sessionEntries/draftByIndex/swaps are keyed by array position (see sanitizeActiveRun's
+// draftByIndex comment), so moving a slot without also moving its own entry/draft/swap would
+// silently reattach them to whatever exercise ends up at the old position instead. This computes
+// the move by workoutSlotId — the one identity that's stable across the reorder — and carries
+// every index-keyed structure through the exact same old-index -> new-index mapping, the same
+// pattern removeRunExercise/swapWorkoutExercise already use for a shrinking or inserting array,
+// generalized here to an arbitrary single-slot move. Using workoutSlotId (not exId) is also what
+// lets two slots of the same exercise move independently without crossing wires.
+export function moveWorkoutExercise(run, fromIndex, toIndex) {
+  const exercises = run?.exercises;
+  if (!Array.isArray(exercises) || run.finished || run.completionPending) return run;
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= exercises.length || toIndex >= exercises.length) return run;
+  const reordered = [...exercises];
+  const [moved] = reordered.splice(fromIndex, 1);
+  reordered.splice(toIndex, 0, moved);
+  const newIndexBySlotId = new Map(reordered.map((slot, i) => [slot.workoutSlotId, i]));
+  const remap = (oldIdx) => newIndexBySlotId.get(exercises[oldIdx]?.workoutSlotId) ?? oldIdx;
+  return {
+    ...run,
+    exercises: reordered,
+    sessionEntries: (run.sessionEntries || []).map((se) => ({ ...se, index: remap(se.index) })),
+    draftByIndex: Object.fromEntries(Object.entries(run.draftByIndex || {}).map(([i, draft]) => [remap(Number(i)), draft])),
+    swaps: Object.fromEntries(Object.entries(run.swaps || {}).map(([i, exId]) => [remap(Number(i)), exId])),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export function advanceProgramForWorkout(state, run, now = new Date().toISOString()) {
   const cp = state.currentProgram, ctx = run.programContext;
   if (!cp || !ctx || cp.programId !== ctx.programId || cp.source !== ctx.source) return state;
