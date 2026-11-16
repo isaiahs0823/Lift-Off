@@ -40,6 +40,7 @@ import {
   Layers,
   BarChart3,
   Type,
+  GripVertical,
 } from "lucide-react";
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
@@ -130,7 +131,7 @@ import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
 import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
 import { initialSyncStatus, markSyncStarted, markSyncSuccess, markSyncFailure, MAX_SYNC_ATTEMPTS, retryDelayMs } from "./utils/syncStatus.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
-import { newWorkoutId, hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion, stampWorkoutDraft, workoutEntryKey, recoverWorkoutCheckpoint, swapWorkoutExercise } from "./utils/workoutIntegrity.js";
+import { newWorkoutId, hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion, stampWorkoutDraft, workoutEntryKey, recoverWorkoutCheckpoint, swapWorkoutExercise, moveWorkoutExercise } from "./utils/workoutIntegrity.js";
 import {
   SET_TYPES,
   PROGRAM_ROLES,
@@ -2555,6 +2556,19 @@ export default function LiftLog() {
       preserveRecoveryConflict(error);
     }
   };
+  // Reorder (task: "BRK Active Workout — Reorder Exercises") — session-only, same as every other
+  // activeRun mutation here; the saved program/template and past workout history are untouched.
+  // moveWorkoutExercise carries sessionEntries/draftByIndex/swaps through the move by
+  // workoutSlotId, so this is safe to call from either a drag release or a Move up/down tap —
+  // both just resolve to a fromIndex/toIndex pair.
+  const reorderRunExercise = (fromIndex, toIndex) => {
+    setActiveRun((run) => moveWorkoutExercise(run, fromIndex, toIndex));
+  };
+  // Persists which exercise slot GuidedRunView keeps shown as "active" — on `run` itself (not
+  // local component state) so it survives a refresh, same as every other in-progress field here.
+  const selectRunExercise = (slotId) => {
+    setActiveRun((run) => (run ? { ...run, selectedSlotId: slotId } : run));
+  };
   // Appends an exercise the plan never had (session-only, not saved back to the plan) — the
   // slot lands at the end of run.exercises, so it becomes the active card once everything
   // already queued ahead of it is logged, no matter when during the workout it's added.
@@ -2935,6 +2949,8 @@ export default function LiftLog() {
             onSwap={swapRunExercise}
             onAddExercise={addRunExercise}
             onRemoveExercise={removeRunExercise}
+            onReorderExercise={reorderRunExercise}
+            onSelectExercise={selectRunExercise}
             onSplitEquipmentSwitch={splitExerciseForEquipmentSwitch}
             onReopen={reopenRun}
             onLoggedSet={bumpRestTimer}
@@ -4970,6 +4986,12 @@ function TrainingExerciseCard({
   const [setType, setSetType] = useState(() => draft?.setType ?? "working");
   const [programRole, setProgramRole] = useState(() => draft?.programRole ?? "");
   const [drops, setDrops] = useState(() => draft?.drops ?? []);
+  // Replace-exercise draft-loss check (task: "BRK Active Workout — Replace Exercise") — captured
+  // once per exercise instance (this component remounts fresh via key={currentExId}, same as the
+  // comment above), so comparing the CURRENT weight/reps against this is exactly "has the athlete
+  // actually typed something since landing on this exercise" rather than a guess from a
+  // zero/blank check, which the prefilled suggestion would too easily false-positive on.
+  const initialDraftRef = useRef({ weight, reps });
   // Progressive disclosure state — every one of these defaults closed. This component gets a
   // fresh `key={currentExId}` from GuidedRunView on every exercise switch, so there's no need
   // to reset these in an effect: a new exercise is a whole new component instance.
@@ -5346,6 +5368,21 @@ function TrainingExerciseCard({
         muscleGroups={MUSCLE_GROUPS}
         onBack={() => setSwapOpen(false)}
         onSelect={(newExId) => {
+          // Replace-exercise draft-loss confirmation (task: "If the original has a draft... ask
+          // the user before discarding it"). Only relevant when there's nothing already
+          // CONFIRMED (a Save Set) to protect — that case is already handled safely further down
+          // (swapWorkoutExercise preserves it and inserts the replacement next, never silently
+          // dropping a logged set). This is specifically for weight/reps typed but never saved.
+          const hasConfirmedSets = confirmedSets.length > 0;
+          const draftTouched =
+            !hasConfirmedSets &&
+            (Number(weight) !== Number(initialDraftRef.current.weight) || Number(reps) !== Number(initialDraftRef.current.reps));
+          if (draftTouched) {
+            const ok = window.confirm(
+              `Replace ${exMap[exId]?.name || exId}? Your unsaved ${weight} lb × ${reps} entry for it will be discarded — it won't carry over to the new exercise.`
+            );
+            if (!ok) return; // picker stays open, nothing changes
+          }
           // Cancel typed-input autosave before the atomic swap transition. Confirmed work
           // stays in its original slot; replacement input starts independently.
           if (draftTimerRef.current) {
@@ -5423,7 +5460,7 @@ function TrainingExerciseCard({
           onClick={() => setSwapOpen(true)}
           className="w-full flex items-center justify-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-v5-subtext hover:text-v5-red py-0.5"
         >
-          <ArrowLeftRight size={12} /> Swap exercise
+          <ArrowLeftRight size={12} /> Replace exercise
         </button>
       )}
 
@@ -6170,6 +6207,112 @@ function SwipeableExerciseRow({ isOpen, onOpenChange, onRemove, exName, children
   );
 }
 
+// Reorder mode's exercise list (task: "BRK Active Workout — Reorder Exercises") — a deliberately
+// plain, dedicated list (name + status, not the full logging card) while active, so normal
+// scrolling is never in tension with a drag gesture on an input field or a Save Set button.
+// Dragging uses Pointer Events (not native HTML5 drag-and-drop, which never fires from a real
+// touchscreen tap-and-hold — see ProgramBuilder's DayRow comment for that exact lesson already
+// learned on this same codebase) with `touchAction: "none"` scoped to the handle alone, so the
+// rest of the row/page keeps ordinary touch scrolling. Only the dragged row visually follows the
+// finger; the rest of the list snaps to its new order on release via the same onReorder(from, to)
+// the Move up/down buttons use — one function, two input methods, so either always agrees with
+// the other and with moveWorkoutExercise's own fromIndex/toIndex contract.
+const REORDER_ROW_HEIGHT = 56;
+function ReorderableExerciseList({ exercises, swaps, exMap, loggedFlags, onReorder, onDone }) {
+  const [dragIdx, setDragIdx] = useState(null);
+  const [dragOffsetY, setDragOffsetY] = useState(0);
+  const dragInfo = useRef(null);
+
+  const nameFor = (idx) => {
+    const exId = swaps?.[idx] ?? exercises[idx].exId;
+    return exMap[exId]?.name || exId;
+  };
+
+  const onHandlePointerDown = (e, idx) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragInfo.current = { pointerId: e.pointerId, startY: e.clientY, from: idx };
+    setDragIdx(idx);
+    setDragOffsetY(0);
+  };
+  const onHandlePointerMove = (e) => {
+    if (!dragInfo.current || dragInfo.current.pointerId !== e.pointerId) return;
+    setDragOffsetY(e.clientY - dragInfo.current.startY);
+  };
+  const endDrag = (e) => {
+    if (!dragInfo.current || dragInfo.current.pointerId !== e.pointerId) return;
+    const { from } = dragInfo.current;
+    const steps = Math.round(dragOffsetY / REORDER_ROW_HEIGHT);
+    const to = Math.max(0, Math.min(exercises.length - 1, from + steps));
+    dragInfo.current = null;
+    setDragIdx(null);
+    setDragOffsetY(0);
+    if (to !== from) onReorder(from, to);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-bold text-v5-text">Reorder exercises</div>
+        <button onClick={onDone} className="text-xs uppercase tracking-widest font-bold text-v5-red">
+          Done
+        </button>
+      </div>
+      <div className="text-xs text-v5-subtext">Drag the handle, or use the up/down arrows — this session only.</div>
+      <div>
+        {exercises.map((exSlot, idx) => {
+          const isDragging = idx === dragIdx;
+          return (
+            <div
+              key={exSlot.workoutSlotId}
+              className={`flex items-center gap-1.5 bg-v5-surface border border-white/[0.06] px-2 ${
+                isDragging ? "relative z-10 shadow-lg shadow-black/40" : ""
+              } ${idx > 0 ? "-mt-px" : ""}`}
+              style={{
+                height: REORDER_ROW_HEIGHT,
+                transform: isDragging ? `translateY(${dragOffsetY}px)` : "none",
+              }}
+            >
+              <button
+                onPointerDown={(e) => onHandlePointerDown(e, idx)}
+                onPointerMove={onHandlePointerMove}
+                onPointerUp={endDrag}
+                onPointerCancel={endDrag}
+                aria-label={`Drag to reorder ${nameFor(idx)}`}
+                className="shrink-0 p-2 -ml-1 text-v5-subtext/70 active:text-v5-red"
+                style={{ touchAction: "none" }}
+              >
+                <GripVertical size={18} />
+              </button>
+              <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                {loggedFlags?.[idx] && <Check size={13} className="text-v5-success shrink-0" />}
+                <span className="truncate text-sm text-v5-text">{nameFor(idx)}</span>
+              </div>
+              <div className="shrink-0 flex flex-col -my-1">
+                <button
+                  onClick={() => onReorder(idx, idx - 1)}
+                  disabled={idx === 0}
+                  aria-label={`Move ${nameFor(idx)} up`}
+                  className="p-1 text-v5-subtext/70 hover:text-v5-text disabled:opacity-20 disabled:pointer-events-none"
+                >
+                  <ChevronUp size={15} />
+                </button>
+                <button
+                  onClick={() => onReorder(idx, idx + 1)}
+                  disabled={idx === exercises.length - 1}
+                  aria-label={`Move ${nameFor(idx)} down`}
+                  className="p-1 text-v5-subtext/70 hover:text-v5-text disabled:opacity-20 disabled:pointer-events-none"
+                >
+                  <ChevronDown size={15} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ---------------- GUIDED PLAN RUNNER ----------------
 // Shows every exercise in the plan on one page so the whole session is visible at once, but
 // only the current, not-yet-logged exercise ever shows active input fields — logged ones
@@ -6210,9 +6353,32 @@ function GuidedRunView({
   onSaveTemporaryProfile,
   onUpdateSessionContext,
   onRemoveExercise,
+  onReorderExercise,
+  onSelectExercise,
   onSplitEquipmentSwitch,
 }) {
   const [editingIdx, setEditingIdx] = useState(null);
+  // Reorder mode (task: "BRK Active Workout — Reorder Exercises") — a dedicated, simple
+  // drag-handle/Move-up/Move-down list replaces the normal per-exercise cards while this is on;
+  // Done returns to logging. Session-only, like every other activeRun mutation here.
+  const [reorderMode, setReorderMode] = useState(false);
+  // Sticky "selected" exercise (task: "keep the same exercise selected after a move") — tracked
+  // by workoutSlotId (run.selectedSlotId), the one identity stable across a reorder, rather than
+  // recomputed purely from array position every render (see currentIdx below). Persisted on
+  // `run` itself, not local component state — a reorder is supposed to survive a refresh per the
+  // task's own verification step, and GuidedRunView remounts fresh on one, so anything that
+  // needs to outlive that must live on the saved run, the same as sessionEntries/draftByIndex.
+  // Kept in sync by the effect further down: it only re-points to the natural next slot when the
+  // previously-selected one actually finished or was removed — a reorder alone never does
+  // either, so the same exercise stays selected through one, exactly as today's behavior already
+  // advances it on a real finish.
+  const selectedSlotId = run.selectedSlotId ?? null;
+  // Replace exercise from an upcoming (not-yet-active) row (task: "BRK Active Workout — Replace
+  // Exercise" — "equipment is taken" is just as likely to be true of a movement a few slots away
+  // as the one currently up). The active card's own "Replace exercise" button covers the
+  // currently-active slot already; this is the same ExerciseSwapPicker/onSwap path, opened for
+  // an arbitrary idx instead.
+  const [replacingIdx, setReplacingIdx] = useState(null);
   const [prByIndex, setPrByIndex] = useState({});
   const [addingExercise, setAddingExercise] = useState(false);
   // Swipe-to-remove (task: "BRK Active Workout — Swipe to Remove Exercise"). `openSwipeIdx`:
@@ -6288,6 +6454,28 @@ function GuidedRunView({
     const id = setInterval(() => setNowTick(Date.now()), 1000);
     return () => clearInterval(id);
   }, [run.finished]);
+
+  // Hooks must run unconditionally on every render (never after the run.finished early return
+  // below), so this — and the values it needs — live here, ahead of it, same as the nowTick
+  // effect above. entryForIndex/currentIdx are still used further down, in the non-finished
+  // render only; declaring them this early changes nothing about that, `const` is visible for
+  // the rest of the function body regardless of which branch returns first.
+  const entryForIndex = (idx) => run.sessionEntries.find((se) => se.index === idx)?.entry || null;
+  const naturalCurrentIdx = run.exercises.findIndex((_, idx) => !entryForIndex(idx));
+  const selectedIdxRaw = selectedSlotId != null ? run.exercises.findIndex((ex) => ex.workoutSlotId === selectedSlotId) : -1;
+  const currentIdx = selectedIdxRaw !== -1 && !entryForIndex(selectedIdxRaw) ? selectedIdxRaw : naturalCurrentIdx;
+  // Keeps selectedSlotId pointing at a real, still-unfinished slot; otherwise re-syncs to the
+  // natural next one. Covers mount (selectedSlotId starts null), a normal finish advancing to
+  // the next exercise, and a removed slot — all unchanged from today's behavior. A reorder alone
+  // changes nothing here (the selected slot is still unfinished and still present), which is
+  // exactly what keeps the same exercise selected through one.
+  useEffect(() => {
+    if (run.finished) return;
+    if (selectedIdxRaw !== -1 && !entryForIndex(selectedIdxRaw)) return;
+    const nextSlotId = naturalCurrentIdx === -1 ? null : run.exercises[naturalCurrentIdx].workoutSlotId;
+    if (nextSlotId !== selectedSlotId) onSelectExercise?.(nextSlotId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run.exercises, run.sessionEntries, run.finished]);
 
   if (run.finished) {
     const summary = (state.workoutSessions || []).find((s) => s.id === run.summaryId) || null;
@@ -6725,9 +6913,6 @@ function GuidedRunView({
     );
   }
 
-  const entryForIndex = (idx) => run.sessionEntries.find((se) => se.index === idx)?.entry || null;
-  const currentIdx = run.exercises.findIndex((_, idx) => !entryForIndex(idx));
-
   // Superset/giant-set grouping: exercises carry an optional single-letter `group` (set in
   // Build Plan). Two or more *consecutive* plan entries sharing a letter render as A1/A2/A3
   // and share one rest window — logging a non-last member skips the rest timer entirely so
@@ -6816,6 +7001,36 @@ function GuidedRunView({
             onSelect={(exId) => {
               onAddExercise(exId);
               setAddingExercise(false);
+            }}
+          />
+        </div>
+      )}
+      {replacingIdx != null && (
+        <div className="fixed inset-0 z-30 bg-v5-surface overflow-y-auto p-4 sm:p-6">
+          <ExerciseSwapPicker
+            currentExId={run.swaps?.[replacingIdx] ?? run.exercises[replacingIdx]?.exId}
+            allExercises={allExercises}
+            exMap={exMap}
+            state={state}
+            updateState={updateState}
+            muscleGroups={MUSCLE_GROUPS}
+            onBack={() => setReplacingIdx(null)}
+            onSelect={(newExId) => {
+              // An upcoming row only ever autosaves a draft once it's been opened as the active
+              // card at least once — a never-visited exercise has no draftByIndex entry at all,
+              // so there's nothing to lose and nothing to confirm. If it WAS visited earlier
+              // (e.g. Finish Workout reopened an exercise, or this slot was active before a
+              // reorder moved focus elsewhere) and left typed-but-unsaved input behind, ask
+              // first, same as the active card's own Replace exercise.
+              const draft = run.draftByIndex?.[replacingIdx];
+              const hasConfirmedSets = (draft?.confirmedSets?.length ?? 0) > 0;
+              const hasTypedDraft = !hasConfirmedSets && draft && (draft.weight !== undefined || draft.reps !== undefined);
+              if (hasTypedDraft) {
+                const exName = exMap[run.swaps?.[replacingIdx] ?? run.exercises[replacingIdx]?.exId]?.name || "this exercise";
+                if (!window.confirm(`Replace ${exName}? Its unsaved entry will be discarded — it won't carry over to the new exercise.`)) return;
+              }
+              onSwap(replacingIdx, newExId);
+              setReplacingIdx(null);
             }}
           />
         </div>
@@ -6946,17 +7161,42 @@ function GuidedRunView({
         </div>
       )}
 
-      {/* Compact contextual insight, not a card competing with the workout itself — a thin red
-          accent bar and one line of text, gone the moment something's actually logged (see
-          preWorkout's own sessionEntries.length === 0 guard above). */}
-      {preWorkout && (
-        <div className="flex items-start gap-2 pl-2.5 border-l-2 border-v5-red/60">
-          <span className="text-xs text-v5-subtext leading-snug">{preWorkout.message}</span>
+      {/* Edit order (task: "BRK Active Workout — Reorder Exercises") — visible whenever there's
+          actually more than one exercise to reorder; onReorderExercise is optional so an older
+          caller that doesn't pass it simply never shows this rather than crashing. */}
+      {!reorderMode && totalExercises > 1 && onReorderExercise && (
+        <div className="flex justify-end -mb-2">
+          <button
+            onClick={() => setReorderMode(true)}
+            className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-v5-subtext hover:text-v5-red"
+          >
+            <GripVertical size={13} /> Edit order
+          </button>
         </div>
       )}
 
-      <div className="space-y-8">
-        {run.exercises.map((exSlot, idx) => {
+      {reorderMode ? (
+        <ReorderableExerciseList
+          exercises={run.exercises}
+          swaps={run.swaps}
+          exMap={exMap}
+          loggedFlags={run.exercises.map((_, idx) => !!entryForIndex(idx))}
+          onReorder={(from, to) => onReorderExercise(from, to)}
+          onDone={() => setReorderMode(false)}
+        />
+      ) : (
+        <>
+          {/* Compact contextual insight, not a card competing with the workout itself — a thin red
+              accent bar and one line of text, gone the moment something's actually logged (see
+              preWorkout's own sessionEntries.length === 0 guard above). */}
+          {preWorkout && (
+            <div className="flex items-start gap-2 pl-2.5 border-l-2 border-v5-red/60">
+              <span className="text-xs text-v5-subtext leading-snug">{preWorkout.message}</span>
+            </div>
+          )}
+
+          <div className="space-y-8">
+            {run.exercises.map((exSlot, idx) => {
           const currentExId = run.swaps?.[idx] ?? exSlot.exId;
           const entry = entryForIndex(idx);
           const isLogged = !!entry;
@@ -7143,6 +7383,13 @@ function GuidedRunView({
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-base font-medium text-v5-subtext truncate">{exMap[currentExId]?.name || currentExId}</div>
                     <button
+                      onClick={() => setReplacingIdx(idx)}
+                      aria-label={`Replace ${exMap[currentExId]?.name || currentExId}`}
+                      className="shrink-0 p-1 -m-1 text-v5-subtext/40 hover:text-v5-red"
+                    >
+                      <ArrowLeftRight size={14} />
+                    </button>
+                    <button
                       onClick={() => requestRemoveExercise(idx, exMap[currentExId]?.name || currentExId, false)}
                       aria-label={`Remove ${exMap[currentExId]?.name || currentExId}`}
                       className="shrink-0 p-1 -m-1 text-v5-subtext/40 hover:text-v5-red"
@@ -7155,28 +7402,32 @@ function GuidedRunView({
             </div>
           );
         })}
-      </div>
+          </div>
+        </>
+      )}
 
-      <div className="space-y-2 pt-1">
-        {/* Ghost/outlined, not a solid filled block — ranks below Save Set at a glance, exactly
-            like Finish Workout below it, rather than reading as another primary button. */}
-        <button
-          onClick={() => setAddingExercise(true)}
-          className="w-full py-2.5 rounded-lg text-xs uppercase tracking-widest font-bold border border-v5-muted text-v5-subtext hover:text-v5-text hover:border-v5-subtext/50 flex items-center justify-center gap-1.5"
-        >
-          <Plus size={14} /> Add exercise
-        </button>
+      {!reorderMode && (
+        <div className="space-y-2 pt-1">
+          {/* Ghost/outlined, not a solid filled block — ranks below Save Set at a glance, exactly
+              like Finish Workout below it, rather than reading as another primary button. */}
+          <button
+            onClick={() => setAddingExercise(true)}
+            className="w-full py-2.5 rounded-lg text-xs uppercase tracking-widest font-bold border border-v5-muted text-v5-subtext hover:text-v5-text hover:border-v5-subtext/50 flex items-center justify-center gap-1.5"
+          >
+            <Plus size={14} /> Add exercise
+          </button>
 
-        {/* Outlined rather than solid-fill red — Save Set (inside the active set card above) is
-            the one dominant CTA on screen while a set is being logged; Finish Workout stays a
-            strong, unmistakably red action without visually tying with it for attention. */}
-        <button
-          onClick={() => setFinishConfirmOpen(true)}
-          className="w-full py-3 rounded-lg text-xs uppercase tracking-widest font-bold border border-v5-red/70 text-v5-red hover:bg-v5-red hover:text-white mt-1"
-        >
-          Finish workout
-        </button>
-      </div>
+          {/* Outlined rather than solid-fill red — Save Set (inside the active set card above) is
+              the one dominant CTA on screen while a set is being logged; Finish Workout stays a
+              strong, unmistakably red action without visually tying with it for attention. */}
+          <button
+            onClick={() => setFinishConfirmOpen(true)}
+            className="w-full py-3 rounded-lg text-xs uppercase tracking-widest font-bold border border-v5-red/70 text-v5-red hover:bg-v5-red hover:text-white mt-1"
+          >
+            Finish workout
+          </button>
+        </div>
+      )}
 
       {/* Finish Workout confirmation (task: "one accidental tap must NEVER finish a workout") —
           Keep Training is the calm, bordered/neutral option (never red — this app reserves red
