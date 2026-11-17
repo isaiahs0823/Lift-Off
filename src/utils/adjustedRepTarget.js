@@ -44,9 +44,17 @@ const ASSISTED_KEYWORDS = ["assisted"];
 // reps:1 is how BRK's own program data already represents these (see farmers_carry/plank's
 // prescriptions in App.jsx) — the logged number isn't a rep count at all.
 const TIMED_OR_CARRY_KEYWORDS = ["hold", "plank", "carry", "dead hang", "farmer"];
-// Bodyweight-family movements — treated as bodyweight-only UNLESS the name also says "weighted",
-// matching BRK's own naming convention (e.g. "pullup"/"Weighted pull-up" are the loaded variant;
-// "bodyweight_pullup"/"Pull-Up" and "Wide-Grip Pull-Up" etc. are the unweighted ones).
+// Bodyweight-family movements — excluded even when the name says "weighted" (e.g. "Weighted
+// pull-up", "Weighted chin-up", "Weighted dip" — the only three such naming variants in BRK's
+// whole exercise library; "bodyweight_pullup"/"Pull-Up", "Wide-Grip Pull-Up", "Chest dip", etc.
+// are the plain unweighted ones and were already excluded regardless). An earlier version of this
+// file re-included the "weighted" variant, on the assumption its logged weight was the full load.
+// It isn't: BRK's weight field for these logs ADDED resistance only (a belt plate, a held
+// dumbbell), not the athlete's bodyweight-plus-load. The inverse-Epley ratio math assumes the
+// weight field IS the full load, so +25 lb -> +35 lb reads as a ~40% jump even though the actual
+// total load barely moved, producing a misleading rep target. Suppressed here until BRK models
+// effective load (bodyweight + added resistance) for these — a separate change; normal weight/
+// reps logging for these exercises is completely unaffected, only this cue is hidden.
 const BODYWEIGHT_FAMILY_KEYWORDS = [
   "push-up",
   "pushup",
@@ -72,8 +80,7 @@ export function isAdjustedRepTargetCompatible(ex) {
   const n = ex.name.toLowerCase();
   if (ASSISTED_KEYWORDS.some((k) => n.includes(k))) return false;
   if (TIMED_OR_CARRY_KEYWORDS.some((k) => n.includes(k))) return false;
-  const looksBodyweight = BODYWEIGHT_FAMILY_KEYWORDS.some((k) => n.includes(k));
-  if (looksBodyweight && !n.includes("weighted")) return false;
+  if (BODYWEIGHT_FAMILY_KEYWORDS.some((k) => n.includes(k))) return false;
   return true;
 }
 

@@ -88,10 +88,14 @@ describe("isAdjustedRepTargetCompatible — exercise scoping", () => {
     expect(isAdjustedRepTargetCompatible({ name: "Bodyweight Squat", type: "compound" })).toBe(false);
   });
 
-  it("accepts the WEIGHTED variant of an otherwise-bodyweight movement family", () => {
-    expect(isAdjustedRepTargetCompatible({ name: "Weighted pull-up", type: "compound" })).toBe(true);
-    expect(isAdjustedRepTargetCompatible({ name: "Weighted chin-up", type: "compound" })).toBe(true);
-    expect(isAdjustedRepTargetCompatible({ name: "Weighted dip", type: "compound" })).toBe(true);
+  it("skips the WEIGHTED variant of a bodyweight movement family too — the logged weight is added resistance, not total load", () => {
+    // All three are BRK's only "Weighted ..." naming variants of a bodyweight-family movement
+    // (confirmed against the full exercise library). The inverse-Epley ratio math assumes the
+    // weight field is the full load; for these it's only the added plate/dumbbell, so +25 lb ->
+    // +35 lb would otherwise read as a ~40% load jump and produce a misleading rep target.
+    expect(isAdjustedRepTargetCompatible({ name: "Weighted pull-up", type: "compound" })).toBe(false);
+    expect(isAdjustedRepTargetCompatible({ name: "Weighted chin-up", type: "compound" })).toBe(false);
+    expect(isAdjustedRepTargetCompatible({ name: "Weighted dip", type: "compound" })).toBe(false);
   });
 
   it("skips assisted movements, even a weighted-sounding one", () => {
@@ -197,6 +201,39 @@ describe("adjustedRepTargetCue — the full cue BRK shows next to Weight/Reps", 
   it("bodyweight-only exercises are skipped entirely, even with a seemingly valid weight/reps baseline", () => {
     const cue = adjustedRepTargetCue({ ex: pushup, exSlot: { sets: 3, reps: 10 }, setType: "working", originalWeight: 0, originalReps: 20, newWeight: 0 });
     expect(cue).toBeNull();
+  });
+
+  describe("weighted bodyweight edge case (weighted pull-ups/chin-ups/dips)", () => {
+    // Realistic added-weight scenario: a dip belt moving from +25 lb to +35 lb is a genuinely
+    // valid weight/reps entry (not zero, not missing) that would otherwise trigger a cue — the
+    // formula would treat it as a ~40% total-load jump (25 -> 35) when it's really a much smaller
+    // change in true total load (bodyweight + added weight). The cue must stay hidden here, while
+    // the Weight/Reps fields themselves stay fully usable (adjustedRepTargetCue never touches
+    // those — it only ever returns a label or null).
+    const weightedPullup = { name: "Weighted pull-up", type: "compound" };
+    const weightedChinup = { name: "Weighted chin-up", type: "compound" };
+    const weightedDip = { name: "Weighted dip", type: "compound" };
+
+    it("weighted pull-up: no cue even for a clearly-valid +25 lb -> +35 lb change", () => {
+      const cue = adjustedRepTargetCue({ ex: weightedPullup, exSlot: { sets: 3, reps: 8 }, setType: "working", originalWeight: 25, originalReps: 8, newWeight: 35 });
+      expect(cue).toBeNull();
+    });
+
+    it("weighted chin-up: no cue even for a clearly-valid +25 lb -> +35 lb change", () => {
+      const cue = adjustedRepTargetCue({ ex: weightedChinup, exSlot: { sets: 3, reps: 7 }, setType: "working", originalWeight: 25, originalReps: 7, newWeight: 35 });
+      expect(cue).toBeNull();
+    });
+
+    it("weighted dip: no cue even for a clearly-valid +25 lb -> +35 lb change", () => {
+      const cue = adjustedRepTargetCue({ ex: weightedDip, exSlot: { sets: 3, reps: 8, repRange: [6, 10] }, setType: "working", originalWeight: 25, originalReps: 8, newWeight: 35 });
+      expect(cue).toBeNull();
+    });
+
+    it("stays null across the full range of weight changes an athlete might make, not just the one example above", () => {
+      for (const newWeight of [0.1, 5, 15, 25, 35, 45, 90]) {
+        expect(adjustedRepTargetCue({ ex: weightedPullup, exSlot: { sets: 3, reps: 8 }, setType: "working", originalWeight: 25, originalReps: 8, newWeight })).toBeNull();
+      }
+    });
   });
 
   it("no suggestion yet (no load/rep recommendation) -> no cue, preserving plain manual logging", () => {
