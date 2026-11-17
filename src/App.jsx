@@ -70,6 +70,7 @@ import MobilitySessionRunner from "./components/MobilitySessionRunner.jsx";
 import ProgramTimelineScreen from "./components/ProgramTimelineScreen.jsx";
 import DevelopmentPrioritiesScreen from "./components/DevelopmentPrioritiesScreen.jsx";
 import EquipmentProfileSheet, { AddEquipmentProfileForm } from "./components/EquipmentProfileSheet.jsx";
+import ExerciseInstructionPanel from "./components/ExerciseInstructionPanel.jsx";
 import {
   isMachineBasedExercise,
   profilesForExercise,
@@ -3300,7 +3301,15 @@ function Header() {
   return (
     <div className="px-4 sm:px-6 pt-2 pb-1.5 sm:pt-3 sm:pb-2 bg-v5-bg">
       <div className="flex items-center gap-1.5 sm:gap-2">
-        <img src={BREAK_LOGO} alt="B.R.E.A.K. logo" className="w-7 h-7 rounded-full object-cover ring-1 ring-v5-red/50" />
+        {/* New BRK identity: black background, bold white "BRK" — no skull/axes imagery.
+            aria-hidden since the adjacent "BRK - FIT" text already names the app for
+            screen readers; this mark is decorative. */}
+        <div
+          className="w-7 h-7 rounded-full bg-v5-bg ring-1 ring-v5-muted flex items-center justify-center shrink-0"
+          aria-hidden="true"
+        >
+          <span className="font-brk-display text-[10px] leading-none text-v5-text tracking-tight">BRK</span>
+        </div>
         <div className="min-w-0">
           <div className="text-v5-text font-black tracking-wide text-sm leading-none">
             BRK <span className="text-v5-red">-</span> FIT
@@ -5379,6 +5388,13 @@ function TrainingExerciseCard({
           )}
         </div>
       </PhotoHero>
+
+      {/* V2 reference board's How To / Tips / Muscles panel — right below the exercise hero,
+          before the swap/equipment controls and the set table. Falls back to an honest "no demo
+          yet" state for the ~300+ exercises not yet in exerciseInstructions.js; never fabricated
+          video/instructions. */}
+      <ExerciseInstructionPanel exId={exId} exerciseName={exMap[exId]?.name} muscle={exMap[exId]?.muscle} compact />
+
       {onSwap && (
         <button
           onClick={() => setSwapOpen(true)}

@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
-import { ChevronDown, ChevronUp, ChevronRight, Check, X, ArrowLeftRight, XCircle, Type, Play, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight, Check, X, ArrowLeftRight, XCircle, Type, Play, RefreshCw, Calendar, TrendingUp } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
 import ExerciseAnatomyRow from "./ExerciseAnatomyRow.jsx";
 import SwapWorkoutSheet from "./SwapWorkoutSheet.jsx";
+import { Card, ProgressBar } from "./ui/Kit.jsx";
 import { resolveProgramTimeline, programWeekAdherence, programTotalAdherence, applyProgramDaySwap } from "../utils/programSchedule.js";
 import { formatSetPrescription } from "../utils/exercisePrescription.js";
 import { groupedPriorities, sanitizeDevelopmentPriorities, labelFor } from "../utils/developmentPriorities.js";
@@ -13,18 +14,20 @@ function fmtDate(iso) {
 
 // Original BRK status glyphs — no bright multi-color system, restrained red for what actually
 // needs attention (current), muted gray for everything not yet due, a distinct recovery mark
-// rather than reusing the lifting checkmark for a different kind of session.
-const STATUS_GLYPH = { completed: "✓", current: "→", upcoming: "○", missed: "×", swapped: "⇄" };
-const STATUS_COLOR = {
-  completed: "text-green-500",
-  current: "text-v5-red",
-  upcoming: "text-v5-subtext/70",
-  missed: "text-red-700",
-  swapped: "text-v5-subtext",
-};
+// rather than reusing the lifting checkmark for a different kind of session. Status computation
+// (day.status/isRecovery/isDeload) is untouched — only the visual badge changed, to the V2
+// reference board's filled-circle/outlined-circle language instead of text glyphs.
+function DayStatusBadge({ day }) {
+  const base = "w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold";
+  if (day.isRecovery) return <div className={`${base} border border-v5-subtext/40 text-v5-subtext`}>◐</div>;
+  if (day.status === "completed") return <div className={`${base} bg-v5-success text-white`}><Check size={13} strokeWidth={3} /></div>;
+  if (day.status === "current") return <div className={`${base} bg-v5-red text-white`}><Play size={10} strokeWidth={3} className="ml-0.5" /></div>;
+  if (day.status === "missed") return <div className={`${base} bg-v5-red/20 text-v5-red border border-v5-red/40`}><X size={13} strokeWidth={3} /></div>;
+  if (day.status === "swapped") return <div className={`${base} border border-v5-subtext/40 text-v5-subtext`}><RefreshCw size={11} /></div>;
+  return <div className={`${base} border border-v5-subtext/40`} />; // upcoming — plain outlined circle, matching the reference
+}
 
 function DayRow({ day, onTap }) {
-  const recoveryMark = day.isRecovery ? "◐" : null;
   return (
     <button
       onClick={() => onTap(day)}
@@ -33,7 +36,7 @@ function DayRow({ day, onTap }) {
       }`}
     >
       <span className="flex items-center gap-2 min-w-0">
-        <span className={`w-4 shrink-0 text-center font-bold ${STATUS_COLOR[day.status]}`}>{recoveryMark || STATUS_GLYPH[day.status]}</span>
+        <DayStatusBadge day={day} />
         <span className={`text-sm truncate ${day.status === "current" ? "text-white font-bold" : "text-v5-text/90"}`}>{day.label}</span>
         {day.isRecovery && <span className="text-[11px] uppercase tracking-widest text-v5-subtext border border-white/10 px-1 py-0.5 shrink-0">Recovery</span>}
         {day.isDeload && <span className="text-[11px] uppercase tracking-widest text-v5-red border border-v5-red/40 px-1 py-0.5 shrink-0">Deload</span>}
@@ -266,68 +269,90 @@ export default function ProgramTimelineScreen({ state, updateState, exMap, onBac
         )}
       </div>
 
-      <div>
-        {renaming ? (
-          <div className="space-y-2">
-            <input
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") saveRename();
-                if (e.key === "Escape") cancelRenaming();
-              }}
-              autoFocus
-              className="w-full bg-v5-elevated text-white text-xl font-bold rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-v5-red"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={cancelRenaming}
-                className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:text-v5-text/90"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveRename}
-                disabled={!draft.trim()}
-                className="flex-1 py-2 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 disabled:opacity-40"
-              >
-                Save name
-              </button>
-            </div>
+      {/* Program hero card — V2 reference board's diagonal-accent program card. weekPct is only
+          computed (and the bar only shown) for a fixed-length program with a real totalWeeks;
+          a rolling/open-ended program has no natural "% through" to show, so none is fabricated. */}
+      <Card tone="accent" padding="p-4 sm:p-5" className="relative overflow-hidden space-y-3">
+        <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-v5-red/20 blur-2xl pointer-events-none" />
+        <div className="relative flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-full bg-v5-red flex items-center justify-center shrink-0 shadow-[0_4px_14px_-4px_rgba(232,16,29,0.6)]">
+            <Calendar size={16} className="text-white" />
           </div>
-        ) : (
-          <button onClick={startRenaming} className="flex items-center gap-2 text-left group">
-            <span className="text-2xl font-bold text-white">{timeline.programName}</span>
-            <Type size={15} className="text-v5-subtext/50 group-hover:text-v5-red shrink-0" />
-          </button>
-        )}
-        {justSaved && (
-          <div className="text-xs text-v5-text/70 flex items-center gap-1.5 mt-1">
-            <Check size={12} className="text-v5-red" /> Name saved
+          <div className="min-w-0 flex-1">
+            {renaming ? (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveRename();
+                    if (e.key === "Escape") cancelRenaming();
+                  }}
+                  autoFocus
+                  className="w-full bg-v5-elevated text-white text-xl font-bold rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-v5-red"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={cancelRenaming}
+                    className="flex-1 py-2 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:text-v5-text/90"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveRename}
+                    disabled={!draft.trim()}
+                    className="flex-1 py-2 text-xs uppercase tracking-widest font-bold bg-v5-red text-white hover:bg-v5-red/90 disabled:opacity-40"
+                  >
+                    Save name
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={startRenaming} className="flex items-center gap-2 text-left group min-w-0">
+                <span className="font-brk-display text-xl text-white truncate">{timeline.programName}</span>
+                <Type size={14} className="text-v5-subtext/50 group-hover:text-v5-red shrink-0" />
+              </button>
+            )}
+            {justSaved && (
+              <div className="text-xs text-v5-text/70 flex items-center gap-1.5 mt-1">
+                <Check size={12} className="text-v5-red" /> Name saved
+              </div>
+            )}
           </div>
-        )}
-        <div className="text-sm text-v5-subtext mt-1">
-          {timeline.totalWeeks ? `Week ${timeline.currentWeekNumber} of ${timeline.totalWeeks}` : `Week ${timeline.currentWeekNumber}`}
-          {" · "}
-          Day {timeline.currentDayIndex + 1} of {timeline.totalDaysPerCycle}
         </div>
+
+        <div className="relative flex items-center justify-between text-sm">
+          <span className="text-v5-subtext">
+            {timeline.totalWeeks ? `Week ${timeline.currentWeekNumber} of ${timeline.totalWeeks}` : `Week ${timeline.currentWeekNumber}`}
+            {" · "}
+            Day {timeline.currentDayIndex + 1} of {timeline.totalDaysPerCycle}
+          </span>
+          {timeline.totalWeeks > 0 && (
+            <span className="font-bold text-white tabular-nums">
+              {Math.round(((timeline.currentWeekNumber - 1) / timeline.totalWeeks) * 100)}%
+            </span>
+          )}
+        </div>
+        {timeline.totalWeeks > 0 && (
+          <ProgressBar pct={((timeline.currentWeekNumber - 1) / timeline.totalWeeks) * 100} className="relative" />
+        )}
+
         {/* "Swap Workout" (do a different day of THIS program today) — deliberately distinct from
-            "Switch Program" below (which replaces the whole active program). Same understated
-            text-link treatment Today/Train already use for it, same underlying sheet. */}
+            "Switch Program" below (which replaces the whole active program). */}
         {updateState && (
-          <button onClick={() => setSwapOpen(true)} className="flex items-center gap-1.5 text-xs text-v5-subtext hover:text-v5-red mt-1.5">
+          <button onClick={() => setSwapOpen(true)} className="relative flex items-center gap-1.5 text-xs text-v5-subtext hover:text-v5-red">
             <RefreshCw size={12} /> Swap workout
           </button>
         )}
         {(timeline.startDate || timeline.projectedCompletionDate) && (
-          <div className="text-xs text-v5-subtext/70 mt-0.5">
+          <div className="relative text-xs text-v5-subtext/70">
             {timeline.startDate && `Started ${fmtDate(timeline.startDate)}`}
             {timeline.startDate && timeline.projectedCompletionDate && " · "}
             {timeline.projectedCompletionDate && `Projected completion ${fmtDate(timeline.projectedCompletionDate)}`}
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Obvious program-management actions (active-program-management fix, items 1/2) — this
           screen was previously entirely read-only, with no way to stop or change the running
@@ -358,7 +383,7 @@ export default function ProgramTimelineScreen({ state, updateState, exMap, onBac
       )}
 
       {(timeline.programFocus?.length > 0 || yourPriorityLabels.length > 0) && (
-        <div className="border border-white/10 bg-v5-elevated p-4 space-y-2">
+        <Card padding="p-4" className="space-y-2">
           {timeline.programFocus?.length > 0 && (
             <div>
               <div className="text-[11px] uppercase tracking-widest text-v5-subtext">Program focus</div>
@@ -371,39 +396,49 @@ export default function ProgramTimelineScreen({ state, updateState, exMap, onBac
               <div className="text-sm text-v5-text/90 mt-0.5">{yourPriorityLabels.join(" · ")}</div>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {(weekAdherence || totalAdherence) && (
-        <div className="border border-white/10 bg-v5-elevated p-4 space-y-2">
-          <div className="text-[11px] uppercase tracking-widest text-v5-subtext">This week</div>
+        <Card padding="p-4" className="space-y-3">
+          <div className="flex items-center gap-2">
+            <TrendingUp size={14} className="text-v5-red" />
+            <span className="text-[11px] uppercase tracking-widest text-v5-subtext">Program Progress</span>
+          </div>
           {weekAdherence && (
-            <>
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-v5-subtext">Strength</span>
-                <span className="text-white font-bold">
+                <span className="text-v5-subtext">This week — Strength</span>
+                <span className="text-white font-bold tabular-nums">
                   {weekAdherence.lifting.completed} / {weekAdherence.lifting.scheduled}
                 </span>
               </div>
               {weekAdherence.recovery.scheduled > 0 && (
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-v5-subtext">Recovery</span>
-                  <span className="text-white font-bold">
+                  <span className="text-v5-subtext">This week — Recovery</span>
+                  <span className="text-white font-bold tabular-nums">
                     {weekAdherence.recovery.completed} / {weekAdherence.recovery.scheduled}
                   </span>
                 </div>
               )}
-            </>
-          )}
-          {totalAdherence?.totalScheduled != null && (
-            <div className="flex items-start justify-between gap-3 text-sm border-t border-white/[0.06] pt-2">
-              <span className="text-v5-subtext shrink-0">Program</span>
-              <span className="text-white font-bold text-right">
-                {totalAdherence.totalCompleted} / {totalAdherence.totalScheduled} sessions completed
-              </span>
             </div>
           )}
-        </div>
+          {/* Real session-based progress — not a fabricated "N weeks complete" figure, since a
+              rolling-schedule program doesn't cleanly map to that the way a fixed-length one does.
+              This is the same totalAdherence the plain-text version above already computed. */}
+          {totalAdherence?.totalScheduled > 0 && (
+            <div className="space-y-1.5 border-t border-white/[0.06] pt-2.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-v5-subtext">Sessions complete</span>
+                <span className="text-white font-bold tabular-nums">
+                  {totalAdherence.totalCompleted} / {totalAdherence.totalScheduled} ·{" "}
+                  {Math.round((totalAdherence.totalCompleted / totalAdherence.totalScheduled) * 100)}%
+                </span>
+              </div>
+              <ProgressBar pct={(totalAdherence.totalCompleted / totalAdherence.totalScheduled) * 100} />
+            </div>
+          )}
+        </Card>
       )}
 
       <div className="space-y-2">
