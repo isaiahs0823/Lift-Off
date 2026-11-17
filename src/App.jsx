@@ -1936,6 +1936,14 @@ export default function LiftLog() {
     };
   }, []);
   const [tab, setTab] = useState("today");
+  // Re-tapping the already-active "Today" nav icon must close whatever TodayTab-local, no-
+  // backdrop full-screen view is open (Swap Workout, Readiness Check-in) and return to the
+  // dashboard — the same thing each screen's own back chevron already does. setTab("today") alone
+  // can't do this: tab is already "today" in that case, so React bails out on the no-op update
+  // and TodayTab never re-renders to reset its own swapOpen/readinessSheetOpen state. Bumping this
+  // token on every tap of the Today icon (cheap, harmless on a tab switch too) gives TodayTab an
+  // explicit signal to reset those two flags via its own effect, without lifting them up here.
+  const [todayTapToken, setTodayTapToken] = useState(0);
   // "Start This Program" success feedback (UX audit Phase 1, item 1) — deliberately NOT part of
   // `state`/localStorage: it's a one-shot "you just did this" banner for Today, not durable data,
   // and never needs to survive a reload or sync to another device. TodayTab clears it itself after
@@ -3043,6 +3051,7 @@ export default function LiftLog() {
                   programEndedNotice={programEndedNotice}
                   onDismissProgramEndedNotice={() => setProgramEndedNotice(null)}
                   onChooseProgram={() => setTab("templates")}
+                  todayTapToken={todayTapToken}
                 />
               ))}
             {tab === "workoutDetail" && (
@@ -3369,7 +3378,10 @@ export default function LiftLog() {
             return (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => {
+                  setTab(t.id);
+                  if (t.id === "today") setTodayTapToken((n) => n + 1);
+                }}
                 className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 sm:py-2.5 text-[11px] uppercase tracking-widest transition-colors ${
                   active ? "text-v5-red" : "text-v5-subtext/70 hover:text-v5-subtext"
                 }`}
