@@ -615,6 +615,7 @@ export default function TodayTab({
   programEndedNotice,
   onDismissProgramEndedNotice,
   onChooseProgram,
+  todayTapToken,
 }) {
   const ratingSnapshots = state.athleteRatingSnapshots || [];
   const latestRatingSnapshot = ratingSnapshots[ratingSnapshots.length - 1] || null;
@@ -659,6 +660,21 @@ export default function TodayTab({
   // Secondary sheet for This Week / Mission / Recent Win, pulled out of the always-visible Today
   // stack so the primary dashboard fits one viewport (task Part 2).
   const [moreTodayOpen, setMoreTodayOpen] = useState(false);
+
+  // Re-tapping the bottom nav's already-active "Today" icon bumps todayTapToken (see LiftLog in
+  // App.jsx) — swapOpen and readinessSheetOpen are the only two TodayTab-local views that render
+  // full-screen with no backdrop, so the nav bar stays visible and tappable over them but a plain
+  // setTab("today") is a no-op while tab is already "today" and never reaches this component's
+  // own state. This closes them exactly the way their own back chevron already does (onClose/
+  // onBack just flips the flag — see SwapWorkoutSheet and ReadinessCheckIn, neither commits
+  // anything until its own explicit "Use This Workout"/"Save" action), so re-tapping Today can
+  // never apply a swap or submit a check-in. moreTodayOpen/bodyweightSheetOpen are real backdrop
+  // modals the nav is already covered by, so they don't need this.
+  useEffect(() => {
+    setSwapOpen(false);
+    setReadinessSheetOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayTapToken]);
 
   const coachContext = buildCoachContext(state, exMap);
   const coachMessage = generateTodaySnapshot(coachContext).message;
