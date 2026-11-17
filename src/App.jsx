@@ -111,6 +111,7 @@ import { isPlateLoadedEquipment, isExactPlateLoad } from "./utils/equipmentDispl
 import MuscleBodyOutline from "./components/MuscleBodyOutline.jsx";
 import ExerciseAnatomyRow from "./components/ExerciseAnatomyRow.jsx";
 import { formatSetPrescription } from "./utils/exercisePrescription.js";
+import { adjustedRepTargetCue } from "./utils/adjustedRepTarget.js";
 import QuickLoadAdjuster from "./components/QuickLoadAdjuster.jsx";
 import { unlockAudio, playCompletionBeep, vibratePattern } from "./utils/timerAudio.js";
 import NutritionHome from "./components/NutritionHome.jsx";
@@ -5042,6 +5043,23 @@ function TrainingExerciseCard({
   // actually typed something since landing on this exercise" rather than a guess from a
   // zero/blank check, which the prefilled suggestion would too easily false-positive on.
   const initialDraftRef = useRef({ weight, reps });
+  // Adjusted rep target — recomputed from BRK's own suggested weight/reps for this set
+  // (suggestion.suggestion/suggestion.targetReps, the same stable baseline "Use Suggested" resets
+  // the fields to), never from whatever weight was previously typed, so repeated weight edits can
+  // never compound and returning to the suggested weight always reproduces the suggested reps
+  // exactly. Purely a display cue — never written to confirmedSets/logs/the saved program.
+  const adjustedRepTarget = useMemo(
+    () =>
+      adjustedRepTargetCue({
+        ex: exMap[exId],
+        exSlot,
+        setType,
+        originalWeight: suggestion.suggestion,
+        originalReps: suggestion.targetReps,
+        newWeight: weight,
+      }),
+    [exMap, exId, exSlot, setType, suggestion.suggestion, suggestion.targetReps, weight]
+  );
   // Progressive disclosure state — every one of these defaults closed. This component gets a
   // fresh `key={currentExId}` from GuidedRunView on every exercise switch, so there's no need
   // to reset these in an effect: a new exercise is a whole new component instance.
@@ -5840,6 +5858,13 @@ function TrainingExerciseCard({
               </div>
             )}
           </div>
+
+          {/* Adjusted rep target — right under Weight/Reps so it's read alongside the fields it
+              reacts to, not buried in Options. Purely informational: never autofills Reps, never
+              touches confirmedSets/logs/the saved program (see adjustedRepTarget.js). */}
+          {adjustedRepTarget && (
+            <div className={`text-xs font-bold ${adjustedRepTarget.outOfRange ? "text-v5-subtext" : "text-v5-red"}`}>{adjustedRepTarget.label}</div>
+          )}
 
           {/* Compact advanced-tools row — RIR/Set Type/Notes bundled behind "More", Plate Calc
               as its own quick-access toggle, matching the v5 "RIR / Set Type / Notes / Plate
