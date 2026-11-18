@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { resolveNutritionProfile } from "../utils/nutrition.js";
-import { generateMealPlan, getSwapOptions, swapFoodInMeal, suggestFromAvailable, planGaps, planMeetsTargets } from "../utils/mealPlanGenerator.js";
+import { generateMealPlan, getSwapOptions, swapFoodInMeal, suggestFromAvailable, planGaps, planMeetsTargets, mealPlansMeaningfullyDiffer } from "../utils/mealPlanGenerator.js";
+
+// Regenerate bug fix — generateMealPlan is a pure function of (profile, targets, variation), so
+// calling it again with an unchanged variation silently re-saves an identical plan (the originally
+// reported bug: tapping Regenerate appeared to do nothing). This tries the next few variations in
+// order and keeps the first one that's actually different; a bounded cap, not an unbounded loop,
+// so an exhausted/very restrictive food pool fails fast into the "no alternative" message instead
+// of hanging the tap.
+const MAX_REGENERATE_ATTEMPTS = 10;
 
 // Bug report (Nutrition -> Meal Plan -> Swap -> "What do you have instead?"): Build From This
 // appeared to do nothing for an unrecognized food (e.g. "Corn Flakes"). Root cause —
@@ -231,9 +239,60 @@ export default function MealPlanView({ state, updateState, onBack }) {
   const targets = state.nutritionTargets;
   const plan = state.nutritionMealPlan;
 
+  // isRegenerating disables the button visibly; regenerateInFlightRef is the actual duplicate-tap
+  // guard, checked/set synchronously so a second tap is caught even before React re-renders.
+  // generateMealPlan is synchronous and fast, so releasing the guard in a plain try/finally (within
+  // the same call) would reset it before a genuine rapid second tap even lands — two taps fired
+  // close together each dispatch as their own real browser click event, not within the same JS
+  // tick, so even a same-tick reset leaves a real double-tap's second click completely unguarded.
+  // A short cooldown (500ms — comfortably longer than a real double-tap gap, imperceptible as a
+  // delay since the plan itself is already generated and saved synchronously, before this timer is
+  // even set) keeps the guard held across it.
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateMessage, setRegenerateMessage] = useState(null);
+  const regenerateInFlightRef = useRef(false);
+
   const regenerate = () => {
-    const generated = generateMealPlan(profile, targets);
-    updateState((prev) => ({ ...prev, nutritionMealPlan: generated }));
+    if (regenerateInFlightRef.current) return;
+    regenerateInFlightRef.current = true;
+    setIsRegenerating(true);
+    setRegenerateMessage(null);
+
+    // No plan yet ("Generate Meal Plan," the first-ever build) — nothing to differ from, so the
+    // first attempt is the only one that matters.
+    if (!plan) {
+      const generated = generateMealPlan(profile, targets, { variation: 0 });
+      if (generated) {
+        updateState((prev) => ({ ...prev, nutritionMealPlan: generated }));
+      } else {
+        setRegenerateMessage("Couldn't generate a meal plan right now — check your nutrition targets.");
+      }
+    } else {
+      // Continues forward from whatever variation the SAVED plan is already on (survives a
+      // refresh, so a second Regenerate after reopening the app doesn't risk re-trying a
+      // variation it already rejected or already showed).
+      const startVariation = (plan.variation ?? 0) + 1;
+      let found = null;
+      for (let i = 0; i < MAX_REGENERATE_ATTEMPTS; i++) {
+        const candidate = generateMealPlan(profile, targets, { variation: startVariation + i });
+        if (candidate && mealPlansMeaningfullyDiffer(plan, candidate)) {
+          found = candidate;
+          break;
+        }
+      }
+      if (found) {
+        updateState((prev) => ({ ...prev, nutritionMealPlan: found }));
+      } else {
+        setRegenerateMessage(
+          "No meaningfully different plan is available for your current targets and preferences — try adjusting dietary restrictions, training time, or meals per day, or Swap individual items instead."
+        );
+      }
+    }
+
+    setTimeout(() => {
+      regenerateInFlightRef.current = false;
+      setIsRegenerating(false);
+    }, 500);
   };
 
   const updateMeal = (mealId, updatedMeal) => {
@@ -272,9 +331,14 @@ export default function MealPlanView({ state, updateState, onBack }) {
       ) : !plan ? (
         <div className="border border-white/10 bg-v5-elevated p-4 space-y-3">
           <p className="text-sm text-v5-subtext">Build a practical daily meal plan from your targets and preferences.</p>
-          <button onClick={regenerate} className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90">
-            Generate Meal Plan
+          <button
+            onClick={regenerate}
+            disabled={isRegenerating}
+            className="w-full py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {isRegenerating ? "Generating…" : "Generate Meal Plan"}
           </button>
+          {regenerateMessage && <p className="text-xs text-amber-500">{regenerateMessage}</p>}
         </div>
       ) : (
         <>
@@ -282,9 +346,14 @@ export default function MealPlanView({ state, updateState, onBack }) {
           {plan.meals.map((meal) => (
             <MealCard key={meal.id} meal={meal} profile={profile} onSwap={handleSwap} onDontHave={handleDontHave} />
           ))}
-          <button onClick={regenerate} className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40">
-            Regenerate
+          <button
+            onClick={regenerate}
+            disabled={isRegenerating}
+            className="w-full py-2.5 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40 disabled:opacity-50"
+          >
+            {isRegenerating ? "Regenerating…" : "Regenerate"}
           </button>
+          {regenerateMessage && <p className="text-xs text-amber-500 text-center">{regenerateMessage}</p>}
         </>
       )}
     </div>
