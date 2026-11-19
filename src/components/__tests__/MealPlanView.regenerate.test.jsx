@@ -129,8 +129,59 @@ describe("MealPlanView — Regenerate when no different plan is available", () =
 
     expect(updateState).not.toHaveBeenCalled();
     expect(state.nutritionMealPlan).toBe(originalPlan); // untouched
-    expect(text(root.toJSON())).toMatch(/no meaningfully different plan is available/i);
+    expect(text(root.toJSON())).toMatch(/no different plan is available with your current preferences/i);
 
     vi.doUnmock("../../utils/mealPlanGenerator.js");
+  });
+});
+
+describe("MealPlanView — Regenerate when generation throws", () => {
+  it("shows a retry message and leaves the plan untouched on error, then succeeds on a later retry", async () => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    let callCount = 0;
+    vi.doMock("../../utils/mealPlanGenerator.js", async () => {
+      const actual = await vi.importActual("../../utils/mealPlanGenerator.js");
+      return {
+        ...actual,
+        generateMealPlan: (...args) => {
+          callCount++;
+          if (callCount === 1) throw new Error("boom");
+          return actual.generateMealPlan(...args);
+        },
+      };
+    });
+    const { default: MealPlanViewMocked } = await import("../MealPlanView.jsx");
+
+    const state = baseState();
+    const originalPlan = state.nutritionMealPlan;
+    const updateState = vi.fn((updater) => {
+      state.nutritionMealPlan = updater(state).nutritionMealPlan;
+    });
+    let root;
+    act(() => {
+      root = TestRenderer.create(<MealPlanViewMocked state={state} updateState={updateState} onBack={vi.fn()} />);
+    });
+
+    // First tap: generateMealPlan throws.
+    act(() => regenerateButton(root).props.onClick());
+    expect(updateState).not.toHaveBeenCalled();
+    expect(state.nutritionMealPlan).toBe(originalPlan); // untouched
+    expect(text(root.toJSON())).toMatch(/something went wrong/i);
+
+    // The guard's cooldown timer must still run (in `finally`) even though generation threw,
+    // so the button is usable again rather than permanently stuck disabled.
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+
+    // Retry: generateMealPlan now succeeds normally.
+    act(() => regenerateButton(root).props.onClick());
+    expect(updateState).toHaveBeenCalledTimes(1);
+    expect(state.nutritionMealPlan).not.toBe(originalPlan);
+    expect(state.nutritionMealPlan.variation).toBe(1);
+
+    vi.doUnmock("../../utils/mealPlanGenerator.js");
+    vi.useRealTimers();
   });
 });

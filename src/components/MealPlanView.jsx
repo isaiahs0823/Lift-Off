@@ -247,10 +247,18 @@ export default function MealPlanView({ state, updateState, onBack }) {
   // tick, so even a same-tick reset leaves a real double-tap's second click completely unguarded.
   // A short cooldown (500ms — comfortably longer than a real double-tap gap, imperceptible as a
   // delay since the plan itself is already generated and saved synchronously, before this timer is
-  // even set) keeps the guard held across it.
+  // even set) keeps the guard held across it. regenerateCooldownTimerRef holds that timer's id so
+  // it can be cancelled if the component unmounts mid-cooldown (navigating away right after a tap).
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateMessage, setRegenerateMessage] = useState(null);
   const regenerateInFlightRef = useRef(false);
+  const regenerateCooldownTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (regenerateCooldownTimerRef.current) clearTimeout(regenerateCooldownTimerRef.current);
+    };
+  }, []);
 
   const regenerate = () => {
     if (regenerateInFlightRef.current) return;
@@ -258,41 +266,50 @@ export default function MealPlanView({ state, updateState, onBack }) {
     setIsRegenerating(true);
     setRegenerateMessage(null);
 
-    // No plan yet ("Generate Meal Plan," the first-ever build) — nothing to differ from, so the
-    // first attempt is the only one that matters.
-    if (!plan) {
-      const generated = generateMealPlan(profile, targets, { variation: 0 });
-      if (generated) {
-        updateState((prev) => ({ ...prev, nutritionMealPlan: generated }));
+    try {
+      // No plan yet ("Generate Meal Plan," the first-ever build) — nothing to differ from, so the
+      // first attempt is the only one that matters.
+      if (!plan) {
+        const generated = generateMealPlan(profile, targets, { variation: 0 });
+        if (generated) {
+          updateState((prev) => ({ ...prev, nutritionMealPlan: generated }));
+        } else {
+          setRegenerateMessage("Couldn't generate a meal plan right now — check your nutrition targets.");
+        }
       } else {
-        setRegenerateMessage("Couldn't generate a meal plan right now — check your nutrition targets.");
-      }
-    } else {
-      // Continues forward from whatever variation the SAVED plan is already on (survives a
-      // refresh, so a second Regenerate after reopening the app doesn't risk re-trying a
-      // variation it already rejected or already showed).
-      const startVariation = (plan.variation ?? 0) + 1;
-      let found = null;
-      for (let i = 0; i < MAX_REGENERATE_ATTEMPTS; i++) {
-        const candidate = generateMealPlan(profile, targets, { variation: startVariation + i });
-        if (candidate && mealPlansMeaningfullyDiffer(plan, candidate)) {
-          found = candidate;
-          break;
+        // Continues forward from whatever variation the SAVED plan is already on (survives a
+        // refresh, so a second Regenerate after reopening the app doesn't risk re-trying a
+        // variation it already rejected or already showed).
+        const startVariation = (plan.variation ?? 0) + 1;
+        let found = null;
+        for (let i = 0; i < MAX_REGENERATE_ATTEMPTS; i++) {
+          const candidate = generateMealPlan(profile, targets, { variation: startVariation + i });
+          if (candidate && mealPlansMeaningfullyDiffer(plan, candidate)) {
+            found = candidate;
+            break;
+          }
+        }
+        if (found) {
+          updateState((prev) => ({ ...prev, nutritionMealPlan: found }));
+        } else {
+          setRegenerateMessage("No different plan is available with your current preferences. Try swapping an individual item.");
         }
       }
-      if (found) {
-        updateState((prev) => ({ ...prev, nutritionMealPlan: found }));
-      } else {
-        setRegenerateMessage(
-          "No meaningfully different plan is available for your current targets and preferences — try adjusting dietary restrictions, training time, or meals per day, or Swap individual items instead."
-        );
-      }
+    } catch (e) {
+      // generateMealPlan/updateState threw — updateState is only ever called once a real
+      // generated/candidate plan is already in hand, so a throw anywhere above this point never
+      // reaches it: `plan` (and therefore state.nutritionMealPlan) is untouched either way. A
+      // clear retry message beats leaving the tap looking like it silently failed again.
+      setRegenerateMessage("Something went wrong generating a plan. Please try again.");
+    } finally {
+      // Guaranteed guard cleanup — reached on every path (a saved plan, the no-alternative
+      // message, or a caught error), so the button is never left permanently disabled.
+      regenerateCooldownTimerRef.current = setTimeout(() => {
+        regenerateInFlightRef.current = false;
+        setIsRegenerating(false);
+        regenerateCooldownTimerRef.current = null;
+      }, 500);
     }
-
-    setTimeout(() => {
-      regenerateInFlightRef.current = false;
-      setIsRegenerating(false);
-    }, 500);
   };
 
   const updateMeal = (mealId, updatedMeal) => {

@@ -184,10 +184,10 @@ describe("mealPlansMeaningfullyDiffer", () => {
     expect(mealPlansMeaningfullyDiffer(a, b)).toBe(true);
   });
 
-  it("returns true when a serving size (calories) changes even with the same food name", () => {
+  it("a serving-size/calorie change alone, with the same food, is NOT meaningfully different", () => {
     const a = { meals: [{ label: "Breakfast", items: [{ name: "Eggs", calories: 230 }] }] };
     const b = { meals: [{ label: "Breakfast", items: [{ name: "Eggs", calories: 345 }] }] };
-    expect(mealPlansMeaningfullyDiffer(a, b)).toBe(true);
+    expect(mealPlansMeaningfullyDiffer(a, b)).toBe(false);
   });
 
   it("a different generatedAt timestamp ALONE does not count as meaningfully different", () => {
@@ -201,5 +201,43 @@ describe("mealPlansMeaningfullyDiffer", () => {
     expect(mealPlansMeaningfullyDiffer(null, plan)).toBe(true);
     expect(mealPlansMeaningfullyDiffer(plan, null)).toBe(true);
     expect(mealPlansMeaningfullyDiffer(null, null)).toBe(false);
+  });
+
+  it("identical foods with different portions AND different ordering across multiple meals is NOT meaningfully different", () => {
+    const a = {
+      meals: [
+        { label: "Breakfast", items: [{ name: "Eggs", calories: 230 }, { name: "Oatmeal", calories: 150 }] },
+        { label: "Lunch", items: [{ name: "Chicken breast", calories: 300 }, { name: "White rice", calories: 200 }] },
+      ],
+    };
+    const b = {
+      meals: [
+        { label: "Breakfast", items: [{ name: "Oatmeal", calories: 180 }, { name: "Eggs", calories: 115 }] },
+        { label: "Lunch", items: [{ name: "White rice", calories: 220 }, { name: "Chicken breast", calories: 280 }] },
+      ],
+    };
+    expect(mealPlansMeaningfullyDiffer(a, b)).toBe(false);
+  });
+
+  it("a real food substitution in one meal counts as meaningfully different, even with identical items elsewhere", () => {
+    const a = {
+      meals: [
+        { label: "Breakfast", items: [{ name: "Eggs", calories: 230 }] },
+        { label: "Lunch", items: [{ name: "Chicken breast", calories: 300 }, { name: "White rice", calories: 200 }] },
+      ],
+    };
+    const b = {
+      meals: [
+        { label: "Breakfast", items: [{ name: "Eggs", calories: 230 }] },
+        { label: "Lunch", items: [{ name: "Turkey breast", calories: 300 }, { name: "White rice", calories: 200 }] },
+      ],
+    };
+    expect(mealPlansMeaningfullyDiffer(a, b)).toBe(true);
+  });
+
+  it("prefers stable `id` over `name` when comparing, so a renamed-but-same-id food is NOT meaningfully different", () => {
+    const a = { meals: [{ label: "Breakfast", items: [{ id: "food-42", name: "Eggs", calories: 230 }] }] };
+    const b = { meals: [{ label: "Breakfast", items: [{ id: "food-42", name: "Large eggs", calories: 230 }] }] };
+    expect(mealPlansMeaningfullyDiffer(a, b)).toBe(false);
   });
 });

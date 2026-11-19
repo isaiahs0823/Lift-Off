@@ -323,19 +323,39 @@ export function generateMealPlan(profile, targets, { variation = 0 } = {}) {
   };
 }
 
+// FOOD_DB entries have no `id` field today (only `name`, which is unique across the whole
+// catalog) — preferring `item.id` when present keeps this correct if a future food source ever
+// does carry a stable id, without requiring one to exist yet.
+function foodKey(item) {
+  return item.id ?? item.name;
+}
+
 // Regenerate bug fix — generateMealPlan is a pure function of (profile, targets, variation): the
 // same targets/preferences/schedule always deserve the same curated-food reasoning, so calling it
 // again with an unchanged variation silently re-saves an identical plan (the originally reported
 // bug: tapping Regenerate appeared to do nothing, because it wasn't actually asking for anything
-// different). "Meaningfully different" means at least one meal's actual food selection changed —
-// a new `generatedAt` timestamp or reordering don't count, since neither is visible to the athlete.
+// different). "Meaningfully different" means a real food substitution — comparing each meal's
+// SET of selected foods by stable id/name, ignoring item order and ignoring calorie/portion-size
+// changes to the SAME food (a bigger or smaller serving of the same chicken breast is not a
+// different plan to the athlete looking at it) and the plan's own generatedAt timestamp (neither
+// field is ever read here at all).
 export function mealPlansMeaningfullyDiffer(planA, planB) {
   if (!planA || !planB) return !!planA !== !!planB;
-  const signature = (plan) =>
-    plan.meals
-      .map((m) => `${m.label}:${m.items.map((i) => `${i.name}x${i.calories}`).join(",")}`)
-      .join("|");
-  return signature(planA) !== signature(planB);
+  const mealsA = planA.meals || [];
+  const mealsB = planB.meals || [];
+  if (mealsA.length !== mealsB.length) return true;
+  for (let i = 0; i < mealsA.length; i++) {
+    const a = mealsA[i];
+    const b = mealsB[i];
+    if (a.label !== b.label) return true;
+    const keysA = new Set((a.items || []).map(foodKey));
+    const keysB = new Set((b.items || []).map(foodKey));
+    if (keysA.size !== keysB.size) return true;
+    for (const k of keysA) {
+      if (!keysB.has(k)) return true;
+    }
+  }
+  return false;
 }
 
 // A pure numeric meal-macro split — no food items, so unlike generateMealPlan it always
