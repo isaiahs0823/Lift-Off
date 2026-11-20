@@ -47,6 +47,10 @@ export function sanitizeActiveRun(raw) {
       // current unsaved set draft) — see TrainingExerciseCard's draft autosave. Keyed by the
       // exercise's index within `exercises`, cleared the moment that slot's exercise is finished.
       draftByIndex: raw.draftByIndex && typeof raw.draftByIndex === "object" ? raw.draftByIndex : {},
+      // Skip Exercise — which slots are marked "not today," keyed by workoutSlotId (see
+      // skipWorkoutExercise's own comment) rather than index, so it survives a reorder with no
+      // remapping logic of its own. Every run started before this existed simply has none.
+      skipped: raw.skipped && typeof raw.skipped === "object" ? raw.skipped : {},
       // Which exercise slot stays shown as "active" (task: "BRK Active Workout — Reorder
       // Exercises" — "keep the same exercise selected after a move," which must survive a
       // refresh, not just this component's lifetime). null means "no explicit selection yet —

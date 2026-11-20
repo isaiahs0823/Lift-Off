@@ -132,7 +132,15 @@ export function swapWorkoutExercise(run, index, newExId, logs = []) {
   }, new Date().toISOString()).sessionEntries.find((se) => se.index === index);
   const draftByIndex = { ...run.draftByIndex };
   delete draftByIndex[index]; // Only unconfirmed input is abandoned; selected holds saved work.
-  if (!selected) return { ...run, draftByIndex, swaps: { ...run.swaps, [index]: newExId } };
+  if (!selected) {
+    // A skipped slot keeps its workoutSlotId when relabeled this way (see skipWorkoutExercise's
+    // own comment on why it's keyed by workoutSlotId, not index) — swapping to a different
+    // exercise is a fresh decision to actually perform something today, so any skip mark for
+    // this slot is stale the moment that happens and must not carry over onto the new exercise.
+    const skipped = { ...run.skipped };
+    delete skipped[slot.workoutSlotId];
+    return { ...run, draftByIndex, skipped, swaps: { ...run.swaps, [index]: newExId } };
+  }
   const shift = (i) => i > index ? i + 1 : i;
   const { group, ...replacement } = slot;
   return {
@@ -149,6 +157,41 @@ export function swapWorkoutExercise(run, index, newExId, logs = []) {
     draftByIndex: Object.fromEntries(Object.entries(draftByIndex).map(([i, draft]) => [shift(Number(i)), draft])),
     swaps: Object.fromEntries(Object.entries(run.swaps || {}).map(([i, exId]) => [shift(Number(i)), exId])),
   };
+}
+
+// Bug report: an athlete who can't do a scheduled movement (injury, equipment taken, whatever)
+// had no way to move on except swapping in a different exercise or fighting the app into saving
+// fake 0-rep sets — both of which either lose the fact that something was scheduled here at all,
+// or (before cleanSetsInput existed) polluted history with sets that never happened. Skip is a
+// third, honest option: "not today," visibly recorded, but never logged or counted anywhere.
+// Keyed by workoutSlotId rather than index (like selectedSlotId, and unlike draftByIndex/swaps/
+// sessionEntries) specifically so it needs no remapping in moveWorkoutExercise/removeRunExercise
+// — a reorder or a later removal elsewhere in the list never has to know this map exists.
+// Only valid for a slot with nothing confirmed yet: once a real set is logged there's no
+// ambiguity to resolve, just Finish Exercise with whatever's confirmed.
+export function skipWorkoutExercise(run, index) {
+  const slot = run?.exercises?.[index];
+  if (!slot || run.finished || run.completionPending) return run;
+  if (run.sessionEntries?.some((se) => se.index === index)) return run;
+  const draftByIndex = { ...run.draftByIndex };
+  delete draftByIndex[index]; // Abandons only unconfirmed typed input — nothing confirmed exists at this slot.
+  return {
+    ...run,
+    draftByIndex,
+    skipped: { ...run.skipped, [slot.workoutSlotId]: new Date().toISOString() },
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+// "Log it after all" — reverses a skip. Nothing else needs restoring: a skipped slot was never
+// allowed to hold a sessionEntry, so clearing the mark alone returns it to a normal open slot.
+export function unskipWorkoutExercise(run, index) {
+  const slot = run?.exercises?.[index];
+  if (!slot || run.finished || run.completionPending) return run;
+  if (!run.skipped?.[slot.workoutSlotId]) return run;
+  const skipped = { ...run.skipped };
+  delete skipped[slot.workoutSlotId];
+  return { ...run, skipped, updatedAt: new Date().toISOString() };
 }
 
 // Reorders one exercise slot within the active session only — never the saved program/template,

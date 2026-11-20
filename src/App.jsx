@@ -41,6 +41,8 @@ import {
   BarChart3,
   Type,
   GripVertical,
+  SkipForward,
+  Undo2,
 } from "lucide-react";
 import { SlideInPanel } from "./components/SlideInPanel.jsx";
 import MissionTab from "./components/MissionTab.jsx";
@@ -132,7 +134,7 @@ import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
 import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
 import { initialSyncStatus, markSyncStarted, markSyncSuccess, markSyncFailure, MAX_SYNC_ATTEMPTS, retryDelayMs } from "./utils/syncStatus.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
-import { newWorkoutId, hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion, stampWorkoutDraft, workoutEntryKey, recoverWorkoutCheckpoint, swapWorkoutExercise, moveWorkoutExercise } from "./utils/workoutIntegrity.js";
+import { newWorkoutId, hasUnfinishedWorkout, workoutLogId, collectConfirmedWorkout, completeWorkoutState, advanceProgramForWorkout, writeWorkoutCompletion, stampWorkoutDraft, workoutEntryKey, recoverWorkoutCheckpoint, swapWorkoutExercise, moveWorkoutExercise, skipWorkoutExercise, unskipWorkoutExercise } from "./utils/workoutIntegrity.js";
 import {
   SET_TYPES,
   PROGRAM_ROLES,
@@ -1777,6 +1779,14 @@ function buildSessionSummary(run, allLogs, priorSessions, exMap) {
     // Travel/Alternate Gym mode (task Part 3) — whole-session, defaults to "normal" for every
     // run that predates this. Read by workoutRecap.js's "ALTERNATE GYM SESSION" note.
     sessionContext: sanitizeSessionContext(run.sessionContext),
+    // Skip Exercise — purely informational (task: "no skip option, had to swap or 0 out sets so
+    // they don't count"). Never touches workingSets/totalVolume/exerciseCount/PRs above, all of
+    // which are derived only from `entries` — a skipped exercise is never in that list. This is
+    // just so the athlete can see, after the fact, which scheduled movements they didn't do
+    // today, instead of the workout quietly looking like it was never scheduled at all.
+    skippedExercises: (run.exercises || [])
+      .map((slot, idx) => (run.skipped?.[slot.workoutSlotId] ? (run.swaps?.[idx] ?? slot.exId) : null))
+      .filter(Boolean),
   };
 }
 
@@ -2411,6 +2421,7 @@ export default function LiftLog() {
       exercises: plan.exercises.map((slot) => ({ ...slot, workoutSlotId: newWorkoutId() })),
       sessionEntries: [],
       swaps: {},
+      skipped: {},
       finished: false,
       returnTab: fromTab,
       programContext: programContext ? {
@@ -2603,6 +2614,15 @@ export default function LiftLog() {
       preserveRecoveryConflict(error);
     }
   };
+  // Skip Exercise — "not today," recorded but never logged or counted (see skipWorkoutExercise's
+  // own comment). Neither direction touches state.logs, so unlike swap/remove there's nothing
+  // that can conflict with durable history — no try/catch needed around either call.
+  const skipRunExercise = (index) => {
+    setActiveRun((run) => skipWorkoutExercise(run, index));
+  };
+  const unskipRunExercise = (index) => {
+    setActiveRun((run) => unskipWorkoutExercise(run, index));
+  };
   // Reorder (task: "BRK Active Workout — Reorder Exercises") — session-only, same as every other
   // activeRun mutation here; the saved program/template and past workout history are untouched.
   // moveWorkoutExercise carries sessionEntries/draftByIndex/swaps through the move by
@@ -2643,8 +2663,12 @@ export default function LiftLog() {
     const reindex = (idx) => (idx > index ? idx - 1 : idx);
     setActiveRun((run) => {
       if (!run) return run;
+      const removedSlotId = run.exercises[index]?.workoutSlotId;
+      const skipped = { ...run.skipped };
+      if (removedSlotId) delete skipped[removedSlotId]; // keyed by workoutSlotId — never reindexed, just dropped
       return {
         ...run,
+        skipped,
         exercises: run.exercises.filter((_, i) => i !== index),
         sessionEntries: run.sessionEntries.filter((se) => se.index !== index).map((se) => ({ ...se, index: reindex(se.index) })),
         draftByIndex: Object.fromEntries(
@@ -2996,6 +3020,8 @@ export default function LiftLog() {
             onSwap={swapRunExercise}
             onAddExercise={addRunExercise}
             onRemoveExercise={removeRunExercise}
+            onSkipExercise={skipRunExercise}
+            onUnskipExercise={unskipRunExercise}
             onReorderExercise={reorderRunExercise}
             onSelectExercise={selectRunExercise}
             onSplitEquipmentSwitch={splitExerciseForEquipmentSwitch}
@@ -6428,6 +6454,8 @@ function GuidedRunView({
   onSaveTemporaryProfile,
   onUpdateSessionContext,
   onRemoveExercise,
+  onSkipExercise,
+  onUnskipExercise,
   onReorderExercise,
   onSelectExercise,
   onSplitEquipmentSwitch,
@@ -6536,21 +6564,27 @@ function GuidedRunView({
   // render only; declaring them this early changes nothing about that, `const` is visible for
   // the rest of the function body regardless of which branch returns first.
   const entryForIndex = (idx) => run.sessionEntries.find((se) => se.index === idx)?.entry || null;
-  const naturalCurrentIdx = run.exercises.findIndex((_, idx) => !entryForIndex(idx));
+  // A skipped slot is "resolved" for navigation purposes exactly like a logged one — the athlete
+  // already made a decision about it, so it's never shown as the active card and never blocks
+  // advancing to the next exercise, even though (unlike a logged one) it has no sessionEntry.
+  const isSkippedIdx = (idx) => !!run.skipped?.[run.exercises[idx]?.workoutSlotId];
+  const naturalCurrentIdx = run.exercises.findIndex((_, idx) => !entryForIndex(idx) && !isSkippedIdx(idx));
   const selectedIdxRaw = selectedSlotId != null ? run.exercises.findIndex((ex) => ex.workoutSlotId === selectedSlotId) : -1;
-  const currentIdx = selectedIdxRaw !== -1 && !entryForIndex(selectedIdxRaw) ? selectedIdxRaw : naturalCurrentIdx;
-  // Keeps selectedSlotId pointing at a real, still-unfinished slot; otherwise re-syncs to the
-  // natural next one. Covers mount (selectedSlotId starts null), a normal finish advancing to
-  // the next exercise, and a removed slot — all unchanged from today's behavior. A reorder alone
-  // changes nothing here (the selected slot is still unfinished and still present), which is
-  // exactly what keeps the same exercise selected through one.
+  const currentIdx =
+    selectedIdxRaw !== -1 && !entryForIndex(selectedIdxRaw) && !isSkippedIdx(selectedIdxRaw) ? selectedIdxRaw : naturalCurrentIdx;
+  // Keeps selectedSlotId pointing at a real, still-unfinished, still-unskipped slot; otherwise
+  // re-syncs to the natural next one. Covers mount (selectedSlotId starts null), a normal finish
+  // advancing to the next exercise, a removed slot, and now a just-skipped one — all unchanged
+  // from today's behavior except the added skip check. A reorder alone changes nothing here (the
+  // selected slot is still unfinished/unskipped and still present), which is exactly what keeps
+  // the same exercise selected through one.
   useEffect(() => {
     if (run.finished) return;
-    if (selectedIdxRaw !== -1 && !entryForIndex(selectedIdxRaw)) return;
+    if (selectedIdxRaw !== -1 && !entryForIndex(selectedIdxRaw) && !isSkippedIdx(selectedIdxRaw)) return;
     const nextSlotId = naturalCurrentIdx === -1 ? null : run.exercises[naturalCurrentIdx].workoutSlotId;
     if (nextSlotId !== selectedSlotId) onSelectExercise?.(nextSlotId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run.exercises, run.sessionEntries, run.finished]);
+  }, [run.exercises, run.sessionEntries, run.skipped, run.finished]);
 
   if (run.finished) {
     const summary = (state.workoutSessions || []).find((s) => s.id === run.summaryId) || null;
@@ -6734,6 +6768,16 @@ function GuidedRunView({
               {summary.avgRir != null && (
                 <div className="text-sm text-v5-text/90 text-center">
                   Average {rirSystem === "rpe" ? "RPE" : "RIR"}: {rirSystem === "rpe" ? Math.round((10 - summary.avgRir) * 10) / 10 : summary.avgRir}
+                </div>
+              )}
+              {/* Skip Exercise (task: "no skip option, had to swap or 0 out sets so they don't
+                  count") — purely informational, matching this card's existing factual tone.
+                  Never implies these counted toward anything above; they're excluded from every
+                  number in the stat strip precisely because buildSessionSummary never put them
+                  in `entries` to begin with. */}
+              {summary.skippedExercises?.length > 0 && (
+                <div className="text-xs text-v5-subtext text-center">
+                  Skipped: {summary.skippedExercises.map((exId) => exMap[exId]?.name || exId).join(", ")}
                 </div>
               )}
             </div>
@@ -7029,8 +7073,12 @@ function GuidedRunView({
 
   const totalExercises = run.exercises.length;
   const loggedCount = run.sessionEntries.length;
+  const skippedCount = run.exercises.filter((_, idx) => isSkippedIdx(idx)).length;
   const stepNumber = Math.min(currentIdx === -1 ? totalExercises : currentIdx + 1, totalExercises);
-  const progressPct = totalExercises > 0 ? Math.round((loggedCount / totalExercises) * 100) : 0;
+  // A skipped slot is a resolved decision, same as a logged one (see isSkippedIdx's own comment)
+  // — it counts toward how far through the workout the athlete is, just not toward anything
+  // performance-related.
+  const progressPct = totalExercises > 0 ? Math.round(((loggedCount + skippedCount) / totalExercises) * 100) : 0;
   const elapsedSec = Math.max(0, Math.round((nowTick - new Date(run.startedAt).getTime()) / 1000));
   const elapsedLabel = `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, "0")}`;
 
@@ -7276,7 +7324,13 @@ function GuidedRunView({
           const entry = entryForIndex(idx);
           const isLogged = !!entry;
           const isEditing = editingIdx === idx;
-          const isActive = !isLogged && idx === currentIdx;
+          const isSkipped = !isLogged && isSkippedIdx(idx);
+          const isActive = !isLogged && !isSkipped && idx === currentIdx;
+          // Skip is only ever offered for a slot with nothing confirmed yet (see
+          // skipWorkoutExercise's own precondition) — this mirrors removeConfirm's identical
+          // hasLoggedSets check just above, which is exactly the same "has real work started
+          // here" question.
+          const hasConfirmedSetsHere = !!run.draftByIndex?.[idx]?.confirmedSets?.length;
 
           const label = groupLabel(idx);
 
@@ -7387,13 +7441,43 @@ function GuidedRunView({
                     </SwipeableExerciseRow>
                   );
                 })()
+              ) : isSkipped ? (
+                // Skip Exercise (task: "no skip option, had to swap or 0 out sets so they don't
+                // count") — a visibly distinct resolved state, neither the green-check "logged"
+                // summary above nor an upcoming row below. "Log it after all" is always offered:
+                // unskipWorkoutExercise is a no-op-safe pure clear of the mark, nothing to lose.
+                <div className="flex items-center justify-between gap-3 py-0.5">
+                  <div className="min-w-0 flex items-center gap-1.5 text-sm font-bold text-v5-subtext">
+                    <SkipForward size={14} className="shrink-0 text-v5-subtext/70" />
+                    <span className="truncate">{exMap[currentExId]?.name || currentExId}</span>
+                    <span className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-v5-subtext/70">Skipped</span>
+                  </div>
+                  <button
+                    onClick={() => onUnskipExercise?.(idx)}
+                    className="shrink-0 flex items-center gap-1 text-xs uppercase tracking-widest text-v5-red hover:opacity-80"
+                  >
+                    <Undo2 size={12} /> Log it after all
+                  </button>
+                </div>
               ) : isActive ? (
                 <div className="space-y-2">
-                  {/* Non-swipe remove affordance for the exercise currently being worked (task
-                      section 7/10) — deliberately NOT wrapped in SwipeableExerciseRow, which never
-                      touches the expanded TrainingExerciseCard so it can never fight with
-                      scrolling, typing weight/reps, or tapping a set type. */}
-                  <div className="flex items-center justify-end">
+                  {/* Non-swipe remove/skip affordances for the exercise currently being worked
+                      (task section 7/10, extended by the Skip Exercise task above) — deliberately
+                      NOT wrapped in SwipeableExerciseRow, which never touches the expanded
+                      TrainingExerciseCard so it can never fight with scrolling, typing weight/
+                      reps, or tapping a set type. Skip only ever shows with nothing confirmed yet
+                      here — once a real set is logged, Finish Exercise with what's confirmed is
+                      the only forward path, same as Remove already requires a confirmation for
+                      that case while Skip simply doesn't offer itself at all. */}
+                  <div className="flex items-center justify-end gap-3">
+                    {!hasConfirmedSetsHere && (
+                      <button
+                        onClick={() => onSkipExercise?.(idx)}
+                        className="flex items-center gap-1 text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-text"
+                      >
+                        <SkipForward size={13} /> Skip
+                      </button>
+                    )}
                     <button
                       onClick={() => requestRemoveExercise(idx, exMap[currentExId]?.name || currentExId, false)}
                       aria-label={`Remove ${exMap[currentExId]?.name || currentExId}`}
@@ -7457,6 +7541,13 @@ function GuidedRunView({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-base font-medium text-v5-subtext truncate">{exMap[currentExId]?.name || currentExId}</div>
+                    <button
+                      onClick={() => onSkipExercise?.(idx)}
+                      aria-label={`Skip ${exMap[currentExId]?.name || currentExId}`}
+                      className="shrink-0 p-1 -m-1 text-v5-subtext/40 hover:text-v5-red"
+                    >
+                      <SkipForward size={14} />
+                    </button>
                     <button
                       onClick={() => setReplacingIdx(idx)}
                       aria-label={`Replace ${exMap[currentExId]?.name || currentExId}`}
@@ -7522,6 +7613,9 @@ function GuidedRunView({
               <div>• {loggedCount} exercise{loggedCount === 1 ? "" : "s"} completed</div>
               <div>• {workingSetsLogged} working set{workingSetsLogged === 1 ? "" : "s"}</div>
               <div>• {Math.floor(elapsedSec / 60)} min elapsed</div>
+              {skippedCount > 0 && (
+                <div>• {skippedCount} exercise{skippedCount === 1 ? "" : "s"} skipped</div>
+              )}
             </div>
             {incompleteExerciseCount > 0 && (
               <div className="text-xs text-v5-subtext">
