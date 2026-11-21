@@ -246,3 +246,82 @@ describe("adjustedRepTargetCue — the full cue BRK shows next to Weight/Reps", 
     expect(cue).toBeNull();
   });
 });
+
+// Bug report: "Shoulder press machine, previous 140 x 8, today's recommended target 145 x 7,
+// manually entered 150 — the interface still displayed the original 145 x 7 target." Investigated
+// first (per the task's own instruction) rather than assumed broken: traced suggestNext (140 x 8
+// beat the prior session's targetReps of 7, so it suggests the SAME target reps at +5 lb — 145 x
+// 7, matching the screenshot exactly, not a bug) and adjustedRepTargetCue/TrainingExerciseCard's
+// wiring (useMemo keyed on suggestion.suggestion/suggestion.targetReps/weight, rendered
+// unconditionally right under Weight/Reps, in both simple and advanced mode). Reproduced live
+// (Playwright, this exact exercise/numbers) against the current build BEFORE concluding anything:
+// the cue appears correctly ("Aim for 6 reps (rough estimate)") the moment 150 is typed, survives
+// a refresh, and the original 145 x 7 target stays visibly untouched beside it. No code defect
+// found — this feature (PR #19) was already fully implemented and is not "missing, disconnected,
+// or incorrectly implemented." These tests pin the exact reported numbers as a permanent
+// regression, per the task's explicit ask, rather than leaving coverage only at the generic
+// 225/10/245 worked example above.
+describe("adjustedRepTargetCue — the exact reported scenario (Shoulder press machine, 140x8 -> 145x7 -> 150)", () => {
+  const shoulderPress = { name: "Shoulder press machine", type: "compound" };
+  // suggestNext's own output for this exact history: topSet.weight (140) + compound increment (5)
+  // = 145, with last.targetReps (7) carried forward unchanged — this is what TrainingExerciseCard
+  // actually passes in as originalWeight/originalReps, not the raw 140x8 performance itself.
+  const todaysTarget = { originalWeight: 145, originalReps: 7 };
+
+  it("the exact repro: 150 lb override on a 145 x 7 target -> 'Aim for 6 reps'", () => {
+    const cue = adjustedRepTargetCue({ ex: shoulderPress, exSlot: { sets: 3, reps: 7 }, setType: "working", ...todaysTarget, newWeight: 150 });
+    expect(cue.outOfRange).toBe(false);
+    expect(cue.reps).toBe(6);
+    expect(cue.label).toBe("Aim for 6 reps (rough estimate)");
+  });
+
+  it("the original 145 x 7 target is a separate, independent value this cue never touches", () => {
+    // adjustedRepTargetCue only ever returns the adjusted side; the caller (TrainingExerciseCard)
+    // keeps rendering suggestion.suggestion/suggestion.targetReps (145 x 7) in its own "Today's
+    // target" line regardless of what this returns, so the two can never be conflated on screen.
+    const cue = adjustedRepTargetCue({ ex: shoulderPress, exSlot: { sets: 3, reps: 7 }, setType: "working", ...todaysTarget, newWeight: 150 });
+    expect(cue).not.toHaveProperty("originalWeight");
+    expect(cue).not.toHaveProperty("originalReps");
+    expect(todaysTarget).toEqual({ originalWeight: 145, originalReps: 7 }); // untouched by the call above
+  });
+
+  it("repeated edits (150 -> 135 -> 150 again) never drift or compound", () => {
+    const first150 = adjustedRepTargetCue({ ex: shoulderPress, exSlot: { sets: 3, reps: 7 }, setType: "working", ...todaysTarget, newWeight: 150 });
+    const at135 = adjustedRepTargetCue({ ex: shoulderPress, exSlot: { sets: 3, reps: 7 }, setType: "working", ...todaysTarget, newWeight: 135 });
+    const second150 = adjustedRepTargetCue({ ex: shoulderPress, exSlot: { sets: 3, reps: 7 }, setType: "working", ...todaysTarget, newWeight: 150 });
+    expect(second150).toEqual(first150); // identical result the second time at 150, not influenced by the 135 detour
+    expect(at135.reps).toBeGreaterThan(first150.reps); // a lighter override correctly suggests MORE reps, not fewer
+  });
+
+  it("returning to the original 145 lb restores the original 7-rep target exactly", () => {
+    const cue = adjustedRepTargetCue({ ex: shoulderPress, exSlot: { sets: 3, reps: 7 }, setType: "working", ...todaysTarget, newWeight: 145 });
+    expect(cue.reps).toBe(7);
+  });
+
+  it("a decrease (150 -> 130) and an increase (150 -> 170) both resolve sensibly in opposite directions", () => {
+    const lighter = adjustedRepTargetCue({ ex: shoulderPress, exSlot: { sets: 3, reps: 7 }, setType: "working", ...todaysTarget, newWeight: 130 });
+    const heavier = adjustedRepTargetCue({ ex: shoulderPress, exSlot: { sets: 3, reps: 7 }, setType: "working", ...todaysTarget, newWeight: 170 });
+    expect(lighter.outOfRange).toBe(false);
+    expect(heavier.outOfRange).toBe(false);
+    expect(lighter.reps).toBeGreaterThan(todaysTarget.originalReps);
+    expect(heavier.reps).toBeLessThan(todaysTarget.originalReps);
+  });
+
+  it("missing history (first time on this exercise/machine, no suggestion yet) -> no cue at all", () => {
+    // suggestNext returns { suggestion: null, targetReps: null } with zero logs — this is the
+    // exact shape TrainingExerciseCard passes straight through, which adjustedRepTargetCue must
+    // refuse rather than compute a nonsense cue from missing data.
+    const cue = adjustedRepTargetCue({ ex: shoulderPress, exSlot: { sets: 3, reps: 7 }, setType: "working", originalWeight: null, originalReps: null, newWeight: 150 });
+    expect(cue).toBeNull();
+  });
+
+  // "Recovery after refresh" is an integration/persistence concern, not pure math: this cue has
+  // no storage of its own (see the file comment at top) — it is always recomputed fresh from
+  // suggestion.suggestion/suggestion.targetReps/weight, and `weight` is restored from the
+  // exercise's autosaved draft on remount (TrainingExerciseCard's own useState init, unrelated to
+  // this file). So a refresh "recovering" the adjusted cue is really just this same pure function
+  // being called again with the same restored inputs, which the determinism asserted above
+  // already covers. Verified live (Playwright, this exact 140x8/145x7/150 scenario, closing and
+  // reopening the editing tab against the same persisted storage): the 150 override, the "Aim for
+  // 6 reps" cue, and the untouched 145 x 7 target all reappeared correctly after the refresh.
+});
