@@ -3,14 +3,27 @@ import { EXERCISE_INSTRUCTIONS, getExerciseInstruction, hasInstructionContent, i
 
 describe("EXERCISE_INSTRUCTIONS — structural integrity of every authored entry", () => {
   const entries = Object.entries(EXERCISE_INSTRUCTIONS);
+  // Two deliberate tiers (Quality Sprint 01 final pass): "full" entries have real setup/execution
+  // step-by-step guidance; "minimal" entries exist ONLY to carry a control-focused tip for a
+  // confirmed plate-loaded exercise that had zero content before — cues only, no fabricated
+  // setup/execution/video/image (task: "do not fabricate complete exercise tutorials"). The How
+  // To tab's own existing fallback ("No step-by-step guidance yet") is what a minimal entry is
+  // meant to show — that's honest, not a bug.
+  const fullEntries = entries.filter(([, e]) => e.setup || e.execution);
+  const minimalEntries = entries.filter(([, e]) => !e.setup && !e.execution);
 
-  it("covers a deliberately bounded set (quality over catalog coverage), not hundreds of auto-generated entries", () => {
-    expect(entries.length).toBeGreaterThanOrEqual(40);
-    expect(entries.length).toBeLessThan(60);
+  it("full (setup+execution) entries stay a deliberately bounded, hand-curated set", () => {
+    expect(fullEntries.length).toBeGreaterThanOrEqual(40);
+    expect(fullEntries.length).toBeLessThan(60);
   });
 
-  it("every entry has non-empty setup and execution text", () => {
-    for (const [exId, entry] of entries) {
+  it("minimal (cues-only, control-tip) entries stay bounded to the confirmed plate-loaded set this pass covered", () => {
+    expect(minimalEntries.length).toBeGreaterThanOrEqual(45);
+    expect(minimalEntries.length).toBeLessThan(60);
+  });
+
+  it("every full entry has non-empty setup and execution text", () => {
+    for (const [exId, entry] of fullEntries) {
       expect(typeof entry.setup, `${exId}.setup`).toBe("string");
       expect(entry.setup.length, `${exId}.setup should not be empty`).toBeGreaterThan(0);
       expect(typeof entry.execution, `${exId}.execution`).toBe("string");
@@ -18,7 +31,14 @@ describe("EXERCISE_INSTRUCTIONS — structural integrity of every authored entry
     }
   });
 
-  it("every entry has at least one coaching cue", () => {
+  it("every minimal entry has no setup/execution at all — never a half-fabricated step", () => {
+    for (const [exId, entry] of minimalEntries) {
+      expect(entry.setup, exId).toBeUndefined();
+      expect(entry.execution, exId).toBeUndefined();
+    }
+  });
+
+  it("every entry (full or minimal) has at least one coaching cue", () => {
     for (const [exId, entry] of entries) {
       expect(Array.isArray(entry.cues), `${exId}.cues should be an array`).toBe(true);
       expect(entry.cues.length, `${exId}.cues should not be empty`).toBeGreaterThan(0);

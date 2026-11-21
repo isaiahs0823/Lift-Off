@@ -153,6 +153,23 @@ describe("checkpoint authority and whole-record recovery", () => {
     const recovered = recoverWorkoutCheckpoint(result.state, checkpoint(result, next));
     expect(recovered.finished).toBe(true); expect(recovered.draftByIndex).toEqual({});
   });
+  // Quality Sprint 01 — Fix 1: a beginner can now tag a set "warmup". This module treats sets
+  // generically (it never inspects setType), so a warm-up-classified set must survive draft
+  // stamping, checkpoint collection, and completion exactly like any other set field — proving
+  // the recovery engine needed no change for the new UI toggle to be safe.
+  it("preserves a warm-up-classified set through recovery and completion, unmodified and uncounted-as-lost", () => {
+    const warmupSet = { weight: 45, reps: 10, setType: "warmup" };
+    const workingSet = { weight: 135, reps: 8, setType: "working" };
+    const withWarmup = save(run(), [warmupSet, workingSet]);
+    const result = completeWorkoutState(base(), withWarmup, summary);
+    expect(result.state.logs[0].sets).toEqual([warmupSet, workingSet]);
+    expect(result.summary.workingSets).toBe(2); // raw set count — exclusion from analytics happens in countedSets, not here
+    // Simulate an interrupted completion write, then recover from the checkpoint.
+    const pending = JSON.parse(JSON.stringify(checkpoint(result, withWarmup)));
+    const recovered = recoverWorkoutCheckpoint(result.state, pending);
+    expect(recovered.finished).toBe(true);
+    expect(result.state.logs[0].sets[0]).toEqual(warmupSet);
+  });
 });
 
 describe("durable completion verification", () => {

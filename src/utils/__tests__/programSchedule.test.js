@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { activeProgramAndCP, resolveCurrentProgramDay, resolveTodayWorkout, programWeekAdherence, programTotalAdherence, resolveProgramTimeline, applyProgramDaySwap } from "../programSchedule.js";
 
 afterEach(() => {
@@ -252,5 +252,130 @@ describe("applyProgramDaySwap", () => {
     const next = applyProgramDaySwap(state, row);
     expect(next.workoutSessions).toBe(sessions);
     expect(next.customPrograms).toBe(state.customPrograms);
+  });
+});
+
+// Today-dashboard local-day rollover bug (reported from an iPhone in America/Los_Angeles):
+// completedToday previously compared a UTC-sliced "today" against a UTC-sliced completion
+// timestamp, so a workout finished in the evening in any timezone west of UTC could still read
+// as "completed today" the ENTIRE next local calendar day too (its lastCompletedAt's UTC date
+// slice happened to still equal the new UTC "today"). See todayDateStr/localDateStr in
+// programSchedule.js.
+describe("resolveCurrentProgramDay — local calendar day vs UTC (Today-dashboard rollover bug)", () => {
+  const architect = {
+    id: "program_architect",
+    name: "The Architect",
+    days: [
+      { label: "Legs B", exercises: [{ exId: "squat", sets: 4, reps: 6 }] },
+      { label: "Push", exercises: [{ exId: "bench", sets: 4, reps: 6 }] },
+      { label: "Pull", exercises: [{ exId: "row", sets: 4, reps: 8 }] },
+      { label: "Rest Day", type: "recovery", routineId: "lower_body_recovery" },
+    ],
+  };
+
+  let originalTZ;
+  beforeEach(() => {
+    originalTZ = process.env.TZ;
+    process.env.TZ = "America/Los_Angeles";
+  });
+  afterEach(() => {
+    process.env.TZ = originalTZ;
+  });
+
+  function stateWithArchitect(cp) {
+    return { currentProgram: cp, customPrograms: [architect], programs: [], workoutSessions: [], recoverySessions: [] };
+  }
+
+  it("exact reported scenario: Sunday evening Legs B completion (crosses UTC midnight) reads correctly as Monday-morning Push, not stale Legs B complete", () => {
+    // Sunday Nov 15, 2026, 9:30 PM America/Los_Angeles == Monday Nov 16, 2026 05:30 UTC.
+    const cp = stateWithArchitect({
+      programId: "program_architect", programName: "The Architect", source: "custom",
+      dayIndex: 1, lastCompletedAt: "2026-11-16T05:30:00.000Z", lastCompletedDayIndex: 0,
+      startDate: "2026-01-01T00:00:00Z",
+    }).currentProgram;
+    const state = stateWithArchitect(cp);
+
+    // Still Sunday evening, right after finishing: the card should show Legs B as Complete.
+    vi.setSystemTime(new Date("2026-11-16T05:35:00.000Z")); // Sun 9:35 PM PST
+    let day = resolveCurrentProgramDay(state);
+    expect(day.dayLabel).toBe("Legs B");
+    expect(day.completedToday).toBe(true);
+
+    // Monday 8:10 AM America/Los_Angeles == Monday 16:10 UTC — the exact reported moment.
+    vi.setSystemTime(new Date("2026-11-16T16:10:00.000Z"));
+    day = resolveCurrentProgramDay(state);
+    expect(day.dayLabel).toBe("Push");
+    expect(day.completedToday).toBe(false);
+  });
+
+  it("a local evening completion that has NOT yet crossed UTC midnight still correctly reads as completed later the same local evening", () => {
+    // Monday Nov 16, 2026, 6:00 PM America/Los_Angeles == Tuesday Nov 17, 2026 02:00 UTC — the
+    // completion instant is already "tomorrow" in UTC terms, but still the SAME local day.
+    const cp = stateWithArchitect({
+      programId: "program_architect", programName: "The Architect", source: "custom",
+      dayIndex: 1, lastCompletedAt: "2026-11-17T02:00:00.000Z", lastCompletedDayIndex: 0,
+      startDate: "2026-01-01T00:00:00Z",
+    }).currentProgram;
+    const state = stateWithArchitect(cp);
+
+    vi.setSystemTime(new Date("2026-11-17T02:30:00.000Z")); // Mon 6:30 PM PST, same local day
+    const day = resolveCurrentProgramDay(state);
+    expect(day.dayLabel).toBe("Legs B");
+    expect(day.completedToday).toBe(true);
+  });
+
+  it("same-day completion still reads as complete after a later same-day check (simulated refresh)", () => {
+    const cp = stateWithArchitect({
+      programId: "program_architect", programName: "The Architect", source: "custom",
+      dayIndex: 1, lastCompletedAt: "2026-11-16T17:00:00.000Z", lastCompletedDayIndex: 0, // Mon 9am PST
+      startDate: "2026-01-01T00:00:00Z",
+    }).currentProgram;
+    const state = stateWithArchitect(cp);
+
+    vi.setSystemTime(new Date("2026-11-16T17:05:00.000Z")); // right after finishing
+    expect(resolveCurrentProgramDay(state).completedToday).toBe(true);
+
+    vi.setSystemTime(new Date("2026-11-16T22:00:00.000Z")); // Mon 2pm PST — "refreshed" later same day
+    expect(resolveCurrentProgramDay(state).completedToday).toBe(true);
+  });
+
+  it("a scheduled rest day is preserved: not disrupted by the local-day fix, and correctly rolls to the next day the next local morning", () => {
+    const cp = stateWithArchitect({
+      programId: "program_architect", programName: "The Architect", source: "custom",
+      dayIndex: 3, lastCompletedAt: "2026-11-16T05:30:00.000Z", lastCompletedDayIndex: 2, // finished Pull Sun evening
+      startDate: "2026-01-01T00:00:00Z",
+    }).currentProgram;
+    const state = stateWithArchitect(cp);
+
+    // Monday morning: dayIndex 3 is the scheduled Rest Day, not completed yet today.
+    vi.setSystemTime(new Date("2026-11-16T16:10:00.000Z"));
+    const day = resolveCurrentProgramDay(state);
+    expect(day.isRecoveryDay).toBe(true);
+    expect(day.dayLabel).toBe("Rest Day");
+    expect(day.completedToday).toBe(false);
+  });
+
+  it("an unfinished workout carried across local midnight is untouched by the date fix — dayIndex/lastCompletedAt don't change just because the clock crossed midnight", () => {
+    // Started (but never finished) Legs B Sunday; nothing records a completion yet, so an
+    // in-progress run has no lastCompletedAt/lastCompletedDayIndex bump at all — only finishRun
+    // sets those. The resolved "current" program day must stay Legs B straight through midnight,
+    // exactly as if no time had passed, so the active run (held separately in liftlog-active-run,
+    // not here) remains resumable against the same program day.
+    const cp = stateWithArchitect({
+      programId: "program_architect", programName: "The Architect", source: "custom",
+      dayIndex: 0, lastCompletedAt: null, lastCompletedDayIndex: null,
+      startDate: "2026-01-01T00:00:00Z",
+    }).currentProgram;
+    const state = stateWithArchitect(cp);
+
+    vi.setSystemTime(new Date("2026-11-16T05:00:00.000Z")); // Sun 9pm PST, mid-workout
+    let day = resolveCurrentProgramDay(state);
+    expect(day.dayLabel).toBe("Legs B");
+    expect(day.completedToday).toBe(false);
+
+    vi.setSystemTime(new Date("2026-11-16T09:00:00.000Z")); // Sun 1am PST — past local midnight, still unfinished
+    day = resolveCurrentProgramDay(state);
+    expect(day.dayLabel).toBe("Legs B");
+    expect(day.completedToday).toBe(false);
   });
 });

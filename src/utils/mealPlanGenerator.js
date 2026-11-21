@@ -250,7 +250,12 @@ function buildMeal(label, time, macroShare, profile, { includeVeg = false, mealT
 // training time), what fraction of the day's targets each one gets, and in what order. Kept in
 // one place so the curated-food plan and the pure-numbers summary can never disagree about the
 // day's structure, only about how each slot's share gets filled.
-function buildMealSlots(profile) {
+// `variation` shifts every slot's `rotation` by the same offset — pickFood's `rotation %
+// pool.length` then lands on a different food in each category pool for a nonzero variation,
+// without changing anything about which categories/slots exist or how a share is filled. Default
+// 0 keeps every existing caller (mealMacroDistribution, any test built before Regenerate's fix)
+// byte-identical to before this parameter existed.
+function buildMealSlots(profile, variation = 0) {
   const mealCount = Math.max(3, Math.min(5, profile.mealsPerDayPreference || 3));
   const hasPreWorkout = !!profile.trainingTime;
   const preWorkoutFrac = hasPreWorkout ? 0.1 : 0;
@@ -258,10 +263,10 @@ function buildMealSlots(profile) {
 
   const mainLabels = ["Breakfast", "Lunch", "Dinner", "Snack 1", "Snack 2"].slice(0, mealCount);
   const mainTimes = ["7:00 AM", "12:00 PM", "7:00 PM", "3:00 PM", "9:00 PM"].slice(0, mealCount);
-  const slots = mainLabels.map((label, i) => ({ label, time: mainTimes[i], frac: mainFrac, mealType: label === "Breakfast" ? "breakfast" : "main", rotation: i }));
+  const slots = mainLabels.map((label, i) => ({ label, time: mainTimes[i], frac: mainFrac, mealType: label === "Breakfast" ? "breakfast" : "main", rotation: i + variation }));
 
   if (hasPreWorkout) {
-    const preWorkoutSlot = { label: "Pre-Workout", time: profile.trainingTime, frac: preWorkoutFrac, mealType: "preworkout", rotation: 0 };
+    const preWorkoutSlot = { label: "Pre-Workout", time: profile.trainingTime, frac: preWorkoutFrac, mealType: "preworkout", rotation: variation };
     const dinnerIdx = slots.findIndex((s) => s.label === "Dinner");
     if (dinnerIdx >= 0) slots.splice(dinnerIdx, 0, preWorkoutSlot);
     else slots.push(preWorkoutSlot);
@@ -291,9 +296,14 @@ function sumMealTotals(meals) {
 // so MealPlanView can display the actual plan-vs-target picture rather than recomputing or
 // assuming it. See mealMacroDistribution below for the separate exact-reconciling pure-numbers
 // split used by the home screen's "Meal Structure" summary (no food items, so it can't drift).
-export function generateMealPlan(profile, targets) {
+// `variation` (default 0, byte-identical to every pre-existing call site) offsets which food
+// each slot's rotation lands on — see buildMealSlots. Recorded on the returned plan so Regenerate
+// (MealPlanView.jsx) can always ask for "the next one after whatever's currently saved," surviving
+// a refresh exactly like the rest of the plan does, rather than restarting from 0 and risking an
+// immediate repeat.
+export function generateMealPlan(profile, targets, { variation = 0 } = {}) {
   if (!targets) return null;
-  const meals = buildMealSlots(profile).map((slot) =>
+  const meals = buildMealSlots(profile, variation).map((slot) =>
     buildMeal(slot.label, slot.time, { calories: targets.calories * slot.frac, protein: targets.protein * slot.frac, carbs: targets.carbs * slot.frac, fat: targets.fat * slot.frac }, profile, {
       includeVeg: slot.label === "Lunch" || slot.label === "Dinner",
       mealType: slot.mealType,
@@ -305,11 +315,47 @@ export function generateMealPlan(profile, targets) {
   return {
     meals,
     generatedAt: new Date().toISOString(),
+    variation,
     targets: dailyTargets,
     totals,
     gaps: planGaps(totals, dailyTargets),
     withinTolerance: planMeetsTargets(totals, dailyTargets),
   };
+}
+
+// FOOD_DB entries have no `id` field today (only `name`, which is unique across the whole
+// catalog) — preferring `item.id` when present keeps this correct if a future food source ever
+// does carry a stable id, without requiring one to exist yet.
+function foodKey(item) {
+  return item.id ?? item.name;
+}
+
+// Regenerate bug fix — generateMealPlan is a pure function of (profile, targets, variation): the
+// same targets/preferences/schedule always deserve the same curated-food reasoning, so calling it
+// again with an unchanged variation silently re-saves an identical plan (the originally reported
+// bug: tapping Regenerate appeared to do nothing, because it wasn't actually asking for anything
+// different). "Meaningfully different" means a real food substitution — comparing each meal's
+// SET of selected foods by stable id/name, ignoring item order and ignoring calorie/portion-size
+// changes to the SAME food (a bigger or smaller serving of the same chicken breast is not a
+// different plan to the athlete looking at it) and the plan's own generatedAt timestamp (neither
+// field is ever read here at all).
+export function mealPlansMeaningfullyDiffer(planA, planB) {
+  if (!planA || !planB) return !!planA !== !!planB;
+  const mealsA = planA.meals || [];
+  const mealsB = planB.meals || [];
+  if (mealsA.length !== mealsB.length) return true;
+  for (let i = 0; i < mealsA.length; i++) {
+    const a = mealsA[i];
+    const b = mealsB[i];
+    if (a.label !== b.label) return true;
+    const keysA = new Set((a.items || []).map(foodKey));
+    const keysB = new Set((b.items || []).map(foodKey));
+    if (keysA.size !== keysB.size) return true;
+    for (const k of keysA) {
+      if (!keysB.has(k)) return true;
+    }
+  }
+  return false;
 }
 
 // A pure numeric meal-macro split — no food items, so unlike generateMealPlan it always
