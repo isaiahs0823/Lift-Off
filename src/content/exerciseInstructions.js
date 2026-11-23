@@ -38,7 +38,10 @@ export const EXERCISE_INSTRUCTIONS = {
   bench: {
     setup: "Lie on the bench with your eyes under the bar. Grip slightly wider than shoulder width and unrack the bar over your shoulders.",
     execution: "Lower the bar to your mid-chest under control. Press back up to full arm extension.",
-    cues: ["Keep your feet flat on the floor and your shoulder blades pulled together and down."],
+    cues: [
+      "Keep your feet flat on the floor and your shoulder blades pulled together and down.",
+      "Control: lower the weight under control — don't let it drop or bounce out of the bottom.",
+    ],
     mistakes: [],
     video: null,
     image: null,
@@ -46,7 +49,10 @@ export const EXERCISE_INSTRUCTIONS = {
   incline_bench: {
     setup: "Set the bench to a moderate incline, around 30-45°. Grip the bar slightly wider than shoulder width and unrack it over your upper chest.",
     execution: "Lower the bar to your upper chest, then press back up to full arm extension.",
-    cues: ["A steeper angle shifts more work to your shoulders — keep the incline moderate, not vertical."],
+    cues: [
+      "A steeper angle shifts more work to your shoulders — keep the incline moderate, not vertical.",
+      "Control: lower the weight under control — don't let it drop or bounce out of the bottom.",
+    ],
     mistakes: [],
     video: null,
     image: null,
@@ -62,7 +68,10 @@ export const EXERCISE_INSTRUCTIONS = {
   barbell_row: {
     setup: "Hinge at the hips with a flat back, holding the bar at arm's length below your shoulders.",
     execution: "Pull the bar to your lower ribs, then lower it back under control to full arm extension.",
-    cues: ["Keep your back flat throughout — if it rounds, lighten the weight."],
+    cues: [
+      "Keep your back flat throughout — if it rounds, lighten the weight.",
+      "Control: let the weight travel back under control on the return — don't let it yank your arms or slam the stack.",
+    ],
     mistakes: [],
     video: null,
     image: null,
@@ -78,7 +87,10 @@ export const EXERCISE_INSTRUCTIONS = {
   hack_squat: {
     setup: "Set your shoulders and back against the machine's pads with your feet shoulder-width on the platform.",
     execution: "Lower under control until your thighs approach parallel, then press back up.",
-    cues: ["Keep your heels flat on the platform the whole rep."],
+    cues: [
+      "Keep your heels flat on the platform the whole rep.",
+      "Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it.",
+    ],
     mistakes: [],
     video: null,
     image: null,
@@ -86,7 +98,10 @@ export const EXERCISE_INSTRUCTIONS = {
   leg_press: {
     setup: "Sit in the machine with your back against the pad and feet shoulder-width on the platform.",
     execution: "Lower the platform until your knees reach about 90°, then press back to the start without locking your knees out hard.",
-    cues: ["Keep your lower back flat against the pad — don't let your hips round up off it at the bottom."],
+    cues: [
+      "Keep your lower back flat against the pad — don't let your hips round up off it at the bottom.",
+      "Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it.",
+    ],
     mistakes: [],
     video: null,
     image: null,
@@ -118,7 +133,10 @@ export const EXERCISE_INSTRUCTIONS = {
   ohp: {
     setup: "Hold the bar at shoulder height, hands just outside shoulder width.",
     execution: "Press it straight overhead until your arms are fully extended, then lower back to the start.",
-    cues: ["Brace your core and avoid leaning back excessively as you press."],
+    cues: [
+      "Brace your core and avoid leaning back excessively as you press.",
+      "Control: lower the weight under control — don't let it drop or bounce out of the bottom.",
+    ],
     mistakes: [],
     video: null,
     image: null,
@@ -158,7 +176,10 @@ export const EXERCISE_INSTRUCTIONS = {
   barbell_curl: {
     setup: "Stand holding a barbell with an underhand grip, arms extended.",
     execution: "Curl it up toward your shoulders, then lower under control.",
-    cues: ["Keep your elbows pinned at your sides — don't let them drift forward."],
+    cues: [
+      "Keep your elbows pinned at your sides — don't let them drift forward.",
+      "Control: lower the weight slowly under control — don't let it drop or swing on the way down.",
+    ],
     mistakes: [],
     video: null,
     image: null,
@@ -258,7 +279,10 @@ export const EXERCISE_INSTRUCTIONS = {
   hip_thrust: {
     setup: "Sit on the floor with your upper back against a bench and a barbell across your hips. Plant your feet flat, knees bent.",
     execution: "Drive through your heels to raise your hips until your body forms a straight line from shoulders to knees, then lower back down under control.",
-    cues: ["Squeeze your glutes hard at the top for a one-second pause before lowering."],
+    cues: [
+      "Squeeze your glutes hard at the top for a one-second pause before lowering.",
+      "Control: return to the start under control instead of letting the weight yank you back.",
+    ],
     mistakes: ["Overextending your lower back at the top instead of stopping at a straight hip-to-shoulder line."],
     video: null,
     image: null,
@@ -383,6 +407,308 @@ export const EXERCISE_INSTRUCTIONS = {
     video: null,
     image: null,
   },
+  // ---------------- Quality Sprint 01 final pass: plate-loaded control-tip coverage ----------------
+  // These exercises had no instructional content at all, which meant no way to surface the one
+  // piece of coaching every plate-loaded movement needs: control the weight through the full rep,
+  // especially the lowering (eccentric) phase, rather than letting it drop, swing, bounce, or rely
+  // on momentum. Deliberately minimal (cues only) rather than fabricated setup/execution steps or
+  // demonstration footage this app has no real content for — the How To tab honestly falls back to
+  // "No step-by-step guidance yet" for these, same as any other exercise with partial content.
+  decline_bench: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  smith_bench: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  incline_smith_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  trap_bar_deadlift: {
+    cues: ["Control: lower the weight under control along the same path you lifted it — don't let it drop or bounce off the floor."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  t_bar_row: {
+    cues: ["Control: let the weight travel back under control on the return — don't let it yank your arms or slam the stack."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  barbell_pullover: {
+    cues: ["Control: let the weight travel back under control on the return — don't let it yank your arms or slam the stack."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  shrug_barbell: {
+    cues: ["Control: lower the weight under control instead of dropping it — a controlled negative builds real trap strength."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  smith_ohp: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  smith_squat: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  vertical_leg_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  pendulum_squat: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  leg_press_calf_raise: {
+    cues: ["Control: lower your heels under control for a full stretch instead of bouncing out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  preacher_curl: {
+    cues: ["Control: lower the weight slowly under control — don't let it drop or swing on the way down."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  arsenal_linear_leg_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  arsenal_linear_hack_squat: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  arsenal_belt_squat: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_bench_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_horizontal_bench_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_incline_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_super_incline_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_decline_chest_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_wide_chest_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_chest_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_plate_super_fly: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_chest_back_chest_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_row: {
+    cues: ["Control: let the weight travel back under control on the return — don't let it yank your arms or slam the stack."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_low_row: {
+    cues: ["Control: let the weight travel back under control on the return — don't let it yank your arms or slam the stack."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_dy_row: {
+    cues: ["Control: let the weight travel back under control on the return — don't let it yank your arms or slam the stack."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_t_bar_row: {
+    cues: ["Control: let the weight travel back under control on the return — don't let it yank your arms or slam the stack."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_wide_pulldown: {
+    cues: ["Control: let the weight travel back under control on the return — don't let it yank your arms or slam the stack."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_front_lat_pulldown: {
+    cues: ["Control: let the weight travel back under control on the return — don't let it yank your arms or slam the stack."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_plate_pullover: {
+    cues: ["Control: let the weight travel back under control on the return — don't let it yank your arms or slam the stack."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_chest_back_lat_pulldown: {
+    cues: ["Control: let the weight travel back under control on the return — don't let it yank your arms or slam the stack."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_shoulder_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_plate_seated_biceps: {
+    cues: ["Control: lower the weight slowly under control — don't let it drop or swing on the way down."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_plate_seated_dip: {
+    cues: ["Control: lower under control — don't let the weight drop or bounce at the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_plate_gripper: {
+    cues: ["Control: return to the start under control — don't let the weight drop or swing."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_linear_leg_press: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_hack_squat: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_pendulum_x_squat: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_belt_squat: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  belt_squat_split_squat: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_ground_base_multi_squat: {
+    cues: ["Control: lower the weight under control — don't let it drop or bounce at the bottom; lower it as deliberately as you press it."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_leg_extension: {
+    cues: ["Control: lower the weight under control instead of letting it drop — the lowering phase is where this exercise does the most work."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_iso_kneeling_leg_curl: {
+    cues: ["Control: lower the weight under control instead of letting it drop back to the stack."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_plate_glute_drive: {
+    cues: ["Control: return to the start under control instead of letting the weight yank you back."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_plate_seated_calf_raise: {
+    cues: ["Control: lower your heels under control for a full stretch instead of bouncing out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_plate_tibia_dorsi_flexion: {
+    cues: ["Control: lower your heels under control for a full stretch instead of bouncing out of the bottom."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+  hammer_strength_plate_ab_oblique_crunch: {
+    cues: ["Control: return to the start under control instead of letting the weight yank you back."],
+    mistakes: [],
+    video: null,
+    image: null,
+  },
+
 };
 
 export function getExerciseInstruction(exId) {

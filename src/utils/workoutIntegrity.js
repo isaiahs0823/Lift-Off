@@ -132,7 +132,15 @@ export function swapWorkoutExercise(run, index, newExId, logs = []) {
   }, new Date().toISOString()).sessionEntries.find((se) => se.index === index);
   const draftByIndex = { ...run.draftByIndex };
   delete draftByIndex[index]; // Only unconfirmed input is abandoned; selected holds saved work.
-  if (!selected) return { ...run, draftByIndex, swaps: { ...run.swaps, [index]: newExId } };
+  if (!selected) {
+    // A skipped slot keeps its workoutSlotId when relabeled this way (see skipWorkoutExercise's
+    // own comment on why it's keyed by workoutSlotId, not index) — swapping to a different
+    // exercise is a fresh decision to actually perform something today, so any skip mark for
+    // this slot is stale the moment that happens and must not carry over onto the new exercise.
+    const skipped = { ...run.skipped };
+    delete skipped[slot.workoutSlotId];
+    return { ...run, draftByIndex, skipped, swaps: { ...run.swaps, [index]: newExId } };
+  }
   const shift = (i) => i > index ? i + 1 : i;
   const { group, ...replacement } = slot;
   return {
@@ -148,6 +156,70 @@ export function swapWorkoutExercise(run, index, newExId, logs = []) {
     ].sort((a, b) => a.index - b.index),
     draftByIndex: Object.fromEntries(Object.entries(draftByIndex).map(([i, draft]) => [shift(Number(i)), draft])),
     swaps: Object.fromEntries(Object.entries(run.swaps || {}).map(([i, exId]) => [shift(Number(i)), exId])),
+  };
+}
+
+// Bug report: an athlete who can't do a scheduled movement (injury, equipment taken, whatever)
+// had no way to move on except swapping in a different exercise or fighting the app into saving
+// fake 0-rep sets — both of which either lose the fact that something was scheduled here at all,
+// or (before cleanSetsInput existed) polluted history with sets that never happened. Skip is a
+// third, honest option: "not today," visibly recorded, but never logged or counted anywhere.
+// Keyed by workoutSlotId rather than index (like selectedSlotId, and unlike draftByIndex/swaps/
+// sessionEntries) specifically so it needs no remapping in moveWorkoutExercise/removeRunExercise
+// — a reorder or a later removal elsewhere in the list never has to know this map exists.
+// Only valid for a slot with nothing confirmed yet: once a real set is logged there's no
+// ambiguity to resolve, just Finish Exercise with whatever's confirmed.
+export function skipWorkoutExercise(run, index) {
+  const slot = run?.exercises?.[index];
+  if (!slot || run.finished || run.completionPending) return run;
+  if (run.sessionEntries?.some((se) => se.index === index)) return run;
+  const draftByIndex = { ...run.draftByIndex };
+  delete draftByIndex[index]; // Abandons only unconfirmed typed input — nothing confirmed exists at this slot.
+  return {
+    ...run,
+    draftByIndex,
+    skipped: { ...run.skipped, [slot.workoutSlotId]: new Date().toISOString() },
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+// "Log it after all" — reverses a skip. Nothing else needs restoring: a skipped slot was never
+// allowed to hold a sessionEntry, so clearing the mark alone returns it to a normal open slot.
+export function unskipWorkoutExercise(run, index) {
+  const slot = run?.exercises?.[index];
+  if (!slot || run.finished || run.completionPending) return run;
+  if (!run.skipped?.[slot.workoutSlotId]) return run;
+  const skipped = { ...run.skipped };
+  delete skipped[slot.workoutSlotId];
+  return { ...run, skipped, updatedAt: new Date().toISOString() };
+}
+
+// Reorders one exercise slot within the active session only — never the saved program/template,
+// and never past workout history (those are untouched; this only ever mutates activeRun).
+// sessionEntries/draftByIndex/swaps are keyed by array position (see sanitizeActiveRun's
+// draftByIndex comment), so moving a slot without also moving its own entry/draft/swap would
+// silently reattach them to whatever exercise ends up at the old position instead. This computes
+// the move by workoutSlotId — the one identity that's stable across the reorder — and carries
+// every index-keyed structure through the exact same old-index -> new-index mapping, the same
+// pattern removeRunExercise/swapWorkoutExercise already use for a shrinking or inserting array,
+// generalized here to an arbitrary single-slot move. Using workoutSlotId (not exId) is also what
+// lets two slots of the same exercise move independently without crossing wires.
+export function moveWorkoutExercise(run, fromIndex, toIndex) {
+  const exercises = run?.exercises;
+  if (!Array.isArray(exercises) || run.finished || run.completionPending) return run;
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= exercises.length || toIndex >= exercises.length) return run;
+  const reordered = [...exercises];
+  const [moved] = reordered.splice(fromIndex, 1);
+  reordered.splice(toIndex, 0, moved);
+  const newIndexBySlotId = new Map(reordered.map((slot, i) => [slot.workoutSlotId, i]));
+  const remap = (oldIdx) => newIndexBySlotId.get(exercises[oldIdx]?.workoutSlotId) ?? oldIdx;
+  return {
+    ...run,
+    exercises: reordered,
+    sessionEntries: (run.sessionEntries || []).map((se) => ({ ...se, index: remap(se.index) })),
+    draftByIndex: Object.fromEntries(Object.entries(run.draftByIndex || {}).map(([i, draft]) => [remap(Number(i)), draft])),
+    swaps: Object.fromEntries(Object.entries(run.swaps || {}).map(([i, exId]) => [remap(Number(i)), exId])),
+    updatedAt: new Date().toISOString(),
   };
 }
 
