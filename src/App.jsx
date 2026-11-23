@@ -7540,7 +7540,22 @@ function GuidedRunView({
                   exName={exMap[currentExId]?.name || currentExId}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-base font-medium text-v5-subtext truncate">{exMap[currentExId]?.name || currentExId}</div>
+                    {/* Tap an upcoming row to start it now (task: "occupied machine" — moving the
+                        exercise you're currently on later must also let you immediately begin
+                        whatever's now next, not just leave the moved exercise's own card showing).
+                        selectedSlotId otherwise only ever changes automatically, when the selected
+                        slot finishes or is skipped (see the re-sync effect above) — a reorder alone
+                        never did, which silently stranded the athlete on the just-moved exercise's
+                        card with no way to jump ahead except skipping (wrong: they intend to do it
+                        later, not skip it) or finishing something they can't start yet. Reuses the
+                        exact same onSelectExercise(workoutSlotId) path Reorder's own "keep selected
+                        through a move" already relies on. */}
+                    <button
+                      onClick={() => onSelectExercise?.(exSlot.workoutSlotId)}
+                      className="min-w-0 flex-1 text-left text-base font-medium text-v5-subtext hover:text-v5-text truncate"
+                    >
+                      {exMap[currentExId]?.name || currentExId}
+                    </button>
                     <button
                       onClick={() => onSkipExercise?.(idx)}
                       aria-label={`Skip ${exMap[currentExId]?.name || currentExId}`}
