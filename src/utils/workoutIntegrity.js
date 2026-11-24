@@ -169,10 +169,21 @@ export function swapWorkoutExercise(run, index, newExId, logs = []) {
 // — a reorder or a later removal elsewhere in the list never has to know this map exists.
 // Only valid for a slot with nothing confirmed yet: once a real set is logged there's no
 // ambiguity to resolve, just Finish Exercise with whatever's confirmed.
+//
+// P0 data-loss fix: a confirmed set is "nothing confirmed yet" for exactly as long as the
+// athlete hasn't tapped Finish Exercise — it lives in draftByIndex[index].confirmedSets, not yet
+// a sessionEntry, right up until then (see the autosave comment in TrainingExerciseCard). The
+// original guard here only checked sessionEntries, so navigating away from an exercise after
+// Save Set but before Finish Exercise, then Skipping it from its now-upcoming row, silently
+// deleted that confirmed set along with the rest of the draft — a real logged working set,
+// gone, with no trace in history. Guarding on confirmedSets.length here, in the one shared
+// helper, protects every call site (today's active-card and upcoming-row buttons, and any
+// future one) rather than relying on each caller's own UI-level check to happen to line up.
 export function skipWorkoutExercise(run, index) {
   const slot = run?.exercises?.[index];
   if (!slot || run.finished || run.completionPending) return run;
   if (run.sessionEntries?.some((se) => se.index === index)) return run;
+  if (run.draftByIndex?.[index]?.confirmedSets?.length > 0) return run;
   const draftByIndex = { ...run.draftByIndex };
   delete draftByIndex[index]; // Abandons only unconfirmed typed input — nothing confirmed exists at this slot.
   return {

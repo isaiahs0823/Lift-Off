@@ -7556,13 +7556,22 @@ function GuidedRunView({
                     >
                       {exMap[currentExId]?.name || currentExId}
                     </button>
-                    <button
-                      onClick={() => onSkipExercise?.(idx)}
-                      aria-label={`Skip ${exMap[currentExId]?.name || currentExId}`}
-                      className="shrink-0 p-1 -m-1 text-v5-subtext/40 hover:text-v5-red"
-                    >
-                      <SkipForward size={14} />
-                    </button>
+                    {/* P0 data-loss fix: this row's exercise can have a confirmed-but-not-yet-
+                        finished set (Save Set was tapped here, then the athlete navigated away
+                        without hitting Finish Exercise) — skipWorkoutExercise itself now refuses
+                        that case too, but the button must not even offer to do something it will
+                        silently no-op on. Same hasConfirmedSetsHere gate the active card's own
+                        Skip button already uses, just applied to this row's own idx instead of
+                        the active one's. */}
+                    {!hasConfirmedSetsHere && (
+                      <button
+                        onClick={() => onSkipExercise?.(idx)}
+                        aria-label={`Skip ${exMap[currentExId]?.name || currentExId}`}
+                        className="shrink-0 p-1 -m-1 text-v5-subtext/40 hover:text-v5-red"
+                      >
+                        <SkipForward size={14} />
+                      </button>
+                    )}
                     <button
                       onClick={() => setReplacingIdx(idx)}
                       aria-label={`Replace ${exMap[currentExId]?.name || currentExId}`}
