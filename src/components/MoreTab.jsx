@@ -109,6 +109,7 @@ function AccountCard({ auth, syncStatus, onRetrySync }) {
       <Card className="space-y-2">
         <SectionLabel tone="muted">Account</SectionLabel>
         <p className="text-xs text-v5-text/90">Signed in as {auth.user.email}</p>
+        {errorMsg && <p role="alert" className="text-xs text-v5-red">{errorMsg}</p>}
         <div className="flex items-center gap-1.5 text-xs">
           {syncStatus?.lastError ? (
             <>
@@ -130,7 +131,7 @@ function AccountCard({ auth, syncStatus, onRetrySync }) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <ButtonSecondary size="sm" icon={LogOut} onClick={() => auth.signOut()} fullWidth={false}>
+          <ButtonSecondary size="sm" icon={LogOut} onClick={() => auth.signOut().catch(err=>setErrorMsg(err.message || "Could not sign out safely. Your data has not been reset."))} fullWidth={false}>
             Sign out
           </ButtonSecondary>
           {!syncStatus?.pending && (

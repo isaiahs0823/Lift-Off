@@ -1,4 +1,4 @@
-import { editorStorage } from "../persistence/editorSession.js";
+import { getEditorSession } from "../persistence/editorSession.js";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, Pause, Play, Square } from "lucide-react";
 import {
@@ -20,18 +20,18 @@ import { unlockAudio, playCompletionBeep, playCountdownTick, vibratePattern } fr
 // how that's enforced structurally, not just by convention.
 const STORAGE_KEY = "liftlog-interval-timer";
 
-function loadPersisted() {
+function loadPersisted(storage) {
   try {
-    const raw = editorStorage().getItem(STORAGE_KEY);
+    const raw = storage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
-function persist(data) {
+function persist(data, storage) {
   try {
-    if (data) editorStorage().setItem(STORAGE_KEY, JSON.stringify(data));
-    else editorStorage().removeItem(STORAGE_KEY);
+    if (data) storage.setItem(STORAGE_KEY, JSON.stringify(data));
+    else storage.removeItem(STORAGE_KEY);
   } catch {
     // storage unavailable — the session just won't survive a refresh/navigation
   }
@@ -83,7 +83,8 @@ function DurationInput({ label, totalSec, onChange }) {
 }
 
 export default function IntervalTimerScreen({ updateState, allExercises, onBack }) {
-  const persisted = loadPersisted();
+  const storage=useRef(getEditorSession().scoped().storage).current;
+  const persisted = loadPersisted(storage);
   const [config, setConfig] = useState(persisted?.config ?? DEFAULT_CONFIG);
   // "setup" while idle/configuring, "active" while running/paused, "summary" right after Stop.
   const [screen, setScreen] = useState(persisted?.runtime?.status === "running" || persisted?.runtime?.status === "paused" ? "active" : "setup");
@@ -101,8 +102,8 @@ export default function IntervalTimerScreen({ updateState, allExercises, onBack 
   const lastWarnedPhaseEndsAtRef = useRef(null);
 
   useEffect(() => {
-    if (runtime.status === "idle" || runtime.status === "complete") persist(null);
-    else persist({ config, runtime: { ...runtime, alertedSeq: alertedSeqRef.current } });
+    if (runtime.status === "idle" || runtime.status === "complete") persist(null, storage);
+    else persist({ config, runtime: { ...runtime, alertedSeq: alertedSeqRef.current } }, storage);
   }, [config, runtime]);
 
   // The one place a phase transition is ever handled. `silent` is true for the catch-up walk

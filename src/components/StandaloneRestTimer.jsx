@@ -1,4 +1,4 @@
-import { editorStorage } from "../persistence/editorSession.js";
+import { getEditorSession } from "../persistence/editorSession.js";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause, RotateCcw, Plus, Minus } from "lucide-react";
 import { SlideInPanel } from "./SlideInPanel.jsx";
@@ -31,20 +31,20 @@ const MAX_DURATION = 1800;
 
 const STORAGE_KEY = "brk-standalone-rest-timer";
 
-function loadPersisted() {
+function loadPersisted(storage) {
   try {
-    const raw = editorStorage().getItem(STORAGE_KEY);
+    const raw = storage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
-function persist({ duration, endsAt, pausedRemainingMs, autoRepeat }) {
+function persist({ duration, endsAt, pausedRemainingMs, autoRepeat }, storage) {
   try {
     if (endsAt != null || pausedRemainingMs != null) {
-      editorStorage().setItem(STORAGE_KEY, JSON.stringify({ duration, endsAt, pausedRemainingMs, autoRepeat }));
+      storage.setItem(STORAGE_KEY, JSON.stringify({ duration, endsAt, pausedRemainingMs, autoRepeat }));
     } else {
-      editorStorage().removeItem(STORAGE_KEY);
+      storage.removeItem(STORAGE_KEY);
     }
   } catch {
     // storage unavailable — timer still works, it just won't survive a tab switch/reload
@@ -59,7 +59,8 @@ function formatTime(totalSeconds) {
 }
 
 export default function StandaloneRestTimer({ onBack }) {
-  const initial = loadPersisted();
+  const storage=useRef(getEditorSession().scoped().storage).current;
+  const initial = loadPersisted(storage);
   const [duration, setDuration] = useState(initial?.duration ?? 90);
   const [endsAt, setEndsAt] = useState(initial?.endsAt ?? null);
   const [pausedRemainingMs, setPausedRemainingMs] = useState(initial?.pausedRemainingMs ?? null);
@@ -118,7 +119,7 @@ export default function StandaloneRestTimer({ onBack }) {
 
   // ---- persistence (section 13) ----
   useEffect(() => {
-    persist({ duration, endsAt, pausedRemainingMs, autoRepeat });
+    persist({ duration, endsAt, pausedRemainingMs, autoRepeat }, storage);
   }, [duration, endsAt, pausedRemainingMs, autoRepeat]);
 
   // ---- completion (section 5/6) ----

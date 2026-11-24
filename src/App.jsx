@@ -1,5 +1,5 @@
 import { ACTIVE_RUN_VERSION, sanitizeSessionContext } from "./utils/activeRun.js";
-import { editorStorage, getEditorSession } from "./persistence/editorSession.js";
+import { getEditorSession } from "./persistence/editorSession.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Plus,
@@ -121,7 +121,6 @@ import { todayDateKey } from "./utils/nutrition.js";
 import { recalcAthleteRatingState, detectRatingEvent, RATING_SCHEMA_VERSION } from "./utils/athleteRating.js";
 import { reminderIsDue, getReminderSettings } from "./utils/workoutReminders.js";
 import LevelUpScreen from "./components/LevelUpScreen.jsx";
-import { useSupabaseAuth } from "./hooks/useSupabaseAuth.js";
 import { pushWorkoutDataToSupabase, pullWorkoutDataFromSupabase, mergeRemoteIntoLocal } from "./utils/supabaseSync.js";
 import { initialSyncStatus, markSyncStarted, markSyncSuccess, markSyncFailure, MAX_SYNC_ATTEMPTS, retryDelayMs } from "./utils/syncStatus.js";
 import { pushPhotosToSupabase, pullNewPhotosFromSupabase } from "./utils/photoStorage.js";
@@ -1856,8 +1855,8 @@ const SECTION_OF = {
   programTimeline: "train",
 };
 
-export default function LiftLog() {
-  const persistence = getEditorSession();
+export default function LiftLog({auth}) {
+  const persistence = useRef(getEditorSession().scoped()).current;
   const [durability, setDurability] = useState(persistence.snapshot);
   useEffect(() => persistence.subscribe(setDurability), [persistence]);
   const [state, setRenderedState] = useState(() => ({
@@ -1887,9 +1886,10 @@ export default function LiftLog() {
   // Optional cloud sync (hybrid: localStorage stays the source of truth signed-out AND
   // signed-in — this only ever backs state up to Supabase and fills in gaps from other
   // devices, never replaces what's already here). See src/utils/supabaseSync.js.
-  const auth = useSupabaseAuth();
+
   const cloudSyncTimerRef = useRef(null);
   const cloudSyncRetryTimerRef = useRef(null);
+  useEffect(()=>()=>{clearTimeout(cloudSyncTimerRef.current);clearTimeout(cloudSyncRetryTimerRef.current);},[]);
   const pulledForUserIdRef = useRef(null);
   // Cloud sync status (P0 auth audit, item 6/7) — "visible, retried safely, never falsely
   // reported as successful." Its own localStorage key, deliberately separate from `state` (the
@@ -1898,7 +1898,7 @@ export default function LiftLog() {
   // still means something after closing and reopening the app.
   const [syncStatus, setSyncStatus] = useState(() => {
     try {
-      const raw = editorStorage().getItem("liftlog-sync-status");
+      const raw = persistence.storage.getItem("liftlog-sync-status");
       return raw ? JSON.parse(raw) : initialSyncStatus();
     } catch (e) {
       return initialSyncStatus();
@@ -1906,7 +1906,7 @@ export default function LiftLog() {
   });
   useEffect(() => {
     try {
-      editorStorage().setItem("liftlog-sync-status", JSON.stringify(syncStatus));
+      persistence.storage.setItem("liftlog-sync-status", JSON.stringify(syncStatus));
     } catch (e) {
       // storage unavailable — status just won't survive a reload, not worth surfacing an error
       // about an error-tracking mechanism
@@ -1995,8 +1995,8 @@ export default function LiftLog() {
     activeRunRef.current = next;
     let saved = true;
     try {
-      if (next) editorStorage().setItem("liftlog-active-run", JSON.stringify(next));
-      else editorStorage().removeItem("liftlog-active-run");
+      if (next) persistence.storage.setItem("liftlog-active-run", JSON.stringify(next));
+      else persistence.storage.removeItem("liftlog-active-run");
     } catch {
       saved = false;
     }
@@ -2129,13 +2129,14 @@ export default function LiftLog() {
   // previous version called pushWorkoutDataToSupabase and threw its {ok, errors} result straight
   // away, so a failed push (expired token, RLS denial, a network blip) produced zero feedback,
   // ever, and was never retried until some unrelated later edit happened to trigger another push.
-  // Upserts are idempotent by primary key (onConflict: "id"), so retrying — even with a `next`
-  // that's gone slightly stale because a newer edit landed in between — is always safe: it can
-  // never duplicate or lose a row, worst case it's immediately superseded by the next real push.
+  // Ownership tickets fence accounts and editor generations. Same-account cross-device
+  // revision reconciliation remains a separate fix; upsert alone cannot protect newer rows.
   const pushWithRetry = useCallback(async (next, userId, attempt = 1) => {
-    setSyncStatus((s) => markSyncStarted(s, attempt));
     if (!persistence.isOwner()) return;
-    const result = await persistence.task(() => pushWorkoutDataToSupabase(next, userId));
+    setSyncStatus((s) => markSyncStarted(s, attempt));
+    let result;
+    try {result=await persistence.task(() => pushWorkoutDataToSupabase(next, userId));}
+    catch(error){if(persistence.isOwner())setSyncStatus(s=>markSyncFailure(s,[error.message],false));return;}
     if (!persistence.isOwner()) return;
     if (result.ok) {
       setSyncStatus((s) => markSyncSuccess(s));
@@ -2167,7 +2168,7 @@ export default function LiftLog() {
               photos: (prev.photos || []).map((p) => (uploadedIds.includes(p.id) ? { ...p, syncedToCloud: true } : p)),
             }));
           }
-        });
+        }).catch(error=>{if(persistence.isOwner())setSyncStatus(s=>markSyncFailure(s,[error.message],false));});
       }, 1500);
     },
     [auth.user, pushWithRetry]
@@ -2183,12 +2184,13 @@ export default function LiftLog() {
 
   const persist = useCallback(
     (next) => {
+      if(!persistence.isOwner()) return;
       try {
         // Never persist templates/programs — they're static app content that should
         // always come from source on the next load, not a snapshot from whatever build
         // last saved.
         const { templates, programs, ...toPersist } = next;
-        editorStorage().setItem("liftlog-data", JSON.stringify(toPersist));
+        persistence.storage.setItem("liftlog-data", JSON.stringify(toPersist));
       } catch (e) {
         console.error("Storage error", e);
       }
@@ -2264,7 +2266,7 @@ export default function LiftLog() {
           return merged;
         });
       }
-    })();
+    })().catch(error=>{if(persistence.isOwner())setSyncStatus(s=>markSyncFailure(s,[error.message],false));});
   }, [loaded, auth.user, persist]);
 
   // Workout reminder check — the "strongest reliable architecture the current stack supports"
@@ -2665,7 +2667,7 @@ export default function LiftLog() {
       return;
     }
     try {
-      const retired = writeWorkoutCompletion(editorStorage(), next, result.run);
+      const retired = writeWorkoutCompletion(persistence.storage, next, result.run);
       setState(next);
       activeRunRef.current = result.run;
       setRenderedActiveRun(result.run);
@@ -4511,20 +4513,20 @@ async function showWorkoutReminderNotification(plan) {
 // blob that only persists on the normal debounce cycle). alertedFor is included so a refresh
 // landing exactly after completion but before the athlete has acted doesn't re-alert.
 const REST_TIMER_STORAGE_KEY = "liftlog-rest-timer";
-function loadPersistedRestTimer() {
+function loadPersistedRestTimer(storage) {
   try {
-    const raw = editorStorage().getItem(REST_TIMER_STORAGE_KEY);
+    const raw = storage.getItem(REST_TIMER_STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
-function persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor }) {
+function persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor }, storage) {
   try {
     if (endsAt != null || pausedRemainingMs != null) {
-      editorStorage().setItem(REST_TIMER_STORAGE_KEY, JSON.stringify({ duration, endsAt, pausedRemainingMs, alertedFor }));
+      storage.setItem(REST_TIMER_STORAGE_KEY, JSON.stringify({ duration, endsAt, pausedRemainingMs, alertedFor }));
     } else {
-      editorStorage().removeItem(REST_TIMER_STORAGE_KEY);
+      storage.removeItem(REST_TIMER_STORAGE_KEY);
     }
   } catch {
     // storage unavailable
@@ -4556,7 +4558,8 @@ function triggerRestCompleteAlert({ sound = true, vibration = true, backgroundAl
 // immediate recompute the instant BRK becomes active again, so returning from background jumps
 // straight to "complete" rather than resuming a stale number.
 function RestTimer({ bump, settings }) {
-  const initial = loadPersistedRestTimer();
+  const storage=useRef(getEditorSession().scoped().storage).current;
+  const initial = loadPersistedRestTimer(storage);
   const [duration, setDuration] = useState(initial?.duration ?? 90);
   const [endsAt, setEndsAt] = useState(initial?.endsAt ?? null); // absolute ms timestamp; null while idle
   const [pausedRemainingMs, setPausedRemainingMs] = useState(initial?.pausedRemainingMs ?? null); // set only while paused (endsAt is null then)
@@ -4587,7 +4590,7 @@ function RestTimer({ bump, settings }) {
     if (alertedForRef.current === endsAt) return;
     const completedEndsAt = endsAt;
     alertedForRef.current = completedEndsAt;
-    persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor: completedEndsAt });
+    persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor: completedEndsAt }, storage);
     triggerRestCompleteAlert({ sound: soundEnabled, vibration: vibrationEnabled, backgroundAlerts: backgroundAlertsEnabled });
     setJustFinished(true);
     setTimeout(() => setJustFinished(false), 2000);
@@ -4602,7 +4605,7 @@ function RestTimer({ bump, settings }) {
   // Persists on every meaningful state change, and once more immediately on mount to catch
   // "the stored timer already expired while BRK was closed" without waiting for the next tick.
   useEffect(() => {
-    persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor: alertedForRef.current });
+    persistRestTimerState({ duration, endsAt, pausedRemainingMs, alertedFor: alertedForRef.current }, storage);
   }, [duration, endsAt, pausedRemainingMs]);
   useEffect(() => {
     fireCompletionIfDue();
@@ -8894,6 +8897,7 @@ function PhotoFullView({ photo, onBack, onDelete }) {
 
 // ---------------- PHOTOS TAB ----------------
 function PhotosTab({ state, updateState }) {
+  const photoPersistence=useRef(getEditorSession().scoped()).current;
   const fileInputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -8918,13 +8922,13 @@ function PhotosTab({ state, updateState }) {
         currentProgramDay && !currentProgramDay.isComplete
           ? `${currentProgramDay.programName} — ${currentProgramDay.dayLabel}`
           : null;
-      const dataUrl = await getEditorSession().task(() => compositeProgressPhoto(file, contextLine));
+      const dataUrl = await photoPersistence.task(() => compositeProgressPhoto(file, contextLine));
       const photo = { id: `photo_${Date.now()}`, date: new Date().toISOString(), context: contextLine, dataUrl };
       let quotaError = false;
       updateState((prev) => {
         const next = { ...prev, photos: [photo, ...(prev.photos || [])] };
         try {
-          editorStorage().setItem("liftlog-data", JSON.stringify(next));
+          photoPersistence.storage.setItem("liftlog-data", JSON.stringify(next));
         } catch (err) {
           quotaError = true;
           return prev;

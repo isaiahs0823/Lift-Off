@@ -32,6 +32,7 @@ async function fixture(t, recovery = false) {
   await context.route("**/*", (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   await context.addInitScript(({ program, recovery }) => {
     if (localStorage.getItem("liftlog-data")) return;
+    localStorage.setItem("brk-dataset-ownership:v1",JSON.stringify({version:1,datasetId:"integrity-synthetic",kind:"anonymous",accountId:null}));
     if (recovery) program.days[0] = { id: "recovery", label: "Recovery", type: "recovery", routineId: "lower_body_recovery" };
     const startedAt = new Date().toISOString();
     localStorage.setItem("liftlog-data", JSON.stringify({
@@ -819,6 +820,7 @@ async function initializationFixture(t, canonical, {active=null,fault=null,crede
   });
   await context.addInitScript(({canonical,active,fault,credential})=>{
     if(!localStorage.getItem("brk-synthetic-seeded")) {
+      localStorage.setItem("brk-dataset-ownership:v1",JSON.stringify({version:1,datasetId:"initialization-synthetic",kind:"anonymous",accountId:null}));
       if(canonical!==null) localStorage.setItem("liftlog-data",canonical);
       if(active!==null) localStorage.setItem("liftlog-active-run",active);
       if(credential) localStorage.setItem("sb-synthetic-auth-token","synthetic-private-credential");
