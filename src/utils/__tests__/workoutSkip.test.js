@@ -44,6 +44,46 @@ it("abandons only an unconfirmed draft at that index — there's nothing confirm
   expect(next.skipped.a).toBeTruthy();
 });
 
+// P0 data-loss bug: skipWorkoutExercise previously only checked sessionEntries (a FINISHED
+// exercise) — a set confirmed via Save Set but not yet finished (sitting in
+// draftByIndex[index].confirmedSets) wasn't checked at all. Navigating away from an exercise
+// after confirming a set, then Skipping it from its now-upcoming row, deleted that confirmed
+// set along with the rest of the draft, with no trace left anywhere. Reproduced live before this
+// fix (Playwright): Save Set on exercise A, select exercise B, Skip A from its upcoming row —
+// A's confirmed set vanished and A was marked Skipped despite having real performed work.
+it("refuses to skip a slot with a confirmed-but-not-yet-finished set, preserving it exactly", () => {
+  const r = run();
+  r.draftByIndex[0] = { confirmedSets: [hackSquatSet], reps: 10, entryDate: time, updatedAt: time };
+  const before = structuredClone(r);
+  const next = skipWorkoutExercise(r, 0);
+  expect(next).toBe(r); // no-op — the same object identity, nothing changed at all
+  expect(next.draftByIndex[0].confirmedSets).toEqual([hackSquatSet]);
+  expect(next.skipped.a).toBeUndefined();
+  expect(r).toEqual(before); // pure
+});
+
+it("the confirmed set survives a refresh and still finishes into history normally after the blocked skip attempt", () => {
+  let r = run();
+  r.draftByIndex[0] = { confirmedSets: [hackSquatSet], reps: 10, entryDate: time, updatedAt: time };
+  r = skipWorkoutExercise(r, 0); // blocked — a no-op, as asserted above
+  // "Refresh" is just re-reading the same persisted run — nothing about it depends on time or a
+  // running session, so simulating one here is exactly re-using `r` as-is.
+  const completed = collectConfirmedWorkout(r);
+  expect(completed.sessionEntries).toHaveLength(1);
+  expect(completed.sessionEntries[0].entry.sets).toEqual([hackSquatSet]);
+  const result = completeWorkoutState(state(), completed, summary);
+  expect(result.summary.entries).toEqual([{ id: expect.any(String), exId: "hack_squat", date: time, sets: [hackSquatSet], targetReps: 10 }]);
+  expect(result.state.logs).toHaveLength(1);
+});
+
+it("still allows skipping normally when there is genuinely no confirmed work (empty confirmedSets array, not just a missing key)", () => {
+  const r = run();
+  r.draftByIndex[0] = { confirmedSets: [], weight: 135, reps: 10 }; // typed but never Saved
+  const next = skipWorkoutExercise(r, 0);
+  expect(next.skipped.a).toBeTruthy();
+  expect(next.draftByIndex[0]).toBeUndefined();
+});
+
 it("a skipped exercise never produces a sessionEntry, so it's never logged or counted", () => {
   const r = skipWorkoutExercise(run(), 0);
   const completed = collectConfirmedWorkout(r);
