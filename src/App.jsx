@@ -4960,6 +4960,7 @@ function TrainingExerciseCard({
   allExercises,
   onSaved,
   onSwap,
+  onSkip,
   onSetSaved,
   draft,
   onDraftChange,
@@ -5382,6 +5383,27 @@ function TrainingExerciseCard({
     onSaved?.(entry);
   };
 
+  // Skip Exercise (task: "I want to stop doing an exercise without losing anything I've already
+  // done") — a single, always-visible entry point that closes out whatever's left of THIS
+  // exercise, replacing the old behavior where Skip simply disappeared the moment any set was
+  // confirmed (PR #23's own fix: skipWorkoutExercise correctly refuses to skip a slot holding a
+  // confirmed-but-unfinished set, to prevent silently deleting it — that guard is untouched here).
+  // Two cases, both already-safe existing code paths, never a new one:
+  //   - Nothing confirmed yet: onSkip() -> the same skipWorkoutExercise flow Skip has always used
+  //     (marks the slot "Skipped", nothing logged, nothing counted).
+  //   - 1+ sets confirmed: finishExercise() -> the exact same path "Finish exercise now" already
+  //     takes, building a real history entry from precisely what was confirmed. No new sets are
+  //     ever fabricated for the unperformed remainder; "Partially completed" (shown in the
+  //     exercise list) is purely a DISPLAY label derived by comparing the saved entry's set count
+  //     against this slot's prescribed target — never a stored flag, so there's no new field that
+  //     could itself drift out of sync with the real data.
+  const [skipConfirmOpen, setSkipConfirmOpen] = useState(false);
+  const confirmSkip = () => {
+    setSkipConfirmOpen(false);
+    if (confirmedSets.length > 0) finishExercise();
+    else onSkip?.();
+  };
+
   // Mid-exercise equipment switch, after sets are already logged (task sections 9/10) — gated
   // behind a confirmation (see pendingEquipmentSwitch below) rather than applied immediately like
   // the "nothing logged yet" case, since it finishes whatever's confirmed as a real entry under
@@ -5548,6 +5570,20 @@ function TrainingExerciseCard({
           yet" state for the ~300+ exercises not yet in exerciseInstructions.js; never fabricated
           video/instructions. */}
       <ExerciseInstructionPanel exId={exId} exerciseName={exMap[exId]?.name} muscle={exMap[exId]?.muscle} compact />
+
+      {/* Skip Exercise — a peer action to Replace exercise, same visual weight, distinct icon and
+          label so neither is mistaken for the other (task: "do not confuse it with Replace
+          Exercise or Remove Exercise"). Always visible on the active card regardless of whether
+          any sets are confirmed yet — the confirmation dialog is what actually decides what
+          happens, not whether the button even appears. */}
+      {onSkip && (
+        <button
+          onClick={() => setSkipConfirmOpen(true)}
+          className="w-full flex items-center justify-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-v5-subtext hover:text-v5-red py-0.5"
+        >
+          <SkipForward size={12} /> Skip exercise
+        </button>
+      )}
 
       {onSwap && (
         <button
@@ -6203,6 +6239,39 @@ function TrainingExerciseCard({
                 className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
               >
                 Switch Equipment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Skip Exercise confirmation — the same copy whether or not anything's confirmed yet,
+          since "the remaining sets" reads correctly either way (all of them, or whatever's left
+          after what's already confirmed). Understandable at a glance, no jargon. */}
+      {skipConfirmOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/85 flex items-end sm:items-center justify-center"
+          onClick={() => setSkipConfirmOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-xs sm:mx-4 bg-v5-elevated border border-white/10 sm:border rounded-t-2xl sm:rounded-2xl p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-sm text-v5-text">
+              Are you sure you want to skip the remaining sets for this exercise?
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSkipConfirmOpen(false)}
+                className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border border-white/10 text-v5-subtext hover:border-v5-red/40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmSkip}
+                className="flex-1 py-3 text-xs uppercase tracking-widest font-bold border bg-v5-red border-v5-red text-white hover:opacity-90"
+              >
+                Skip Remaining Sets
               </button>
             </div>
           </div>
@@ -7382,6 +7451,14 @@ function GuidedRunView({
                   const finishedTop = topSetOf(entry.sets);
                   const workingCount = countedSets(entry.sets).length;
                   const exName = exMap[currentExId]?.name || currentExId;
+                  // "Partially completed" (task: "stop doing an exercise without losing anything
+                  // I've already done") — purely a display label derived from comparing what was
+                  // actually logged against this slot's own prescribed target, never a stored
+                  // flag: an exercise finished early via Skip Exercise, or via "Finish exercise
+                  // now" on its own, look identical in the data either way, and both deserve the
+                  // same honest label here. A slot with no real prescribed count (e.g. an ad-hoc
+                  // added exercise) never shows this — there's nothing to be "partial" against.
+                  const isPartial = exSlot?.sets > 0 && workingCount < exSlot.sets;
                   return (
                     <SwipeableExerciseRow
                       isOpen={openSwipeIdx === idx}
@@ -7395,6 +7472,11 @@ function GuidedRunView({
                             <div className="flex items-center gap-1.5 text-sm font-bold text-v5-text mb-1">
                               <Check size={14} className="text-v5-success shrink-0" />
                               <span className="truncate">{exName}</span>
+                              {isPartial && (
+                                <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-v5-subtext/70">
+                                  Partially completed
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-v5-subtext">
                               {workingCount} working set{workingCount === 1 ? "" : "s"} · Best {finishedTop.weight} × {finishedTop.reps} · Volume{" "}
@@ -7461,23 +7543,15 @@ function GuidedRunView({
                 </div>
               ) : isActive ? (
                 <div className="space-y-2">
-                  {/* Non-swipe remove/skip affordances for the exercise currently being worked
-                      (task section 7/10, extended by the Skip Exercise task above) — deliberately
-                      NOT wrapped in SwipeableExerciseRow, which never touches the expanded
-                      TrainingExerciseCard so it can never fight with scrolling, typing weight/
-                      reps, or tapping a set type. Skip only ever shows with nothing confirmed yet
-                      here — once a real set is logged, Finish Exercise with what's confirmed is
-                      the only forward path, same as Remove already requires a confirmation for
-                      that case while Skip simply doesn't offer itself at all. */}
+                  {/* Non-swipe remove affordance for the exercise currently being worked (task
+                      section 7/10) — deliberately NOT wrapped in SwipeableExerciseRow, which
+                      never touches the expanded TrainingExerciseCard so it can never fight with
+                      scrolling, typing weight/reps, or tapping a set type. Skip now lives inside
+                      TrainingExerciseCard itself (a full-width "Skip exercise" button next to
+                      Replace exercise, with its own confirmation) — it needs direct access to
+                      confirmedSets/finishExercise to safely preserve already-confirmed work, which
+                      only the card itself has; see onSkip below. */}
                   <div className="flex items-center justify-end gap-3">
-                    {!hasConfirmedSetsHere && (
-                      <button
-                        onClick={() => onSkipExercise?.(idx)}
-                        className="flex items-center gap-1 text-xs uppercase tracking-widest text-v5-subtext hover:text-v5-text"
-                      >
-                        <SkipForward size={13} /> Skip
-                      </button>
-                    )}
                     <button
                       onClick={() => requestRemoveExercise(idx, exMap[currentExId]?.name || currentExId, false)}
                       aria-label={`Remove ${exMap[currentExId]?.name || currentExId}`}
@@ -7509,6 +7583,7 @@ function GuidedRunView({
                       onSplitEquipmentSwitch?.(idx, finishedEntry, newEquipment);
                     }}
                     onSwap={(newExId) => onSwap(idx, newExId)}
+                    onSkip={() => onSkipExercise?.(idx)}
                     sessionContext={run.sessionContext}
                     exIndex={idx}
                     totalExercises={totalExercises}
@@ -7558,11 +7633,11 @@ function GuidedRunView({
                     </button>
                     {/* P0 data-loss fix: this row's exercise can have a confirmed-but-not-yet-
                         finished set (Save Set was tapped here, then the athlete navigated away
-                        without hitting Finish Exercise) — skipWorkoutExercise itself now refuses
-                        that case too, but the button must not even offer to do something it will
-                        silently no-op on. Same hasConfirmedSetsHere gate the active card's own
-                        Skip button already uses, just applied to this row's own idx instead of
-                        the active one's. */}
+                        without hitting Finish Exercise) — skipWorkoutExercise refuses that case,
+                        so this icon-only Skip (upcoming rows only — the active card's own Skip
+                        exercise button handles the confirmed-sets case itself, via a confirmation
+                        that finishes with whatever's confirmed instead) must not even offer to do
+                        something it will silently no-op on. */}
                     {!hasConfirmedSetsHere && (
                       <button
                         onClick={() => onSkipExercise?.(idx)}
